@@ -1,0 +1,88 @@
+# 优惠券系统配置
+
+# 场景配置
+scenes:
+  new_user:
+    name: "新人场景"
+    allowed_coupon_types: ["discount", "fixed"]
+    max_claim_per_user: 1
+    require_new_user: true
+  activity:
+    name: "活动场景"
+    allowed_coupon_types: ["discount", "fixed", "free_shipping"]
+    max_claim_per_user: 3
+    require_new_user: false
+  member_day:
+    name: "会员日场景"
+    allowed_coupon_types: ["discount", "fixed"]
+    max_claim_per_user: 5
+    require_new_user: false
+    require_member: true
+
+# 优惠券模板
+coupon_templates:
+  COUPON_NEW_001:
+    name: "新人满100减20"
+    type: "fixed"
+    value: 2000           # 分
+    min_spend: 10000      # 分
+    total_stock: 10000
+    expire_days: 7
+    scenes: ["new_user"]
+  COUPON_ACT_001:
+    name: "活动8折券"
+    type: "discount"
+    value: 80             # 80折 = 8折
+    min_spend: 5000
+    total_stock: 50000
+    expire_days: 3
+    scenes: ["activity"]
+  COUPON_MEM_001:
+    name: "会员日满200减50"
+    type: "fixed"
+    value: 5000
+    min_spend: 20000
+    total_stock: 5000
+    expire_days: 1
+    scenes: ["member_day"]
+  COUPON_SHIP_001:
+    name: "免邮券"
+    type: "free_shipping"
+    value: 0
+    min_spend: 0
+    total_stock: 100000
+    expire_days: 30
+    scenes: ["activity"]
+
+# 限流配置
+rate_limit:
+  enabled: true
+  max_qps: 1000
+  per_user_qps: 10
+  window_seconds: 1
+
+# 兜底配置
+fallback:
+  enabled: true
+  # 模型服务超时时的默认行为
+  on_model_timeout:
+    action: "allow"            # allow / deny / default_score
+    default_score: 0.5
+  # 模型服务不可用时的默认行为
+  on_model_unavailable:
+    action: "allow"
+    default_score: 0.3
+
+# 模型服务配置（mock）
+model_service:
+  host: "localhost"
+  port: 50052
+  timeout: 2.0
+  enabled: true
+
+# Redis 配置
+redis:
+  url: "redis://localhost:6379/0"
+  key_prefix: "coupon:"
+  stock_ttl: 86400          # 库存key TTL: 1天
+  user_claim_ttl: 604800    # 用户领取记录 TTL: 7天

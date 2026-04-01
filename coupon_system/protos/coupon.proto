@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package coupon;
+
+option python_package = "coupon_system.protos";
+
+// 优惠券服务 - 主接口
+service CouponService {
+  // 领取优惠券
+  rpc ClaimCoupon (ClaimCouponRequest) returns (ClaimCouponResponse);
+  // 查询用户优惠券列表
+  rpc QueryUserCoupons (QueryUserCouponsRequest) returns (QueryUserCouponsResponse);
+  // 批量审核优惠券发放（模型精排）
+  rpc BatchEvaluate (BatchEvaluateRequest) returns (BatchEvaluateResponse);
+}
+
+// ========== ClaimCoupon ==========
+
+message ClaimCouponRequest {
+  string user_id = 1;
+  string coupon_id = 2;
+  string scene = 3;           // 场景: new_user, activity, member_day
+  map<string, string> extra = 4;  // 扩展字段
+}
+
+message ClaimCouponResponse {
+  int32 code = 1;             // 0=成功, 非0=错误
+  string message = 2;
+  CouponInfo coupon = 3;
+}
+
+message CouponInfo {
+  string id = 1;
+  string coupon_id = 2;
+  string user_id = 3;
+  string status = 4;          // claimed, used, expired
+  string coupon_type = 5;     // discount, fixed, free_shipping
+  int32 value = 6;            // 面值（分）
+  int32 min_spend = 7;        // 最低消费（分）
+  int64 expire_time = 8;      // 过期时间戳
+  int64 claim_time = 9;       // 领取时间戳
+}
+
+// ========== QueryUserCoupons ==========
+
+message QueryUserCouponsRequest {
+  string user_id = 1;
+  string status_filter = 2;   // 可选: claimed, used, expired, all
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message QueryUserCouponsResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated CouponInfo coupons = 3;
+  int32 total = 4;
+}
+
+// ========== BatchEvaluate ==========
+
+message BatchEvaluateRequest {
+  string user_id = 1;
+  string scene = 2;
+  repeated string candidate_coupon_ids = 3;
+}
+
+message BatchEvaluateResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated EvaluateResult results = 3;
+}
+
+message EvaluateResult {
+  string coupon_id = 1;
+  float score = 2;            // 模型预估的发放价值分数
+  bool recommended = 3;       // 是否推荐发放
+  string reason = 4;          // 推荐/不推荐原因
+}
