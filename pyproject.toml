@@ -1,12 +1,12 @@
 [build-system]
-requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
+requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "aitest-kit"
 version = "0.1.0"
 description = "AI-driven automated testing toolkit"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 dependencies = [
     "httpx>=0.27",
     "grpcio>=1.60",
@@ -40,3 +40,6 @@ aitest = "aitest_kit.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+include = ["aitest_kit*", "coupon_system*"]

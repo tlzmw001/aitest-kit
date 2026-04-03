@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(python3 -m pip install fakeredis pyyaml pytest httpx fastapi uvicorn grpcio grpcio-tools grpcio-reflection protobuf)",
-      "Bash(python3 -m pytest tests/test_coupon_service.py -v)"
+      "Bash(python3 -m pytest tests/test_coupon_service.py -v)",
+      "Bash(python -m pytest tests/test_coupon_service.py -v)"
     ]
   }
 }

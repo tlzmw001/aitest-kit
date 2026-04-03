@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Environment
+.env
+*.local.json
+!.claude/settings.local.json
+
+# Test / coverage
+.pytest_cache/
+htmlcov/
+.coverage
