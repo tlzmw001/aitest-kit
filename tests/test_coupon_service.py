@@ -1,19 +1,41 @@
-"""优惠券核心业务逻辑功能测试
+"""优惠券策略系统核心业务逻辑测试
 
 使用 fakeredis 模拟 Redis，不依赖外部服务。
-覆盖场景：正常领取、重复领取、库存不足、场景不匹配、
-新用户/会员校验、领取次数限制、模型拒绝、模型超时兜底、限流。
+覆盖场景：推荐 pipeline、AB实验分流、场景路由、粗排、
+特征抽取、打分、校准、发放、查询。
 """
 from __future__ import annotations
 
+import os
+from unittest.mock import MagicMock, patch
+from dataclasses import dataclass
+
 import pytest
 import fakeredis
+from pydantic import ValidationError
 
-from coupon_system.config import load_config, AppConfig
+from coupon_system.config import (
+    load_config,
+    load_scene_routing_config,
+    load_experiment_config,
+    load_calibration_config,
+    AppConfig,
+    CalibrationCoefficients,
+)
 from coupon_system.services.redis_store import RedisStore
-from coupon_system.services.model_service import MockModelService
+from coupon_system.services.experiment import ExperimentRouter
+from coupon_system.services.scene_router import SceneRouter
+from coupon_system.services.coarse_ranker import CoarseRanker
+from coupon_system.services.feature_store import FeatureStore
+from coupon_system.services.scoring_client import ScoringClient, ItemScore
+from coupon_system.services.calibrator import Calibrator
 from coupon_system.services.coupon_service import CouponBizService, CouponError
+from coupon_system.services.grpc_servicer import CouponGrpcServicer
+from coupon_system.http_app import RecommendRequest
+from coupon_system.protos import coupon_pb2
 
+
+# ========== Fixtures ==========
 
 @pytest.fixture
 def config() -> AppConfig:
@@ -22,10 +44,8 @@ def config() -> AppConfig:
 
 @pytest.fixture
 def fake_redis_client():
-    """创建 fakeredis 客户端"""
     server = fakeredis.FakeServer()
-    client = fakeredis.FakeRedis(server=server, decode_responses=True)
-    return client
+    return fakeredis.FakeRedis(server=server, decode_responses=True)
 
 
 @pytest.fixture
@@ -37,253 +57,602 @@ def redis_store(fake_redis_client) -> RedisStore:
 
 
 @pytest.fixture
-def model_service() -> MockModelService:
-    return MockModelService(timeout=2.0, enabled=True)
+def experiment_router() -> ExperimentRouter:
+    return ExperimentRouter(load_experiment_config())
 
 
 @pytest.fixture
-def biz(config, redis_store, model_service) -> CouponBizService:
-    # 禁用限流简化测试
+def scene_router() -> SceneRouter:
+    return SceneRouter(load_scene_routing_config())
+
+
+@pytest.fixture
+def coarse_ranker() -> CoarseRanker:
+    return CoarseRanker()
+
+
+@pytest.fixture
+def feature_store(redis_store) -> FeatureStore:
+    """使用项目自带的 item_features.tsv"""
+    return FeatureStore(
+        redis_store=redis_store,
+        user_feature_keys=["gender", "total_spend", "is_new_user", "is_member"],
+        item_feature_file="data/item_features.tsv",
+    )
+
+
+@pytest.fixture
+def mock_scoring_client():
+    """Mock 的打分客户端，不实际连接 gRPC"""
+    client = MagicMock(spec=ScoringClient)
+    client.enabled = True
+    # 默认返回合理分数
+    client.score.return_value = [
+        ItemScore(item_id="COUPON_ACT_001", score=0.75),
+    ]
+    return client
+
+
+@pytest.fixture
+def calibrator() -> Calibrator:
+    return Calibrator(load_calibration_config())
+
+
+@pytest.fixture
+def biz(
+    config, redis_store, experiment_router, scene_router,
+    coarse_ranker, feature_store, mock_scoring_client, calibrator,
+) -> CouponBizService:
     config.rate_limit.enabled = False
-    return CouponBizService(config, redis_store, model_service)
+    return CouponBizService(
+        config=config,
+        redis_store=redis_store,
+        experiment_router=experiment_router,
+        scene_router=scene_router,
+        coarse_ranker=coarse_ranker,
+        feature_store=feature_store,
+        scoring_client=mock_scoring_client,
+        calibrator=calibrator,
+    )
 
 
 @pytest.fixture
-def biz_with_rate_limit(config, redis_store, model_service) -> CouponBizService:
+def biz_with_rate_limit(
+    config, redis_store, experiment_router, scene_router,
+    coarse_ranker, feature_store, mock_scoring_client, calibrator,
+) -> CouponBizService:
     config.rate_limit.enabled = True
     config.rate_limit.per_user_qps = 2
     config.rate_limit.max_qps = 100
-    return CouponBizService(config, redis_store, model_service)
+    return CouponBizService(
+        config=config,
+        redis_store=redis_store,
+        experiment_router=experiment_router,
+        scene_router=scene_router,
+        coarse_ranker=coarse_ranker,
+        feature_store=feature_store,
+        scoring_client=mock_scoring_client,
+        calibrator=calibrator,
+    )
 
 
-def setup_stock(redis_store: RedisStore, coupon_id: str, stock: int = 100):
-    redis_store.init_stock(coupon_id, stock)
+# ========== Helpers ==========
+
+SAMPLE_ITEMS = [
+    {"item_id": "COUPON_ACT_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 3},
+]
+
+MULTI_ITEMS = [
+    {"item_id": "COUPON_ACT_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 3},
+    {"item_id": "COUPON_SHIP_001", "coupon_type": "free_shipping", "value": 0, "min_spend": 0, "expire_days": 30},
+    {"item_id": "COUPON_MEM_001", "coupon_type": "fixed", "value": 5000, "min_spend": 20000, "expire_days": 1},
+]
 
 
-def setup_new_user(redis_store: RedisStore, user_id: str):
-    redis_store.set_user_profile(user_id, {"is_new_user": True, "total_spend": 0})
+def setup_stock(redis_store: RedisStore, item_id: str, stock: int = 100):
+    redis_store.init_stock(item_id, stock)
 
 
-def setup_member(redis_store: RedisStore, user_id: str):
-    redis_store.set_user_profile(user_id, {"is_member": True, "total_spend": 15000})
+def setup_user_features(redis_store: RedisStore, user_id: str, features: dict):
+    redis_store.set_user_features(user_id, features)
 
 
-def setup_old_user(redis_store: RedisStore, user_id: str):
-    redis_store.set_user_profile(user_id, {"is_new_user": False, "is_member": False, "total_spend": 5000})
+def recommend(
+    biz: CouponBizService,
+    user_id: str,
+    scene_name: str,
+    device: str,
+    policy_id: str,
+    context: dict,
+    items: list,
+    **kwargs,
+):
+    kwargs.setdefault("external", 0)
+    kwargs.setdefault("score_threshold", 0.5)
+    kwargs.setdefault("max_claim_per_request", 1)
+    return biz.recommend_and_claim(
+        user_id=user_id,
+        scene_name=scene_name,
+        device=device,
+        policy_id=policy_id,
+        context=context,
+        items=items,
+        **kwargs,
+    )
 
 
 # ========== 参数校验 ==========
 
 class TestParamValidation:
     def test_empty_user_id(self, biz):
-        result = biz.claim_coupon("", "COUPON_NEW_001", "new_user")
+        result = recommend(biz, "", "game", "mobile", "", {}, SAMPLE_ITEMS)
         assert result["code"] == CouponError.INVALID_PARAM
 
-    def test_empty_coupon_id(self, biz):
-        result = biz.claim_coupon("user_001", "", "new_user")
+    def test_empty_scene_name(self, biz):
+        result = recommend(biz, "u001", "", "mobile", "", {}, SAMPLE_ITEMS)
         assert result["code"] == CouponError.INVALID_PARAM
 
-    def test_empty_scene(self, biz):
-        result = biz.claim_coupon("user_001", "COUPON_NEW_001", "")
+    def test_empty_device(self, biz):
+        result = recommend(biz, "u001", "game", "", "", {}, SAMPLE_ITEMS)
         assert result["code"] == CouponError.INVALID_PARAM
+
+    def test_empty_items(self, biz):
+        result = recommend(biz, "u001", "game", "mobile", "", {}, [])
+        assert result["code"] == CouponError.INVALID_PARAM
+
+    def test_missing_required_request_fields(self, biz):
+        result = biz.recommend_and_claim(
+            user_id="u001",
+            scene_name="game",
+            device="mobile",
+            policy_id="",
+            context={},
+            items=SAMPLE_ITEMS,
+            req_id="req-no-required-fields",
+        )
+        assert result["code"] == CouponError.INVALID_PARAM
+
+
+class TestRequestSchemaValidation:
+    def _payload(self) -> dict:
+        return {
+            "user_id": "u001",
+            "scene_name": "game",
+            "device": "mobile",
+            "policy_id": "",
+            "external": 0,
+            "reqId": "req-schema-001",
+            "score_threshold": 0.5,
+            "max_claim_per_request": 1,
+            "context": {},
+            "items": SAMPLE_ITEMS,
+        }
+
+    def test_http_model_requires_external(self):
+        payload = self._payload()
+        payload.pop("external")
+        with pytest.raises(ValidationError):
+            RecommendRequest(**payload)
+
+    def test_http_model_requires_score_threshold(self):
+        payload = self._payload()
+        payload.pop("score_threshold")
+        with pytest.raises(ValidationError):
+            RecommendRequest(**payload)
+
+    def test_http_model_requires_max_claim_per_request(self):
+        payload = self._payload()
+        payload.pop("max_claim_per_request")
+        with pytest.raises(ValidationError):
+            RecommendRequest(**payload)
+
+
+class TestGrpcRequiredFields:
+    def _build_item(self):
+        return coupon_pb2.CouponItem(
+            item_id="COUPON_ACT_001",
+            coupon_type="discount",
+            value=80,
+            min_spend=5000,
+            expire_days=3,
+        )
+
+    def test_grpc_missing_external_returns_invalid_param(self, biz):
+        servicer = CouponGrpcServicer(biz)
+        request = coupon_pb2.RecommendRequest(
+            user_id="u001",
+            scene_name="game",
+            device="mobile",
+            policy_id="",
+            context={},
+            items=[self._build_item()],
+            score_threshold=0.5,
+            max_claim_per_request=1,
+        )
+        response = servicer.Recommend(request, None)
+        assert response.code == CouponError.INVALID_PARAM
+
+    def test_grpc_missing_score_threshold_returns_invalid_param(self, biz):
+        servicer = CouponGrpcServicer(biz)
+        request = coupon_pb2.RecommendRequest(
+            user_id="u001",
+            scene_name="game",
+            device="mobile",
+            policy_id="",
+            context={},
+            items=[self._build_item()],
+            external=0,
+            max_claim_per_request=1,
+        )
+        response = servicer.Recommend(request, None)
+        assert response.code == CouponError.INVALID_PARAM
+
+    def test_grpc_missing_max_claim_per_request_returns_invalid_param(self, biz):
+        servicer = CouponGrpcServicer(biz)
+        request = coupon_pb2.RecommendRequest(
+            user_id="u001",
+            scene_name="game",
+            device="mobile",
+            policy_id="",
+            context={},
+            items=[self._build_item()],
+            external=0,
+            score_threshold=0.5,
+        )
+        response = servicer.Recommend(request, None)
+        assert response.code == CouponError.INVALID_PARAM
+
+    def test_grpc_with_all_required_fields_can_pass_validation(self, biz):
+        servicer = CouponGrpcServicer(biz)
+        request = coupon_pb2.RecommendRequest(
+            user_id="u001",
+            scene_name="game",
+            device="mobile",
+            policy_id="",
+            context={},
+            items=[self._build_item()],
+            external=0,
+            score_threshold=0.5,
+            max_claim_per_request=1,
+        )
+        response = servicer.Recommend(request, None)
+        assert response.code == CouponError.OK
 
 
 # ========== 场景路由 ==========
 
 class TestSceneRouting:
-    def test_invalid_scene(self, biz, redis_store):
-        setup_stock(redis_store, "COUPON_NEW_001")
-        result = biz.claim_coupon("user_001", "COUPON_NEW_001", "nonexistent_scene")
-        assert result["code"] == CouponError.SCENE_NOT_FOUND
+    def test_game_mobile(self, biz, redis_store, mock_scoring_client):
+        setup_stock(redis_store, "COUPON_ACT_001")
+        result = recommend(biz, "u001", "game", "mobile", "", {}, SAMPLE_ITEMS)
+        assert result["scene_id"] == 1001
 
-    def test_coupon_not_in_scene(self, biz, redis_store):
-        """新人券不能在活动场景下领取"""
-        setup_stock(redis_store, "COUPON_NEW_001")
-        setup_new_user(redis_store, "user_001")
-        result = biz.claim_coupon("user_001", "COUPON_NEW_001", "activity")
-        assert result["code"] == CouponError.SCENE_MISMATCH
+    def test_ad_pc(self, biz, redis_store, mock_scoring_client):
+        setup_stock(redis_store, "COUPON_ACT_001")
+        result = recommend(biz, "u001", "ad", "pc", "", {}, SAMPLE_ITEMS)
+        assert result["scene_id"] == 2002
 
-    def test_coupon_not_found(self, biz, redis_store):
-        result = biz.claim_coupon("user_001", "NONEXISTENT_COUPON", "new_user")
-        assert result["code"] == CouponError.COUPON_NOT_FOUND
+    def test_fallback_policy_id(self, biz, redis_store):
+        """命中兜底 policyId，跳过打分"""
+        setup_stock(redis_store, "COUPON_ACT_001")
+        result = recommend(biz, 
+            "u001", "game", "mobile", "policy_fallback_001", {}, SAMPLE_ITEMS,
+        )
+        assert result["scene_id"] == 3001
+        assert result["message"] == "兜底策略"
+        # 兜底不调打分服务
+        biz.scoring_client.score.assert_not_called()
 
-
-# ========== 正常领取 ==========
-
-class TestClaimSuccess:
-    def test_new_user_claim_success(self, biz, redis_store):
-        """新用户正常领取新人券"""
-        setup_stock(redis_store, "COUPON_NEW_001", 100)
-        setup_new_user(redis_store, "user_001")
-
-        result = biz.claim_coupon("user_001", "COUPON_NEW_001", "new_user")
-
-        assert result["code"] == CouponError.OK
+    def test_fallback_claim_has_correct_user_id(self, biz, redis_store):
+        """兜底发放时 user_id 不应为空"""
+        setup_stock(redis_store, "COUPON_ACT_001")
+        result = recommend(biz, 
+            "u_fallback", "game", "mobile", "policy_fallback_001", {}, SAMPLE_ITEMS,
+        )
         assert result["coupon"] is not None
+        assert result["coupon"]["user_id"] == "u_fallback"
+
+    def test_unknown_scene_fallback(self, biz, redis_store):
+        """未知场景组合走兜底"""
+        setup_stock(redis_store, "COUPON_ACT_001")
+        result = recommend(biz, "u001", "unknown", "vr", "", {}, SAMPLE_ITEMS)
+        assert result["scene_id"] == 3001
+
+
+# ========== AB 实验 ==========
+
+class TestExperiment:
+    def test_experiment_info_in_response(self, biz, redis_store, mock_scoring_client):
+        setup_stock(redis_store, "COUPON_ACT_001")
+        result = recommend(biz, "u001", "game", "mobile", "", {}, SAMPLE_ITEMS)
+        assert "experiment_info" in result
+        assert isinstance(result["experiment_info"], dict)
+        # 应该包含配置中定义的实验
+        assert "coarse_rank_exp" in result["experiment_info"]
+        assert "calibration_exp" in result["experiment_info"]
+
+
+# ========== 粗排 ==========
+
+class TestCoarseRanking:
+    def test_truncation(self, coarse_ranker):
+        items = [
+            {"item_id": "A", "value": 100},
+            {"item_id": "B", "value": 500},
+            {"item_id": "C", "value": 200},
+            {"item_id": "D", "value": 50},
+        ]
+        result = coarse_ranker.rank(items, {"truncate_count": 2, "truncate_rule": "top_value"})
+        assert len(result) == 2
+        assert result[0]["item_id"] == "B"
+        assert result[1]["item_id"] == "C"
+
+    def test_no_truncation_when_count_exceeds(self, coarse_ranker):
+        items = [{"item_id": "A", "value": 100}]
+        result = coarse_ranker.rank(items, {"truncate_count": 10, "truncate_rule": "top_value"})
+        assert len(result) == 1
+
+
+# ========== 打分 + 发放 ==========
+
+class TestRecommendAndClaim:
+    def test_successful_claim(self, biz, redis_store, mock_scoring_client):
+        """正常打分 + 发放"""
+        setup_stock(redis_store, "COUPON_ACT_001", 100)
+        mock_scoring_client.score.return_value = [
+            ItemScore(item_id="COUPON_ACT_001", score=0.6),
+        ]
+
+        result = recommend(biz, "u001", "game", "mobile", "", {}, SAMPLE_ITEMS)
+
+        assert result["code"] == CouponError.OK
+        assert len(result["results"]) == 1
+        assert result["results"][0]["item_id"] == "COUPON_ACT_001"
+        assert result["coupon"] is not None
+        assert result["coupon"]["item_id"] == "COUPON_ACT_001"
         assert result["coupon"]["status"] == "claimed"
-        assert result["coupon"]["coupon_id"] == "COUPON_NEW_001"
-        assert result["coupon"]["user_id"] == "user_001"
-        assert result["coupon"]["coupon_type"] == "fixed"
-        assert result["coupon"]["value"] == 2000
 
-    def test_stock_decremented(self, biz, redis_store):
-        """领取后库存减少"""
-        setup_stock(redis_store, "COUPON_NEW_001", 100)
-        setup_new_user(redis_store, "user_001")
-
-        biz.claim_coupon("user_001", "COUPON_NEW_001", "new_user")
-
-        assert redis_store.get_stock("COUPON_NEW_001") == 99
-
-    def test_claim_recorded(self, biz, redis_store):
-        """领取后记录已领取"""
-        setup_stock(redis_store, "COUPON_NEW_001", 100)
-        setup_new_user(redis_store, "user_001")
-
-        biz.claim_coupon("user_001", "COUPON_NEW_001", "new_user")
-
-        assert redis_store.has_claimed("user_001", "COUPON_NEW_001")
-
-    def test_activity_claim_success(self, biz, redis_store):
-        """活动场景领取"""
+    def test_stock_decremented(self, biz, redis_store, mock_scoring_client):
+        """发放后库存减少"""
         setup_stock(redis_store, "COUPON_ACT_001", 100)
-        setup_old_user(redis_store, "user_002")
+        mock_scoring_client.score.return_value = [
+            ItemScore(item_id="COUPON_ACT_001", score=0.6),
+        ]
 
-        result = biz.claim_coupon("user_002", "COUPON_ACT_001", "activity")
+        recommend(biz, "u001", "game", "mobile", "", {}, SAMPLE_ITEMS)
+        assert redis_store.get_stock("COUPON_ACT_001") == 99
+
+    def test_low_score_no_claim(self, biz, redis_store, mock_scoring_client):
+        """分数低于阈值不发放"""
+        setup_stock(redis_store, "COUPON_ACT_001", 100)
+        mock_scoring_client.score.return_value = [
+            ItemScore(item_id="COUPON_ACT_001", score=0.3),
+        ]
+
+        result = recommend(biz, "u001", "game", "mobile", "", {}, SAMPLE_ITEMS)
 
         assert result["code"] == CouponError.OK
-        assert result["coupon"]["coupon_type"] == "discount"
+        assert result["coupon"] is None
+        assert result["results"][0]["recommended"] is False
+        assert redis_store.get_stock("COUPON_ACT_001") == 100
 
+    def test_stock_empty_skip(self, biz, redis_store, mock_scoring_client):
+        """库存为零时跳过发放"""
+        setup_stock(redis_store, "COUPON_ACT_001", 0)
+        mock_scoring_client.score.return_value = [
+            ItemScore(item_id="COUPON_ACT_001", score=0.8),
+        ]
 
-# ========== 规则引擎粗筛 ==========
+        result = recommend(biz, "u001", "game", "mobile", "", {}, SAMPLE_ITEMS)
+        assert result["code"] == CouponError.OK
+        assert result["coupon"] is None
 
-class TestRuleEngine:
-    def test_duplicate_claim(self, biz, redis_store):
-        """重复领取同一券"""
-        setup_stock(redis_store, "COUPON_NEW_001", 100)
-        setup_new_user(redis_store, "user_001")
+    def test_multi_items_best_score_claimed(self, biz, redis_store, mock_scoring_client):
+        """多个候选券，发放分数最高的"""
+        for item in MULTI_ITEMS:
+            setup_stock(redis_store, item["item_id"], 100)
 
-        biz.claim_coupon("user_001", "COUPON_NEW_001", "new_user")
-        result = biz.claim_coupon("user_001", "COUPON_NEW_001", "new_user")
+        mock_scoring_client.score.return_value = [
+            ItemScore(item_id="COUPON_ACT_001", score=0.6),
+            ItemScore(item_id="COUPON_SHIP_001", score=0.9),
+            ItemScore(item_id="COUPON_MEM_001", score=0.4),
+        ]
 
-        assert result["code"] == CouponError.ALREADY_CLAIMED
+        result = recommend(biz, "u001", "game", "mobile", "", {}, MULTI_ITEMS)
+        assert result["coupon"]["item_id"] == "COUPON_SHIP_001"
 
-    def test_stock_empty(self, biz, redis_store):
-        """库存为零"""
-        setup_stock(redis_store, "COUPON_NEW_001", 0)
-        setup_new_user(redis_store, "user_001")
-
-        result = biz.claim_coupon("user_001", "COUPON_NEW_001", "new_user")
-        assert result["code"] == CouponError.STOCK_EMPTY
-
-    def test_not_new_user(self, biz, redis_store):
-        """非新用户尝试领新人券"""
-        setup_stock(redis_store, "COUPON_NEW_001", 100)
-        setup_old_user(redis_store, "user_001")
-
-        result = biz.claim_coupon("user_001", "COUPON_NEW_001", "new_user")
-        assert result["code"] == CouponError.NOT_NEW_USER
-
-    def test_not_member(self, biz, redis_store):
-        """非会员尝试领会员日券"""
-        setup_stock(redis_store, "COUPON_MEM_001", 100)
-        setup_old_user(redis_store, "user_001")
-
-        result = biz.claim_coupon("user_001", "COUPON_MEM_001", "member_day")
-        assert result["code"] == CouponError.NOT_MEMBER
-
-    def test_claim_limit_exceeded(self, biz, redis_store):
-        """超过场景领取次数限制（活动场景限3次）"""
+    def test_request_score_threshold_override(self, biz, redis_store, mock_scoring_client):
+        """请求参数 score_threshold 覆盖配置"""
         setup_stock(redis_store, "COUPON_ACT_001", 100)
-        setup_stock(redis_store, "COUPON_SHIP_001", 100)
-        # 用高消费用户确保模型精排通过
-        redis_store.set_user_profile("user_001", {
-            "is_new_user": False, "is_member": False, "total_spend": 50000
+        mock_scoring_client.score.return_value = [
+            ItemScore(item_id="COUPON_ACT_001", score=0.6),
+        ]
+
+        result = recommend(biz, 
+            "u001", "game", "mobile", "", {}, SAMPLE_ITEMS,
+            score_threshold=0.95,
+        )
+        assert result["code"] == CouponError.OK
+        assert result["coupon"] is None
+        assert result["results"][0]["recommended"] is False
+
+    def test_request_max_claim_per_request_controls_attempt_count(
+        self, biz, redis_store, mock_scoring_client,
+    ):
+        """
+        max_claim_per_request 影响可尝试发券的候选数量。
+        当最高分券无库存时，只有 max_claim_per_request>=2 才能尝试到次优券。
+        """
+        items = [
+            {"item_id": "A", "coupon_type": "discount", "value": 10, "min_spend": 0, "expire_days": 3},
+            {"item_id": "B", "coupon_type": "discount", "value": 10, "min_spend": 0, "expire_days": 3},
+        ]
+        setup_stock(redis_store, "A", 0)
+        setup_stock(redis_store, "B", 100)
+        mock_scoring_client.score.return_value = [
+            ItemScore(item_id="A", score=0.9),
+            ItemScore(item_id="B", score=0.8),
+        ]
+
+        result_1 = recommend(biz, 
+            "u001", "game", "mobile", "", {}, items,
+            max_claim_per_request=1,
+        )
+        assert result_1["coupon"] is None
+
+        result_2 = recommend(biz, 
+            "u001", "game", "mobile", "", {}, items,
+            max_claim_per_request=2,
+        )
+        assert result_2["coupon"] is not None
+        assert result_2["coupon"]["item_id"] == "B"
+
+    def test_invalid_request_claim_controls(self, biz):
+        """请求级阈值/数量非法时返回参数错误"""
+        result = recommend(biz, 
+            "u001", "game", "mobile", "", {}, SAMPLE_ITEMS,
+            score_threshold=1.5,
+        )
+        assert result["code"] == CouponError.INVALID_PARAM
+
+        result = recommend(biz, 
+            "u001", "game", "mobile", "", {}, SAMPLE_ITEMS,
+            max_claim_per_request=0,
+        )
+        assert result["code"] == CouponError.INVALID_PARAM
+
+
+# ========== 打分服务异常 ==========
+
+class TestScoringFailure:
+    def test_scoring_timeout_fallback(self, biz, redis_store, mock_scoring_client):
+        """打分超时走兜底，使用 on_scoring_timeout.default_score=0.5"""
+        setup_stock(redis_store, "COUPON_ACT_001", 100)
+        mock_scoring_client.score.side_effect = TimeoutError("timeout")
+
+        result = recommend(biz, "u001", "game", "mobile", "", {}, SAMPLE_ITEMS)
+        assert result["code"] == CouponError.OK
+        # timeout default_score=0.5 >= threshold=0.5，应该发放
+        assert result["coupon"] is not None
+
+    def test_scoring_unavailable_fallback(self, biz, redis_store, mock_scoring_client):
+        """打分不可用走兜底，使用 on_scoring_unavailable.default_score=0.3"""
+        setup_stock(redis_store, "COUPON_ACT_001", 100)
+        mock_scoring_client.score.side_effect = RuntimeError("unavailable")
+
+        result = recommend(biz, "u001", "game", "mobile", "", {}, SAMPLE_ITEMS)
+        assert result["code"] == CouponError.OK
+        # unavailable default_score=0.3 < threshold=0.5，不发放
+        assert result["coupon"] is None
+
+    def test_scoring_timeout_deny(self, biz, redis_store, mock_scoring_client):
+        """timeout action=deny 时直接返回错误"""
+        biz.config.fallback.on_scoring_timeout.action = "deny"
+        setup_stock(redis_store, "COUPON_ACT_001", 100)
+        mock_scoring_client.score.side_effect = TimeoutError("timeout")
+
+        result = recommend(biz, "u001", "game", "mobile", "", {}, SAMPLE_ITEMS)
+        assert result["code"] == CouponError.SCORING_ERROR
+
+    def test_fallback_score_redis_first(self, biz, redis_store, mock_scoring_client):
+        """兜底分优先读 Redis，读不到才用配置默认值"""
+        setup_stock(redis_store, "COUPON_ACT_001", 100)
+        redis_store.set_fallback_score(0.9, scene_id=1001)
+        mock_scoring_client.score.side_effect = RuntimeError("unavailable")
+
+        result = recommend(biz, "u001", "game", "mobile", "", {}, SAMPLE_ITEMS)
+        assert result["code"] == CouponError.OK
+        assert result["results"][0]["score"] == 0.9
+        assert result["coupon"] is not None
+
+
+class TestRoutingAndLogs:
+    def test_external_route_and_req_id_logged(self, biz, redis_store, mock_scoring_client, caplog):
+        setup_stock(redis_store, "COUPON_ACT_001", 100)
+        caplog.set_level("INFO")
+
+        result = recommend(biz, 
+            "u_ext", "game", "mobile", "", {}, SAMPLE_ITEMS,
+            external=1,
+            req_id="req-abc-001",
+        )
+
+        assert result["code"] == CouponError.OK
+        mock_scoring_client.score.assert_called()
+        kwargs = mock_scoring_client.score.call_args.kwargs
+        assert kwargs["external"] == 1
+        assert kwargs["request_id"] == "req-abc-001"
+
+        matched = [
+            rec.getMessage() for rec in caplog.records
+            if "recommend request:" in rec.getMessage()
+        ]
+        assert matched, "should have request info log"
+        log = matched[-1]
+        assert "reqId=req-abc-001" in log
+        assert "user_id=u_ext" in log
+        assert "item_ids=COUPON_ACT_001" in log
+        assert "route=2" in log
+        assert "scene_id=1001" in log
+
+    def test_scene_route_still_works_when_external_enabled(self, biz, redis_store, mock_scoring_client):
+        """
+        场景与 route 隔离：external=1 仍需正常计算 scene_id。
+        """
+        setup_stock(redis_store, "COUPON_ACT_001", 100)
+        result = recommend(biz, 
+            "u_ext_scene", "ad", "pc", "", {}, SAMPLE_ITEMS,
+            external=1,
+        )
+        assert result["scene_id"] == 2002
+
+
+# ========== 校准 ==========
+
+class TestCalibration:
+    def test_calibrate_scores(self, calibrator):
+        """校准 y = kx + b"""
+        scores = [ItemScore(item_id="A", score=0.5)]
+        # scene_id 1001: k=1.2, b=0.1 → calibrated = 0.5 * 1.2 + 0.1 = 0.7
+        result = calibrator.calibrate(1001, scores)
+        assert result[0].calibrated_score == 0.7
+
+    def test_calibrate_clamp(self, calibrator):
+        """校准后 clamp 到 [0, 1]"""
+        scores = [ItemScore(item_id="A", score=0.9)]
+        # scene_id 1001: k=1.2, b=0.1 → 0.9 * 1.2 + 0.1 = 1.18 → clamp to 1.0
+        result = calibrator.calibrate(1001, scores)
+        assert result[0].calibrated_score == 1.0
+
+    def test_default_coefficients(self, calibrator):
+        """未配置的 scene_id 使用 default"""
+        scores = [ItemScore(item_id="A", score=0.5)]
+        # default: k=1.0, b=0.0 → 0.5
+        result = calibrator.calibrate(9999, scores)
+        assert result[0].calibrated_score == 0.5
+
+
+# ========== 特征抽取 ==========
+
+class TestFeatureStore:
+    def test_get_user_features(self, redis_store, feature_store):
+        redis_store.set_user_features("u001", {
+            "gender": "male",
+            "total_spend": "15000",
+            "is_new_user": "true",
         })
-        # 关闭模型避免随机性干扰
-        biz.model.enabled = False
+        features = feature_store.get_user_features("u001")
+        assert features["gender"] == "male"
+        assert features["total_spend"] == "15000"
 
-        # 活动场景限制 max_claim_per_user=3
-        r1 = biz.claim_coupon("user_001", "COUPON_ACT_001", "activity")
-        assert r1["code"] == CouponError.OK
+    def test_get_item_features(self, feature_store):
+        features = feature_store.get_item_features("COUPON_ACT_001")
+        assert "popularity" in features
+        assert "stock" in features
 
-        r2 = biz.claim_coupon("user_001", "COUPON_SHIP_001", "activity")
-        assert r2["code"] == CouponError.OK
-
-        count = redis_store.get_user_claim_count("user_001", "activity")
-        assert count == 2
-
-        biz.model.enabled = True
-
-    def test_stock_race_condition(self, biz, redis_store):
-        """库存只剩1时的竞争"""
-        setup_stock(redis_store, "COUPON_NEW_001", 1)
-        setup_new_user(redis_store, "user_001")
-        setup_new_user(redis_store, "user_002")
-
-        # 修复：给 user_002 也设置新用户画像
-        redis_store.set_user_profile("user_002", {"is_new_user": True})
-
-        r1 = biz.claim_coupon("user_001", "COUPON_NEW_001", "new_user")
-        assert r1["code"] == CouponError.OK
-
-        r2 = biz.claim_coupon("user_002", "COUPON_NEW_001", "new_user")
-        assert r2["code"] == CouponError.STOCK_EMPTY
-
-
-# ========== 模型精排 + 兜底 ==========
-
-class TestModelEvaluation:
-    def test_model_timeout_fallback_allow(self, biz, redis_store):
-        """模型超时时兜底放行"""
-        setup_stock(redis_store, "COUPON_NEW_001", 100)
-        setup_new_user(redis_store, "user_001")
-        biz.model.set_simulate_timeout(True)
-
-        # 配置兜底策略为 allow
-        biz.config.fallback.on_model_timeout.action = "allow"
-
-        result = biz.claim_coupon("user_001", "COUPON_NEW_001", "new_user")
-        assert result["code"] == CouponError.OK
-
-        biz.model.set_simulate_timeout(False)
-
-    def test_model_failure_fallback_allow(self, biz, redis_store):
-        """模型服务不可用时兜底放行"""
-        setup_stock(redis_store, "COUPON_NEW_001", 100)
-        setup_new_user(redis_store, "user_001")
-        biz.model.set_simulate_failure(True)
-
-        biz.config.fallback.on_model_unavailable.action = "allow"
-
-        result = biz.claim_coupon("user_001", "COUPON_NEW_001", "new_user")
-        assert result["code"] == CouponError.OK
-
-        biz.model.set_simulate_failure(False)
-
-    def test_model_failure_fallback_deny(self, biz, redis_store):
-        """模型服务不可用时兜底拒绝"""
-        setup_stock(redis_store, "COUPON_NEW_001", 100)
-        setup_new_user(redis_store, "user_001")
-        biz.model.set_simulate_failure(True)
-
-        biz.config.fallback.on_model_unavailable.action = "deny"
-
-        result = biz.claim_coupon("user_001", "COUPON_NEW_001", "new_user")
-        assert result["code"] == CouponError.MODEL_REJECTED
-
-        biz.model.set_simulate_failure(False)
-
-    def test_model_disabled_skip(self, biz, redis_store):
-        """模型关闭时跳过精排"""
-        setup_stock(redis_store, "COUPON_NEW_001", 100)
-        setup_new_user(redis_store, "user_001")
-        biz.model.enabled = False
-
-        result = biz.claim_coupon("user_001", "COUPON_NEW_001", "new_user")
-        assert result["code"] == CouponError.OK
-
-        biz.model.enabled = True
+    def test_missing_item_features(self, feature_store):
+        features = feature_store.get_item_features("NONEXISTENT")
+        assert features == {}
 
 
 # ========== 查询接口 ==========
@@ -295,77 +664,37 @@ class TestQueryCoupons:
         assert result["coupons"] == []
         assert result["total"] == 0
 
-    def test_query_after_claim(self, biz, redis_store):
-        setup_stock(redis_store, "COUPON_NEW_001", 100)
-        setup_new_user(redis_store, "user_001")
+    def test_query_after_claim(self, biz, redis_store, mock_scoring_client):
+        setup_stock(redis_store, "COUPON_ACT_001", 100)
+        mock_scoring_client.score.return_value = [
+            ItemScore(item_id="COUPON_ACT_001", score=0.8),
+        ]
+        recommend(biz, "u001", "game", "mobile", "", {}, SAMPLE_ITEMS)
 
-        biz.claim_coupon("user_001", "COUPON_NEW_001", "new_user")
-        result = biz.query_user_coupons("user_001")
-
+        result = biz.query_user_coupons("u001")
         assert result["code"] == CouponError.OK
         assert result["total"] == 1
-        assert result["coupons"][0]["coupon_id"] == "COUPON_NEW_001"
+        assert result["coupons"][0]["item_id"] == "COUPON_ACT_001"
 
     def test_query_invalid_user(self, biz):
         result = biz.query_user_coupons("")
         assert result["code"] == CouponError.INVALID_PARAM
 
 
-# ========== 批量评估 ==========
-
-class TestBatchEvaluate:
-    def test_batch_evaluate_success(self, biz, redis_store):
-        setup_new_user(redis_store, "user_001")
-
-        result = biz.batch_evaluate(
-            "user_001", "activity", ["COUPON_ACT_001", "COUPON_SHIP_001"]
-        )
-
-        assert result["code"] == CouponError.OK
-        assert len(result["results"]) == 2
-        for r in result["results"]:
-            assert "score" in r
-            assert "recommended" in r
-
-    def test_batch_evaluate_model_failure_fallback(self, biz, redis_store):
-        """模型故障时批量评估使用兜底分数"""
-        setup_new_user(redis_store, "user_001")
-        biz.model.set_simulate_failure(True)
-
-        result = biz.batch_evaluate(
-            "user_001", "activity", ["COUPON_ACT_001"]
-        )
-
-        assert result["code"] == CouponError.OK
-        assert "兜底" in result["message"]
-
-        biz.model.set_simulate_failure(False)
-
-    def test_batch_evaluate_invalid_params(self, biz):
-        result = biz.batch_evaluate("", "activity", [])
-        assert result["code"] == CouponError.INVALID_PARAM
-
-
 # ========== 限流 ==========
 
 class TestRateLimit:
-    def test_user_rate_limit(self, biz_with_rate_limit, redis_store):
+    def test_user_rate_limit(self, biz_with_rate_limit, redis_store, mock_scoring_client):
         """用户级限流（per_user_qps=2）"""
         biz = biz_with_rate_limit
         setup_stock(redis_store, "COUPON_ACT_001", 100)
-        setup_stock(redis_store, "COUPON_SHIP_001", 100)
-        setup_old_user(redis_store, "user_001")
+        mock_scoring_client.score.return_value = [
+            ItemScore(item_id="COUPON_ACT_001", score=0.8),
+        ]
 
-        # 前 2 次应该成功
-        r1 = biz.claim_coupon("user_001", "COUPON_ACT_001", "activity")
-        r2 = biz.claim_coupon("user_001", "COUPON_SHIP_001", "activity")
+        r1 = recommend(biz, "u001", "game", "mobile", "", {}, SAMPLE_ITEMS)
+        r2 = recommend(biz, "u001", "game", "mobile", "", {}, SAMPLE_ITEMS)
+        r3 = recommend(biz, "u001", "game", "mobile", "", {}, SAMPLE_ITEMS)
 
-        # 第 3 次应该被限流
-        # 需要不同的 coupon_id 避免 ALREADY_CLAIMED
-        setup_stock(redis_store, "COUPON_MEM_001", 100)
-        setup_member(redis_store, "user_001")
-        r3 = biz.claim_coupon("user_001", "COUPON_MEM_001", "member_day")
-
-        # 至少有一次被限流（取决于时间窗口内的请求数）
         codes = [r1["code"], r2["code"], r3["code"]]
         assert CouponError.RATE_LIMITED in codes or all(c == CouponError.OK for c in codes[:2])
