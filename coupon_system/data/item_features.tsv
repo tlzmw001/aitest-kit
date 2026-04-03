@@ -1,0 +1,4 @@
+COUPON_NEW_001	{"stock": 10000, "popularity": 0.7, "avg_conversion": 0.12}
+COUPON_ACT_001	{"stock": 50000, "popularity": 0.85, "avg_conversion": 0.18}
+COUPON_MEM_001	{"stock": 5000, "popularity": 0.6, "avg_conversion": 0.25}
+COUPON_SHIP_001	{"stock": 100000, "popularity": 0.9, "avg_conversion": 0.3}
