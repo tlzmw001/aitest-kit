@@ -1,4 +1,4 @@
-"""优惠券系统启动入口 — 同时启动 FastAPI (HTTP) 和 gRPC 服务"""
+"""优惠券策略系统启动入口 — 同时启动 FastAPI (HTTP) 和 gRPC 服务"""
 
 import os
 import sys
@@ -8,71 +8,73 @@ from pathlib import Path
 
 import uvicorn
 
-from coupon_system.config import load_config
+from coupon_system.config import (
+    load_config,
+    load_scene_routing_config,
+    load_experiment_config,
+    load_calibration_config,
+)
 from coupon_system.services.redis_store import RedisStore
-from coupon_system.services.model_service import MockModelService
+from coupon_system.services.experiment import ExperimentRouter
+from coupon_system.services.scene_router import SceneRouter
+from coupon_system.services.coarse_ranker import CoarseRanker
+from coupon_system.services.feature_store import FeatureStore
+from coupon_system.services.scoring_client import ScoringClient
+from coupon_system.services.calibrator import Calibrator
 from coupon_system.services.coupon_service import CouponBizService
 from coupon_system.http_app import set_biz_service
 
 
-def compile_proto():
-    """编译 proto 文件"""
+def compile_protos():
+    """编译所有 proto 文件"""
     proto_dir = Path(__file__).parent / "protos"
-    proto_file = proto_dir / "coupon.proto"
+    proto_files = [
+        ("coupon.proto", "coupon_pb2.py", "coupon_pb2_grpc.py", "coupon_pb2"),
+        ("scoring.proto", "scoring_pb2.py", "scoring_pb2_grpc.py", "scoring_pb2"),
+    ]
 
-    if not proto_file.exists():
-        print(f"Proto file not found: {proto_file}")
-        sys.exit(1)
+    for proto_name, pb2_name, grpc_name, module_name in proto_files:
+        proto_file = proto_dir / proto_name
+        pb2_file = proto_dir / pb2_name
 
-    # 检查是否已编译
-    pb2_file = proto_dir / "coupon_pb2.py"
-    if pb2_file.exists():
-        if pb2_file.stat().st_mtime >= proto_file.stat().st_mtime:
-            return  # 已是最新
+        if not proto_file.exists():
+            print(f"Proto file not found: {proto_file}")
+            sys.exit(1)
 
-    print("Compiling proto files...")
-    result = subprocess.run(
-        [
-            sys.executable, "-m", "grpc_tools.protoc",
-            f"--proto_path={proto_dir}",
-            f"--python_out={proto_dir}",
-            f"--grpc_python_out={proto_dir}",
-            str(proto_file),
-        ],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        print(f"Proto compilation failed: {result.stderr}")
-        sys.exit(1)
+        if pb2_file.exists() and pb2_file.stat().st_mtime >= proto_file.stat().st_mtime:
+            continue
 
-    # 创建 __init__.py
+        print(f"Compiling {proto_name}...")
+        result = subprocess.run(
+            [
+                sys.executable, "-m", "grpc_tools.protoc",
+                f"--proto_path={proto_dir}",
+                f"--python_out={proto_dir}",
+                f"--grpc_python_out={proto_dir}",
+                str(proto_file),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            print(f"Proto compilation failed: {result.stderr}")
+            sys.exit(1)
+
+        # 修复 grpc import 路径
+        grpc_file = proto_dir / grpc_name
+        if grpc_file.exists():
+            content = grpc_file.read_text()
+            old_import = f"import {module_name} as {module_name.replace('_', '__')}"
+            new_import = f"from coupon_system.protos import {module_name} as {module_name.replace('_', '__')}"
+            content = content.replace(old_import, new_import)
+            grpc_file.write_text(content)
+
+    # 确保 __init__.py 存在
     init_file = proto_dir / "__init__.py"
     if not init_file.exists():
         init_file.write_text("")
 
-    # 修复 grpc import 路径
-    grpc_file = proto_dir / "coupon_pb2_grpc.py"
-    if grpc_file.exists():
-        content = grpc_file.read_text()
-        content = content.replace(
-            "import coupon_pb2 as coupon__pb2",
-            "from coupon_system.protos import coupon_pb2 as coupon__pb2",
-        )
-        grpc_file.write_text(content)
-
     print("Proto compilation done.")
-
-
-def init_stock(redis_store: RedisStore, config):
-    """初始化优惠券库存"""
-    for coupon_id, template in config.coupon_templates.items():
-        current = redis_store.get_stock(coupon_id)
-        if current == 0:
-            redis_store.init_stock(coupon_id, template.total_stock, config.redis.stock_ttl)
-            print(f"  Initialized stock: {coupon_id} = {template.total_stock}")
-        else:
-            print(f"  Stock exists: {coupon_id} = {current}")
 
 
 def start_grpc_server(biz_service: CouponBizService, port: int = 50051):
@@ -91,40 +93,67 @@ def main():
     config_path = os.environ.get("COUPON_CONFIG_PATH", None)
 
     # 1. 编译 proto
-    compile_proto()
+    compile_protos()
 
     # 2. 加载配置
     config = load_config(config_path)
-    print(f"Config loaded: {len(config.scenes)} scenes, {len(config.coupon_templates)} templates")
+    scene_routing_config = load_scene_routing_config()
+    experiment_config = load_experiment_config()
+    calibration_config = load_calibration_config()
+    print(f"Config loaded: scoring_service={config.scoring_service.host}:{config.scoring_service.port}")
 
     # 3. 初始化依赖
     redis_store = RedisStore(config.redis.url, config.redis.key_prefix)
-    model_service = MockModelService(
-        timeout=config.model_service.timeout,
-        enabled=config.model_service.enabled,
+    experiment_router = ExperimentRouter(experiment_config)
+    scene_router = SceneRouter(scene_routing_config)
+    coarse_ranker = CoarseRanker()
+    feature_store = FeatureStore(
+        redis_store=redis_store,
+        user_feature_keys=config.user_feature_keys,
+        item_feature_file=config.item_feature_file,
     )
-    biz_service = CouponBizService(config, redis_store, model_service)
+    scoring_client = ScoringClient(
+        host=config.scoring_service.host,
+        port=config.scoring_service.port,
+        timeout=config.scoring_service.timeout,
+        enabled=config.scoring_service.enabled,
+        external_host=config.external_scoring_service.host,
+        external_port=config.external_scoring_service.port,
+        external_timeout=config.external_scoring_service.timeout,
+        external_enabled=config.external_scoring_service.enabled,
+        external_path=config.external_scoring_service.path,
+        external_user_id_salt=config.external_scoring_service.user_id_salt,
+    )
+    calibrator = Calibrator(calibration_config)
 
-    # 4. 初始化库存
-    print("Initializing coupon stock...")
-    init_stock(redis_store, config)
+    biz_service = CouponBizService(
+        config=config,
+        redis_store=redis_store,
+        experiment_router=experiment_router,
+        scene_router=scene_router,
+        coarse_ranker=coarse_ranker,
+        feature_store=feature_store,
+        scoring_client=scoring_client,
+        calibrator=calibrator,
+    )
 
-    # 5. 注入 FastAPI
+    # 4. 注入 FastAPI
     set_biz_service(biz_service)
 
-    # 6. 启动 gRPC（后台线程）
+    # 5. 启动 gRPC（后台线程）
     grpc_server = start_grpc_server(biz_service, grpc_port)
 
-    # 7. 信号处理
+    # 6. 信号处理
     def shutdown(signum, frame):
         print("\nShutting down...")
+        scoring_client.close()
         grpc_server.stop(grace=5)
         sys.exit(0)
 
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
 
-    # 8. 启动 FastAPI（主线程）
+    # 7. 启动 FastAPI（主线程）
     print(f"HTTP server starting on port {http_port}")
     print(f"API docs: http://localhost:{http_port}/docs")
     uvicorn.run(
