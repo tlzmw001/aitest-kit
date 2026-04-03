@@ -2,50 +2,70 @@ syntax = "proto3";
 
 package coupon;
 
-option python_package = "coupon_system.protos";
-
-// 优惠券服务 - 主接口
+// 优惠券策略服务 — 主接口
 service CouponService {
-  // 领取优惠券
-  rpc ClaimCoupon (ClaimCouponRequest) returns (ClaimCouponResponse);
+  // 推荐 + 发放
+  rpc Recommend (RecommendRequest) returns (RecommendResponse);
   // 查询用户优惠券列表
   rpc QueryUserCoupons (QueryUserCouponsRequest) returns (QueryUserCouponsResponse);
-  // 批量审核优惠券发放（模型精排）
-  rpc BatchEvaluate (BatchEvaluateRequest) returns (BatchEvaluateResponse);
 }
 
-// ========== ClaimCoupon ==========
+// ========== Recommend ==========
 
-message ClaimCouponRequest {
+message RecommendRequest {
   string user_id = 1;
-  string coupon_id = 2;
-  string scene = 3;           // 场景: new_user, activity, member_day
-  map<string, string> extra = 4;  // 扩展字段
+  string scene_name = 2;           // 场景名: game, ad
+  string device = 3;               // 设备: mobile, pc, pad
+  string policy_id = 4;            // 兜底策略ID（命中则跳过打分）
+  map<string, string> context = 5; // 上下文特征（时间、渠道等）
+  repeated CouponItem items = 6;   // 候选优惠券物料
+  optional float score_threshold = 7;       // 请求级阈值（必传）
+  optional int32 max_claim_per_request = 8; // 请求级最大发券数量（必传）
+  optional int32 external = 9;              // 打分路由（必传）0=内部，1=外部
+  string req_id = 10;                       // 请求标识（日志追踪）
 }
 
-message ClaimCouponResponse {
-  int32 code = 1;             // 0=成功, 非0=错误
+message CouponItem {
+  string item_id = 1;
+  string coupon_type = 2;          // discount, fixed, free_shipping
+  int32 value = 3;                 // 面值（分）
+  int32 min_spend = 4;             // 门槛（分）
+  int32 expire_days = 5;
+}
+
+message RecommendResponse {
+  int32 code = 1;
   string message = 2;
-  CouponInfo coupon = 3;
+  int32 scene_id = 3;
+  map<string, string> experiment_info = 4;  // 命中的实验策略
+  repeated ScoredItem results = 5;          // 每个候选券的打分结果
+  ClaimedCoupon coupon = 6;                 // 发放的券（如有）
 }
 
-message CouponInfo {
-  string id = 1;
-  string coupon_id = 2;
+message ScoredItem {
+  string item_id = 1;
+  float score = 2;
+  float calibrated_score = 3;
+  bool recommended = 4;
+}
+
+message ClaimedCoupon {
+  string instance_id = 1;
+  string item_id = 2;
   string user_id = 3;
-  string status = 4;          // claimed, used, expired
-  string coupon_type = 5;     // discount, fixed, free_shipping
-  int32 value = 6;            // 面值（分）
-  int32 min_spend = 7;        // 最低消费（分）
-  int64 expire_time = 8;      // 过期时间戳
-  int64 claim_time = 9;       // 领取时间戳
+  string status = 4;
+  string coupon_type = 5;
+  int32 value = 6;
+  int32 min_spend = 7;
+  int64 expire_time = 8;
+  int64 claim_time = 9;
 }
 
 // ========== QueryUserCoupons ==========
 
 message QueryUserCouponsRequest {
   string user_id = 1;
-  string status_filter = 2;   // 可选: claimed, used, expired, all
+  string status_filter = 2;
   int32 page = 3;
   int32 page_size = 4;
 }
@@ -53,27 +73,6 @@ message QueryUserCouponsRequest {
 message QueryUserCouponsResponse {
   int32 code = 1;
   string message = 2;
-  repeated CouponInfo coupons = 3;
+  repeated ClaimedCoupon coupons = 3;
   int32 total = 4;
-}
-
-// ========== BatchEvaluate ==========
-
-message BatchEvaluateRequest {
-  string user_id = 1;
-  string scene = 2;
-  repeated string candidate_coupon_ids = 3;
-}
-
-message BatchEvaluateResponse {
-  int32 code = 1;
-  string message = 2;
-  repeated EvaluateResult results = 3;
-}
-
-message EvaluateResult {
-  string coupon_id = 1;
-  float score = 2;            // 模型预估的发放价值分数
-  bool recommended = 3;       // 是否推荐发放
-  string reason = 4;          // 推荐/不推荐原因
 }

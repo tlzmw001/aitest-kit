@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package scoring;
+
+// 打分服务 — 独立 gRPC 服务，接收特征和物料，返回每个 item 的分数
+service ScoringService {
+  rpc Score (ScoreRequest) returns (ScoreResponse);
+}
+
+message ScoreRequest {
+  string request_id = 1;
+  string user_id = 2;
+  int32 scene_id = 3;
+  map<string, string> user_features = 4;
+  map<string, string> context_features = 5;
+  repeated ItemFeatures items = 6;
+}
+
+message ItemFeatures {
+  string item_id = 1;
+  map<string, string> features = 2;
+}
+
+message ScoreResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated ItemScore scores = 3;
+}
+
+message ItemScore {
+  string item_id = 1;
+  float score = 2;
+}
