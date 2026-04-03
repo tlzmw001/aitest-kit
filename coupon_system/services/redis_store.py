@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import time
+from typing import Optional
 
 import redis
 
@@ -65,18 +66,40 @@ class RedisStore:
         self.client.expire(key, ttl)
         return result
 
-    # ========== 用户画像 ==========
+    # ========== 用户画像（兼容旧接口） ==========
 
-    def get_user_profile(self, user_id: str) -> dict | None:
-        """获取用户画像"""
+    def get_user_profile(self, user_id: str) -> Optional[dict]:
+        """获取用户画像（整体 JSON，兼容 admin 接口）"""
         key = self._key("user_profile", user_id)
         data = self.client.get(key)
         return json.loads(data) if data else None
 
     def set_user_profile(self, user_id: str, profile: dict, ttl: int = 86400) -> None:
-        """设置用户画像"""
+        """设置用户画像（整体 JSON，兼容 admin 接口）"""
         key = self._key("user_profile", user_id)
         self.client.set(key, json.dumps(profile), ex=ttl)
+
+    # ========== 用户特征（按字段） ==========
+
+    def get_user_feature(self, user_id: str, feature_name: str) -> Optional[str]:
+        """获取单个用户特征，key: {prefix}user_feature:{feature_name}:{uid}"""
+        key = self._key("user_feature", feature_name, user_id)
+        return self.client.get(key)
+
+    def set_user_feature(
+        self, user_id: str, feature_name: str, value: str, ttl: int = 86400
+    ) -> None:
+        """设置单个用户特征"""
+        key = self._key("user_feature", feature_name, user_id)
+        self.client.set(key, value, ex=ttl)
+
+    def set_user_features(self, user_id: str, features: dict, ttl: int = 86400) -> None:
+        """批量设置用户特征"""
+        pipe = self.client.pipeline()
+        for feature_name, value in features.items():
+            key = self._key("user_feature", feature_name, user_id)
+            pipe.set(key, str(value), ex=ttl)
+        pipe.execute()
 
     # ========== 限流 ==========
 
@@ -100,7 +123,7 @@ class RedisStore:
         key = self._key("instance", instance_id)
         self.client.set(key, json.dumps(data), ex=ttl)
 
-    def get_coupon_instance(self, instance_id: str) -> dict | None:
+    def get_coupon_instance(self, instance_id: str) -> Optional[dict]:
         """获取优惠券实例"""
         key = self._key("instance", instance_id)
         data = self.client.get(key)
@@ -116,3 +139,38 @@ class RedisStore:
         key = self._key("user", user_id, "instances")
         self.client.sadd(key, instance_id)
         self.client.expire(key, ttl)
+
+    # ========== 兜底分 ==========
+
+    def get_fallback_score(self, scene_id: Optional[int] = None) -> Optional[float]:
+        """
+        获取兜底分。
+        优先读取 scene 级别：fallback:score:{scene_id}
+        其次读取全局默认：fallback:score:default
+        """
+        if scene_id is not None:
+            scene_val = self.client.get(self._key("fallback", "score", str(scene_id)))
+            if scene_val is not None:
+                try:
+                    return float(scene_val)
+                except ValueError:
+                    return None
+
+        default_val = self.client.get(self._key("fallback", "score", "default"))
+        if default_val is None:
+            return None
+
+        try:
+            return float(default_val)
+        except ValueError:
+            return None
+
+    def set_fallback_score(
+        self, score: float, scene_id: Optional[int] = None, ttl: int = 86400,
+    ) -> None:
+        """设置兜底分（测试/运维辅助）"""
+        if scene_id is None:
+            key = self._key("fallback", "score", "default")
+        else:
+            key = self._key("fallback", "score", str(scene_id))
+        self.client.set(key, str(score), ex=ttl)
