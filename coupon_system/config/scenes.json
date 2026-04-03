@@ -1,0 +1,13 @@
+{
+  "routes": [
+    {"scene_name": "game", "device": "mobile", "scene_id": 1001, "description": "手机游戏场景"},
+    {"scene_name": "game", "device": "pc", "scene_id": 1002, "description": "PC游戏场景"},
+    {"scene_name": "game", "device": "pad", "scene_id": 1003, "description": "平板游戏场景"},
+    {"scene_name": "ad", "device": "mobile", "scene_id": 2001, "description": "手机广告场景"},
+    {"scene_name": "ad", "device": "pc", "scene_id": 2002, "description": "PC广告场景"},
+    {"scene_name": "ad", "device": "pad", "scene_id": 2003, "description": "平板广告场景"}
+  ],
+  "fallback_policy_ids": ["policy_fallback_001", "policy_fallback_002"],
+  "fallback_scene_id": 3001,
+  "fallback_score": 0.5
+}

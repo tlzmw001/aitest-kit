@@ -1,32 +1,16 @@
-"""配置加载模块"""
+"""配置加载模块 — YAML 主配置 + JSON 场景/实验/校准配置"""
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 import yaml
 
 
-@dataclass
-class SceneConfig:
-    name: str
-    allowed_coupon_types: list[str]
-    max_claim_per_user: int
-    require_new_user: bool = False
-    require_member: bool = False
-
-
-@dataclass
-class CouponTemplate:
-    name: str
-    type: str
-    value: int
-    min_spend: int
-    total_stock: int
-    expire_days: int
-    scenes: list[str]
-
+# ========== 主配置 dataclass ==========
 
 @dataclass
 class RateLimitConfig:
@@ -45,16 +29,26 @@ class FallbackAction:
 @dataclass
 class FallbackConfig:
     enabled: bool = True
-    on_model_timeout: FallbackAction = field(default_factory=FallbackAction)
-    on_model_unavailable: FallbackAction = field(default_factory=FallbackAction)
+    on_scoring_timeout: FallbackAction = field(default_factory=FallbackAction)
+    on_scoring_unavailable: FallbackAction = field(default_factory=FallbackAction)
 
 
 @dataclass
-class ModelServiceConfig:
+class ScoringServiceConfig:
     host: str = "localhost"
     port: int = 50052
     timeout: float = 2.0
     enabled: bool = True
+
+
+@dataclass
+class ExternalScoringServiceConfig:
+    host: str = "localhost"
+    port: int = 50053
+    timeout: float = 2.0
+    enabled: bool = True
+    path: str = "/score"
+    user_id_salt: str = "coupon_external_uid_salt"
 
 
 @dataclass
@@ -67,32 +61,77 @@ class RedisConfig:
 
 @dataclass
 class AppConfig:
-    scenes: dict[str, SceneConfig] = field(default_factory=dict)
-    coupon_templates: dict[str, CouponTemplate] = field(default_factory=dict)
     rate_limit: RateLimitConfig = field(default_factory=RateLimitConfig)
     fallback: FallbackConfig = field(default_factory=FallbackConfig)
-    model_service: ModelServiceConfig = field(default_factory=ModelServiceConfig)
+    scoring_service: ScoringServiceConfig = field(default_factory=ScoringServiceConfig)
+    external_scoring_service: ExternalScoringServiceConfig = field(default_factory=ExternalScoringServiceConfig)
     redis: RedisConfig = field(default_factory=RedisConfig)
+    user_feature_keys: list = field(default_factory=list)
+    item_feature_file: str = "data/item_features.tsv"
 
 
-def load_config(config_path: str | None = None) -> AppConfig:
-    """加载配置文件"""
+# ========== 场景路由配置 ==========
+
+@dataclass
+class SceneRoute:
+    scene_name: str
+    device: str
+    scene_id: int
+    description: str = ""
+
+
+@dataclass
+class SceneRoutingConfig:
+    routes: list = field(default_factory=list)
+    fallback_policy_ids: list = field(default_factory=list)
+    fallback_scene_id: int = 3001
+    fallback_score: float = 0.5
+
+
+# ========== AB 实验配置 ==========
+
+@dataclass
+class ExperimentStrategy:
+    id: str
+    hash_range: list = field(default_factory=lambda: [0, 100])
+    params: dict = field(default_factory=dict)
+
+
+@dataclass
+class Experiment:
+    name: str
+    strategies: list = field(default_factory=list)
+
+
+@dataclass
+class ExperimentConfig:
+    experiments: list = field(default_factory=list)
+
+
+# ========== 校准配置 ==========
+
+@dataclass
+class CalibrationCoefficients:
+    k: float = 1.0
+    b: float = 0.0
+
+
+# ========== 加载函数 ==========
+
+def _resolve_config_dir() -> Path:
+    return Path(__file__).parent
+
+
+def load_config(config_path: Optional[str] = None) -> AppConfig:
+    """加载主配置文件（YAML）"""
     if config_path is None:
         config_path = os.environ.get(
             "COUPON_CONFIG_PATH",
-            str(Path(__file__).parent / "settings.yaml"),
+            str(_resolve_config_dir() / "settings.yaml"),
         )
 
     with open(config_path) as f:
         raw = yaml.safe_load(f)
-
-    scenes = {}
-    for key, val in raw.get("scenes", {}).items():
-        scenes[key] = SceneConfig(**val)
-
-    templates = {}
-    for key, val in raw.get("coupon_templates", {}).items():
-        templates[key] = CouponTemplate(**val)
 
     rl_raw = raw.get("rate_limit", {})
     rate_limit = RateLimitConfig(**rl_raw)
@@ -100,21 +139,75 @@ def load_config(config_path: str | None = None) -> AppConfig:
     fb_raw = raw.get("fallback", {})
     fallback = FallbackConfig(
         enabled=fb_raw.get("enabled", True),
-        on_model_timeout=FallbackAction(**fb_raw.get("on_model_timeout", {})),
-        on_model_unavailable=FallbackAction(**fb_raw.get("on_model_unavailable", {})),
+        on_scoring_timeout=FallbackAction(**fb_raw.get("on_scoring_timeout", {})),
+        on_scoring_unavailable=FallbackAction(**fb_raw.get("on_scoring_unavailable", {})),
     )
 
-    model_raw = raw.get("model_service", {})
-    model_service = ModelServiceConfig(**model_raw)
+    scoring_raw = raw.get("scoring_service", {})
+    scoring_service = ScoringServiceConfig(**scoring_raw)
+
+    external_scoring_raw = raw.get("external_scoring_service", {})
+    external_scoring_service = ExternalScoringServiceConfig(**external_scoring_raw)
 
     redis_raw = raw.get("redis", {})
     redis_config = RedisConfig(**redis_raw)
 
+    user_feature_keys = raw.get("user_feature_keys", [])
+    item_feature_file = raw.get("item_feature_file", "data/item_features.tsv")
+
     return AppConfig(
-        scenes=scenes,
-        coupon_templates=templates,
         rate_limit=rate_limit,
         fallback=fallback,
-        model_service=model_service,
+        scoring_service=scoring_service,
+        external_scoring_service=external_scoring_service,
         redis=redis_config,
+        user_feature_keys=user_feature_keys,
+        item_feature_file=item_feature_file,
     )
+
+
+def load_scene_routing_config(config_path: Optional[str] = None) -> SceneRoutingConfig:
+    """加载场景路由配置（JSON）"""
+    if config_path is None:
+        config_path = str(_resolve_config_dir() / "scenes.json")
+
+    with open(config_path) as f:
+        raw = json.load(f)
+
+    routes = [SceneRoute(**r) for r in raw.get("routes", [])]
+    return SceneRoutingConfig(
+        routes=routes,
+        fallback_policy_ids=raw.get("fallback_policy_ids", []),
+        fallback_scene_id=raw.get("fallback_scene_id", 3001),
+        fallback_score=raw.get("fallback_score", 0.5),
+    )
+
+
+def load_experiment_config(config_path: Optional[str] = None) -> ExperimentConfig:
+    """加载 AB 实验配置（JSON）"""
+    if config_path is None:
+        config_path = str(_resolve_config_dir() / "experiments.json")
+
+    with open(config_path) as f:
+        raw = json.load(f)
+
+    experiments = []
+    for exp_raw in raw.get("experiments", []):
+        strategies = [ExperimentStrategy(**s) for s in exp_raw.get("strategies", [])]
+        experiments.append(Experiment(name=exp_raw["name"], strategies=strategies))
+
+    return ExperimentConfig(experiments=experiments)
+
+
+def load_calibration_config(config_path: Optional[str] = None) -> dict:
+    """加载校准系数（JSON）→ dict[str, CalibrationCoefficients]"""
+    if config_path is None:
+        config_path = str(_resolve_config_dir() / "calibration.json")
+
+    with open(config_path) as f:
+        raw = json.load(f)
+
+    result = {}
+    for key, val in raw.items():
+        result[key] = CalibrationCoefficients(k=val["k"], b=val["b"])
+    return result

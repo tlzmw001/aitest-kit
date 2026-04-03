@@ -1,0 +1,44 @@
+{
+  "experiments": [
+    {
+      "name": "coarse_rank_exp",
+      "strategies": [
+        {
+          "id": "cr_on",
+          "hash_range": [0, 50],
+          "params": {
+            "enable_coarse_rank": true,
+            "truncate_count": 5,
+            "truncate_rule": "top_value"
+          }
+        },
+        {
+          "id": "cr_off",
+          "hash_range": [50, 100],
+          "params": {
+            "enable_coarse_rank": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "calibration_exp",
+      "strategies": [
+        {
+          "id": "cal_on",
+          "hash_range": [0, 50],
+          "params": {
+            "enable_calibration": true
+          }
+        },
+        {
+          "id": "cal_off",
+          "hash_range": [50, 100],
+          "params": {
+            "enable_calibration": false
+          }
+        }
+      ]
+    }
+  ]
+}
