@@ -1,5 +1,6 @@
 """优惠券策略系统启动入口 — 同时启动 FastAPI (HTTP) 和 gRPC 服务"""
 
+import json
 import os
 import sys
 import signal
@@ -8,14 +9,14 @@ from pathlib import Path
 
 import uvicorn
 
+from ab_experiment_sdk import ConfigBasedABExperimentSDK
 from coupon_system.config import (
     load_config,
     load_scene_routing_config,
     load_experiment_config,
-    load_calibration_config,
+    load_scene_experiment_mapping_config,
 )
 from coupon_system.services.redis_store import RedisStore
-from coupon_system.services.experiment import ExperimentRouter
 from coupon_system.services.scene_router import SceneRouter
 from coupon_system.services.coarse_ranker import CoarseRanker
 from coupon_system.services.feature_store import FeatureStore
@@ -23,6 +24,24 @@ from coupon_system.services.scoring_client import ScoringClient
 from coupon_system.services.calibrator import Calibrator
 from coupon_system.services.coupon_service import CouponBizService
 from coupon_system.http_app import set_biz_service
+
+
+def _load_ab_sdk_whitelist_from_env() -> dict:
+    """
+    读取业务侧传给 SDK 的白名单配置（可选）。
+
+    环境变量格式：
+    AB_SDK_WHITELIST_JSON='{"user_1":{"coarse_rank_exp_game":"cr_off"}}'
+    """
+    raw = os.environ.get("AB_SDK_WHITELIST_JSON", "").strip()
+    if not raw:
+        return {}
+    try:
+        val = json.loads(raw)
+        return val if isinstance(val, dict) else {}
+    except json.JSONDecodeError:
+        print("Invalid AB_SDK_WHITELIST_JSON, ignore whitelist.")
+        return {}
 
 
 def compile_protos():
@@ -99,12 +118,14 @@ def main():
     config = load_config(config_path)
     scene_routing_config = load_scene_routing_config()
     experiment_config = load_experiment_config()
-    calibration_config = load_calibration_config()
+    scene_experiment_mapping_config = load_scene_experiment_mapping_config()
     print(f"Config loaded: scoring_service={config.scoring_service.host}:{config.scoring_service.port}")
 
     # 3. 初始化依赖
     redis_store = RedisStore(config.redis.url, config.redis.key_prefix)
-    experiment_router = ExperimentRouter(experiment_config)
+    experiment_sdk = ConfigBasedABExperimentSDK(experiment_config)
+    # 白名单属于 SDK 能力，业务侧通过 SDK 接口注入。
+    experiment_sdk.set_whitelist(_load_ab_sdk_whitelist_from_env())
     scene_router = SceneRouter(scene_routing_config)
     coarse_ranker = CoarseRanker()
     feature_store = FeatureStore(
@@ -124,12 +145,14 @@ def main():
         external_path=config.external_scoring_service.path,
         external_user_id_salt=config.external_scoring_service.user_id_salt,
     )
-    calibrator = Calibrator(calibration_config)
+    calibrator = Calibrator()
 
     biz_service = CouponBizService(
         config=config,
         redis_store=redis_store,
-        experiment_router=experiment_router,
+        experiment_sdk=experiment_sdk,
+        scene_experiment_mapping=scene_experiment_mapping_config.scene_experiments,
+        default_scene_experiments=scene_experiment_mapping_config.default_experiments,
         scene_router=scene_router,
         coarse_ranker=coarse_ranker,
         feature_store=feature_store,

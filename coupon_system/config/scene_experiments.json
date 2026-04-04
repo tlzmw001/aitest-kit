@@ -1,0 +1,11 @@
+{
+  "scene_experiments": {
+    "1001": ["coarse_rank_exp_game", "calibration_exp_game"],
+    "1002": ["coarse_rank_exp_game", "calibration_exp_game"],
+    "1003": ["coarse_rank_exp_game", "calibration_exp_game"],
+    "2001": ["coarse_rank_exp_ad", "calibration_exp_ad"],
+    "2002": ["coarse_rank_exp_ad", "calibration_exp_ad"],
+    "2003": ["coarse_rank_exp_ad", "calibration_exp_ad"]
+  },
+  "default_experiments": []
+}

@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0c\x63oupon.proto\x12\x06\x63oupon\"\x89\x03\n\x10RecommendRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x12\n\nscene_name\x18\x02 \x01(\t\x12\x0e\n\x06\x64\x65vice\x18\x03 \x01(\t\x12\x11\n\tpolicy_id\x18\x04 \x01(\t\x12\x36\n\x07\x63ontext\x18\x05 \x03(\x0b\x32%.coupon.RecommendRequest.ContextEntry\x12!\n\x05items\x18\x06 \x03(\x0b\x32\x12.coupon.CouponItem\x12\x1c\n\x0fscore_threshold\x18\x07 \x01(\x02H\x00\x88\x01\x01\x12\"\n\x15max_claim_per_request\x18\x08 \x01(\x05H\x01\x88\x01\x01\x12\x15\n\x08\x65xternal\x18\t \x01(\x05H\x02\x88\x01\x01\x12\x0e\n\x06req_id\x18\n \x01(\t\x1a.\n\x0c\x43ontextEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x42\x12\n\x10_score_thresholdB\x18\n\x16_max_claim_per_requestB\x0b\n\t_external\"i\n\nCouponItem\x12\x0f\n\x07item_id\x18\x01 \x01(\t\x12\x13\n\x0b\x63oupon_type\x18\x02 \x01(\t\x12\r\n\x05value\x18\x03 \x01(\x05\x12\x11\n\tmin_spend\x18\x04 \x01(\x05\x12\x13\n\x0b\x65xpire_days\x18\x05 \x01(\x05\"\x8f\x02\n\x11RecommendResponse\x12\x0c\n\x04\x63ode\x18\x01 \x01(\x05\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x10\n\x08scene_id\x18\x03 \x01(\x05\x12\x46\n\x0f\x65xperiment_info\x18\x04 \x03(\x0b\x32-.coupon.RecommendResponse.ExperimentInfoEntry\x12#\n\x07results\x18\x05 \x03(\x0b\x32\x12.coupon.ScoredItem\x12%\n\x06\x63oupon\x18\x06 \x01(\x0b\x32\x15.coupon.ClaimedCoupon\x1a\x35\n\x13\x45xperimentInfoEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"[\n\nScoredItem\x12\x0f\n\x07item_id\x18\x01 \x01(\t\x12\r\n\x05score\x18\x02 \x01(\x02\x12\x18\n\x10\x63\x61librated_score\x18\x03 \x01(\x02\x12\x13\n\x0brecommended\x18\x04 \x01(\x08\"\xb6\x01\n\rClaimedCoupon\x12\x13\n\x0binstance_id\x18\x01 \x01(\t\x12\x0f\n\x07item_id\x18\x02 \x01(\t\x12\x0f\n\x07user_id\x18\x03 \x01(\t\x12\x0e\n\x06status\x18\x04 \x01(\t\x12\x13\n\x0b\x63oupon_type\x18\x05 \x01(\t\x12\r\n\x05value\x18\x06 \x01(\x05\x12\x11\n\tmin_spend\x18\x07 \x01(\x05\x12\x13\n\x0b\x65xpire_time\x18\x08 \x01(\x03\x12\x12\n\nclaim_time\x18\t \x01(\x03\"b\n\x17QueryUserCouponsRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x15\n\rstatus_filter\x18\x02 \x01(\t\x12\x0c\n\x04page\x18\x03 \x01(\x05\x12\x11\n\tpage_size\x18\x04 \x01(\x05\"p\n\x18QueryUserCouponsResponse\x12\x0c\n\x04\x63ode\x18\x01 \x01(\x05\x12\x0f\n\x07message\x18\x02 \x01(\t\x12&\n\x07\x63oupons\x18\x03 \x03(\x0b\x32\x15.coupon.ClaimedCoupon\x12\r\n\x05total\x18\x04 \x01(\x05\x32\xa8\x01\n\rCouponService\x12@\n\tRecommend\x12\x18.coupon.RecommendRequest\x1a\x19.coupon.RecommendResponse\x12U\n\x10QueryUserCoupons\x12\x1f.coupon.QueryUserCouponsRequest\x1a .coupon.QueryUserCouponsResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0c\x63oupon.proto\x12\x06\x63oupon\"\x89\x03\n\x10RecommendRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x12\n\nscene_name\x18\x02 \x01(\t\x12\x0e\n\x06\x64\x65vice\x18\x03 \x01(\t\x12\x11\n\tpolicy_id\x18\x04 \x01(\t\x12\x36\n\x07\x63ontext\x18\x05 \x03(\x0b\x32%.coupon.RecommendRequest.ContextEntry\x12!\n\x05items\x18\x06 \x03(\x0b\x32\x12.coupon.CouponItem\x12\x1c\n\x0fscore_threshold\x18\x07 \x01(\x02H\x00\x88\x01\x01\x12\"\n\x15max_claim_per_request\x18\x08 \x01(\x05H\x01\x88\x01\x01\x12\x15\n\x08\x65xternal\x18\t \x01(\x05H\x02\x88\x01\x01\x12\x0e\n\x06req_id\x18\n \x01(\t\x1a.\n\x0c\x43ontextEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x42\x12\n\x10_score_thresholdB\x18\n\x16_max_claim_per_requestB\x0b\n\t_external\"{\n\nCouponItem\x12\x0f\n\x07item_id\x18\x01 \x01(\t\x12\x13\n\x0b\x63oupon_type\x18\x02 \x01(\t\x12\r\n\x05value\x18\x03 \x01(\x05\x12\x11\n\tmin_spend\x18\x04 \x01(\x05\x12\x13\n\x0b\x65xpire_days\x18\x05 \x01(\x05\x12\x10\n\x08is_prior\x18\x06 \x01(\x08\"\x8f\x02\n\x11RecommendResponse\x12\x0c\n\x04\x63ode\x18\x01 \x01(\x05\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x10\n\x08scene_id\x18\x03 \x01(\x05\x12\x46\n\x0f\x65xperiment_info\x18\x04 \x03(\x0b\x32-.coupon.RecommendResponse.ExperimentInfoEntry\x12#\n\x07results\x18\x05 \x03(\x0b\x32\x12.coupon.ScoredItem\x12%\n\x06\x63oupon\x18\x06 \x01(\x0b\x32\x15.coupon.ClaimedCoupon\x1a\x35\n\x13\x45xperimentInfoEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"[\n\nScoredItem\x12\x0f\n\x07item_id\x18\x01 \x01(\t\x12\r\n\x05score\x18\x02 \x01(\x02\x12\x18\n\x10\x63\x61librated_score\x18\x03 \x01(\x02\x12\x13\n\x0brecommended\x18\x04 \x01(\x08\"\xb6\x01\n\rClaimedCoupon\x12\x13\n\x0binstance_id\x18\x01 \x01(\t\x12\x0f\n\x07item_id\x18\x02 \x01(\t\x12\x0f\n\x07user_id\x18\x03 \x01(\t\x12\x0e\n\x06status\x18\x04 \x01(\t\x12\x13\n\x0b\x63oupon_type\x18\x05 \x01(\t\x12\r\n\x05value\x18\x06 \x01(\x05\x12\x11\n\tmin_spend\x18\x07 \x01(\x05\x12\x13\n\x0b\x65xpire_time\x18\x08 \x01(\x03\x12\x12\n\nclaim_time\x18\t \x01(\x03\"b\n\x17QueryUserCouponsRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x15\n\rstatus_filter\x18\x02 \x01(\t\x12\x0c\n\x04page\x18\x03 \x01(\x05\x12\x11\n\tpage_size\x18\x04 \x01(\x05\"p\n\x18QueryUserCouponsResponse\x12\x0c\n\x04\x63ode\x18\x01 \x01(\x05\x12\x0f\n\x07message\x18\x02 \x01(\t\x12&\n\x07\x63oupons\x18\x03 \x03(\x0b\x32\x15.coupon.ClaimedCoupon\x12\r\n\x05total\x18\x04 \x01(\x05\x32\xa8\x01\n\rCouponService\x12@\n\tRecommend\x12\x18.coupon.RecommendRequest\x1a\x19.coupon.RecommendResponse\x12U\n\x10QueryUserCoupons\x12\x1f.coupon.QueryUserCouponsRequest\x1a .coupon.QueryUserCouponsResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -40,19 +40,19 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_RECOMMENDREQUEST_CONTEXTENTRY']._serialized_start=313
   _globals['_RECOMMENDREQUEST_CONTEXTENTRY']._serialized_end=359
   _globals['_COUPONITEM']._serialized_start=420
-  _globals['_COUPONITEM']._serialized_end=525
-  _globals['_RECOMMENDRESPONSE']._serialized_start=528
-  _globals['_RECOMMENDRESPONSE']._serialized_end=799
-  _globals['_RECOMMENDRESPONSE_EXPERIMENTINFOENTRY']._serialized_start=746
-  _globals['_RECOMMENDRESPONSE_EXPERIMENTINFOENTRY']._serialized_end=799
-  _globals['_SCOREDITEM']._serialized_start=801
-  _globals['_SCOREDITEM']._serialized_end=892
-  _globals['_CLAIMEDCOUPON']._serialized_start=895
-  _globals['_CLAIMEDCOUPON']._serialized_end=1077
-  _globals['_QUERYUSERCOUPONSREQUEST']._serialized_start=1079
-  _globals['_QUERYUSERCOUPONSREQUEST']._serialized_end=1177
-  _globals['_QUERYUSERCOUPONSRESPONSE']._serialized_start=1179
-  _globals['_QUERYUSERCOUPONSRESPONSE']._serialized_end=1291
-  _globals['_COUPONSERVICE']._serialized_start=1294
-  _globals['_COUPONSERVICE']._serialized_end=1462
+  _globals['_COUPONITEM']._serialized_end=543
+  _globals['_RECOMMENDRESPONSE']._serialized_start=546
+  _globals['_RECOMMENDRESPONSE']._serialized_end=817
+  _globals['_RECOMMENDRESPONSE_EXPERIMENTINFOENTRY']._serialized_start=764
+  _globals['_RECOMMENDRESPONSE_EXPERIMENTINFOENTRY']._serialized_end=817
+  _globals['_SCOREDITEM']._serialized_start=819
+  _globals['_SCOREDITEM']._serialized_end=910
+  _globals['_CLAIMEDCOUPON']._serialized_start=913
+  _globals['_CLAIMEDCOUPON']._serialized_end=1095
+  _globals['_QUERYUSERCOUPONSREQUEST']._serialized_start=1097
+  _globals['_QUERYUSERCOUPONSREQUEST']._serialized_end=1195
+  _globals['_QUERYUSERCOUPONSRESPONSE']._serialized_start=1197
+  _globals['_QUERYUSERCOUPONSRESPONSE']._serialized_end=1309
+  _globals['_COUPONSERVICE']._serialized_start=1312
+  _globals['_COUPONSERVICE']._serialized_end=1480
 # @@protoc_insertion_point(module_scope)

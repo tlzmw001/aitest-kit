@@ -1,11 +1,43 @@
 {
   "experiments": [
     {
-      "name": "coarse_rank_exp",
+      "name": "coarse_rank_exp_game",
       "strategies": [
         {
-          "id": "cr_on",
-          "hash_range": [0, 50],
+          "id": "cr_v2_full",
+          "hash_range": [0, 30],
+          "params": {
+            "enable_coarse_rank": true,
+            "truncate_count": 5,
+            "prior_count": 2,
+            "prior_rule": "top_value",
+            "filters": [
+              {
+                "field": "expire_days",
+                "op": "gte",
+                "value": 3
+              }
+            ],
+            "sort_keys": [
+              {
+                "field": "value",
+                "weight": 0.6
+              },
+              {
+                "field": "min_spend",
+                "weight": -0.3
+              }
+            ],
+            "diversity": {
+              "enabled": true,
+              "group_field": "coupon_type",
+              "max_per_group": 2
+            }
+          }
+        },
+        {
+          "id": "cr_v1_baseline",
+          "hash_range": [30, 60],
           "params": {
             "enable_coarse_rank": true,
             "truncate_count": 5,
@@ -14,7 +46,7 @@
         },
         {
           "id": "cr_off",
-          "hash_range": [50, 100],
+          "hash_range": [60, 100],
           "params": {
             "enable_coarse_rank": false
           }
@@ -22,18 +54,66 @@
       ]
     },
     {
-      "name": "calibration_exp",
+      "name": "calibration_exp_game",
       "strategies": [
         {
           "id": "cal_on",
           "hash_range": [0, 50],
           "params": {
-            "enable_calibration": true
+            "enable_calibration": true,
+            "calibration_dir": {
+              "linear": "calibration/scene_game/linear",
+              "piecewise": "calibration/scene_game/piecewise"
+            }
           }
         },
         {
           "id": "cal_off",
           "hash_range": [50, 100],
+          "params": {
+            "enable_calibration": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "coarse_rank_exp_ad",
+      "strategies": [
+        {
+          "id": "cr_ad_on",
+          "hash_range": [0, 30],
+          "params": {
+            "enable_coarse_rank": true,
+            "truncate_count": 3,
+            "truncate_rule": "top_value"
+          }
+        },
+        {
+          "id": "cr_ad_off",
+          "hash_range": [30, 100],
+          "params": {
+            "enable_coarse_rank": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "calibration_exp_ad",
+      "strategies": [
+        {
+          "id": "cal_ad_on",
+          "hash_range": [0, 30],
+          "params": {
+            "enable_calibration": true,
+            "calibration_dir": {
+              "linear": "calibration/scene_ad/linear",
+              "piecewise": "calibration/scene_ad/piecewise"
+            }
+          }
+        },
+        {
+          "id": "cal_ad_off",
+          "hash_range": [30, 100],
           "params": {
             "enable_calibration": false
           }

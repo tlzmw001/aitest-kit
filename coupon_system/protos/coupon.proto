@@ -31,6 +31,7 @@ message CouponItem {
   int32 value = 3;                 // 面值（分）
   int32 min_spend = 4;             // 门槛（分）
   int32 expire_days = 5;
+  bool is_prior = 6;               // 是否保送（粗排阶段0）
 }
 
 message RecommendResponse {

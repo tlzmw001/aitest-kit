@@ -40,6 +40,7 @@ class CouponGrpcServicer:
                 "value": item.value,
                 "min_spend": item.min_spend,
                 "expire_days": item.expire_days,
+                "isPrior": item.is_prior,
             })
 
         result = self.biz.recommend_and_claim(

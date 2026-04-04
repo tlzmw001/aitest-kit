@@ -42,4 +42,4 @@ aitest = "aitest_kit.cli:main"
 testpaths = ["tests"]
 
 [tool.setuptools.packages.find]
-include = ["aitest_kit*", "coupon_system*"]
+include = ["aitest_kit*", "coupon_system*", "ab_experiment_sdk*"]

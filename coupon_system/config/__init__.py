@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 import yaml
+from ab_experiment_sdk import Experiment, ExperimentConfig, ExperimentStrategy
 
 
 # ========== 主配置 dataclass ==========
@@ -88,24 +89,10 @@ class SceneRoutingConfig:
     fallback_score: float = 0.5
 
 
-# ========== AB 实验配置 ==========
-
 @dataclass
-class ExperimentStrategy:
-    id: str
-    hash_range: list = field(default_factory=lambda: [0, 100])
-    params: dict = field(default_factory=dict)
-
-
-@dataclass
-class Experiment:
-    name: str
-    strategies: list = field(default_factory=list)
-
-
-@dataclass
-class ExperimentConfig:
-    experiments: list = field(default_factory=list)
+class SceneExperimentMappingConfig:
+    scene_experiments: dict = field(default_factory=dict)
+    default_experiments: list = field(default_factory=list)
 
 
 # ========== 校准配置 ==========
@@ -197,6 +184,43 @@ def load_experiment_config(config_path: Optional[str] = None) -> ExperimentConfi
         experiments.append(Experiment(name=exp_raw["name"], strategies=strategies))
 
     return ExperimentConfig(experiments=experiments)
+
+
+def load_scene_experiment_mapping_config(
+    config_path: Optional[str] = None,
+) -> SceneExperimentMappingConfig:
+    """加载场景ID与实验名映射配置（JSON）"""
+    if config_path is None:
+        config_path = str(_resolve_config_dir() / "scene_experiments.json")
+
+    with open(config_path) as f:
+        raw = json.load(f)
+
+    scene_raw = raw.get("scene_experiments", {})
+    normalized_scene_experiments = {}
+    if isinstance(scene_raw, dict):
+        for scene_id_raw, experiment_names_raw in scene_raw.items():
+            try:
+                scene_id = int(scene_id_raw)
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(experiment_names_raw, list):
+                continue
+            normalized_scene_experiments[scene_id] = [
+                name for name in experiment_names_raw if isinstance(name, str)
+            ]
+
+    default_experiments_raw = raw.get("default_experiments", [])
+    default_experiments = []
+    if isinstance(default_experiments_raw, list):
+        default_experiments = [
+            name for name in default_experiments_raw if isinstance(name, str)
+        ]
+
+    return SceneExperimentMappingConfig(
+        scene_experiments=normalized_scene_experiments,
+        default_experiments=default_experiments,
+    )
 
 
 def load_calibration_config(config_path: Optional[str] = None) -> dict:

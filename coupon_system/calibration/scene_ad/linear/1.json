@@ -1,0 +1,12 @@
+[
+  {
+    "conditions": {"device": "pc"},
+    "k": 1.1,
+    "b": 0.05
+  },
+  {
+    "conditions": {"device": "mobile"},
+    "k": 1.0,
+    "b": 0.02
+  }
+]

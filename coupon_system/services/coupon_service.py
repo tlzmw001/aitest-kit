@@ -4,8 +4,8 @@
 完整链路：
 1. 参数校验
 2. 限流（全局 + 用户级）
-3. AB 实验分流（hash uid → 实验策略）
-4. 场景路由（sceneName + device + policyId → sceneId）
+3. 场景路由（sceneName + device + policyId → sceneId）
+4. AB 实验分流（按 scene_id 映射实验后再分流）
 5. 粗排（实验控制，截断候选 items）
 6. 特征抽取（用户 Redis + item 文件 + 上下文请求）
 7. 调打分服务（独立 gRPC）
@@ -21,10 +21,10 @@ import time
 import uuid
 from typing import Optional
 
+from ab_experiment_sdk import ABExperimentRequest, ABExperimentSDK
 from coupon_system.config import AppConfig
 from coupon_system.services.calibrator import Calibrator
 from coupon_system.services.coarse_ranker import CoarseRanker
-from coupon_system.services.experiment import ExperimentRouter
 from coupon_system.services.feature_store import FeatureStore
 from coupon_system.services.redis_store import RedisStore
 from coupon_system.services.scene_router import SceneRouter
@@ -80,7 +80,9 @@ class CouponBizService:
         self,
         config: AppConfig,
         redis_store: RedisStore,
-        experiment_router: ExperimentRouter,
+        experiment_sdk: ABExperimentSDK,
+        scene_experiment_mapping: dict,
+        default_scene_experiments: list,
         scene_router: SceneRouter,
         coarse_ranker: CoarseRanker,
         feature_store: FeatureStore,
@@ -89,7 +91,9 @@ class CouponBizService:
     ):
         self.config = config
         self.redis = redis_store
-        self.experiment = experiment_router
+        self.experiment_sdk = experiment_sdk
+        self.scene_experiment_mapping = dict(scene_experiment_mapping)
+        self.default_scene_experiments = list(default_scene_experiments)
         self.scene_router = scene_router
         self.coarse_ranker = coarse_ranker
         self.feature_store = feature_store
@@ -154,13 +158,7 @@ class CouponBizService:
             ):
                 return self._error(CouponError.RATE_LIMITED)
 
-        # 2. AB 实验分流
-        exp_result = self.experiment.route(user_id)
-        experiment_info = {
-            name: result.strategy_id for name, result in exp_result.items()
-        }
-
-        # 3. 场景路由
+        # 2. 场景路由
         scene = self.scene_router.route(scene_name, device, policy_id)
         item_ids = [str(item.get("item_id", "")) for item in items]
         logger.info(
@@ -168,7 +166,7 @@ class CouponBizService:
             request_id, user_id, ",".join(item_ids), route, scene.scene_id,
         )
 
-        # 兜底场景：直接返回兜底分，不打分
+        # 兜底场景：直接返回兜底分，不请求实验、不打分
         if scene.is_fallback:
             fallback_score = self._resolve_fallback_score(scene.scene_id, scene.fallback_score)
             return self._build_fallback_response(
@@ -176,14 +174,42 @@ class CouponBizService:
                 items=items,
                 scene_id=scene.scene_id,
                 fallback_score=fallback_score,
-                experiment_info=experiment_info,
+                experiment_info={},
                 score_threshold=resolved_score_threshold,
                 max_claim_per_request=resolved_max_claim,
             )
 
+        # 3. AB 实验分流（先确定 scene_id，再按场景读取实验）
+        exp_result = {}
+        if route != 2:
+            scene_experiments = self.scene_experiment_mapping.get(
+                scene.scene_id, self.default_scene_experiments,
+            )
+            exp_result = self.experiment_sdk.evaluate(
+                ABExperimentRequest(
+                    user_id=user_id,
+                    request_id=request_id,
+                    context={
+                        "scene_name": scene_name,
+                        "device": device,
+                        "policy_id": policy_id,
+                        "scene_id": scene.scene_id,
+                    },
+                    experiment_names=scene_experiments,
+                )
+            ).assignments
+        else:
+            logger.info(
+                "skip experiments for external scoring: reqId=%s scene_id=%d",
+                request_id, scene.scene_id,
+            )
+        experiment_info = {
+            name: result.strategy_id for name, result in exp_result.items()
+        }
+
         # 4. 粗排（实验控制）
         working_items = [dict(item) for item in items]
-        cr_exp = exp_result.get("coarse_rank_exp")
+        cr_exp = self._find_experiment_by_param(exp_result, "enable_coarse_rank")
         if cr_exp and cr_exp.params.get("enable_coarse_rank"):
             working_items = self.coarse_ranker.rank(working_items, cr_exp.params)
 
@@ -236,9 +262,27 @@ class CouponBizService:
             )
 
         # 7. 校准（实验控制）
-        cal_exp = exp_result.get("calibration_exp")
+        cal_exp = self._find_experiment_by_param(exp_result, "enable_calibration")
         if cal_exp and cal_exp.params.get("enable_calibration"):
-            calibrated = self.calibrator.calibrate(scene.scene_id, scores)
+            calibration_request_context = {
+                "device": device,
+                "external": external,
+                "gender": user_features.get("gender"),
+                "age": user_features.get("age"),
+                "total_spend": user_features.get("total_spend"),
+            }
+            item_context_by_id = {
+                str(item.get("item_id")): item
+                for item in working_items
+                if item.get("item_id") is not None
+            }
+            calibrated = self.calibrator.calibrate(
+                scene_id=scene.scene_id,
+                scores=scores,
+                calibration_params=cal_exp.params,
+                request_context=calibration_request_context,
+                item_context_by_id=item_context_by_id,
+            )
             results = [
                 {
                     "item_id": cs.item_id,
@@ -270,6 +314,13 @@ class CouponBizService:
             "results": results,
             "coupon": coupon,
         }
+
+    def _find_experiment_by_param(self, exp_result: dict, param_name: str):
+        """在命中的实验结果中，查找包含指定控制参数的实验。"""
+        for result in exp_result.values():
+            if param_name in result.params:
+                return result
+        return None
 
     def query_user_coupons(
         self, user_id: str, status_filter: str = "all",

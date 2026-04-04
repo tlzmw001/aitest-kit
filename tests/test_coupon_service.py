@@ -14,16 +14,15 @@ import pytest
 import fakeredis
 from pydantic import ValidationError
 
+from ab_experiment_sdk import ConfigBasedABExperimentSDK
 from coupon_system.config import (
     load_config,
     load_scene_routing_config,
     load_experiment_config,
-    load_calibration_config,
+    load_scene_experiment_mapping_config,
     AppConfig,
-    CalibrationCoefficients,
 )
 from coupon_system.services.redis_store import RedisStore
-from coupon_system.services.experiment import ExperimentRouter
 from coupon_system.services.scene_router import SceneRouter
 from coupon_system.services.coarse_ranker import CoarseRanker
 from coupon_system.services.feature_store import FeatureStore
@@ -57,13 +56,18 @@ def redis_store(fake_redis_client) -> RedisStore:
 
 
 @pytest.fixture
-def experiment_router() -> ExperimentRouter:
-    return ExperimentRouter(load_experiment_config())
+def experiment_sdk() -> ConfigBasedABExperimentSDK:
+    return ConfigBasedABExperimentSDK(load_experiment_config())
 
 
 @pytest.fixture
 def scene_router() -> SceneRouter:
     return SceneRouter(load_scene_routing_config())
+
+
+@pytest.fixture
+def scene_experiment_mapping_config():
+    return load_scene_experiment_mapping_config()
 
 
 @pytest.fixture
@@ -95,19 +99,21 @@ def mock_scoring_client():
 
 @pytest.fixture
 def calibrator() -> Calibrator:
-    return Calibrator(load_calibration_config())
+    return Calibrator()
 
 
 @pytest.fixture
 def biz(
-    config, redis_store, experiment_router, scene_router,
+    config, redis_store, experiment_sdk, scene_experiment_mapping_config, scene_router,
     coarse_ranker, feature_store, mock_scoring_client, calibrator,
 ) -> CouponBizService:
     config.rate_limit.enabled = False
     return CouponBizService(
         config=config,
         redis_store=redis_store,
-        experiment_router=experiment_router,
+        experiment_sdk=experiment_sdk,
+        scene_experiment_mapping=scene_experiment_mapping_config.scene_experiments,
+        default_scene_experiments=scene_experiment_mapping_config.default_experiments,
         scene_router=scene_router,
         coarse_ranker=coarse_ranker,
         feature_store=feature_store,
@@ -118,7 +124,7 @@ def biz(
 
 @pytest.fixture
 def biz_with_rate_limit(
-    config, redis_store, experiment_router, scene_router,
+    config, redis_store, experiment_sdk, scene_experiment_mapping_config, scene_router,
     coarse_ranker, feature_store, mock_scoring_client, calibrator,
 ) -> CouponBizService:
     config.rate_limit.enabled = True
@@ -127,7 +133,9 @@ def biz_with_rate_limit(
     return CouponBizService(
         config=config,
         redis_store=redis_store,
-        experiment_router=experiment_router,
+        experiment_sdk=experiment_sdk,
+        scene_experiment_mapping=scene_experiment_mapping_config.scene_experiments,
+        default_scene_experiments=scene_experiment_mapping_config.default_experiments,
         scene_router=scene_router,
         coarse_ranker=coarse_ranker,
         feature_store=feature_store,
@@ -318,6 +326,45 @@ class TestGrpcRequiredFields:
         response = servicer.Recommend(request, None)
         assert response.code == CouponError.OK
 
+    def test_grpc_item_is_prior_mapped_to_internal_field(self, biz, redis_store):
+        setup_stock(redis_store, "COUPON_ACT_001", 100)
+        # 强制命中开启粗排的策略，确保 coarse_ranker 会被调用。
+        biz.experiment_sdk.set_user_whitelist(
+            "u_grpc_prior",
+            {
+                "coarse_rank_exp_game": "cr_v2_full",
+                "calibration_exp_game": "cal_off",
+            },
+        )
+        servicer = CouponGrpcServicer(biz)
+        request = coupon_pb2.RecommendRequest(
+            user_id="u_grpc_prior",
+            scene_name="game",
+            device="mobile",
+            policy_id="",
+            context={},
+            items=[
+                coupon_pb2.CouponItem(
+                    item_id="COUPON_ACT_001",
+                    coupon_type="discount",
+                    value=80,
+                    min_spend=5000,
+                    expire_days=3,
+                    is_prior=True,
+                )
+            ],
+            external=0,
+            score_threshold=0.5,
+            max_claim_per_request=1,
+        )
+        with patch.object(biz.coarse_ranker, "rank", wraps=biz.coarse_ranker.rank) as mock_rank:
+            response = servicer.Recommend(request, None)
+
+        assert response.code == CouponError.OK
+        mock_rank.assert_called()
+        rank_items = mock_rank.call_args.args[0]
+        assert rank_items[0].get("isPrior") is True
+
 
 # ========== 场景路由 ==========
 
@@ -340,6 +387,7 @@ class TestSceneRouting:
         )
         assert result["scene_id"] == 3001
         assert result["message"] == "兜底策略"
+        assert result["experiment_info"] == {}
         # 兜底不调打分服务
         biz.scoring_client.score.assert_not_called()
 
@@ -357,6 +405,24 @@ class TestSceneRouting:
         setup_stock(redis_store, "COUPON_ACT_001")
         result = recommend(biz, "u001", "unknown", "vr", "", {}, SAMPLE_ITEMS)
         assert result["scene_id"] == 3001
+        assert result["experiment_info"] == {}
+
+    def test_fallback_scene_skips_experiment_evaluation(self, biz, redis_store):
+        setup_stock(redis_store, "COUPON_ACT_001")
+        with patch.object(biz.experiment_sdk, "evaluate", wraps=biz.experiment_sdk.evaluate) as mock_eval:
+            result = recommend(
+                biz,
+                "u_fallback_skip_exp",
+                "game",
+                "mobile",
+                "policy_fallback_001",
+                {},
+                SAMPLE_ITEMS,
+            )
+        assert result["code"] == CouponError.OK
+        assert result["scene_id"] == 3001
+        assert result["experiment_info"] == {}
+        mock_eval.assert_not_called()
 
 
 # ========== AB 实验 ==========
@@ -367,14 +433,55 @@ class TestExperiment:
         result = recommend(biz, "u001", "game", "mobile", "", {}, SAMPLE_ITEMS)
         assert "experiment_info" in result
         assert isinstance(result["experiment_info"], dict)
-        # 应该包含配置中定义的实验
-        assert "coarse_rank_exp" in result["experiment_info"]
-        assert "calibration_exp" in result["experiment_info"]
+        # game/mobile -> scene_id=1001，应命中该场景映射的实验
+        assert "coarse_rank_exp_game" in result["experiment_info"]
+        assert "calibration_exp_game" in result["experiment_info"]
+
+    def test_whitelist_user_can_force_strategy(self, biz, redis_store):
+        setup_stock(redis_store, "COUPON_ACT_001")
+        biz.experiment_sdk.set_user_whitelist(
+            "u_whitelist_001",
+            {
+                "coarse_rank_exp_game": "cr_off",
+                "calibration_exp_game": "cal_on",
+            },
+        )
+        result = recommend(
+            biz, "u_whitelist_001", "game", "mobile", "", {}, SAMPLE_ITEMS,
+        )
+
+        assert result["code"] == CouponError.OK
+        assert result["experiment_info"]["coarse_rank_exp_game"] == "cr_off"
+        assert result["experiment_info"]["calibration_exp_game"] == "cal_on"
+
+    def test_only_scene_mapped_experiments_are_evaluated(self, biz, redis_store):
+        setup_stock(redis_store, "COUPON_ACT_001")
+        result = recommend(biz, "u001", "ad", "pc", "", {}, SAMPLE_ITEMS)
+
+        assert result["code"] == CouponError.OK
+        assert "coarse_rank_exp_ad" in result["experiment_info"]
+        assert "calibration_exp_ad" in result["experiment_info"]
+        assert "coarse_rank_exp_game" not in result["experiment_info"]
+        assert "calibration_exp_game" not in result["experiment_info"]
 
 
 # ========== 粗排 ==========
 
 class TestCoarseRanking:
+    def test_prior_top_value_keeps_sorted_order(self, coarse_ranker):
+        items = [
+            {"item_id": "P_low", "isPrior": True, "value": 10},
+            {"item_id": "N_mid", "isPrior": False, "value": 50},
+            {"item_id": "P_high", "isPrior": True, "value": 100},
+        ]
+        params = {
+            "truncate_count": 2,
+            "prior_count": 2,
+            "prior_rule": "top_value",
+        }
+        result = coarse_ranker.rank(items, params)
+        assert [x["item_id"] for x in result] == ["P_high", "P_low"]
+
     def test_truncation(self, coarse_ranker):
         items = [
             {"item_id": "A", "value": 100},
@@ -391,6 +498,74 @@ class TestCoarseRanking:
         items = [{"item_id": "A", "value": 100}]
         result = coarse_ranker.rank(items, {"truncate_count": 10, "truncate_rule": "top_value"})
         assert len(result) == 1
+
+    def test_filters_and_intersection(self, coarse_ranker):
+        items = [
+            {"item_id": "A", "coupon_type": "discount", "value": 10, "expire_days": 3},
+            {"item_id": "B", "coupon_type": "fixed", "value": 4, "expire_days": 5},
+            {"item_id": "C", "coupon_type": "discount", "value": 6, "expire_days": 1},
+        ]
+        params = {
+            "truncate_count": 10,
+            "filters": [
+                {"field": "expire_days", "op": "gte", "value": 3},
+                {"field": "value", "op": "gte", "value": 5},
+                {"field": "coupon_type", "op": "in", "value": ["discount", "cash"]},
+            ],
+        }
+        result = coarse_ranker.rank(items, params)
+        assert [x["item_id"] for x in result] == ["A"]
+
+    def test_diversity_with_backfill(self, coarse_ranker):
+        items = [
+            {"item_id": "A", "coupon_type": "cash", "value": 100},
+            {"item_id": "B", "coupon_type": "cash", "value": 90},
+            {"item_id": "C", "coupon_type": "cash", "value": 80},
+        ]
+        params = {
+            "truncate_count": 2,
+            "truncate_rule": "top_value",
+            "diversity": {
+                "enabled": True,
+                "group_field": "coupon_type",
+                "max_per_group": 1,
+            },
+        }
+        result = coarse_ranker.rank(items, params)
+        # 先按多样性选 A，再从 backfill 池补 B，保证数量补满。
+        assert [x["item_id"] for x in result] == ["A", "B"]
+
+    def test_full_pipeline_with_prior_filter_sort_and_diversity(self, coarse_ranker):
+        items = [
+            {"item_id": "P1", "isPrior": True, "coupon_type": "cash", "value": 100, "min_spend": 100, "expire_days": 5},
+            {"item_id": "P2", "isPrior": True, "coupon_type": "discount", "value": 90, "min_spend": 80, "expire_days": 5},
+            {"item_id": "P3", "isPrior": True, "coupon_type": "cash", "value": 80, "min_spend": 70, "expire_days": 5},
+            {"item_id": "A", "coupon_type": "cash", "value": 95, "min_spend": 200, "expire_days": 5},
+            {"item_id": "B", "coupon_type": "cash", "value": 90, "min_spend": 180, "expire_days": 5},
+            {"item_id": "C", "coupon_type": "discount", "value": 70, "min_spend": 20, "expire_days": 5},
+            {"item_id": "D", "coupon_type": "discount", "value": 60, "min_spend": 10, "expire_days": 2},
+            {"item_id": "E", "coupon_type": "fixed", "value": 65, "min_spend": 30, "expire_days": 5},
+        ]
+        params = {
+            "truncate_count": 5,
+            "prior_count": 2,
+            "prior_rule": "top_value",
+            "filters": [
+                {"field": "expire_days", "op": "gte", "value": 3},
+            ],
+            "sort_keys": [
+                {"field": "value", "weight": 0.6},
+                {"field": "min_spend", "weight": -0.4},
+            ],
+            "diversity": {
+                "enabled": True,
+                "group_field": "coupon_type",
+                "max_per_group": 1,
+            },
+        }
+        result = coarse_ranker.rank(items, params)
+        # 阶段0: 保送 P1/P2；阶段1: 过滤 D；阶段3: 多样性后目标位取 A/C/E。
+        assert [x["item_id"] for x in result] == ["P1", "P2", "A", "C", "E"]
 
 
 # ========== 打分 + 发放 ==========
@@ -578,6 +753,7 @@ class TestRoutingAndLogs:
         )
 
         assert result["code"] == CouponError.OK
+        assert result["experiment_info"] == {}
         mock_scoring_client.score.assert_called()
         kwargs = mock_scoring_client.score.call_args.kwargs
         assert kwargs["external"] == 1
@@ -595,6 +771,24 @@ class TestRoutingAndLogs:
         assert "route=2" in log
         assert "scene_id=1001" in log
 
+    def test_external_route_skips_experiment_evaluation(self, biz, redis_store, mock_scoring_client):
+        setup_stock(redis_store, "COUPON_ACT_001", 100)
+        with patch.object(biz.experiment_sdk, "evaluate", wraps=biz.experiment_sdk.evaluate) as mock_eval:
+            result = recommend(
+                biz,
+                "u_ext_skip_exp",
+                "game",
+                "mobile",
+                "",
+                {},
+                SAMPLE_ITEMS,
+                external=1,
+            )
+
+        assert result["code"] == CouponError.OK
+        assert result["experiment_info"] == {}
+        mock_eval.assert_not_called()
+
     def test_scene_route_still_works_when_external_enabled(self, biz, redis_store, mock_scoring_client):
         """
         场景与 route 隔离：external=1 仍需正常计算 scene_id。
@@ -610,26 +804,98 @@ class TestRoutingAndLogs:
 # ========== 校准 ==========
 
 class TestCalibration:
-    def test_calibrate_scores(self, calibrator):
-        """校准 y = kx + b"""
-        scores = [ItemScore(item_id="A", score=0.5)]
-        # scene_id 1001: k=1.2, b=0.1 → calibrated = 0.5 * 1.2 + 0.1 = 0.7
-        result = calibrator.calibrate(1001, scores)
-        assert result[0].calibrated_score == 0.7
+    def test_linear_calibration_and_clamp(self, calibrator, tmp_path):
+        """命中线性规则后执行 y = kx+b，并在最终做 clamp"""
+        linear_dir = tmp_path / "linear"
+        linear_dir.mkdir()
+        (linear_dir / "1.json").write_text(
+            '[{"conditions":{"device":"ios"},"k":1.2,"b":0.1}]'
+        )
 
-    def test_calibrate_clamp(self, calibrator):
-        """校准后 clamp 到 [0, 1]"""
         scores = [ItemScore(item_id="A", score=0.9)]
-        # scene_id 1001: k=1.2, b=0.1 → 0.9 * 1.2 + 0.1 = 1.18 → clamp to 1.0
-        result = calibrator.calibrate(1001, scores)
+        result = calibrator.calibrate(
+            scene_id=1001,
+            scores=scores,
+            calibration_params={"calibration_dir": {"linear": str(linear_dir)}},
+            request_context={"device": "ios"},
+            item_context_by_id={"A": {"coupon_type": "discount"}},
+        )
         assert result[0].calibrated_score == 1.0
 
-    def test_default_coefficients(self, calibrator):
-        """未配置的 scene_id 使用 default"""
+    def test_piecewise_then_linear_chain(self, calibrator, tmp_path):
+        """分段与线性都命中时，按“先分段后线性”串联"""
+        linear_dir = tmp_path / "linear"
+        piecewise_dir = tmp_path / "piecewise"
+        linear_dir.mkdir()
+        piecewise_dir.mkdir()
+        (linear_dir / "1.json").write_text(
+            '[{"conditions":{"device":"ios"},"k":1.2,"b":0.05}]'
+        )
+        (piecewise_dir / "1.json").write_text(
+            """
+            [
+              {
+                "conditions":{"device":"ios"},
+                "segments":[
+                  {"range":[0.0,0.3],"k":0.8,"b":0.01},
+                  {"range":[0.3,0.7],"k":1.0,"b":0.0},
+                  {"range":[0.7,1.0],"k":1.2,"b":-0.05}
+                ]
+              }
+            ]
+            """
+        )
+
         scores = [ItemScore(item_id="A", score=0.5)]
-        # default: k=1.0, b=0.0 → 0.5
-        result = calibrator.calibrate(9999, scores)
-        assert result[0].calibrated_score == 0.5
+        result = calibrator.calibrate(
+            scene_id=1001,
+            scores=scores,
+            calibration_params={
+                "calibration_dir": {
+                    "linear": str(linear_dir),
+                    "piecewise": str(piecewise_dir),
+                }
+            },
+            request_context={"device": "ios"},
+            item_context_by_id={"A": {"coupon_type": "discount"}},
+        )
+        # 0.5 先命中分段中间段保持 0.5，再线性 1.2 * 0.5 + 0.05 = 0.65
+        assert result[0].calibrated_score == 0.65
+
+    def test_latest_version_file_wins(self, calibrator, tmp_path):
+        """目录中加载序号最大的文件"""
+        linear_dir = tmp_path / "linear"
+        linear_dir.mkdir()
+        (linear_dir / "1.json").write_text(
+            '[{"conditions":{"device":"ios"},"k":1.1,"b":0.0}]'
+        )
+        (linear_dir / "3.json").write_text(
+            '[{"conditions":{"device":"ios"},"k":1.3,"b":0.0}]'
+        )
+
+        result = calibrator.calibrate(
+            scene_id=1001,
+            scores=[ItemScore(item_id="A", score=0.5)],
+            calibration_params={"calibration_dir": {"linear": str(linear_dir)}},
+            request_context={"device": "ios"},
+        )
+        assert result[0].calibrated_score == 0.65
+
+    def test_invalid_condition_field_is_not_matched(self, calibrator, tmp_path):
+        """规则包含未支持字段时，该规则视为无效不命中"""
+        linear_dir = tmp_path / "linear"
+        linear_dir.mkdir()
+        (linear_dir / "1.json").write_text(
+            '[{"conditions":{"unknown":"x"},"k":2.0,"b":0.1}]'
+        )
+
+        result = calibrator.calibrate(
+            scene_id=1001,
+            scores=[ItemScore(item_id="A", score=0.4)],
+            calibration_params={"calibration_dir": {"linear": str(linear_dir)}},
+            request_context={"device": "ios"},
+        )
+        assert result[0].calibrated_score == 0.4
 
 
 # ========== 特征抽取 ==========
