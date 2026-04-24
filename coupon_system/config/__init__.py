@@ -95,14 +95,6 @@ class SceneExperimentMappingConfig:
     default_experiments: list = field(default_factory=list)
 
 
-# ========== 校准配置 ==========
-
-@dataclass
-class CalibrationCoefficients:
-    k: float = 1.0
-    b: float = 0.0
-
-
 # ========== 加载函数 ==========
 
 def _resolve_config_dir() -> Path:
@@ -170,10 +162,16 @@ def load_scene_routing_config(config_path: Optional[str] = None) -> SceneRouting
     )
 
 
+def _resolve_ab_sdk_data_dir() -> Path:
+    """AB 实验配置归 ab_experiment_sdk 管理，数据目录在 ab_experiment_sdk/data/"""
+    # __file__ = coupon_system/config/__init__.py → parents[2] = 项目根目录
+    return Path(__file__).resolve().parents[2] / "ab_experiment_sdk" / "data"
+
+
 def load_experiment_config(config_path: Optional[str] = None) -> ExperimentConfig:
-    """加载 AB 实验配置（JSON）"""
+    """加载 AB 实验配置（JSON），默认从 ab_experiment_sdk/data/ 读取"""
     if config_path is None:
-        config_path = str(_resolve_config_dir() / "experiments.json")
+        config_path = str(_resolve_ab_sdk_data_dir() / "experiments.json")
 
     with open(config_path) as f:
         raw = json.load(f)
@@ -223,15 +221,3 @@ def load_scene_experiment_mapping_config(
     )
 
 
-def load_calibration_config(config_path: Optional[str] = None) -> dict:
-    """加载校准系数（JSON）→ dict[str, CalibrationCoefficients]"""
-    if config_path is None:
-        config_path = str(_resolve_config_dir() / "calibration.json")
-
-    with open(config_path) as f:
-        raw = json.load(f)
-
-    result = {}
-    for key, val in raw.items():
-        result[key] = CalibrationCoefficients(k=val["k"], b=val["b"])
-    return result

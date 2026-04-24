@@ -8,6 +8,7 @@ from ab_experiment_sdk.client import (
     ConfigBasedABExperimentSDK,
 )
 from ab_experiment_sdk.models import Experiment, ExperimentConfig, ExperimentStrategy
+from ab_experiment_sdk.remote_client import RemoteABExperimentSDK
 
 __all__ = [
     "ABExperimentAssignment",
@@ -15,6 +16,7 @@ __all__ = [
     "ABExperimentResponse",
     "ABExperimentSDK",
     "ConfigBasedABExperimentSDK",
+    "RemoteABExperimentSDK",
     "Experiment",
     "ExperimentConfig",
     "ExperimentStrategy",

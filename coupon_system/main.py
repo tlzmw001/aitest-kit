@@ -9,7 +9,7 @@ from pathlib import Path
 
 import uvicorn
 
-from ab_experiment_sdk import ConfigBasedABExperimentSDK
+from ab_experiment_sdk import ConfigBasedABExperimentSDK, RemoteABExperimentSDK
 from coupon_system.config import (
     load_config,
     load_scene_routing_config,
@@ -123,9 +123,13 @@ def main():
 
     # 3. 初始化依赖
     redis_store = RedisStore(config.redis.url, config.redis.key_prefix)
-    experiment_sdk = ConfigBasedABExperimentSDK(experiment_config)
-    # 白名单属于 SDK 能力，业务侧通过 SDK 接口注入。
-    experiment_sdk.set_whitelist(_load_ab_sdk_whitelist_from_env())
+    ab_service_url = os.environ.get("AB_SERVICE_URL", "").strip()
+    if ab_service_url:
+        experiment_sdk = RemoteABExperimentSDK(base_url=ab_service_url)
+    else:
+        experiment_sdk = ConfigBasedABExperimentSDK(experiment_config)
+        # 白名单属于 SDK 能力，业务侧通过 SDK 接口注入。
+        experiment_sdk.set_whitelist(_load_ab_sdk_whitelist_from_env())
     scene_router = SceneRouter(scene_routing_config)
     coarse_ranker = CoarseRanker()
     feature_store = FeatureStore(
@@ -169,6 +173,8 @@ def main():
     # 6. 信号处理
     def shutdown(signum, frame):
         print("\nShutting down...")
+        if hasattr(experiment_sdk, "close"):
+            experiment_sdk.close()
         scoring_client.close()
         grpc_server.stop(grace=5)
         sys.exit(0)

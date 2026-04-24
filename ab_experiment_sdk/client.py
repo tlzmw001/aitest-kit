@@ -57,6 +57,9 @@ class ABExperimentSDK(Protocol):
     def clear_whitelist(self, user_id: Optional[str] = None) -> None:
         ...
 
+    def get_whitelist(self) -> dict:
+        ...
+
 
 class ConfigBasedABExperimentSDK:
     """
@@ -135,6 +138,13 @@ class ConfigBasedABExperimentSDK:
             self._whitelist = {}
             return
         self._whitelist.pop(user_id, None)
+
+    def get_whitelist(self) -> dict:
+        """获取当前白名单快照。"""
+        return {
+            user_id: dict(strategy_map)
+            for user_id, strategy_map in self._whitelist.items()
+        }
 
     def _hash_uid(self, user_id: str) -> int:
         digest = hashlib.md5(user_id.encode()).hexdigest()
