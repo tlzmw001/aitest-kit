@@ -1,0 +1,40 @@
+# 发放
+
+选择最高分券并执行发放。
+
+## 输入
+
+- 校准后的分数列表
+- `score_threshold`：分数阈值（由调用方传入）
+- `max_claim_per_request`：最大发放数量（由调用方传入）
+
+## 输出
+
+发放结果：scene_id、实验信息、所有 item 打分结果、发放的券信息。
+
+## 业务规则
+
+1. 选择最高分的 item
+2. 分数 >= score_threshold → 扣库存 + 记录领取
+3. 分数 < score_threshold → 不发放
+4. max_claim_per_request 控制单次请求最多发放的券数量
+
+## 错误场景
+
+- 库存不足 → 跳过该券，尝试下一个。Redis DECR 原子扣减，扣到 <0 时立即 INCR 回滚并返回 -1，业务层 continue 到下一个候选券。所有候选券都库存不足时返回 code=0, coupon=None（注意：虽定义了 STOCK_EMPTY=1006 错误码，但实际代码未使用）
+- 所有候选券分数低于阈值 → 不发放，返回成功响应（非错误）：code=0, message="success", results 包含所有候选券完整打分信息（每个 recommended: false），coupon=null。调用方需检查 coupon is null 判断未发放
+
+## 可观测状态
+
+- 库存 API：`GET /api/v1/admin/stock/{coupon_id}`
+- 用户券查询：`GET /api/v1/coupons/{user_id}`
+
+## 已有测试覆盖
+
+- [cases/old-cases/coupon_service.md] 发放与查询
+  - 已覆盖：正常发放、库存扣减、低分不发放、库存为零跳过、多候选取最高分、查询空/有券/无效 user_id
+  - 未覆盖：库存并发扣减（DECR 原子性 + 回滚）、所有候选券都库存不足时返回 coupon=None、发放记录持久化验证、coupon 过期时间计算
+
+## 关联 L2
+
+- [0402](../L2/0402.md) — score_threshold、max_claim_per_request 改为请求传参
