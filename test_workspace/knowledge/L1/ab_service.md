@@ -100,7 +100,10 @@
 
 - [cases/old-cases/ab_service.md] AB 服务 API
   - 已覆盖：健康检查、白名单评估、实验 CRUD（创建/查询/更新/删除）、创建重名 409、白名单 CRUD（单用户/全量/清空）、白名单持久化+重启恢复
-  - 未覆盖：GET/PUT/DELETE 实验名不存在 404、更新时 path 名与 body 名不一致 400、hash 分流正确性验证、实验持久化到 experiments.json 后重启恢复、hash_range 重叠行为
+- [test_workspace/cases/ab_service/business.md] AB 服务业务+异常用例
+  - 已覆盖：hash 分流正确性（命中/未命中）、experiment_names 三种行为（None/空列表/指定）、实验持久化+重启恢复、更新为整体替换策略列表、GET/PUT/DELETE 实验名不存在 404、PUT path-body 名不一致 400、GET 用户白名单不存在 404、DELETE 用户白名单静默成功
+- [test_workspace/cases/ab_service/boundary.md] AB 服务边界用例
+  - 已覆盖：hash_range 重叠行为（first-match）、白名单文件损坏容错、实验配置文件不存在自动创建、策略格式异常回退、evaluate 含不存在实验名静默跳过、空策略实验评估、Pydantic 422 校验
 - [cases/old-cases/ab_remote_client.md] 远程 SDK
   - 已覆盖：远程 evaluate 端到端、SDK 白名单 CRUD、远程服务 500 异常
   - 未覆盖：网络超时/连接拒绝、SDK 重试机制、并发 evaluate 请求
