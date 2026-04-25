@@ -2,7 +2,7 @@
 
 ## 系统概述
 
-智能优惠券推荐策略系统 v2：根据用户特征和场景，对候选优惠券进行打分排序，选择最优券发放给用户。支持 HTTP 和 gRPC 双协议。
+智能优惠券推荐策略系统 v3：根据用户特征和场景，对候选优惠券进行打分排序，选择最优券发放给用户。支持 HTTP 和 gRPC 双协议。
 
 ## 服务拓扑
 
@@ -17,10 +17,15 @@
 ## Pipeline 阶段概览
 
 ```
-请求 → 参数校验 → 限流 → AB实验分流(SDK) → 场景路由
-  → 粗排(实验控制) → 特征抽取 → 打分(内部/外部) → 校准(实验控制)
-  → 发放最优券 → 返回结果
+请求 → 参数校验 → 限流 → 场景路由 → 兜底判断
+  → AB实验分流(按scene_id映射实验) → 粗排(实验控制) → 特征抽取
+  → 打分(内部gRPC/外部HTTP) → 校准(实验控制) → 发放最优券 → 返回结果
 ```
+
+## 接口契约
+
+- 主服务接口（HTTP + gRPC）：[coupon_system/protos/coupon.proto](../../coupon_system/protos/coupon.proto)
+- 打分服务接口（gRPC）：[coupon_system/protos/scoring.proto](../../coupon_system/protos/scoring.proto)
 
 ## 模块索引
 

@@ -19,6 +19,12 @@
 | `external` | 是 | int，0=内部打分，1=外部打分；仅允许 0 或 1 |
 | `reqId` | 否 | 请求标识，字符串，用于 debug；默认空字符串，为空时自动生成 UUID |
 
+### 接口契约（完整字段定义）
+
+- 推荐接口请求/响应结构：[coupon.proto](../../../coupon_system/protos/coupon.proto)（RecommendRequest / RecommendResponse / ScoredItem / ClaimedCoupon）
+- 查券接口：同 proto（QueryUserCouponsRequest / QueryUserCouponsResponse）
+- 打分服务接口：[scoring.proto](../../../coupon_system/protos/scoring.proto)（ScoreRequest / ScoreResponse）
+
 ## 输出
 
 校验通过 → 进入限流；校验失败 → 返回错误。

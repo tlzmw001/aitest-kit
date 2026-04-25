@@ -1,6 +1,6 @@
 ---
 name: test-fix
-description: 修正测试用例错误，并将错误模式记录到 TEST_SPEC 已知陷阱章节，供后续 test-design 自检
+description: 修正测试用例错误，记录陷阱到 TEST_SPEC，并判断是否为 skill 级系统性问题——若是则定位并更新对应 skill
 when_to_use: 当用户发现测试用例有错误（评审发现或执行失败），需要修正用例并记录经验时
 argument-hint: <case_id> <error_description>
 arguments: [case_id, error_description]
@@ -57,7 +57,26 @@ effort: high
 
 陷阱序号从已有最大序号 +1 开始。
 
-### 第五步：完成输出
+### 第五步：Skill 级根因分析
+
+修完用例后，判断这个错误是**用例本身的问题**还是**skill 指令导致的系统性问题**：
+
+1. **用例本身的问题**（到此为止，不需要额外动作）：
+   - 个别用例的数据写错、步骤遗漏
+   - 对业务规则的理解偏差（已通过陷阱记录）
+
+2. **Skill 级系统性问题**（需要更新 skill）：
+   - 同类错误在多条用例中重复出现（说明 skill 指令有盲区）
+   - 错误源于 skill 的步骤设计缺陷（如缺少某个检查环节、断言策略指导不足）
+   - 错误源于 skill 读取的输入不完整（如该读 proto 但 skill 没要求读）
+
+   **定位并更新对应 skill**：
+   - 根据错误类型判断属于哪个 skill 的职责范围（test-design / knowledge-build / doc-review）
+   - 读取该 skill 的 SKILL.md，定位到导致问题的步骤
+   - 添加或修正指令，使同类错误不再发生
+   - 在完成输出中注明更新了哪个 skill 及具体改动
+
+### 第六步：完成输出
 
 向用户输出：
 
@@ -68,6 +87,7 @@ effort: high
 错误类型：（预期结果错误 / 前置条件不可行 / ...）
 修正内容：（改了什么）
 新增陷阱：陷阱-{序号}（一句话描述）
+Skill 更新：（无 / 更新了 {skill名} — 具体改动描述）
 ```
 
 ## 约束

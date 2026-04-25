@@ -34,6 +34,7 @@ effort: high
 
 3. 读目标 L1 文档，提取：
    - 输入/输出定义（请求体结构、字段、类型）— 作为用例"输入"字段的结构基准
+   - 如果 L1 或 L0 链接了 proto/OpenAPI 文件，读取该文件获取完整的请求/响应字段定义
    - 业务规则（逐条编号）
    - 错误场景
    - 可观测状态
@@ -77,6 +78,14 @@ effort: high
   2. 动作二
 - **预期结果**：可断言的具体值或状态变化
 ```
+
+**断言策略**：预期结果根据可确定性选择不同的断言方式：
+
+- **结构断言**（值可从业务规则直接确定）：写固定值。如 `response.code == 0`、`response.scene_id == 3001`、`response.coupon == null`
+- **关系断言**（值不可预知但字段间关系已知）：用响应中的其他字段计算。如校准场景下已知 k 和 b，断言 `response.results[i].calibrated_score == clamp(k * response.results[i].score + b, 0, 1)`；未校准时断言 `calibrated_score == score`
+- **不可程序化断言**（需要检查日志、监控等无法通过 API 获取的内容）：标注 `[manual]`，写清预期现象，交给人类验证。如 `[manual] 应用日志包含 "calibration skipped"`
+
+不要为了凑固定值而猜测不可预知的数值（如模型打分结果）。能从响应里读到的值，就用响应字段做关系断言。
 
 输出到 `$cases_dir/business.md`，文件头格式：
 
