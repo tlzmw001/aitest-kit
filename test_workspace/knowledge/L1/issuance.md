@@ -2,6 +2,15 @@
 
 选择最高分券并执行发放。
 
+## 接口
+
+- HTTP 端点：`POST /api/v1/recommend`（发放是 pipeline 的最后一环，通过推荐接口间接触发）
+- gRPC 端点：`coupon.CouponService/Recommend`
+- 请求/响应完整字段定义：[coupon.proto](../../../coupon_system/protos/coupon.proto)、[http_app.py CouponItemRequest/RecommendRequest](../../../coupon_system/http_app.py)
+- 辅助接口（用于断言验证）：
+  - `GET /api/v1/admin/stock/{coupon_id}` — 查询库存
+  - `GET /api/v1/coupons/{user_id}` — 查询用户已领取的券
+
 ## 输入
 
 - 校准后的分数列表

@@ -2,6 +2,12 @@
 
 从存储层获取用户和 Item 特征，调用打分服务获取候选券的分数。
 
+## 接口
+
+- HTTP 端点：`POST /api/v1/recommend`（特征抽取与打分是 pipeline 的一环，通过推荐接口间接触发）
+- gRPC 端点：`coupon.CouponService/Recommend`
+- 请求/响应完整字段定义：[coupon.proto](../../../coupon_system/protos/coupon.proto)、[http_app.py CouponItemRequest/RecommendRequest](../../../coupon_system/http_app.py)
+
 ## 输入
 
 - 经粗排筛选后的候选券列表

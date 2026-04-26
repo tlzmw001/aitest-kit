@@ -2,6 +2,12 @@
 
 通过 AB 实验 SDK 获取用户在各实验中命中的策略，驱动后续粗排和校准逻辑。
 
+## 接口
+
+- HTTP 端点：`POST /api/v1/recommend`（AB 实验分流是 pipeline 的一环，通过推荐接口间接触发）
+- gRPC 端点：`coupon.CouponService/Recommend`
+- 请求/响应完整字段定义：[coupon.proto](../../../coupon_system/protos/coupon.proto)、[http_app.py CouponItemRequest/RecommendRequest](../../../coupon_system/http_app.py)
+
 ## 输入
 
 - `user_id`：用于 hash 分流

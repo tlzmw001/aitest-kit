@@ -2,6 +2,12 @@
 
 在精排（打分）之前对候选券进行筛选和排序，由实验开关控制是否启用。
 
+## 接口
+
+- HTTP 端点：`POST /api/v1/recommend`（粗排是 pipeline 的一环，通过推荐接口间接触发）
+- gRPC 端点：`coupon.CouponService/Recommend`
+- 请求/响应完整字段定义：[coupon.proto](../../../coupon_system/protos/coupon.proto)、[http_app.py CouponItemRequest/RecommendRequest](../../../coupon_system/http_app.py)
+
 ## 输入
 
 - 候选券列表（items）

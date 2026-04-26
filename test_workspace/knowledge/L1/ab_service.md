@@ -2,6 +2,14 @@
 
 独立部署的 AB 实验管理与分流服务，供业务系统通过 SDK 调用。
 
+## 接口
+
+- HTTP 基础 URL：`http://localhost:8100`（可通过 AB_SERVICE_HOST / AB_SERVICE_PORT 环境变量配置）
+- 核心端点：`POST /api/v1/ab/evaluate`（实验评估）
+- 管理端点：实验 CRUD（`/api/v1/ab/experiments`）+ 白名单 CRUD（`/api/v1/ab/whitelist`），完整列表见下方"API 一览"
+- 健康检查：`GET /health`
+- 无 gRPC 接口
+
 ## 输入
 
 ### 实验评估请求（POST /api/v1/ab/evaluate）

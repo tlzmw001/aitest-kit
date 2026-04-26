@@ -2,6 +2,12 @@
 
 请求级别的日志记录系统。
 
+## 接口
+
+- HTTP 端点：`POST /api/v1/recommend`（日志模块是 pipeline 的一环，通过推荐接口间接触发）
+- gRPC 端点：`coupon.CouponService/Recommend`
+- 请求/响应完整字段定义：[coupon.proto](../../../coupon_system/protos/coupon.proto)、[http_app.py CouponItemRequest/RecommendRequest](../../../coupon_system/http_app.py)
+
 ## 输入
 
 每次推荐请求的关键信息。

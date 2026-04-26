@@ -2,6 +2,13 @@
 
 请求入口的校验和流控。
 
+## 接口
+
+- HTTP 端点：`POST /api/v1/recommend`
+- gRPC 端点：`coupon.CouponService/Recommend`
+- 请求/响应完整字段定义：[coupon.proto](../../../coupon_system/protos/coupon.proto)、[http_app.py CouponItemRequest/RecommendRequest](../../../coupon_system/http_app.py)
+- 打分服务接口定义：[scoring.proto](../../../coupon_system/protos/scoring.proto)
+
 ## 输入
 
 来自客户端的 HTTP/gRPC 请求。
