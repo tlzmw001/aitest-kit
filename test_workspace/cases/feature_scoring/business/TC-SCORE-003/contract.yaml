@@ -1,0 +1,135 @@
+schema_version: 0.1
+case_id: TC-SCORE-003
+title: 外部 HTTP 请求对 user_id 做 SHA-256 加盐哈希且不下发 route
+source_review: review.md
+priority: P1
+type: business
+knowledge_refs:
+  - L2/0402
+
+case_facts:
+  external_identity:
+    salt: coupon_external_uid_salt
+    plain_user_id: u_ext_hash_001
+    hashed_user_id: 8e21e887e6d8821c837ee2d8564ea90c756083954b4e7f18a03fbf64cac6b2ab
+    forbidden_fields:
+      - route
+  request:
+    request_id: req-score-003
+    user_id: u_ext_hash_001
+    scene_id: 1001
+    user_features:
+      is_member: "true"
+    context_features:
+      channel: ad
+    items:
+      - item_id: COUPON_ACT_001
+        features:
+          popularity: 0.4
+          coupon_type: discount
+          value: 80
+          min_spend: 5000
+          expire_days: 3
+  expected:
+    R1:
+      summary: request_id is preserved in external HTTP payload
+      observable: payload.request_id equals req-score-003
+    R2:
+      summary: user_id is salted SHA-256 hash in external HTTP payload
+      observable: payload.user_id equals expected hashed_user_id
+    R3:
+      summary: plain user_id is not sent to external HTTP service
+      observable: payload.user_id does not equal u_ext_hash_001
+    R4:
+      summary: route field is not sent to external HTTP service
+      observable: route key is absent from payload
+    R5:
+      summary: external HTTP score response is parsed successfully
+      observable: result contains COUPON_ACT_001 with score 0.62
+
+execution_contract:
+  subject:
+    module: coupon_system.services.scoring_client
+    class: ScoringClient
+    method: score
+  arrange:
+    instantiate:
+      class: ScoringClient
+      kwargs:
+        host: localhost
+        port: 50052
+        external_host: localhost
+        external_port: 50053
+        external_path: /score
+        external_user_id_salt: coupon_external_uid_salt
+    test_doubles:
+      - target: coupon_system.services.scoring_client.httpx.post
+        kind: patch
+        return_value:
+          raise_for_status: no_error
+          json:
+            code: 0
+            message: success
+            scores:
+              - item_id: COUPON_ACT_001
+                score: 0.62
+  act:
+    call: client.score
+    kwargs_ref: case_facts.request
+    extra_kwargs:
+      external: 1
+  observations:
+    - id: O1
+      source: httpx.post.call_args.kwargs.json
+      name: payload
+  assertions:
+    - id: A1
+      verifies: R1
+      kind: payload_field_equals
+      source: payload
+      field: request_id
+      expected: req-score-003
+    - id: A2
+      verifies: R2
+      kind: payload_field_equals
+      source: payload
+      field: user_id
+      expected_ref: case_facts.external_identity.hashed_user_id
+    - id: A3
+      verifies: R3
+      kind: payload_field_not_equals
+      source: payload
+      field: user_id
+      forbidden_ref: case_facts.external_identity.plain_user_id
+    - id: A4
+      verifies: R4
+      kind: payload_field_absent
+      source: payload
+      field: route
+    - id: A5
+      verifies: R5
+      kind: result_equals
+      expected:
+        - type: ItemScore
+          item_id: COUPON_ACT_001
+          score: 0.62
+
+consistency:
+  review_expectation_ids:
+    - R1
+    - R2
+    - R3
+    - R4
+    - R5
+  assertion_ids:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+  assertion_to_expectation:
+    A1: R1
+    A2: R2
+    A3: R3
+    A4: R4
+    A5: R5

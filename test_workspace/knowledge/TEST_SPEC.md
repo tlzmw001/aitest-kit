@@ -2,7 +2,52 @@
 
 > 本文档是 test-design skill 的行为准则。生成、评审、修改用例时，以此为准。
 
+## 零、测试架构
+
+### 测试方式
+- 测试以**外部客户端调接口**的方式执行，不嵌入待测服务代码
+- 待测服务部署在本地，测试代码作为独立进程调用服务的 HTTP / gRPC 端点
+- 禁止在测试中 import 服务内部模块并 mock 内部方法（如 `patch("coupon_system.xxx")`）
+- 测试的 arrange（前置数据准备）通过以下方式构造：Redis 命令写入数据、配置文件、AB 实验 API 调用等
+
+### 接口覆盖要求
+- 有 HTTP 接口的模块 → 必须有 HTTP 用例
+- 有 gRPC 接口的模块 → 必须有 gRPC 用例
+- 同一个功能同时暴露 HTTP 和 gRPC 时 → 两种接口都要测试，不能只测一种
+- 用例通过共享配置中的"接口"字段标明使用哪种协议
+
+### 断言策略（因接口测试而生的约束）
+- 通过接口调用时，pipeline 中间产物（如 score）不可控 → 必须用关系断言（见陷阱-003）
+- 接口返回的字段是唯一断言来源，不能断言内部变量或函数调用
+
 ## 一、用例格式
+
+### 共享配置 + 精简用例格式
+
+每个用例文件顶部定义**共享配置**，包含该模块所有用例共用的部分；每条用例只写与共享配置不同的**场景变量**和**断言**。
+
+共享配置区包含：
+
+| 字段 | 说明 |
+|------|------|
+| 接口 | HTTP endpoint 和/或 gRPC method（模块有多种接口时都列出） |
+| 基础请求体 | 完整请求 JSON/protobuf，用 `{{placeholder}}` 标记每条用例会替换的字段 |
+| 标准前置 | 所有用例共用的环境准备步骤（路由配置、库存初始化等） |
+| 通用断言 | 每条用例都要检查的断言（如 `response.code == 0`） |
+| 变量定义 | 关系断言中的变量缩写（如 `s = response.results[0].score`） |
+
+每条用例格式：
+
+```markdown
+### TC-{模块}-{序号}：{一句话描述}
+- **优先级**：P0 / P1 / P2 [/ 异常]
+- **场景变量**：与共享配置不同的部分（校准参数、实验配置、特殊输入等）
+- **断言**：可程序化断言的表达式（引用共享配置中定义的变量）
+```
+
+### 旧版完整格式
+
+已有用例可保留以下格式，不强制迁移：
 
 ```markdown
 ### TC-{模块}-{序号}：{一句话描述}
@@ -47,7 +92,7 @@
 - 第一轮（不看代码）时，请求体结构来自知识库 L1 的"输入"章节；如果知识库未给出完整字段定义，标注 `[!请求体待补全]`，第二轮读代码后补全
 
 **测试步骤**必须写到可直接执行的粒度：
-- 不能写"发送推荐请求" → 要写"POST /api/recommend，body 为输入中的 JSON"
+- 不能写"发送推荐请求" → 要写"POST /api/v1/recommend，body 为输入中的 JSON"
 - 不能写"配置校准实验" → 要写"设置实验参数 enable_calibration=true, calibration_dir={...}"
 - 不能写"检查返回的分数" → 要写"断言 response.body.results[0].calibrated_score == 0.75"
 
@@ -165,7 +210,23 @@
 > 用例评审或执行中发现的错误模式。test-design 生成用例时必须逐条自检，避免重犯。
 > 由 test-fix skill 自动追加，也可手动编辑。
 
-（暂无，待实践中补充）
+### 陷阱-001：HTTP 路由路径必须包含版本前缀 /api/v1/
+- **错误写法**：`POST /api/recommend`
+- **正确做法**：`POST /api/v1/recommend`（以 http_app.py 中 `@app.post` 装饰器的实际路径为准）
+- **原因**：知识库 L1 未记录完整的 HTTP 路由路径，TEST_SPEC 示例也写错了路径，导致 test-design 第一轮生成时直接复制了错误路径
+- **适用范围**：所有通过 HTTP 接口发起请求的用例；生成时必须从代码或知识库确认真实路由，不能凭模块名推断
+
+### 陷阱-002：items 请求体必须包含 CouponItemRequest 全部必填字段
+- **错误写法**：`{"item_id": "coupon_001", "coupon_type": "discount"}`（缺少 value）
+- **正确做法**：`{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}`（value 必填，min_spend/expire_days 有默认值但建议显式写出）
+- **原因**：知识库 L1 的"输入"章节只列了模块关注的业务参数（scene_name/device/policy_id），未列出 items 子结构的完整 Schema，test-design 第一轮无法构造完整请求体
+- **适用范围**：所有包含 items 字段的 HTTP/gRPC 用例；items 的完整 Schema 定义见 http_app.py:34-39（CouponItemRequest）和 coupon.proto（CouponItem）
+
+### 陷阱-003：pipeline 中间产物不能用结构断言硬编码固定值
+- **错误写法**：`断言 response.results[0].calibrated_score == 0.75`（假设 score 恰好等于 0.5）
+- **正确做法**：用关系断言 `断言 response.results[i].calibrated_score == clamp(k * response.results[i].score + b, 0, 1)`，其中 k/b 来自前置条件中配置的校准文件，score 从响应中读取
+- **原因**：通过 HTTP/gRPC 接口测试时，score 是模型打分的输出（pipeline 中间产物），测试无法控制其值。硬编码固定值的前提是"score 恰好等于某个值"，但这在真实请求中不成立
+- **适用范围**：所有依赖 pipeline 中间产物的断言场景。判断标准：如果断言值依赖的某个变量不是请求输入而是系统计算结果，就必须用关系断言而非结构断言。典型场景：校准分数、排序后位次、打分结果
 
 ## 九、质量红线
 

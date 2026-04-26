@@ -13,16 +13,20 @@ effort: high
 
 修正用例 `$case_id`，错误描述：`$error_description`。
 
+## 前置：读取项目配置
+
+读 `aitest_config/config.yaml`，获取 `paths.*`（知识库、用例、旧用例目录路径）。
+
 ## 执行流程
 
 ### 第一步：定位用例
 
 1. 从 `$case_id` 中提取模块缩写（如 TC-ROUTE-013 → ROUTE）
-2. 查 `test_workspace/knowledge/TEST_SPEC.md` 的模块缩写对照表，确定模块名
+2. 查 `{paths.test_spec}` 的模块缩写对照表，确定模块名
 3. 在以下位置搜索该用例：
-   - `test_workspace/cases/{模块名}/business.md`
-   - `test_workspace/cases/{模块名}/boundary.md`
-   - `cases/old-cases/` 下的文件
+   - `{paths.cases_dir}/{模块名}/business.md`
+   - `{paths.cases_dir}/{模块名}/boundary.md`
+   - `{paths.old_cases_dir}/` 下的文件
 4. 读取该用例的完整内容和上下文（前后用例、关联的知识库文档）
 
 ### 第二步：分析错误
@@ -45,7 +49,7 @@ effort: high
 
 ### 第四步：记录陷阱
 
-在 `test_workspace/knowledge/TEST_SPEC.md` 的"已知陷阱"章节追加一条记录：
+在 `{paths.test_spec}` 的"已知陷阱"章节追加一条记录：
 
 ```markdown
 ### 陷阱-{序号}：{一句话描述错误模式}
@@ -74,6 +78,7 @@ effort: high
    - 根据错误类型判断属于哪个 skill 的职责范围（test-design / knowledge-build / doc-review）
    - 读取该 skill 的 SKILL.md，定位到导致问题的步骤
    - 添加或修正指令，使同类错误不再发生
+   - 如果问题涉及共享引用（断言策略、用例格式、mismatch 格式、L1/L2 模板），更新 `{paths.refs_dir}/` 下对应文件
    - 在完成输出中注明更新了哪个 skill 及具体改动
 
 ### 第六步：完成输出
@@ -88,6 +93,7 @@ effort: high
 修正内容：（改了什么）
 新增陷阱：陷阱-{序号}（一句话描述）
 Skill 更新：（无 / 更新了 {skill名} — 具体改动描述）
+Refs 更新：（无 / 更新了 {refs文件名} — 具体改动描述）
 ```
 
 ## 约束

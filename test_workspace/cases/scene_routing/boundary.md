@@ -22,7 +22,7 @@
     "user_id": "u_edge_001",
     "scene_name": "game",
     "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount"}],
+    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
     "policy_id": "policy_fallback_001",
     "max_claim_per_request": 1,
     "score_threshold": 0.0,
@@ -32,7 +32,7 @@
 - **测试步骤**：
   1. 通过 Redis CLI 执行 `SET coupon:fallback:score:3001 "abc"`
   2. 通过 Redis CLI 执行 `SET coupon:fallback:score:default 0.6`
-  3. POST /api/recommend，body 为上述 JSON
+  3. POST /api/v1/recommend，body 为上述 JSON
   4. 断言 response.body 中兜底分值
 - **预期结果**：场景级值解析失败（ValueError），`get_fallback_score` 返回 None，不会继续读全局默认，直接回退到配置默认值 0.5（代码逻辑：场景级解析失败后 return None，不走全局分支）
 
@@ -49,7 +49,7 @@
     "user_id": "u_edge_002",
     "scene_name": "game",
     "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount"}],
+    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
     "policy_id": "policy_fallback_001",
     "max_claim_per_request": 1,
     "score_threshold": 0.0,
@@ -58,7 +58,7 @@
   ```
 - **测试步骤**：
   1. 停止 Redis 服务
-  2. POST /api/recommend，body 为上述 JSON
+  2. POST /api/v1/recommend，body 为上述 JSON
   3. 检查 response status_code
 - **预期结果**：请求失败，返回 500 或 redis.ConnectionError 上抛（`_resolve_fallback_score` 和 `RedisStore.get_fallback_score` 均无 try/except）
 
@@ -79,7 +79,7 @@
     "user_id": "u_edge_003",
     "scene_name": "game",
     "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount"}],
+    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
     "policy_id": "",
     "max_claim_per_request": 1,
     "score_threshold": 0.5,
@@ -87,7 +87,7 @@
   }
   ```
 - **测试步骤**：
-  1. POST /api/recommend，body 为上述 JSON（policy_id 为空字符串）
+  1. POST /api/v1/recommend，body 为上述 JSON（policy_id 为空字符串）
   2. 断言 response.body.scene_id
 - **预期结果**：不触发兜底（代码 `if policy_id and ...` 中空字符串为 falsy），正常路由到 scene_id=1001
 
@@ -105,7 +105,7 @@
     "user_id": "u_edge_004",
     "scene_name": "game",
     "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount"}],
+    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
     "policy_id": "policy_normal_999",
     "max_claim_per_request": 1,
     "score_threshold": 0.5,
@@ -113,7 +113,7 @@
   }
   ```
 - **测试步骤**：
-  1. POST /api/recommend，body 为上述 JSON（policy_id 存在但不在 fallback 列表中）
+  1. POST /api/v1/recommend，body 为上述 JSON（policy_id 存在但不在 fallback 列表中）
   2. 断言 response.body.scene_id
 - **预期结果**：不触发兜底，正常路由到 scene_id=1001
 
@@ -130,14 +130,14 @@
     "user_id": "u_edge_005",
     "scene_name": "Game",
     "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount"}],
+    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
     "max_claim_per_request": 1,
     "score_threshold": 0.5,
     "external": 0
   }
   ```
 - **测试步骤**：
-  1. POST /api/recommend，body 为上述 JSON（scene_name 首字母大写）
+  1. POST /api/v1/recommend，body 为上述 JSON（scene_name 首字母大写）
   2. 断言 response.body.scene_id
 - **预期结果**：路由不匹配（dict key 精确匹配，大小写敏感），走兜底 scene_id=3001
 
@@ -159,7 +159,7 @@
     "user_id": "u_edge_006",
     "scene_name": "game",
     "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount"}],
+    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
     "max_claim_per_request": 1,
     "score_threshold": 0.5,
     "external": 0
@@ -168,7 +168,7 @@
 - **测试步骤**：
   1. 备份 scenes.json，将 routes 改为 `[]`
   2. 重启服务
-  3. POST /api/recommend，body 为上述 JSON
+  3. POST /api/v1/recommend，body 为上述 JSON
   4. 断言 response.body.scene_id 和 experiment_info
   5. 恢复 scenes.json 原始内容
 - **预期结果**：scene_id=3001（fallback），experiment_info={}（跳过实验）

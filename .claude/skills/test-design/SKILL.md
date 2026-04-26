@@ -11,16 +11,21 @@ effort: high
 
 # 测试用例设计
 
-为 `$target_module` 模块生成测试用例，输出到 `$cases_dir`（未指定时默认 `test_workspace/cases/$target_module/`）。
+为 `$target_module` 模块生成测试用例。
 
-未指定 `$cases_dir` 时，询问用户确认输出目录后再创建。
+输出目录：`$cases_dir`（未指定时，从 `aitest_config/config.yaml` 读取 `paths.cases_dir`，默认 `{cases_dir}/$target_module/`）。未指定时询问用户确认后再创建。
+
+## 前置：读取项目配置
+
+读 `aitest_config/config.yaml`，获取：
+- `paths.*` — 知识库、用例、旧用例等目录路径
+- `service.*` — 路由装饰器模式、Schema 校验模式（第二轮用）
 
 ## 执行流程
 
 ### 第一步：读取规范和上下文
 
-1. 读 `test_workspace/knowledge/TEST_SPEC.md`，建立：
-   - 用例格式模板（含测试步骤）
+1. 读 `{paths.test_spec}`（TEST_SPEC），建立：
    - 编号规则和模块缩写对照表
    - 优先级定义（P0/P1/P2）
    - 质量红线（Q1-Q10）
@@ -28,7 +33,7 @@ effort: high
    - 关注场景列表（生成时必须覆盖）
    - 已知陷阱列表（生成时逐条自检，避免重犯已知错误模式）
 
-2. 读 `test_workspace/knowledge/L0_system_architecture.md`，从模块索引表中找到 `$target_module` 对应的：
+2. 读 `{paths.l0_architecture}`（L0），从模块索引表中找到 `$target_module` 对应的：
    - L1 文档路径
    - 关联的 L2 文档路径
 
@@ -46,9 +51,11 @@ effort: high
    - "已有测试覆盖"章节
 
 5. 搜索已有用例，确定编号起点：
-   - 搜索 `test_workspace/cases/$target_module/` 下已有用例文件
-   - 搜索 `cases/old-cases/` 下相关用例
+   - 搜索 `{paths.cases_dir}/$target_module/` 下已有用例文件
+   - 搜索 `{paths.old_cases_dir}/` 下相关用例
    - 找到该模块缩写的最大 TC 序号，新用例从 +1 开始
+
+6. 读 `aitest_config/refs/assertion-strategy.md`，建立断言策略（结构断言 / 关系断言 / 不可程序化断言的选择标准）
 
 ### 第二步：第一轮——业务用例（不看代码）
 
@@ -63,39 +70,11 @@ effort: high
 7. 知识库没说的行为 → 预期结果写 `TBD-需确认`，不猜测
 8. 用例的"输入"字段必须基于 L1 文档的输入/输出定义，写出完整请求体结构；L1 未给出完整字段定义的，标注 `[!请求体待补全]`
 9. 前置条件必须写出具体构造方式（配置文件内容、Redis 命令、实验参数 dict），不能只写抽象描述
-10. 测试步骤必须写到可直接执行的粒度（具体接口路径、HTTP method、断言表达式）
-用例格式严格遵循 TEST_SPEC 第一节模板：
+10. 断言选择遵循 `aitest_config/refs/assertion-strategy.md` 的三种策略
 
-```markdown
-### TC-{模块缩写}-{序号}：{一句话描述}
-- **关联**：L1/xxx 或 L2/xxxx
-- **优先级**：P0 / P1 / P2
-- **类型**：业务 / 异常
-- **前置条件**：环境状态、数据准备、依赖服务状态
-- **输入**：请求参数、测试数据（具体值）
-- **测试步骤**：
-  1. 动作一
-  2. 动作二
-- **预期结果**：可断言的具体值或状态变化
-```
+**接口覆盖**：查看 L1 "接口"章节，确认模块暴露的接口类型（HTTP / gRPC / 两者）。两种接口都有时，共享配置必须列出两种接口，每个功能场景必须生成 HTTP 和 gRPC 两组用例（可共享场景变量，仅接口和请求格式不同）。
 
-**断言策略**：预期结果根据可确定性选择不同的断言方式：
-
-- **结构断言**（值可从业务规则直接确定）：写固定值。如 `response.code == 0`、`response.scene_id == 3001`、`response.coupon == null`
-- **关系断言**（值不可预知但字段间关系已知）：用响应中的其他字段计算。如校准场景下已知 k 和 b，断言 `response.results[i].calibrated_score == clamp(k * response.results[i].score + b, 0, 1)`；未校准时断言 `calibrated_score == score`
-- **不可程序化断言**（需要检查日志、监控等无法通过 API 获取的内容）：标注 `[manual]`，写清预期现象，交给人类验证。如 `[manual] 应用日志包含 "calibration skipped"`
-
-不要为了凑固定值而猜测不可预知的数值（如模型打分结果）。能从响应里读到的值，就用响应字段做关系断言。
-
-输出到 `$cases_dir/business.md`，文件头格式：
-
-```markdown
-# {模块名} 业务测试用例
-
-> 生成方式：test-design skill
-> 关联知识库：L1/xxx
-> 生成日期：YYYY-MM-DD
-```
+**输出格式**：输出到 `$cases_dir/business.md`，按 `aitest_config/refs/case-format.md` 的"共享配置 + 精简用例"格式。每条用例只写 **优先级 / 场景变量 / 断言** 三个字段。
 
 ### 第三步：第二轮——边界用例（读代码）
 
@@ -107,28 +86,17 @@ effort: high
    - 精度处理（round、截断）
    - 未在知识库中记录的条件分支
 3. 校验第一轮用例的可行性：
+   - **HTTP 路由校验**：在源代码中搜索 `config.yaml` 中 `service.route_patterns` 定义的路由装饰器，确认第一轮用例中的 HTTP 路径与代码中的实际路由完全一致
+   - **请求体 Schema 校验**：搜索 `service.schema_patterns` 定义的模式找到 Schema 定义，逐字段核对第一轮用例的请求体（必填字段必须存在，嵌套结构也要检查）
    - 前置条件是否可通过代码构造
    - 输入格式是否与代码接口匹配
-   - 补全标注了 `[!请求体待补全]` 的用例：根据代码中的实际接口定义，写出完整请求体
-   - 将抽象的前置条件和测试步骤改写为具体可执行的操作
-   - 有问题的用例在 business.md 中追加标注 `[!可行性存疑: 原因]`
-4. 发现规格与实现不一致时 → **不修改第一轮用例**，新建 mismatch 记录
+   - 补全标注了 `[!请求体待补全]` 的用例
+   - 有问题的用例追加标注 `[!可行性存疑: 原因]`
+4. 发现规格与实现不一致时 → **不修改第一轮用例**，按 `aitest_config/refs/mismatch-format.md` 新建 mismatch 记录
 5. 第一轮中标记 `TBD-需确认` 的预期结果，如果代码能给出答案，在 business.md 中更新并标注来源
 
-用例类型标记为"边界"，输出到 `$cases_dir/boundary.md`。
-
-Mismatch 记录格式：
-
-```markdown
-### MISMATCH-{序号}：{一句话描述}
-- **关联**：L1/xxx 或 L2/xxxx
-- **知识库描述**：知识库中的规则原文
-- **实际实现**：代码中的实际行为
-- **影响**：对用户/业务的影响判断
-- **建议**：修代码 / 补文档 / 待产品确认
-```
-
-有 mismatch 时输出到 `$cases_dir/mismatch.md`，无则不创建该文件。
+输出到 `$cases_dir/boundary.md`，使用与 business.md 相同的共享配置格式。
+Mismatch 输出到 `$cases_dir/mismatch.md`（无则不创建）。
 
 ### 第四步：覆盖变更与知识库刷新
 
@@ -146,7 +114,7 @@ Mismatch 记录格式：
 
 4. 更新 L1/L2 文档的"已有测试覆盖"章节：
    - 将新覆盖的维度从"未覆盖"移到"已覆盖"
-   - 添加用例文件引用：`[test_workspace/cases/$target_module/business.md]`
+   - 添加用例文件引用
 
 ### 第五步：完成输出与反馈收集
 
@@ -180,26 +148,11 @@ Mismatch 记录格式：
 2. 有没有不值得测的场景类型？（补充到 TEST_SPEC 排除场景）
 3. 有没有遗漏的必测场景？（补充到 TEST_SPEC 关注场景）
 
-如果用户给出排除/关注反馈 → 更新 `test_workspace/knowledge/TEST_SPEC.md` 对应章节。
+如果用户给出排除/关注反馈 → 更新 `{paths.test_spec}` 对应章节。
 
 ## 质量自检
 
-生成每条用例后，对照 TEST_SPEC 质量红线逐条检查：
-
-| 编号 | 检查项 |
-|------|--------|
-| Q1 | 预期结果是否为可断言的具体值（非"正常"、"成功"） |
-| Q2 | 输入是否为具体数据（非"有效请求"、"正常参数"） |
-| Q3 | 前置条件是否可复现（非"负载高时"） |
-| Q4 | 测试步骤是否完整（含具体接口、方法、参数） |
-| Q5 | 是否只验证一个关注点 |
-| Q6 | 是否独立于其他用例执行顺序 |
-| Q7 | 第一轮预期结果是否仅来自知识库（非代码推测） |
-| Q8 | 输入是否为完整可发送的请求体（非片段参数） |
-| Q9 | 前置条件是否写出了具体构造方式（非抽象描述） |
-| Q10 | 测试步骤是否写到可直接执行（含接口路径、方法、断言表达式） |
-
-不通过的用例必须修正后再输出。
+生成每条用例后，对照 TEST_SPEC 质量红线（Q1-Q10）逐条检查。不通过的用例必须修正后再输出。
 
 ## 增量模式
 

@@ -2,15 +2,23 @@
 
 对打分结果进行分数校准，由实验开关控制。
 
+## 接口
+
+- HTTP 端点：`POST /api/v1/recommend`（校准是 pipeline 的一环，通过推荐接口间接触发）
+- gRPC 端点：`coupon.CouponService/Recommend`
+- 请求/响应完整字段定义：[coupon.proto](../../../coupon_system/protos/coupon.proto)、[http_app.py CouponItemRequest/RecommendRequest](../../../coupon_system/http_app.py)
+- 请求体必填字段：`user_id`(str)、`scene_name`(str)、`device`(str)、`items`(list, 每项含 `item_id`/`coupon_type`/`value` 必填)、`max_claim_per_request`(int)、`score_threshold`(float)、`external`(int)
+
 ## 输入
 
-- 打分结果（分数列表）
-- `scene_id`
-- 校准实验参数
+校准模块在 pipeline 中消费的数据：
+- 打分结果（分数列表）— 来自上游 feature_scoring 模块的输出，**测试无法直接控制此值**
+- `scene_id` — 由场景路由模块决定
+- 校准实验参数 — 由配置和实验开关控制
 
 ## 输出
 
-校准后的分数列表。
+校准后的分数列表（响应中 `results[i].calibrated_score` 字段）。
 
 ## 业务规则
 

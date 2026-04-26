@@ -23,7 +23,7 @@
     "user_id": "u_fb_001",
     "scene_name": "game",
     "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount"}],
+    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
     "policy_id": "policy_fallback_001",
     "max_claim_per_request": 1,
     "score_threshold": 0.0,
@@ -32,7 +32,7 @@
   ```
 - **测试步骤**：
   1. 通过 Redis CLI 执行 `SET coupon:fallback:score:3001 0.8` 和 `SET coupon:fallback:score:default 0.6`
-  2. POST /api/recommend，body 为上述 JSON
+  2. POST /api/v1/recommend，body 为上述 JSON
   3. 断言 response.body 中 calibrated_score 或 score 值
 - **预期结果**：兜底分使用场景级 Redis 值 0.8，而非全局 0.6 或配置默认 0.5
 
@@ -51,7 +51,7 @@
     "user_id": "u_fb_002",
     "scene_name": "game",
     "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount"}],
+    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
     "policy_id": "policy_fallback_001",
     "max_claim_per_request": 1,
     "score_threshold": 0.0,
@@ -61,7 +61,7 @@
 - **测试步骤**：
   1. 通过 Redis CLI 执行 `DEL coupon:fallback:score:3001`
   2. 通过 Redis CLI 执行 `SET coupon:fallback:score:default 0.6`
-  3. POST /api/recommend，body 为上述 JSON
+  3. POST /api/v1/recommend，body 为上述 JSON
   4. 断言 response.body 中兜底分值
 - **预期结果**：兜底分使用全局 Redis 值 0.6，而非配置默认 0.5
 
@@ -79,7 +79,7 @@
     "user_id": "u_fb_003",
     "scene_name": "game",
     "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount"}],
+    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
     "policy_id": "policy_fallback_001",
     "max_claim_per_request": 1,
     "score_threshold": 0.0,
@@ -88,7 +88,7 @@
   ```
 - **测试步骤**：
   1. 通过 Redis CLI 执行 `DEL coupon:fallback:score:3001` 和 `DEL coupon:fallback:score:default`
-  2. POST /api/recommend，body 为上述 JSON
+  2. POST /api/v1/recommend，body 为上述 JSON
   3. 断言 response.body 中兜底分值
 - **预期结果**：兜底分使用配置默认值 0.5
 
@@ -110,7 +110,7 @@
     "user_id": "u_fb_004",
     "scene_name": "game",
     "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount"}],
+    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
     "policy_id": "policy_fallback_001",
     "max_claim_per_request": 1,
     "score_threshold": 0.0,
@@ -119,7 +119,7 @@
   ```
 - **测试步骤**：
   1. 停止 Redis 服务（或 mock Redis 连接超时）
-  2. POST /api/recommend，body 为上述 JSON
+  2. POST /api/v1/recommend，body 为上述 JSON
   3. 检查 response status_code 和 body
 - **预期结果**：请求失败，返回 500（`_resolve_fallback_score` 调用 `redis.get_fallback_score` 无 try/except，ConnectionError 上抛）。注：来自第二轮代码确认，见 MISMATCH-001
 
@@ -137,7 +137,7 @@
     "user_id": "u_route_001",
     "scene_name": "game",
     "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount"}],
+    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
     "max_claim_per_request": 1,
     "score_threshold": 0.5,
     "external": 0
@@ -145,7 +145,7 @@
   ```
 - **测试步骤**：
   1. 备份 `coupon_system/config/scenes.json`，将 routes 改为 `[]`，重启服务
-  2. POST /api/recommend，body 为上述 JSON
+  2. POST /api/v1/recommend，body 为上述 JSON
   3. 断言 response.body.scene_id 和 experiment_info
 - **预期结果**：scene_id=3001（fallback_scene_id），experiment_info={}（跳过实验评估）
 
@@ -166,14 +166,14 @@
     "user_id": "u_ext_001",
     "scene_name": "game",
     "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount"}],
+    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
     "max_claim_per_request": 1,
     "score_threshold": 0.5,
     "external": 1
   }
   ```
 - **测试步骤**：
-  1. POST /api/recommend，body 为上述 JSON（external=1）
+  1. POST /api/v1/recommend，body 为上述 JSON（external=1）
   2. 断言 response.body.scene_id
 - **预期结果**：scene_id=1001，与 external=0 时相同，场景路由不受 external 字段影响
 

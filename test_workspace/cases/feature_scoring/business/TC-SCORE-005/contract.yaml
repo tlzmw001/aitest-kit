@@ -1,0 +1,139 @@
+schema_version: 0.1
+case_id: TC-SCORE-005
+title: fallback 全局关闭时打分超时返回 SCORING_ERROR
+source_review: review.md
+priority: P1
+type: exception
+knowledge_refs:
+  - L1/feature_scoring
+
+case_facts:
+  fallback:
+    enabled: false
+  stock:
+    item_id: COUPON_ACT_001
+    quantity: 100
+  scoring_failure:
+    exception: TimeoutError
+    message: timeout
+  request:
+    user_id: u_timeout_disabled
+    scene_name: game
+    device: mobile
+    policy_id: ""
+    external: 0
+    req_id: req-score-005
+    score_threshold: 0.5
+    max_claim_per_request: 1
+    context: {}
+    items:
+      - item_id: COUPON_ACT_001
+        coupon_type: discount
+        value: 80
+        min_spend: 5000
+        expire_days: 3
+  expected_response:
+    code: 1012
+    message: 打分服务异常
+    scene_id: 0
+    experiment_info: {}
+    results: []
+    coupon: null
+  expected:
+    R1:
+      summary: response code is SCORING_ERROR
+      observable: response.code equals 1012
+    R2:
+      summary: response message reports scoring service error
+      observable: response.message equals 打分服务异常
+    R3:
+      summary: scene_id falls back to 0 in scoring error response
+      observable: response.scene_id equals 0
+    R4:
+      summary: experiment_info is empty
+      observable: response.experiment_info equals empty object
+    R5:
+      summary: recommendation results are empty
+      observable: response.results equals empty list
+    R6:
+      summary: no coupon is issued
+      observable: response.coupon is null
+
+execution_contract:
+  subject:
+    module: coupon_system.services.coupon_service
+    class: CouponBizService
+    method: recommend_and_claim
+  arrange:
+    fixtures:
+      - biz
+      - redis_store
+      - mock_scoring_client
+    setup:
+      - kind: stock
+        item_id: COUPON_ACT_001
+        quantity: 100
+      - kind: config_override
+        target: biz.config.fallback.enabled
+        value: false
+      - kind: mock_side_effect
+        target: mock_scoring_client.score
+        exception: TimeoutError
+        message: timeout
+  act:
+    call: biz.recommend_and_claim
+    kwargs_ref: case_facts.request
+  assertions:
+    - id: A1
+      verifies: R1
+      kind: response_field_equals
+      field: code
+      expected_ref: case_facts.expected_response.code
+    - id: A2
+      verifies: R2
+      kind: response_field_equals
+      field: message
+      expected_ref: case_facts.expected_response.message
+    - id: A3
+      verifies: R3
+      kind: response_field_equals
+      field: scene_id
+      expected_ref: case_facts.expected_response.scene_id
+    - id: A4
+      verifies: R4
+      kind: response_field_equals
+      field: experiment_info
+      expected_ref: case_facts.expected_response.experiment_info
+    - id: A5
+      verifies: R5
+      kind: response_field_equals
+      field: results
+      expected_ref: case_facts.expected_response.results
+    - id: A6
+      verifies: R6
+      kind: response_field_equals
+      field: coupon
+      expected_ref: case_facts.expected_response.coupon
+
+consistency:
+  review_expectation_ids:
+    - R1
+    - R2
+    - R3
+    - R4
+    - R5
+    - R6
+  assertion_ids:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+    - A6
+  assertion_to_expectation:
+    A1: R1
+    A2: R2
+    A3: R3
+    A4: R4
+    A5: R5
+    A6: R6

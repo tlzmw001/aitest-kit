@@ -2,11 +2,22 @@
 
 根据请求参数确定场景 ID，处理兜底逻辑。
 
+## 接口
+
+- HTTP 端点：`POST /api/v1/recommend`
+- gRPC 端点：`coupon.CouponService/Recommend`
+- 请求/响应完整字段定义：[coupon.proto](../../../coupon_system/protos/coupon.proto)、[http_app.py CouponItemRequest/RecommendRequest](../../../coupon_system/http_app.py)
+
 ## 输入
 
+本模块关注的路由决策字段：
 - `scene_name`：场景名
 - `device`：设备类型
 - `policy_id`：请求传入，默认空字符串；非空且在 `config.fallback_policy_ids` 集合中时命中兜底
+
+透传字段（本模块不消费，但请求体必须包含）：
+- `items`：候选券列表，每项必须包含 `item_id`(str)、`coupon_type`(str)、`value`(int, 必填) ；可选字段 `min_spend`(int, 默认0)、`expire_days`(int, 默认7)
+- `max_claim_per_request`(int)、`score_threshold`(float)、`external`(int)
 
 ## 输出
 

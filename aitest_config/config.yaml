@@ -1,0 +1,91 @@
+# ============================================================
+# AIAutoTest 项目配置
+# ============================================================
+# 本文件供 Claude/Codex skill 读取，用于定位项目中的关键路径和环境信息。
+# 换项目时只需修改本文件，skill 定义无需改动。
+#
+# 路径说明：
+#   - 所有路径相对于项目根目录（即本文件所在目录的父目录）
+#   - 不要使用绝对路径
+
+# ------------------------------------------------------------
+# 一、目录与文件路径
+# ------------------------------------------------------------
+paths:
+
+  # 测试知识库根目录（存放 L0/L1/L2 文档和 TEST_SPEC）
+  knowledge_dir: test_workspace/knowledge
+
+  # 测试规范文件（质量红线、陷阱、模块缩写表等，所有 skill 的行为准则）
+  test_spec: test_workspace/knowledge/TEST_SPEC.md
+
+  # 系统架构索引（L0 文档，记录模块列表和 L1/L2 路径映射）
+  l0_architecture: test_workspace/knowledge/L0_system_architecture.md
+
+  # 测试用例输出目录（按模块分子目录，如 cases/calibration/business.md）
+  cases_dir: test_workspace/cases
+
+  # 历史用例目录（旧格式用例，逐步迁移中，编号不回收）
+  old_cases_dir: cases/old-cases
+
+  # 开发文档输入目录（knowledge-build / doc-review 的输入源）
+  docs_dir: docs
+
+  # 共享引用文档目录（断言策略、用例格式、模板等跨 skill 共用的定义）
+  refs_dir: aitest_config/refs
+
+# ------------------------------------------------------------
+# 二、待测服务信息
+# ------------------------------------------------------------
+service:
+
+  # 服务语言和框架（影响第二轮代码扫描时搜索的模式）
+  language: python
+  frameworks:
+    - fastapi   # HTTP 框架
+    - grpc      # gRPC 框架
+
+  # 本地测试服务地址（测试代码作为独立进程调用这些端点）
+  endpoints:
+    http_base_url: http://localhost:8000     # HTTP 服务基础 URL
+    grpc_target: localhost:50051             # gRPC 服务地址
+
+  # 路由装饰器模式（第二轮校验时，在源代码中搜索这些模式来确认 HTTP 路由）
+  # 不同框架的写法不同：
+  #   FastAPI: @app.post, @app.get
+  #   Flask:   @app.route
+  #   Spring:  @PostMapping, @GetMapping
+  route_patterns:
+    - "@app.post"
+    - "@app.get"
+    - "@app.put"
+    - "@app.delete"
+
+  # 请求体校验模式（第二轮校验时，搜索这些模式来找到请求 Schema 定义）
+  # 不同框架的写法不同：
+  #   Pydantic (FastAPI): Field(...)
+  #   protobuf:           message XxxRequest
+  #   Marshmallow:        fields.String(required=True)
+  schema_patterns:
+    - "Field(...)"        # Pydantic 必填字段标记
+    - "message "          # protobuf message 定义
+
+# ------------------------------------------------------------
+# 三、数据层
+# ------------------------------------------------------------
+data:
+
+  # 测试数据准备方式（前置条件中构造数据用到的外部系统）
+  # skill 生成用例时，前置条件需要写出具体的构造命令
+  stores:
+    - type: redis
+      host: localhost
+      port: 6379
+      # 用途说明：库存数据、场景路由表、实验配置缓存
+      # 前置条件示例：SET coupon:stock:COUPON_001 100
+
+    # 如果项目用到 MySQL/PostgreSQL 等，按以下格式添加：
+    # - type: mysql
+    #   host: localhost
+    #   port: 3306
+    #   database: coupon_db
