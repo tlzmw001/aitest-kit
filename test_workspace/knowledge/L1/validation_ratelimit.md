@@ -63,7 +63,13 @@
 
 - [cases/old-cases/coupon_service.md] 参数校验与限流
   - 已覆盖：基础必填字段为空校验（user_id/scene_name/device/items）、gRPC 全字段正向校验、用户级限流触发
-  - 未覆盖：全局限流触发、限流窗口过期后恢复、external/score_threshold 非法值边界（如 external=2）、限流 Redis 异常时行为、并发请求下限流精度
+  - 未覆盖：由新版 validation_ratelimit 用例补齐
+- [test_workspace/cases/validation_ratelimit/business.md] 参数校验与限流
+  - 已覆盖：external 非法值、score_threshold 越界、max_claim_per_request 非法值、HTTP/gRPC 全局限流触发、HTTP/gRPC 用户级限流触发、reqId 为空自动生成
+  - 未覆盖：限流窗口过期恢复、限流 Redis 异常、并发/同时间戳限流精度由 boundary.md 覆盖
+- [test_workspace/cases/validation_ratelimit/boundary.md] 参数校验与限流边界
+  - 已覆盖：限流窗口过期恢复、限流 Redis 异常时接口表现、同时间戳限流精度、HTTP item 子结构 Schema 校验
+  - 未覆盖：无（本模块已知未覆盖维度均已生成用例或 mismatch）
 
 ## 关联 L2
 

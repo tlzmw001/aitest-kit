@@ -42,10 +42,10 @@
 - [cases/old-cases/coupon_service.md] AB 实验分流
   - 已覆盖：正常返回实验信息、白名单强制策略、场景映射只评估关联实验
 - [test_workspace/cases/ab_experiment/business.md] AB 实验分流业务+异常用例
-  - 已覆盖：hash 分流正确性（MD5 % 100）、hash 分流未命中、场景无映射时空实验、SDK 本地模式、AB 服务不可用时无降级（HTTP 500）、实验名不存在的静默跳过
+  - 已覆盖：HTTP/gRPC hash 分流、白名单优先、场景实验映射、external=1 跳过实验、AB 服务不可用无降级、实验名不存在静默跳过
 - [test_workspace/cases/ab_experiment/boundary.md] AB 实验分流边界用例
-  - 已覆盖：hash 分流边界值（半开区间上下界）、白名单 strategy_id 无效降级到 hash、远程 SDK 超时、本地模式白名单环境变量注入
-  - 未覆盖：AB 服务启动顺序依赖
+  - 已覆盖：hash 半开区间边界、白名单 strategy_id 无效降级、远程 SDK 超时、本地模式白名单环境变量异常、AB 服务启动顺序依赖
+  - 未覆盖：无
 
 ## 关联 L2
 

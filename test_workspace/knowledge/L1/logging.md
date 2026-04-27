@@ -37,7 +37,11 @@ INFO 级别日志。
 
 - [cases/old-cases/coupon_service.md] 日志（嵌入在外部打分路由用例中）
   - 已覆盖：日志包含 reqId/user_id/item_ids/route/scene_id 关键字段
-  - 未覆盖：内部打分 route=1 的日志验证、reqId 为空时自动生成 UUID、logging 未配置导致 INFO 日志在生产环境为死代码（知识库标注的风险点）
+- [test_workspace/cases/logging/business.md] 日志业务用例
+  - 已覆盖：HTTP/gRPC 日志字段完整性、route=1/2、reqId 自动生成、兜底 scene_id、route 不下发给打分服务
+- [test_workspace/cases/logging/boundary.md] 日志边界用例
+  - 已覆盖：未配置 root logger 导致 INFO 不可见、显式配置 INFO 后可见、handler 写入失败、空 item_ids 专项风险
+  - 未覆盖：无（默认日志不可见和空 items 黑盒限制见 mismatch.md）
 
 ## 关联 L2
 

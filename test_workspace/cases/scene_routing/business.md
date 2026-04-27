@@ -1,181 +1,105 @@
-# 场景路由 业务测试用例
+# scene_routing 业务测试用例
 
 > 生成方式：test-design skill
 > 关联知识库：L1/scene_routing
-> 生成日期：2026-04-25
+> 生成日期：2026-04-26
 
 ---
 
-## 一、兜底分数三级 Fallback
+## 共享配置
 
-### TC-ROUTE-007：Redis 场景级兜底分存在时优先使用
-- **关联**：L1/scene_routing
-- **优先级**：P1
-- **类型**：业务
-- **前置条件**：
-  - Redis 设置场景级兜底分：`SET coupon:fallback:score:3001 0.8`
-  - Redis 设置全局兜底分：`SET coupon:fallback:score:default 0.6`
-  - 配置默认兜底分为 0.5
-  - 初始化库存，候选券至少 1 个
-- **输入**：
-  ```json
-  {
-    "user_id": "u_fb_001",
-    "scene_name": "game",
-    "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
-    "policy_id": "policy_fallback_001",
-    "max_claim_per_request": 1,
-    "score_threshold": 0.0,
-    "external": 0
-  }
-  ```
-- **测试步骤**：
-  1. 通过 Redis CLI 执行 `SET coupon:fallback:score:3001 0.8` 和 `SET coupon:fallback:score:default 0.6`
-  2. POST /api/v1/recommend，body 为上述 JSON
-  3. 断言 response.body 中 calibrated_score 或 score 值
-- **预期结果**：兜底分使用场景级 Redis 值 0.8，而非全局 0.6 或配置默认 0.5
+**接口**：`POST /api/v1/recommend` / `gRPC coupon.CouponService/Recommend`
 
-### TC-ROUTE-008：Redis 场景级不存在时回退到全局兜底分
-- **关联**：L1/scene_routing
-- **优先级**：P1
-- **类型**：业务
-- **前置条件**：
-  - Redis 中不存在 `coupon:fallback:score:3001`
-  - Redis 设置全局兜底分：`SET coupon:fallback:score:default 0.6`
-  - 配置默认兜底分为 0.5
-  - 初始化库存
-- **输入**：
-  ```json
-  {
-    "user_id": "u_fb_002",
-    "scene_name": "game",
-    "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
-    "policy_id": "policy_fallback_001",
-    "max_claim_per_request": 1,
-    "score_threshold": 0.0,
-    "external": 0
-  }
-  ```
-- **测试步骤**：
-  1. 通过 Redis CLI 执行 `DEL coupon:fallback:score:3001`
-  2. 通过 Redis CLI 执行 `SET coupon:fallback:score:default 0.6`
-  3. POST /api/v1/recommend，body 为上述 JSON
-  4. 断言 response.body 中兜底分值
-- **预期结果**：兜底分使用全局 Redis 值 0.6，而非配置默认 0.5
+**基础请求体（HTTP）**：
 
-### TC-ROUTE-009：Redis 场景级和全局都不存在时使用配置默认值
-- **关联**：L1/scene_routing
-- **优先级**：P1
-- **类型**：业务
-- **前置条件**：
-  - Redis 中不存在 `coupon:fallback:score:3001` 和 `coupon:fallback:score:default`
-  - 配置默认兜底分为 0.5
-  - 初始化库存
-- **输入**：
-  ```json
-  {
-    "user_id": "u_fb_003",
-    "scene_name": "game",
-    "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
-    "policy_id": "policy_fallback_001",
-    "max_claim_per_request": 1,
-    "score_threshold": 0.0,
-    "external": 0
-  }
-  ```
-- **测试步骤**：
-  1. 通过 Redis CLI 执行 `DEL coupon:fallback:score:3001` 和 `DEL coupon:fallback:score:default`
-  2. POST /api/v1/recommend，body 为上述 JSON
-  3. 断言 response.body 中兜底分值
-- **预期结果**：兜底分使用配置默认值 0.5
+```json
+{
+  "user_id": "{{user_id}}",
+  "scene_name": "{{scene_name}}",
+  "device": "{{device}}",
+  "policy_id": "{{policy_id}}",
+  "external": {{external}},
+  "reqId": "{{req_id}}",
+  "score_threshold": 0.0,
+  "max_claim_per_request": 1,
+  "context": {},
+  "items": [{"item_id": "COUPON_ROUTE_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]
+}
+```
+
+**基础请求体（gRPC）**：
+
+```text
+coupon.RecommendRequest{
+  user_id:"{{user_id}}", scene_name:"{{scene_name}}", device:"{{device}}", policy_id:"{{policy_id}}",
+  external:{{external}}, req_id:"{{req_id}}", score_threshold:0.0, max_claim_per_request:1,
+  items:[{item_id:"COUPON_ROUTE_001", coupon_type:"discount", value:80, min_spend:5000, expire_days:7}]
+}
+```
+
+**标准前置**：
+- 主服务、Redis、打分服务可用；非 `external=1` 用例要求 AB 服务可用
+- 默认路由表：`game/mobile -> 1001`、`ad/pc -> 2002`，兜底 `fallback_scene_id=3001`
+- 初始化库存：`SET coupon:stock:COUPON_ROUTE_001 100 EX 86400`
+- 兜底分 Redis key：`coupon:fallback:score:{scene_id}`、`coupon:fallback:score:default`
+
+**通用断言**：`response.code == 0`
+
+**变量定义**：
+- `score` = `response.results[0].score`
+- `cal` = `response.results[0].calibrated_score`
 
 ---
 
-## 二、路由异常场景
+## 一、基础路由
 
-### TC-ROUTE-010：兜底分 Redis 读取异常时的行为
-- **关联**：L1/scene_routing
+### TC-ROUTE-001：HTTP game/mobile 路由到 scene_id=1001
 - **优先级**：P1
-- **类型**：异常
-- **前置条件**：
-  - Redis 服务不可用（停止 Redis 或 mock 连接超时）
-  - 配置默认兜底分为 0.5
-  - 初始化库存
-- **输入**：
-  ```json
-  {
-    "user_id": "u_fb_004",
-    "scene_name": "game",
-    "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
-    "policy_id": "policy_fallback_001",
-    "max_claim_per_request": 1,
-    "score_threshold": 0.0,
-    "external": 0
-  }
-  ```
-- **测试步骤**：
-  1. 停止 Redis 服务（或 mock Redis 连接超时）
-  2. POST /api/v1/recommend，body 为上述 JSON
-  3. 检查 response status_code 和 body
-- **预期结果**：请求失败，返回 500（`_resolve_fallback_score` 调用 `redis.get_fallback_score` 无 try/except，ConnectionError 上抛）。注：来自第二轮代码确认，见 MISMATCH-001
+- **场景变量**：HTTP 请求 `user_id="u_route_game_mobile"`、`scene_name="game"`、`device="mobile"`、`policy_id=""`、`external=0`
+- **断言**：`response.body.scene_id == 1001`
 
-### TC-ROUTE-011：路由表中无任何场景映射时走兜底
-- **关联**：L1/scene_routing
+### TC-ROUTE-002：gRPC ad/pc 路由到 scene_id=2002
 - **优先级**：P1
-- **类型**：异常
-- **前置条件**：
-  - 场景路由表配置为空：修改 `coupon_system/config/scenes.json`，将 `routes` 设为 `[]`，重启服务
-  - `config.fallback_scene_id` 配置为 3001
-  - 初始化库存
-- **输入**：
-  ```json
-  {
-    "user_id": "u_route_001",
-    "scene_name": "game",
-    "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
-    "max_claim_per_request": 1,
-    "score_threshold": 0.5,
-    "external": 0
-  }
-  ```
-- **测试步骤**：
-  1. 备份 `coupon_system/config/scenes.json`，将 routes 改为 `[]`，重启服务
-  2. POST /api/v1/recommend，body 为上述 JSON
-  3. 断言 response.body.scene_id 和 experiment_info
-- **预期结果**：scene_id=3001（fallback_scene_id），experiment_info={}（跳过实验评估）
+- **场景变量**：gRPC 请求 `user_id="u_route_ad_pc"`、`scene_name="ad"`、`device="pc"`、`policy_id=""`、`external=0`
+- **断言**：`response.scene_id == 2002`
+
+### TC-ROUTE-003：external=1 时场景路由正常计算
+- **优先级**：P1
+- **场景变量**：HTTP 请求 `user_id="u_route_external"`、`scene_name="game"`、`device="mobile"`、`policy_id=""`、`external=1`
+- **断言**：`response.body.scene_id == 1001`
 
 ---
 
-## 三、场景与路由隔离
+## 二、兜底策略
 
-### TC-ROUTE-012：external=1 时场景路由正常计算不受影响
-- **关联**：L1/scene_routing, L2/0402
+### TC-ROUTE-004：policy_id 命中兜底时跳过实验和打分
 - **优先级**：P1
-- **类型**：业务
-- **前置条件**：
-  - 路由表中 game/mobile → scene_id=1001
-  - 初始化库存
-- **输入**：
-  ```json
-  {
-    "user_id": "u_ext_001",
-    "scene_name": "game",
-    "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
-    "max_claim_per_request": 1,
-    "score_threshold": 0.5,
-    "external": 1
-  }
-  ```
-- **测试步骤**：
-  1. POST /api/v1/recommend，body 为上述 JSON（external=1）
-  2. 断言 response.body.scene_id
-- **预期结果**：scene_id=1001，与 external=0 时相同，场景路由不受 external 字段影响
+- **场景变量**：HTTP 请求 `user_id="u_route_policy_fb"`、`scene_name="game"`、`device="mobile"`、`policy_id="policy_fallback_001"`、`external=0`
+- **断言**：`response.body.scene_id == 3001`；`response.body.experiment_info == {}`；`score == cal`
+
+### TC-ROUTE-005：未知场景组合走兜底场景
+- **优先级**：P1 / 异常
+- **场景变量**：gRPC 请求 `user_id="u_route_unknown"`、`scene_name="unknown_scene"`、`device="unknown_device"`、`policy_id=""`、`external=0`
+- **断言**：`response.scene_id == 3001`；`response.experiment_info == {}`
+
+---
+
+## 三、兜底分三级读取
+
+### TC-ROUTE-006：优先使用 Redis 场景级兜底分
+- **优先级**：P1
+- **场景变量**：执行 `SET coupon:fallback:score:3001 0.8` 和 `SET coupon:fallback:score:default 0.6`；HTTP 请求命中 `policy_fallback_001`
+- **断言**：`score == 0.8`；`cal == 0.8`
+
+### TC-ROUTE-007：场景级不存在时使用 Redis 全局兜底分
+- **优先级**：P1
+- **场景变量**：执行 `DEL coupon:fallback:score:3001` 和 `SET coupon:fallback:score:default 0.6`；HTTP 请求命中 `policy_fallback_001`
+- **断言**：`score == 0.6`；`cal == 0.6`
+
+### TC-ROUTE-008：Redis 兜底分都不存在时使用配置默认值
+- **优先级**：P1
+- **场景变量**：执行 `DEL coupon:fallback:score:3001 coupon:fallback:score:default`；HTTP 请求命中 `policy_fallback_001`
+- **断言**：`score == 0.5`；`cal == 0.5`
 
 ---
 
@@ -183,5 +107,5 @@
 
 | 知识库文档 | 新增覆盖 | 仍未覆盖 |
 |-----------|---------|---------|
-| L1/scene_routing | 三级兜底分读取顺序（Redis 场景级→全局→配置）、兜底分 Redis 读取异常时行为、路由表为空时行为 | 场景配置热更新（代码不支持，见 MISMATCH-003） |
-| L2/0402 | 兜底分 Redis 优先读取的三级验证 | （无新增未覆盖） |
+| L1/scene_routing | HTTP/gRPC 基础路由、policy_id 兜底、未知场景兜底、external=1 路由隔离、Redis 场景级/全局/配置三级兜底分读取 | Redis 异常、非数字兜底分、大小写敏感、空路由表由 boundary.md 覆盖 |
+| L2/0402 | 兜底策略先读 Redis 再取配置、external=1 不影响场景划分 | 无（仅限 scene_routing 范围） |

@@ -1,14 +1,14 @@
-# rough_ranking Mismatch 记录
+# rough_ranking 规格偏差记录
 
-> 生成方式：test-design skill（第二轮，规格与实现对比）
+> 生成方式：test-design skill
 > 关联知识库：L1/rough_ranking
-> 生成日期：2026-04-25
+> 生成日期：2026-04-26
 
 ---
 
-### MISMATCH-001：filters 中出现非 dict 条件时缺少 warning 日志
+### MISMATCH-001：接口层空候选列表无法进入粗排空列表分支
 - **关联**：L1/rough_ranking
-- **知识库描述**：`filters` 中条件非 dict 或操作符未知时，应输出 warning 日志，并让该条件不通过。
-- **实际实现**：`CoarseRanker._match_all_filters` 在遇到非 dict 条件时直接 `return False`，不会记录 warning；只有 `_match_filter` 遇到未知操作符时才会记录 `未知过滤操作符` 日志。
-- **影响**：功能上该条件仍会导致 item 被过滤，但可观测性低于知识库描述；排查过滤配置错误时，日志信息不完整。
-- **建议**：补文档或修代码。若保持现实现状，应把知识库中的“非 dict 条件会输出 warning”改为“该条件不通过，且当前实现无 warning”；若希望维持知识库契约，应在 `_match_all_filters` 中为非 dict 条件补 warning 日志。
+- **知识库描述**：L1 错误场景写明“候选券为空 → 直接返回空列表，不报错，pipeline 继续”。
+- **实际实现**：`coupon_system/services/coupon_service.py` 在 pipeline 起点先执行参数校验：`if not user_id or not scene_name or not device or not items`，因此通过 HTTP/gRPC 推荐接口传入 `items=[]` 会直接返回 `code=1001`，不会进入 `CoarseRanker.rank([])`。
+- **影响**：黑盒接口用例无法验证粗排模块的“空列表继续”契约；该契约只适用于直接调用粗排组件或上游已保证 items 非空的内部场景。
+- **建议**：待产品确认

@@ -42,7 +42,11 @@
 
 - [cases/old-cases/coupon_service.md] 发放与查询
   - 已覆盖：正常发放、库存扣减、低分不发放、库存为零跳过、多候选取最高分、查询空/有券/无效 user_id
-  - 未覆盖：库存并发扣减（DECR 原子性 + 回滚）、所有候选券都库存不足时返回 coupon=None、发放记录持久化验证、coupon 过期时间计算
+- [test_workspace/cases/issuance/business.md] 发放业务用例
+  - 已覆盖：HTTP/gRPC 最高分发放、低分不发放、库存扣减、发放记录查询、过期时间计算、score_threshold、max_claim_per_request
+- [test_workspace/cases/issuance/boundary.md] 发放边界用例
+  - 已覆盖：库存不足尝试下一张、全库存不足成功空 coupon、并发扣减、重复领取、Redis 写失败、expire_days 默认值、max_claim_per_request 超候选数
+  - 未覆盖：无（库存与记录非原子、重复领取策略见 mismatch.md）
 
 ## 关联 L2
 

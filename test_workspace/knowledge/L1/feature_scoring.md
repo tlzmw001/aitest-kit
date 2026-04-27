@@ -57,7 +57,11 @@
 
 - [cases/old-cases/coupon_service.md] 特征抽取与打分
   - 已覆盖：用户特征读取、Item 特征读取、不存在 Item 返回空、打分超时兜底（allow）、打分不可用兜底（allow）、打分超时 deny 返回错误
-  - 未覆盖：Redis 连接异常直接上抛（知识库标注的风险点）、TSV 文件不存在/格式错误的安全降级、外部打分 user_id SHA-256 加密正确性、内部/外部打分 base_score 验证（0.1/0.2）
+- [test_workspace/cases/feature_scoring/business.md] 特征抽取与打分业务用例
+  - 已覆盖：HTTP/gRPC 用户特征读取、item 特征合并、external=0 内部打分、external=1 外部打分、外部 user_id 加盐 SHA-256
+- [test_workspace/cases/feature_scoring/boundary.md] 特征抽取与打分边界用例
+  - 已覆盖：用户特征缺失、Redis 特征读取异常、TSV 文件不存在/行格式错误/JSON 解析失败、不存在 item、打分超时/不可用兜底、fallback deny
+  - 未覆盖：无
 
 ## 关联 L2
 

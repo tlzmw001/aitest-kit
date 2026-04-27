@@ -1,4 +1,4 @@
-# 校准模块 业务测试用例
+# calibration 业务测试用例
 
 > 生成方式：test-design skill
 > 关联知识库：L1/calibration
@@ -8,124 +8,109 @@
 
 ## 共享配置
 
-**接口**：`POST /api/v1/recommend`
+**接口**：`POST /api/v1/recommend` / `gRPC coupon.CouponService/Recommend`
 
-**基础请求体**：
+**基础请求体（HTTP）**：
 
 ```json
 {
-  "user_id": "{{case_user_id}}",
+  "user_id": "{{user_id}}",
   "scene_name": "game",
   "device": "mobile",
-  "items": [{"item_id": "COUPON_ACT_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
-  "max_claim_per_request": 1,
+  "policy_id": "",
+  "external": 0,
+  "reqId": "{{req_id}}",
   "score_threshold": 0.0,
-  "external": 0
+  "max_claim_per_request": 1,
+  "context": {},
+  "items": [{"item_id": "COUPON_CAL_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]
+}
+```
+
+**基础请求体（gRPC）**：
+
+```text
+coupon.RecommendRequest{
+  user_id:"{{user_id}}", scene_name:"game", device:"mobile", policy_id:"", external:0,
+  req_id:"{{req_id}}", score_threshold:0.0, max_claim_per_request:1,
+  items:[{item_id:"COUPON_CAL_001", coupon_type:"discount", value:80, min_spend:5000, expire_days:7}]
 }
 ```
 
 **标准前置**：
-- 路由表 game/mobile → scene_id=1001
-- 初始化库存（候选券 COUPON_ACT_001 有库存）
+- 主服务、AB 实验服务、Redis、打分服务均已启动
+- 初始化库存：`SET coupon:stock:COUPON_CAL_001 100 EX 86400`
+- 通过 AB 白名单强制命中 `calibration_exp_game` 指定策略；粗排关闭
+- 校准文件使用独立测试目录，不修改仓库默认校准文件
 
 **通用断言**：`response.code == 0`
 
-**关系断言工具函数**：
-- `clamp(x, 0, 1)` = `max(0, min(1, x))`
-- `s` = `response.results[0].score`（打分模型返回的原始分数，不可预知）
+**变量定义**：
+- `s` = `response.results[0].score`
 - `cal` = `response.results[0].calibrated_score`
+- `clamp(x)` = `max(0, min(1, x))`
 
 ---
 
 ## 一、实验控制
 
-### TC-CAL-005：实验开关关闭时跳过校准
+### TC-CAL-001：HTTP 实验关闭时跳过校准
 - **优先级**：P1
-- **场景变量**：校准实验 `enable_calibration=false`；线性文件 `[{"conditions": {"device": "mobile"}, "k": 1.5, "b": 0.0}]`
-- **断言**：`cal == s`（校准被跳过，分数不变）
-- [!校准实验的配置方式（AB 服务 API 参数 key 名）待第二轮读代码确认]
+- **场景变量**：校准实验参数 `{"enable_calibration":false,"calibration_dir":{"linear":"/tmp/cal_linear_001"}}`，线性文件存在且匹配 `device=mobile`
+- **断言**：`cal == s`
 
-### TC-CAL-006：根据 scene_id 选取对应校准实验
+### TC-CAL-002：gRPC 根据 scene_id 选择 game 校准实验
 - **优先级**：P1
-- **场景变量**：
-  - scene_id=1001 校准实验：线性 `k=1.5, b=0.1`
-  - scene_id=1002 校准实验：线性 `k=2.0, b=0.2`
-- **断言**：`cal == clamp(1.5 * s + 0.1, 0, 1)`（使用 1001 的参数，非 1002 的）
+- **场景变量**：`scene_id=1001` 的 `calibration_exp_game` 启用，线性规则 `k=1.5,b=0.1,conditions={"device":"mobile"}`；ad 校准实验配置不同参数
+- **断言**：`cal == round(clamp(1.5 * s + 0.1), 4)`
 
 ---
 
 ## 二、条件匹配
 
-### TC-CAL-007：多条件匹配时靠上的规则优先
+### TC-CAL-003：多条件匹配时靠上的规则优先
 - **优先级**：P1
-- **场景变量**：线性文件含两条规则，均匹配 `device=mobile`：规则 1 `k=1.5, b=0.0`，规则 2 `k=2.0, b=0.0`
-- **断言**：`cal == clamp(1.5 * s + 0.0, 0, 1)`（靠上的规则 1 优先，非规则 2）
+- **场景变量**：线性文件两条规则都匹配：第 1 条 `k=1.2,b=0.0`，第 2 条 `k=2.0,b=0.0`
+- **断言**：`cal == round(clamp(1.2 * s), 4)`
 
-### TC-CAL-008：所有规则都不匹配时不校准
+### TC-CAL-004：条件字段缺失时规则不匹配
 - **优先级**：P1
-- **场景变量**：线性文件条件 `device=ios`（请求为 mobile，不匹配）
-- **断言**：`cal == s`（规则不命中，分数不变）
+- **场景变量**：线性规则 `conditions={"gender":"male"}`；Redis 不设置用户 `gender` 特征
+- **断言**：`cal == s`
+
+### TC-CAL-005：条件字段不在白名单时规则不匹配
+- **优先级**：P1
+- **场景变量**：线性规则 `conditions={"unknown_field":"x"}`，`k=2.0,b=0.0`
+- **断言**：`cal == s`
 
 ---
 
-## 三、校准计算（四种组合覆盖）
+## 三、校准计算
 
-### TC-CAL-009：仅命中线性校准
+### TC-CAL-006：仅命中线性校准
 - **优先级**：P1
-- **场景变量**：仅配置线性校准目录，无分段校准目录；线性 `k=1.5, b=0.0`，条件 `device=mobile`
-- **断言**：`cal == clamp(1.5 * s + 0.0, 0, 1)`
+- **场景变量**：只配置线性目录；规则 `conditions={"device":"mobile"}`、`k=1.5`、`b=0.0`
+- **断言**：`cal == round(clamp(1.5 * s), 4)`
 
-### TC-CAL-010：仅命中分段函数校准
+### TC-CAL-007：仅命中分段函数校准
 - **优先级**：P1
-- **场景变量**：仅配置分段校准目录，无线性校准目录；分段规则：
-  - `[0, 0.3)` → `k=0.5, b=0.1`
-  - `[0.3, 0.7)` → `k=1.0, b=0.0`
-  - `[0.7, 1.0]` → `k=1.5, b=-0.2`
-  - 条件 `device=mobile`
-- **断言**：根据 s 所在分段：
-  - `s ∈ [0, 0.3)` → `cal == clamp(0.5 * s + 0.1, 0, 1)`
-  - `s ∈ [0.3, 0.7)` → `cal == clamp(1.0 * s + 0.0, 0, 1)`
-  - `s ∈ [0.7, 1.0]` → `cal == clamp(1.5 * s - 0.2, 0, 1)`
+- **场景变量**：只配置分段目录；分段 `[0,0.3)->k=0.5,b=0.1`、`[0.3,0.7)->k=1.0,b=0.0`、`[0.7,1.0]->k=1.5,b=-0.2`，条件 `device=mobile`
+- **断言**：按 `s` 所在区间计算 `cal == round(clamp(k * s + b), 4)`
 
-### TC-CAL-011：两类都命中——先分段后线性串联
+### TC-CAL-008：线性和分段都命中时先分段后线性
 - **优先级**：P1
-- **场景变量**：同时配置分段（同 TC-CAL-010）和线性 `k=1.2, b=0.05`，条件 `device=mobile`
-- **断言**：
-  1. 先分段：`mid = clamp(k_pw * s + b_pw, 0, 1)`（k_pw/b_pw 取 s 所在分段）
-  2. 再线性：`cal == clamp(1.2 * mid + 0.05, 0, 1)`
+- **场景变量**：分段同 TC-CAL-007；线性规则 `k=1.2,b=0.05`；二者都匹配 `device=mobile`
+- **断言**：`mid = k_pw * s + b_pw`；`cal == round(clamp(1.2 * mid + 0.05), 4)`
 
-### TC-CAL-012：两类条件都不匹配——不校准
+### TC-CAL-009：两类规则都不匹配时不校准
 - **优先级**：P1
-- **场景变量**：线性 `k=1.5, b=0.0` 条件 `device=ios`；分段 `k=2.0, b=0.0` 条件 `device=ios`（均不匹配 mobile）
-- **断言**：`cal == s`（双不命中，分数不变）
+- **场景变量**：线性和分段规则条件均为 `device=ios`，请求为 `mobile`
+- **断言**：`cal == s`
 
----
-
-## 四、错误场景与降级
-
-### TC-CAL-013：校准目录路径不存在时安全降级
-- **优先级**：P1 / 异常
-- **场景变量**：`calibration_dir="/tmp/nonexistent_cal_dir_013"`，目录不存在
-- **断言**：`cal == s`（降级为 no-op）
-
-### TC-CAL-014：校准目录为空时静默降级
-- **优先级**：P1 / 异常
-- **场景变量**：`mkdir -p /tmp/test_cal_014/linear`（空目录，无 JSON 文件）
-- **断言**：
-  - `cal == s`（降级）
-  - `[manual]` 检查应用日志无 WARNING/ERROR（可观测性盲区：空目录无日志）
-
-### TC-CAL-015：校准文件 JSON 解析失败时降级
-- **优先级**：P1 / 异常
-- **场景变量**：校准文件 `1.json` 内容为 `{invalid json`
-- **断言**：
-  - `cal == s`（降级）
-  - `[manual]` 检查应用日志包含 WARNING（文件解析失败应有告警）
-
-### TC-CAL-016：校准目录路径为空字符串时安全降级
-- **优先级**：P2 / 异常
-- **场景变量**：`calibration_dir=""`
-- **断言**：`cal == s`（降级）
+### TC-CAL-010：目录中选取序号最大的版本文件
+- **优先级**：P1
+- **场景变量**：线性目录包含 `1.json` 规则 `k=1.1,b=0` 和 `3.json` 规则 `k=1.8,b=0`，均匹配 `device=mobile`
+- **断言**：`cal == round(clamp(1.8 * s), 4)`
 
 ---
 
@@ -133,5 +118,5 @@
 
 | 知识库文档 | 新增覆盖 | 仍未覆盖 |
 |-----------|---------|---------|
-| L1/calibration | 实验关闭跳过校准、scene_id 选取实验、多条件优先级、校准四种组合（仅线性/仅分段/双命中串联/双不命中）、校准目录不存在/为空/JSON 解析失败/路径空的降级行为 | 分段函数区间边界值（第二轮边界用例覆盖）、条件值类型转换（第二轮边界用例覆盖） |
-| L2/0405 | 校准条件匹配优先级、双重校准叠加顺序 | （无新增未覆盖） |
+| L1/calibration | 实验关闭、scene_id 选取实验、多条件优先级、缺字段/未知字段不匹配、仅线性、仅分段、双重校准、双不命中、最新版本文件 | 目录和文件异常、分段边界、类型转换由 boundary.md 覆盖 |
+| L2/0405 | 条件匹配、分段函数、版本化文件、双重校准叠加 | 无（仅限 calibration 范围） |

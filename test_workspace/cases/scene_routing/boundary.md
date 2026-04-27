@@ -1,177 +1,98 @@
-# 场景路由 边界测试用例
+# scene_routing 边界测试用例
 
-> 生成方式：test-design skill（第二轮，读代码补充）
+> 生成方式：test-design skill
 > 关联知识库：L1/scene_routing
-> 生成日期：2026-04-25
+> 生成日期：2026-04-26
 
 ---
 
-## 一、兜底分 Redis 边界
+## 共享配置
 
-### TC-ROUTE-013：Redis 兜底分值为非数字字符串时降级到下一级
-- **关联**：L1/scene_routing
-- **优先级**：P2
-- **类型**：边界
-- **前置条件**：
-  - Redis 设置场景级兜底分为非数字：`SET coupon:fallback:score:3001 "abc"`
-  - Redis 设置全局兜底分：`SET coupon:fallback:score:default 0.6`
-  - 初始化库存
-- **输入**：
-  ```json
-  {
-    "user_id": "u_edge_001",
-    "scene_name": "game",
-    "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
-    "policy_id": "policy_fallback_001",
-    "max_claim_per_request": 1,
-    "score_threshold": 0.0,
-    "external": 0
-  }
-  ```
-- **测试步骤**：
-  1. 通过 Redis CLI 执行 `SET coupon:fallback:score:3001 "abc"`
-  2. 通过 Redis CLI 执行 `SET coupon:fallback:score:default 0.6`
-  3. POST /api/v1/recommend，body 为上述 JSON
-  4. 断言 response.body 中兜底分值
-- **预期结果**：场景级值解析失败（ValueError），`get_fallback_score` 返回 None，不会继续读全局默认，直接回退到配置默认值 0.5（代码逻辑：场景级解析失败后 return None，不走全局分支）
+**接口**：`POST /api/v1/recommend` / `gRPC coupon.CouponService/Recommend`
 
-### TC-ROUTE-014：Redis 连接异常时请求失败（无降级保护）
-- **关联**：L1/scene_routing
-- **优先级**：P1
-- **类型**：边界
-- **前置条件**：
-  - Redis 服务不可用（停止 Redis 进程）
-  - 初始化库存（在 Redis 停止前完成）
-- **输入**：
-  ```json
-  {
-    "user_id": "u_edge_002",
-    "scene_name": "game",
-    "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
-    "policy_id": "policy_fallback_001",
-    "max_claim_per_request": 1,
-    "score_threshold": 0.0,
-    "external": 0
-  }
-  ```
-- **测试步骤**：
-  1. 停止 Redis 服务
-  2. POST /api/v1/recommend，body 为上述 JSON
-  3. 检查 response status_code
-- **预期结果**：请求失败，返回 500 或 redis.ConnectionError 上抛（`_resolve_fallback_score` 和 `RedisStore.get_fallback_score` 均无 try/except）
+**基础请求体（HTTP）**：
+
+```json
+{
+  "user_id": "{{user_id}}",
+  "scene_name": "{{scene_name}}",
+  "device": "{{device}}",
+  "policy_id": "{{policy_id}}",
+  "external": 0,
+  "reqId": "{{req_id}}",
+  "score_threshold": 0.0,
+  "max_claim_per_request": 1,
+  "context": {},
+  "items": [{"item_id": "COUPON_ROUTE_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]
+}
+```
+
+**基础请求体（gRPC）**：
+
+```text
+coupon.RecommendRequest{
+  user_id:"{{user_id}}", scene_name:"{{scene_name}}", device:"{{device}}", policy_id:"{{policy_id}}",
+  external:0, req_id:"{{req_id}}", score_threshold:0.0, max_claim_per_request:1,
+  items:[{item_id:"COUPON_ROUTE_BOUNDARY_001", coupon_type:"discount", value:80, min_spend:5000, expire_days:7}]
+}
+```
+
+**标准前置**：
+- 主服务、Redis、打分服务可用，除明确异常场景外
+- 初始化库存：`SET coupon:stock:COUPON_ROUTE_BOUNDARY_001 100 EX 86400`
+- 不直接编辑仓库配置；需要变更路由表时使用独立测试配置启动服务
+
+**通用断言**：`response.code == 0`，除明确异常用例外
+
+**变量定义**：
+- `score` = `response.results[0].score`
+
+---
+
+## 一、兜底分容错
+
+### TC-ROUTE-009：Redis 场景级兜底分非数字时回退到全局兜底分
+- **优先级**：P2 / 异常
+- **场景变量**：执行 `SET coupon:fallback:score:3001 not-a-number` 和 `SET coupon:fallback:score:default 0.6`；HTTP 请求命中 `policy_fallback_001`
+- **断言**：`response.body.scene_id == 3001`；`score == 0.6`
+
+### TC-ROUTE-010：Redis 全局兜底分非数字时回退到配置默认值
+- **优先级**：P2 / 异常
+- **场景变量**：执行 `DEL coupon:fallback:score:3001` 和 `SET coupon:fallback:score:default not-a-number`；HTTP 请求命中 `policy_fallback_001`
+- **断言**：`response.body.scene_id == 3001`；`score == 0.5`
+
+### TC-ROUTE-011：兜底分 Redis 读取异常时请求失败
+- **优先级**：P2 / 异常
+- **场景变量**：启动服务后停止 Redis，或用测试配置将 Redis 指向不可连接实例；HTTP 请求命中 `policy_fallback_001`。[!可行性存疑: 需要测试环境允许控制 Redis 可用性]
+- **断言**：`response.status_code == 500`
 
 ---
 
 ## 二、路由匹配边界
 
-### TC-ROUTE-015：policy_id 为空字符串时不触发兜底
-- **关联**：L1/scene_routing
+### TC-ROUTE-012：policy_id 为空字符串时不触发兜底策略
 - **优先级**：P2
-- **类型**：边界
-- **前置条件**：
-  - 路由表中 game/mobile → scene_id=1001
-  - 初始化库存
-- **输入**：
-  ```json
-  {
-    "user_id": "u_edge_003",
-    "scene_name": "game",
-    "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
-    "policy_id": "",
-    "max_claim_per_request": 1,
-    "score_threshold": 0.5,
-    "external": 0
-  }
-  ```
-- **测试步骤**：
-  1. POST /api/v1/recommend，body 为上述 JSON（policy_id 为空字符串）
-  2. 断言 response.body.scene_id
-- **预期结果**：不触发兜底（代码 `if policy_id and ...` 中空字符串为 falsy），正常路由到 scene_id=1001
+- **场景变量**：HTTP 请求 `scene_name="game"`、`device="mobile"`、`policy_id=""`
+- **断言**：`response.body.scene_id == 1001`
 
-### TC-ROUTE-016：policy_id 不在 fallback 列表中时正常路由
-- **关联**：L1/scene_routing
-- **优先级**：P2
-- **类型**：边界
-- **前置条件**：
-  - fallback_policy_ids=["policy_fallback_001", "policy_fallback_002"]
-  - 路由表中 game/mobile → scene_id=1001
-  - 初始化库存
-- **输入**：
-  ```json
-  {
-    "user_id": "u_edge_004",
-    "scene_name": "game",
-    "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
-    "policy_id": "policy_normal_999",
-    "max_claim_per_request": 1,
-    "score_threshold": 0.5,
-    "external": 0
-  }
-  ```
-- **测试步骤**：
-  1. POST /api/v1/recommend，body 为上述 JSON（policy_id 存在但不在 fallback 列表中）
-  2. 断言 response.body.scene_id
-- **预期结果**：不触发兜底，正常路由到 scene_id=1001
+### TC-ROUTE-013：scene_name 大小写不同视为未匹配并走兜底
+- **优先级**：P2 / 异常
+- **场景变量**：gRPC 请求 `scene_name="Game"`、`device="mobile"`、`policy_id=""`
+- **断言**：`response.scene_id == 3001`；`response.experiment_info == {}`
 
-### TC-ROUTE-017：scene_name 大小写敏感——大写不匹配
-- **关联**：L1/scene_routing
-- **优先级**：P2
-- **类型**：边界
-- **前置条件**：
-  - 路由表中 game/mobile → scene_id=1001（小写）
-  - 初始化库存
-- **输入**：
-  ```json
-  {
-    "user_id": "u_edge_005",
-    "scene_name": "Game",
-    "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
-    "max_claim_per_request": 1,
-    "score_threshold": 0.5,
-    "external": 0
-  }
-  ```
-- **测试步骤**：
-  1. POST /api/v1/recommend，body 为上述 JSON（scene_name 首字母大写）
-  2. 断言 response.body.scene_id
-- **预期结果**：路由不匹配（dict key 精确匹配，大小写敏感），走兜底 scene_id=3001
+### TC-ROUTE-014：路由表为空时所有非 policy 兜底请求走兜底场景
+- **优先级**：P2 / 异常
+- **场景变量**：使用测试配置启动主服务，`routes=[]`、`fallback_scene_id=3001`；HTTP 请求 `scene_name="game"`、`device="mobile"`、`policy_id=""`。[!可行性存疑: 需要测试环境支持独立路由配置启动服务]
+- **断言**：`response.body.scene_id == 3001`
 
 ---
 
-## 三、配置边界
+## 三、配置生命周期
 
-### TC-ROUTE-018：路由表配置为空列表时所有请求走兜底
-- **关联**：L1/scene_routing
+### TC-ROUTE-015：运行中修改路由配置不会热更新
 - **优先级**：P2
-- **类型**：边界
-- **前置条件**：
-  - 修改 `coupon_system/config/scenes.json`，将 routes 设为空列表 `[]`
-  - 重启服务
-  - 初始化库存
-- **输入**：
-  ```json
-  {
-    "user_id": "u_edge_006",
-    "scene_name": "game",
-    "device": "mobile",
-    "items": [{"item_id": "coupon_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
-    "max_claim_per_request": 1,
-    "score_threshold": 0.5,
-    "external": 0
-  }
-  ```
-- **测试步骤**：
-  1. 备份 scenes.json，将 routes 改为 `[]`
-  2. 重启服务
-  3. POST /api/v1/recommend，body 为上述 JSON
-  4. 断言 response.body.scene_id 和 experiment_info
-  5. 恢复 scenes.json 原始内容
-- **预期结果**：scene_id=3001（fallback），experiment_info={}（跳过实验）
+- **场景变量**：服务启动后，将独立测试配置中的 `game/mobile` 从 `1001` 改为 `1999`，不重启服务；发送 HTTP 请求 `scene_name="game"`、`device="mobile"`。[!可行性存疑: 该行为依赖独立测试配置，不应修改仓库默认配置]
+- **断言**：响应仍为启动时加载的 `scene_id == 1001`；详见 mismatch.md
 
 ---
 
@@ -179,4 +100,5 @@
 
 | 知识库文档 | 新增覆盖 | 仍未覆盖 |
 |-----------|---------|---------|
-| L1/scene_routing | Redis 兜底分非数字降级、Redis 连接异常行为、policy_id 空字符串边界、大小写敏感、路由表空配置 | （无新增未覆盖） |
+| L1/scene_routing | Redis 兜底分非数字降级、Redis 连接异常、policy_id 空字符串、scene_name 大小写敏感、路由表空配置、运行中配置不热更新 | 无 |
+| L2/0402 | Redis 兜底读取异常与非法值边界 | 无（仅限 scene_routing 范围） |

@@ -2,61 +2,110 @@
 
 > 生成方式：test-design skill
 > 关联知识库：L1/issuance
-> 生成日期：2026-04-25
+> 生成日期：2026-04-26
 
 ---
 
-## 一、库存不足处理
+## 共享配置
 
-### TC-ISSUE-009：所有推荐候选券都库存不足时返回成功但 coupon 为空
-- **关联**：L1/issuance
+**接口**：`POST /api/v1/recommend` / `gRPC coupon.CouponService/Recommend`；辅助断言接口 `GET /api/v1/admin/stock/{coupon_id}`、`GET /api/v1/coupons/{user_id}`
+
+**基础请求体（HTTP）**：
+
+```json
+{
+  "user_id": "{{user_id}}",
+  "scene_name": "game",
+  "device": "mobile",
+  "policy_id": "",
+  "external": 0,
+  "reqId": "{{req_id}}",
+  "score_threshold": {{score_threshold}},
+  "max_claim_per_request": {{max_claim_per_request}},
+  "context": {},
+  "items": {{items}}
+}
+```
+
+**基础请求体（gRPC）**：
+
+```text
+coupon.RecommendRequest{
+  user_id:"{{user_id}}", scene_name:"game", device:"mobile", policy_id:"", external:0,
+  req_id:"{{req_id}}", score_threshold:{{score_threshold}}, max_claim_per_request:{{max_claim_per_request}},
+  items: {{items}}
+}
+```
+
+**标准前置**：
+- 主服务、AB 实验服务、Redis、打分服务均已启动；粗排和校准实验关闭
+- 候选券默认集合：`COUPON_ISSUE_A(value=100,min_spend=5000)`、`COUPON_ISSUE_B(value=80,min_spend=3000)`
+- 按用例设置库存：`SET coupon:stock:{coupon_id} {stock} EX 86400`
+- 发放后通过库存 API 和用户券查询 API 验证持久化状态
+
+**通用断言**：`response.code == 0`
+
+**变量定义**：
+- `coupon` = `response.coupon`
+- `results` = `response.results`
+
+---
+
+## 一、发放选择
+
+### TC-ISSUE-001：HTTP 正常发放最高分券
 - **优先级**：P1
-- **类型**：异常
-- **前置条件**：按 [tests/test_coupon_service.py](/Users/zmw/AIAutoTest/tests/test_coupon_service.py) 中 `biz`、`redis_store`、`mock_scoring_client` fixture 的构造方式初始化 `CouponBizService`；执行 `setup_stock(redis_store, "A", 0)` 和 `setup_stock(redis_store, "B", 0)`；设置 `mock_scoring_client.score.return_value=[ItemScore(item_id="A", score=0.9), ItemScore(item_id="B", score=0.8)]`。
-- **输入**：调用 `biz.recommend_and_claim(user_id="u_issue_all_empty", scene_name="game", device="mobile", policy_id="", external=0, req_id="req-issue-009", score_threshold=0.5, max_claim_per_request=2, context={}, items=[{"item_id":"A","coupon_type":"discount","value":10,"min_spend":0,"expire_days":3},{"item_id":"B","coupon_type":"discount","value":8,"min_spend":0,"expire_days":3}])`
-- **测试步骤**：
-  1. 初始化 `biz`、库存与 `mock_scoring_client`。
-  2. 将候选券 `A`、`B` 的库存都初始化为 `0`。
-  3. 调用输入中的 `biz.recommend_and_claim(...)`。
-  4. 断言 `result["code"] == 0`，`result["coupon"] is None`。
-  5. 断言 `result["results"]` 仍包含 `A` 和 `B` 两条打分结果，且二者 `recommended` 都为 `True`。
-- **预期结果**：当所有推荐候选券都库存不足时，请求仍返回成功响应 `code=0`，但 `coupon=None`，不会抛出 `STOCK_EMPTY` 错误。
+- **场景变量**：HTTP 请求 `user_id="u_issue_http_ok"`，两张券库存均为 100；打分服务返回 A=0.8、B=0.6；`score_threshold=0.5`、`max_claim_per_request=1`
+- **断言**：`coupon.item_id == "COUPON_ISSUE_A"`；`coupon.user_id == "u_issue_http_ok"`；`coupon.status == "claimed"`
 
-## 二、发放记录持久化
-
-### TC-ISSUE-010：发放成功后领取记录可被查询接口读取
-- **关联**：L1/issuance
+### TC-ISSUE-002：gRPC 正常发放最高分券
 - **优先级**：P1
-- **类型**：业务
-- **前置条件**：按 [tests/test_coupon_service.py](/Users/zmw/AIAutoTest/tests/test_coupon_service.py) 中 `biz`、`redis_store`、`mock_scoring_client` fixture 的构造方式初始化 `CouponBizService`；执行 `setup_stock(redis_store, "COUPON_ACT_001", 100)`；设置 `mock_scoring_client.score.return_value=[ItemScore(item_id="COUPON_ACT_001", score=0.8)]`。
-- **输入**：先调用 `biz.recommend_and_claim(user_id="u_issue_persist", scene_name="game", device="mobile", policy_id="", external=0, req_id="req-issue-010", score_threshold=0.5, max_claim_per_request=1, context={}, items=[{"item_id":"COUPON_ACT_001","coupon_type":"discount","value":80,"min_spend":5000,"expire_days":3}])`，再调用 `biz.query_user_coupons("u_issue_persist")`
-- **测试步骤**：
-  1. 初始化 `biz`、库存与 `mock_scoring_client`。
-  2. 调用发放接口，保存返回的 `coupon.instance_id` 为 `instance_id`。
-  3. 调用 `biz.query_user_coupons("u_issue_persist")`。
-  4. 断言查询结果 `code == 0`、`total == 1`。
-  5. 断言 `coupons[0]["instance_id"] == instance_id`，且 `coupons[0]["item_id"] == "COUPON_ACT_001"`、`coupons[0]["user_id"] == "u_issue_persist"`、`coupons[0]["status"] == "claimed"`。
-- **预期结果**：发放成功后，领取记录会被持久化，并可通过用户券查询接口完整读出。
+- **场景变量**：gRPC 请求 `user_id="u_issue_grpc_ok"`，两张券库存均为 100；打分服务返回 A=0.6、B=0.9；`score_threshold=0.5`、`max_claim_per_request=1`
+- **断言**：`coupon.item_id == "COUPON_ISSUE_B"`；`coupon.user_id == "u_issue_grpc_ok"`；`coupon.status == "claimed"`
 
-## 三、过期时间计算
-
-### TC-ISSUE-011：coupon 过期时间按 claim_time 加 expire_days 天数计算
-- **关联**：L1/issuance
+### TC-ISSUE-003：分数低于 score_threshold 时不发放
 - **优先级**：P1
-- **类型**：业务
-- **前置条件**：按 [tests/test_coupon_service.py](/Users/zmw/AIAutoTest/tests/test_coupon_service.py) 中 `biz`、`redis_store`、`mock_scoring_client` fixture 的构造方式初始化 `CouponBizService`；执行 `setup_stock(redis_store, "COUPON_ACT_001", 100)`；设置 `mock_scoring_client.score.return_value=[ItemScore(item_id="COUPON_ACT_001", score=0.8)]`；使用 `patch("coupon_system.services.coupon_service.time.time", return_value=1700000000)` 固定发放时间。
-- **输入**：调用 `biz.recommend_and_claim(user_id="u_issue_expire", scene_name="game", device="mobile", policy_id="", external=0, req_id="req-issue-011", score_threshold=0.5, max_claim_per_request=1, context={}, items=[{"item_id":"COUPON_ACT_001","coupon_type":"discount","value":80,"min_spend":5000,"expire_days":3}])`
-- **测试步骤**：
-  1. 初始化 `biz`、库存与 `mock_scoring_client`。
-  2. 使用 `patch("coupon_system.services.coupon_service.time.time", return_value=1700000000)` 固定当前时间。
-  3. 调用输入中的 `biz.recommend_and_claim(...)`。
-  4. 断言 `result["coupon"]["claim_time"] == 1700000000`。
-  5. 断言 `result["coupon"]["expire_time"] == 1700259200`。
-- **预期结果**：发放成功时，`claim_time` 为当前时间戳，`expire_time` 等于 `claim_time + expire_days * 86400`；在本用例中应为 `1700259200`。
+- **场景变量**：HTTP 请求 `user_id="u_issue_low_score"`；打分服务返回 A=0.4、B=0.3；`score_threshold=0.5`
+- **断言**：`coupon == null`；`all(r.recommended == false for r in results)`
+
+---
+
+## 二、库存与查询
+
+### TC-ISSUE-004：发放成功后库存扣减 1
+- **优先级**：P1
+- **场景变量**：`SET coupon:stock:COUPON_ISSUE_A 2 EX 86400`；HTTP 请求只传 A，打分 A=0.9，`score_threshold=0.5`
+- **断言**：发放前 `GET /api/v1/admin/stock/COUPON_ISSUE_A` 返回 `2`；发放后返回 `1`
+
+### TC-ISSUE-005：发放记录可通过用户券查询接口查到
+- **优先级**：P1
+- **场景变量**：HTTP 请求 `user_id="u_issue_query"` 成功发放 A
+- **断言**：`GET /api/v1/coupons/u_issue_query` 返回 `code == 0`、`total >= 1`，且 `coupons[*].item_id` 包含 `COUPON_ISSUE_A`
+
+### TC-ISSUE-006：coupon 过期时间按 expire_days 计算
+- **优先级**：P1
+- **场景变量**：HTTP 请求 item A 的 `expire_days=3`，成功发放
+- **断言**：`coupon.expire_time - coupon.claim_time == 3 * 86400`
+
+---
+
+## 三、请求级控制
+
+### TC-ISSUE-007：score_threshold 请求参数控制是否推荐
+- **优先级**：P1
+- **场景变量**：同一用户隔离请求，打分 A=0.8；第一次 `score_threshold=0.95`，第二次 `score_threshold=0.5`
+- **断言**：第一次 `coupon == null`；第二次 `coupon.item_id == "COUPON_ISSUE_A"`
+
+### TC-ISSUE-008：max_claim_per_request 控制尝试发放数量
+- **优先级**：P1
+- **场景变量**：A 分数 0.9 但库存 0，B 分数 0.8 且库存 100；第一次 `max_claim_per_request=1`，第二次 `max_claim_per_request=2`
+- **断言**：第一次 `coupon == null`；第二次 `coupon.item_id == "COUPON_ISSUE_B"`
+
+---
 
 ## 覆盖变更
 
 | 知识库文档 | 新增覆盖 | 仍未覆盖 |
 |-----------|---------|---------|
-| L1/issuance | 所有候选券都库存不足时 `coupon=None`、发放记录持久化验证、`expire_time` 计算 | 库存并发扣减的原子性与回滚 |
-| L2/0402 | 无新增覆盖（请求级 `score_threshold` / `max_claim_per_request` 已有历史覆盖） | 无 |
+| L1/issuance | HTTP/gRPC 最高分发放、低分不发放、库存扣减、发放记录查询、过期时间计算、score_threshold、max_claim_per_request | 库存不足、并发扣减、持久化异常由 boundary.md 覆盖 |
+| L2/0402 | score_threshold 和 max_claim_per_request 请求级控制 | 无（仅限 issuance 范围） |
