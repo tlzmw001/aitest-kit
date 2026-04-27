@@ -39,7 +39,10 @@ server = [
 aitest = "aitest_kit.cli:main"
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "test_workspace/tests"]
+markers = [
+    "manual: test requires manual verification (log check, visual inspection, etc.)",
+]
 
 [tool.setuptools.packages.find]
 include = ["aitest_kit*", "coupon_system*", "ab_experiment_sdk*"]
