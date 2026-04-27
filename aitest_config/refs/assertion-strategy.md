@@ -23,6 +23,8 @@
 **示例**：
 - 校准场景（已知 k 和 b）：`response.results[i].calibrated_score == clamp(k * response.results[i].score + b, 0, 1)`
 - 未校准时：`calibrated_score == score`
+- 发放最高分券：`response.coupon.item_id == max(response.results, key=lambda r: r.score).item_id`
+- 响应只要求包含集合、不要求顺序：`set(response.results[*].item_id) == expected_set`
 
 **典型场景**：校准分数、排序后位次、打分结果
 
@@ -37,6 +39,8 @@
 ## 禁忌
 
 - 不要为了凑固定值而猜测不可预知的数值（如模型打分结果）
+- 不要把"打分服务返回 A=0.8"写成前置条件，除非用例同时写明了可执行的外部测试打分服务/代理构造方式
+- 不要把 `response.results[*].item_id` 的顺序当成粗排送入打分服务的顺序；前者只能做响应集合断言，后者必须通过可观察的打分服务入参或日志断言
 - 能从响应里读到的值，就用响应字段做关系断言
 - pipeline 中间产物（score 等）绝不能用结构断言硬编码固定值（见 TEST_SPEC 陷阱-003）
 

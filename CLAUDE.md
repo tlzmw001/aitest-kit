@@ -75,3 +75,27 @@ test-fix    ── 修正用例错误，沉淀经验到 TEST_SPEC 和相关 skil
 - Markdown 用例是唯一数据源，后续 codegen 生成 pytest 代码执行
 - TEST_SPEC 是所有 skill 的行为准则，经验教训统一沉淀在此
 - 用例存放在 `test_workspace/cases/{模块名}/` 下，未指定时先询问用户
+
+## 测试执行注意事项
+
+### 部署拓扑先行
+
+设计 fixture 前必须确认服务的实际部署模式：
+- 确认 `AB_SERVICE_URL`、`REDIS_URL`、`HTTP_BASE_URL` 等环境变量的实际值
+- 确认服务间调用关系（本地 SDK vs 远程服务）
+- 优先用运行时 API 操作（如 AB 白名单 CRUD），而非启动时环境变量注入
+
+### httpx 系统代理
+
+httpx 0.28+ 会自动读取 macOS 系统代理，`proxy=None` 无效。测试 helper 中必须用显式 transport：
+```python
+httpx.Client(transport=httpx.HTTPTransport())
+```
+
+### 测试角色边界
+
+AI 的角色是测试工程师，不是被测系统的开发者：
+- `coupon_system/`、`ab_experiment_sdk/` 下的源码和配置文件不得修改
+- 只改测试代码：`test_workspace/`、`aitest_kit/`、`.claude/skills/`
+- 通过被测系统已有的 API、环境变量、磁盘数据文件来构造测试条件
+- 现有接口无法满足测试需求时，记录为"测试基础设施需求"让用户决定

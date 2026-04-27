@@ -10,7 +10,11 @@
       "Bash(ls /Users/zmw/AIAutoTest/tests/test_ab_*.py)",
       "Bash(git push:*)",
       "Skill(test-fix)",
-      "Skill(test-design)"
+      "Skill(test-design)",
+      "Bash(python *)",
+      "Skill(test-codegen)",
+      "Bash(git checkout *)",
+      "Bash(curl *)"
     ]
   }
 }

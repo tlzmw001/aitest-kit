@@ -228,6 +228,24 @@
 - **原因**：通过 HTTP/gRPC 接口测试时，score 是模型打分的输出（pipeline 中间产物），测试无法控制其值。硬编码固定值的前提是"score 恰好等于某个值"，但这在真实请求中不成立
 - **适用范围**：所有依赖 pipeline 中间产物的断言场景。判断标准：如果断言值依赖的某个变量不是请求输入而是系统计算结果，就必须用关系断言而非结构断言。典型场景：校准分数、排序后位次、打分结果
 
+### 陷阱-004：不能把打分服务分数写成可直接指定的前置条件
+- **错误写法**：`场景变量：打分服务返回 A=0.8、B=0.6` 或 `控制打分服务返回 s=0.3`
+- **正确做法**：通过可控输入构造场景，例如请求参数、库存、AB 参数、Redis 数据；涉及 score 时读取响应中的实际 `score` 后做关系断言。需要“最高分”时断言 `coupon.item_id == max(response.results, key=score).item_id`；需要“分数低于阈值”时使用高于分数上界的 `score_threshold`，不要假设某个固定 score
+- **原因**：当前 HTTP/gRPC 推荐接口没有提供指定打分服务输出的测试入口；任意写固定打分值违反 Q9，后续无法自动执行
+- **适用范围**：issuance、calibration、rough_ranking、feature_scoring 以及所有依赖模型分数的推荐 pipeline 用例
+
+### 陷阱-005：粗排入参顺序不能用响应 results 顺序替代
+- **错误写法**：`score_items = 打分服务实际收到的 item 顺序，或响应 results[*].item_id`，再断言 `score_items == ["A","B"]`
+- **正确做法**：拆成两个变量：`rank_input_items` 表示打分服务实际收到的 item 顺序，只能通过可记录请求的测试打分服务/代理或日志验证；代理构造需写明独立测试配置、`scoring_service.port` 和 `COUPON_CONFIG_PATH`。`result_item_set = set(response.results[*].item_id)` 只表示响应包含的 item 集合，不能用于断言粗排顺序
+- **原因**：`response.results[*]` 的顺序可能受打分分数、排序或后续处理影响，不等同于粗排送入打分服务的顺序
+- **适用范围**：rough_ranking 以及任何需要验证 pipeline 中间顺序的用例
+
+### 陷阱-006：边界用例不能长期只覆盖单一协议
+- **错误写法**：模块同时暴露 HTTP 与 gRPC，但 boundary.md 全部使用 HTTP 请求
+- **正确做法**：边界用例不要求每条双协议，但每个同时暴露 HTTP/gRPC 的模块必须至少选择代表性的异常、降级、类型转换或边界场景覆盖 gRPC；协议映射相关边界优先使用 gRPC
+- **原因**：业务用例覆盖 gRPC 正常路径不足以证明异常路径、默认值、字段映射和 transport error 在 gRPC 下也正确
+- **适用范围**：所有同时暴露 HTTP 和 gRPC 的模块
+
 ## 九、质量红线
 
 以下任一条不满足，用例不合格：

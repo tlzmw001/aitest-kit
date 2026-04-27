@@ -72,11 +72,15 @@ effort: high
 7. 知识库没说的行为 → 预期结果写 `TBD-需确认`，不猜测
 8. 用例的"输入"字段必须基于 L1 文档的输入/输出定义，写出完整请求体结构；L1 未给出完整字段定义的，标注 `[!请求体待补全]`
 9. 前置条件必须写出具体构造方式（配置文件内容、Redis 命令、实验参数 dict），不能只写抽象描述
-10. 断言选择遵循 `aitest_config/refs/assertion-strategy.md` 的三种策略
+10. 区分可控输入与系统中间产物：请求参数、Redis 数据、配置文件、实验参数属于可控输入，可在前置条件中指定具体值；pipeline 的计算结果（如打分分数、排序位次、校准后分数）属于中间产物，不能在前置条件或场景变量中假设其具体值（如"打分返回 0.8"、"控制打分服务返回 s=0.3"），只能通过调整可控输入间接影响；对中间产物的断言必须使用范围断言或关系断言
+   - issuance 最高分发放：不要写死 A/B 分数，改为断言 `coupon.item_id == max(response.results, key=score).item_id`
+   - calibration 计算：不要写固定 `s`，改为断言 `calibrated_score == f(response.results[i].score)`
+   - rough_ranking 顺序：不要把响应 `results[*].item_id` 当作粗排送打分服务的顺序；若要验证粗排顺序，必须定义 `rank_input_items = 打分服务实际收到的 items[*].item_id`，并写明构造方式：复制主配置到独立测试目录，将 `scoring_service.port` 指向可记录请求的测试打分服务/代理，用 `COUPON_CONFIG_PATH` 启动主服务；响应集合只能定义为 `result_item_set = set(response.results[*].item_id)`
+11. 断言选择遵循 `aitest_config/refs/assertion-strategy.md` 的三种策略
 
 **接口覆盖**：查看 L1 "接口"章节，确认模块暴露的接口类型（HTTP / gRPC / 两者）。两种接口都有时，共享配置必须列出两种接口，每个功能场景必须生成 HTTP 和 gRPC 两组用例（可共享场景变量，仅接口和请求格式不同）。
 
-**输出格式**：输出到 `$cases_dir/business.md`，按 `aitest_config/refs/case-format.md` 的"共享配置 + 精简用例"格式。每条用例只写 **优先级 / 场景变量 / 断言** 三个字段。
+**输出格式**：输出到 `$cases_dir/business.md`，按 `aitest_config/refs/case-format.md` 的"共享配置 + 精简用例"格式。每条用例只写 **优先级 / 场景变量 / 断言** 三个字段（有特殊状态时加 **标记** 字段）。场景变量必须写成 `key：value` 条目列表，`[manual]`、`[!可行性存疑]` 等标记写在独立的标记字段，不内联到场景变量或断言中。
 
 ### 第三步：第二轮——边界用例（读代码）
 
@@ -99,6 +103,8 @@ effort: high
 
 输出到 `$cases_dir/boundary.md`，使用与 business.md 相同的共享配置格式。
 Mismatch 输出到 `$cases_dir/mismatch.md`（无则不创建）。
+
+**边界接口覆盖补充**：如果模块同时暴露 HTTP 和 gRPC，boundary.md 不能全部使用 HTTP。至少选择代表性的异常、降级、类型转换、默认值或字段映射边界补充 gRPC 用例；不要求每个边界场景双协议，但不得让 gRPC 异常路径完全空缺。
 
 ### 第四步：覆盖变更与知识库刷新
 
