@@ -71,7 +71,7 @@
 - [cases/old-cases/coupon_service.md] 粗排
   - 已覆盖：保送排序（top_value）、截断（top_value）、截断不足时不截、多重过滤交集、多样性+backfill 补位、完整 pipeline 组合
 - [test_workspace/cases/rough_ranking/business.md] 粗排业务用例
-  - 已覆盖：实验开关、增强能力不配置时向后兼容、top_value/top_min_spend/random 截断、优先券保送、条件过滤、多维排序、类型打散
+  - 已覆盖：实验开关、增强能力不配置时向后兼容、top_value/top_min_spend/random 截断、截断数量超过候选数、gRPC is_prior→isPrior 映射、优先券保送、条件过滤、多维排序、类型打散、完整粗排 pipeline
 - [test_workspace/cases/rough_ranking/boundary.md] 粗排边界用例
   - 已覆盖：空候选接口层行为、truncate_count<=0、truncate_count 非数字、未知 rule、sort_keys 格式异常、filter 操作符未知、diversity 参数异常、prior_count 超限
   - 未覆盖：无（空候选内部契约与接口层行为差异见 mismatch.md）

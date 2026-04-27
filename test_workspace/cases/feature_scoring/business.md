@@ -58,18 +58,30 @@ coupon.RecommendRequest{
 
 ### TC-FEAT-001：HTTP 读取 Redis 用户特征并透传给打分
 - **优先级**：P1
-- **场景变量**：HTTP 请求 `user_id="u_feat_http"`、`external=0`；Redis 设置 `gender=male`、`total_spend=1200`
-- **断言**：`response.body.code == 0`；`[manual]` 打分服务收到的 `user_features` 包含 `gender="male"`、`total_spend="1200"`
+- **场景变量**：
+  - 协议：HTTP
+  - 请求覆盖：HTTP 请求 `user_id="u_feat_http"`、`external=0`
+  - 前置操作：Redis 设置 `gender=male`、`total_spend=1200`
+- **断言**：`response.body.code == 0`； 打分服务收到的 `user_features` 包含 `gender="male"`、`total_spend="1200"`
+- **标记**：`[manual]`
 
 ### TC-FEAT-002：gRPC 读取 Redis 用户特征并透传给打分
 - **优先级**：P1
-- **场景变量**：gRPC 请求 `user_id="u_feat_grpc"`、`external=0`；Redis 设置 `age=30`、`is_member=true`
-- **断言**：`response.code == 0`；`[manual]` 打分服务收到的 `user_features` 包含 `age="30"`、`is_member="true"`
+- **场景变量**：
+  - 协议：gRPC
+  - 请求覆盖：gRPC 请求 `user_id="u_feat_grpc"`、`external=0`
+  - 前置操作：Redis 设置 `age=30`、`is_member=true`
+- **断言**：`response.code == 0`； 打分服务收到的 `user_features` 包含 `age="30"`、`is_member="true"`
+- **标记**：`[manual]`
 
 ### TC-FEAT-003：请求 item 字段与 TSV item 特征合并后进入打分
 - **优先级**：P1
-- **场景变量**：HTTP 请求 item 为 `COUPON_FEAT_001`，请求体包含 `coupon_type="discount"`、`value=80`、`min_spend=5000`、`expire_days=7`；TSV 中存在该 item 的其他特征
-- **断言**：`[manual]` 打分服务收到的 item features 同时包含 TSV 特征和请求体中的 `coupon_type/value/min_spend/expire_days`
+- **场景变量**：
+  - 协议：HTTP
+  - 请求覆盖：HTTP 请求 item 为 `COUPON_FEAT_001`，请求体包含 `coupon_type="discount"`、`value=80`、`min_spend=5000`、`expire_days=7`
+  - 前置操作：TSV 中存在该 item 的其他特征
+- **断言**：打分服务收到的 item features 同时包含 TSV 特征和请求体中的 `coupon_type/value/min_spend/expire_days`
+- **标记**：`[manual]`
 
 ---
 
@@ -77,28 +89,42 @@ coupon.RecommendRequest{
 
 ### TC-SCORE-001：HTTP external=0 调用内部 gRPC 打分
 - **优先级**：P1
-- **场景变量**：HTTP 请求 `user_id="u_score_internal_http"`、`external=0`、`reqId="req-score-001"`
-- **断言**：`response.body.code == 0`；`response.body.results[0].score >= 0.1`；`[manual]` 内部打分服务收到明文 `user_id="u_score_internal_http"`
+- **场景变量**：
+  - 协议：HTTP
+  - 请求覆盖：HTTP 请求 `user_id="u_score_internal_http"`、`external=0`、`reqId="req-score-001"`
+- **断言**：`response.body.code == 0`；`response.body.results[0].score >= 0.1`； 内部打分服务收到明文 `user_id="u_score_internal_http"`
+- **标记**：`[manual]`
 
 ### TC-SCORE-002：gRPC external=0 调用内部 gRPC 打分
 - **优先级**：P1
-- **场景变量**：gRPC 请求 `user_id="u_score_internal_grpc"`、`external=0`、`req_id="req-score-002"`
-- **断言**：`response.code == 0`；`response.results[0].score >= 0.1`；`[manual]` 内部打分服务收到明文 `user_id="u_score_internal_grpc"`
+- **场景变量**：
+  - 协议：gRPC
+  - 请求覆盖：gRPC 请求 `user_id="u_score_internal_grpc"`、`external=0`、`req_id="req-score-002"`
+- **断言**：`response.code == 0`；`response.results[0].score >= 0.1`； 内部打分服务收到明文 `user_id="u_score_internal_grpc"`
+- **标记**：`[manual]`
 
 ### TC-SCORE-003：HTTP external=1 调用外部 HTTP 打分
 - **优先级**：P1
-- **场景变量**：HTTP 请求 `user_id="u_score_external_http"`、`external=1`、`reqId="req-score-003"`
+- **场景变量**：
+  - 协议：HTTP
+  - 请求覆盖：HTTP 请求 `user_id="u_score_external_http"`、`external=1`、`reqId="req-score-003"`
 - **断言**：`response.body.code == 0`；`response.body.results[0].score >= 0.2`；`response.body.experiment_info == {}`
 
 ### TC-SCORE-004：gRPC external=1 调用外部 HTTP 打分
 - **优先级**：P1
-- **场景变量**：gRPC 请求 `user_id="u_score_external_grpc"`、`external=1`、`req_id="req-score-004"`
+- **场景变量**：
+  - 协议：gRPC
+  - 请求覆盖：gRPC 请求 `user_id="u_score_external_grpc"`、`external=1`、`req_id="req-score-004"`
 - **断言**：`response.code == 0`；`response.results[0].score >= 0.2`；`response.experiment_info == {}`
 
 ### TC-SCORE-005：外部打分 user_id 使用加盐 SHA-256
 - **优先级**：P1
-- **场景变量**：HTTP 请求 `user_id="u_score_encrypt"`、`external=1`；外部打分服务 salt 使用默认 `coupon_external_uid_salt`
-- **断言**：`[manual]` 外部打分服务收到的 `user_id == sha256("coupon_external_uid_salt:u_score_encrypt")`；不包含明文 `u_score_encrypt`
+- **场景变量**：
+  - 协议：HTTP
+  - 请求覆盖：HTTP 请求 `user_id="u_score_encrypt"`、`external=1`
+  - 请求覆盖：外部打分服务 salt 使用默认 `coupon_external_uid_salt`
+- **断言**：外部打分服务收到的 `user_id == sha256("coupon_external_uid_salt:u_score_encrypt")`；不包含明文 `u_score_encrypt`
+- **标记**：`[manual]`
 
 ---
 

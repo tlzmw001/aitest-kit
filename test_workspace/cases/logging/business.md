@@ -59,22 +59,30 @@ coupon.RecommendRequest{
 
 ### TC-LOG-001：HTTP 内部打分请求记录 route=1
 - **优先级**：P1
-- **场景变量**：HTTP 请求 `user_id="u_log_http_internal"`、`external=0`、`reqId="req-log-001"`
+- **场景变量**：
+  - 协议：HTTP
+  - 请求覆盖：HTTP 请求 `user_id="u_log_http_internal"`、`external=0`、`reqId="req-log-001"`
 - **断言**：`log` 包含 `reqId=req-log-001`、`user_id=u_log_http_internal`、`item_ids=COUPON_LOG_001,COUPON_LOG_002`、`route=1`、`scene_id=1001`
 
 ### TC-LOG-002：gRPC 内部打分请求记录 route=1
 - **优先级**：P1
-- **场景变量**：gRPC 请求 `user_id="u_log_grpc_internal"`、`external=0`、`req_id="req-log-002"`
+- **场景变量**：
+  - 协议：gRPC
+  - 请求覆盖：gRPC 请求 `user_id="u_log_grpc_internal"`、`external=0`、`req_id="req-log-002"`
 - **断言**：`log` 包含 `reqId=req-log-002`、`user_id=u_log_grpc_internal`、`route=1`、`scene_id=1001`
 
 ### TC-LOG-003：HTTP 外部打分请求记录 route=2
 - **优先级**：P1
-- **场景变量**：HTTP 请求 `user_id="u_log_http_external"`、`external=1`、`reqId="req-log-003"`
+- **场景变量**：
+  - 协议：HTTP
+  - 请求覆盖：HTTP 请求 `user_id="u_log_http_external"`、`external=1`、`reqId="req-log-003"`
 - **断言**：`log` 包含 `reqId=req-log-003`、`user_id=u_log_http_external`、`route=2`、`scene_id=1001`
 
 ### TC-LOG-004：gRPC 外部打分请求记录 route=2
 - **优先级**：P1
-- **场景变量**：gRPC 请求 `user_id="u_log_grpc_external"`、`external=1`、`req_id="req-log-004"`
+- **场景变量**：
+  - 协议：gRPC
+  - 请求覆盖：gRPC 请求 `user_id="u_log_grpc_external"`、`external=1`、`req_id="req-log-004"`
 - **断言**：`log` 包含 `reqId=req-log-004`、`user_id=u_log_grpc_external`、`route=2`、`scene_id=1001`
 
 ---
@@ -83,12 +91,16 @@ coupon.RecommendRequest{
 
 ### TC-LOG-005：reqId 为空时日志记录自动生成 UUID
 - **优先级**：P1
-- **场景变量**：HTTP 请求 `user_id="u_log_auto_reqid"`、`external=0`、`reqId=""`
+- **场景变量**：
+  - 协议：HTTP
+  - 请求覆盖：HTTP 请求 `user_id="u_log_auto_reqid"`、`external=0`、`reqId=""`
 - **断言**：`log` 中 `reqId=` 后的值匹配 UUID 正则 `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
 
 ### TC-LOG-006：兜底场景也记录 scene_id
 - **优先级**：P1
-- **场景变量**：HTTP 请求 `user_id="u_log_fallback"`、`policy_id="policy_fallback_001"`、`external=0`、`reqId="req-log-006"`
+- **场景变量**：
+  - 协议：HTTP
+  - 请求覆盖：HTTP 请求 `user_id="u_log_fallback"`、`policy_id="policy_fallback_001"`、`external=0`、`reqId="req-log-006"`
 - **断言**：`log` 包含 `scene_id=3001`
 
 ---
@@ -97,13 +109,19 @@ coupon.RecommendRequest{
 
 ### TC-LOG-007：route 字段不下发给内部打分服务
 - **优先级**：P1
-- **场景变量**：HTTP 请求 `user_id="u_log_no_route_internal"`、`external=0`、`reqId="req-log-007"`
-- **断言**：`[manual]` 内部打分服务收到的请求字段中不存在 `route`
+- **场景变量**：
+  - 协议：HTTP
+  - 请求覆盖：HTTP 请求 `user_id="u_log_no_route_internal"`、`external=0`、`reqId="req-log-007"`
+- **断言**：内部打分服务收到的请求字段中不存在 `route`
+- **标记**：`[manual]`
 
 ### TC-LOG-008：route 字段不下发给外部打分服务
 - **优先级**：P1
-- **场景变量**：HTTP 请求 `user_id="u_log_no_route_external"`、`external=1`、`reqId="req-log-008"`
-- **断言**：`[manual]` 外部打分服务收到的 JSON body 中不存在 `route`
+- **场景变量**：
+  - 协议：HTTP
+  - 请求覆盖：HTTP 请求 `user_id="u_log_no_route_external"`、`external=1`、`reqId="req-log-008"`
+- **断言**：外部打分服务收到的 JSON body 中不存在 `route`
+- **标记**：`[manual]`
 
 ---
 

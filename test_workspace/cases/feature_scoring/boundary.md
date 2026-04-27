@@ -53,13 +53,21 @@ coupon.RecommendRequest{
 
 ### TC-FEAT-004：用户特征 key 不存在时静默省略
 - **优先级**：P2
-- **场景变量**：删除用户全部特征 key：`DEL coupon:user_feature:gender:u_feat_missing ...`；HTTP 请求 `user_id="u_feat_missing"`、`item_id="COUPON_FEAT_MISSING"`
-- **断言**：`response.body.code == 0`；`[manual]` 打分服务收到的 `user_features == {}`
+- **场景变量**：
+  - 协议：HTTP
+  - 前置操作：删除用户全部特征 key：`DEL coupon:user_feature:gender:u_feat_missing ...`
+  - 请求覆盖：HTTP 请求 `user_id="u_feat_missing"`、`item_id="COUPON_FEAT_MISSING"`
+- **断言**：`response.body.code == 0`； 打分服务收到的 `user_features == {}`
+- **标记**：`[manual]`
 
 ### TC-FEAT-005：Redis 用户特征读取异常时请求失败
 - **优先级**：P2 / 异常
-- **场景变量**：启动服务后停止 Redis，或使用不可连接 Redis 测试配置；HTTP 请求 `user_id="u_feat_redis_down"`。[!可行性存疑: 需要测试环境允许控制 Redis 可用性]
+- **场景变量**：
+  - 协议：HTTP
+  - 环境覆盖：启动服务后停止 Redis，或使用不可连接 Redis 测试配置
+  - 请求覆盖：HTTP 请求 `user_id="u_feat_redis_down"`
 - **断言**：`response.status_code == 500`
+- **标记**：`[!可行性存疑: 需要测试环境允许控制 Redis 可用性]`
 
 ---
 
@@ -67,22 +75,36 @@ coupon.RecommendRequest{
 
 ### TC-FEAT-006：TSV 文件不存在时安全降级为空 item 特征
 - **优先级**：P2 / 异常
-- **场景变量**：使用独立测试配置启动服务，`item_feature_file="/tmp/not_exists_item_features.tsv"`；HTTP 请求 `item_id="COUPON_FEAT_NO_FILE"`
-- **断言**：`response.body.code == 0`；`[manual]` 应用日志包含 `item 特征文件不存在`
+- **场景变量**：
+  - 协议：HTTP
+  - 环境覆盖：使用独立测试配置启动服务，`item_feature_file="/tmp/not_exists_item_features.tsv"`
+  - 请求覆盖：HTTP 请求 `item_id="COUPON_FEAT_NO_FILE"`
+- **断言**：`response.body.code == 0`； 应用日志包含 `item 特征文件不存在`
+- **标记**：`[manual]`
 
 ### TC-FEAT-007：TSV 行格式错误时跳过该行
 - **优先级**：P2 / 异常
-- **场景变量**：测试 TSV 内容包含一行 `BAD_LINE_WITHOUT_TAB` 和一行合法 `COUPON_FEAT_OK\t{"brand":"A"}`；HTTP 请求 `item_id="COUPON_FEAT_OK"`
-- **断言**：`response.body.code == 0`；`[manual]` 日志包含 `item 特征文件第 1 行格式错误`
+- **场景变量**：
+  - 协议：HTTP
+  - 前置操作：测试 TSV 内容包含一行 `BAD_LINE_WITHOUT_TAB` 和一行合法 `COUPON_FEAT_OK\t{"brand":"A"}`
+  - 请求覆盖：HTTP 请求 `item_id="COUPON_FEAT_OK"`
+- **断言**：`response.body.code == 0`； 日志包含 `item 特征文件第 1 行格式错误`
+- **标记**：`[manual]`
 
 ### TC-FEAT-008：TSV JSON 解析失败时跳过该行
 - **优先级**：P2 / 异常
-- **场景变量**：测试 TSV 内容包含 `COUPON_FEAT_BAD\t{bad json`；HTTP 请求 `item_id="COUPON_FEAT_BAD"`
-- **断言**：`response.body.code == 0`；`[manual]` 日志包含 `JSON 解析失败`
+- **场景变量**：
+  - 协议：HTTP
+  - 前置操作：测试 TSV 内容包含 `COUPON_FEAT_BAD\t{bad json`
+  - 请求覆盖：HTTP 请求 `item_id="COUPON_FEAT_BAD"`
+- **断言**：`response.body.code == 0`； 日志包含 `JSON 解析失败`
+- **标记**：`[manual]`
 
 ### TC-FEAT-009：不存在的 item 返回空特征但 pipeline 不中断
 - **优先级**：P2
-- **场景变量**：HTTP 请求 `item_id="COUPON_FEAT_NOT_IN_TSV"`，该 item 不在 TSV 中
+- **场景变量**：
+  - 协议：HTTP
+  - 前置操作：HTTP 请求 `item_id="COUPON_FEAT_NOT_IN_TSV"`，该 item 不在 TSV 中
 - **断言**：`response.body.code == 0`；`response.body.results[0].item_id == "COUPON_FEAT_NOT_IN_TSV"`
 
 ---
@@ -91,18 +113,33 @@ coupon.RecommendRequest{
 
 ### TC-SCORE-006：打分超时且 fallback allow 时使用默认分继续
 - **优先级**：P2 / 异常
-- **场景变量**：内部打分服务超时；配置 `fallback.enabled=true`、`on_scoring_timeout.action="allow"`、`default_score=0.5`
+- **场景变量**：
+  - 请求覆盖：内部打分服务超时
+  - 请求覆盖：配置 `fallback.enabled=true`、`on_scoring_timeout.action="allow"`、`default_score=0.5`
 - **断言**：`response.body.code == 0`；`response.body.results[0].score == 0.5`
 
 ### TC-SCORE-007：打分不可用且 fallback allow 时使用默认分继续
 - **优先级**：P2 / 异常
-- **场景变量**：内部打分服务不可用；配置 `fallback.enabled=true`、`on_scoring_unavailable.action="allow"`、`default_score=0.3`
+- **场景变量**：
+  - 请求覆盖：内部打分服务不可用
+  - 请求覆盖：配置 `fallback.enabled=true`、`on_scoring_unavailable.action="allow"`、`default_score=0.3`
 - **断言**：`response.body.code == 0`；`response.body.results[0].score == 0.3`
 
 ### TC-SCORE-008：打分超时且 fallback deny 时返回打分异常
 - **优先级**：P2 / 异常
-- **场景变量**：内部打分服务超时；测试配置 `fallback.on_scoring_timeout.action="deny"`。[!可行性存疑: 需要测试环境支持独立 fallback 配置启动服务]
+- **场景变量**：
+  - 请求覆盖：内部打分服务超时
+  - 环境覆盖：测试配置 `fallback.on_scoring_timeout.action="deny"`
 - **断言**：`response.body == err_scoring`
+- **标记**：`[!可行性存疑: 需要测试环境支持独立 fallback 配置启动服务]`
+
+### TC-SCORE-009：打分故障兜底分优先读取 Redis
+- **优先级**：P2 / 异常
+- **场景变量**：
+  - 请求覆盖：内部打分服务抛出 `RuntimeError`
+  - 请求覆盖：配置 `fallback.enabled=true`、`on_scoring_unavailable.action="allow"`、`default_score=0.3`
+  - 前置操作：Redis 设置 `SET coupon:fallback:score:1001 0.9`
+- **断言**：`response.body.code == 0`；`response.body.results[0].score == 0.9`；`response.body.coupon != null`
 
 ---
 
@@ -110,5 +147,5 @@ coupon.RecommendRequest{
 
 | 知识库文档 | 新增覆盖 | 仍未覆盖 |
 |-----------|---------|---------|
-| L1/feature_scoring | 用户特征缺失、Redis 特征读取异常、TSV 文件不存在/行格式错误/JSON 解析失败、不存在 item、打分超时/不可用兜底、fallback deny | 无 |
-| L2/0402 | 内外部打分故障路径与 fallback 行为 | 无（仅限 feature_scoring 范围） |
+| L1/feature_scoring | 用户特征缺失、Redis 特征读取异常、TSV 文件不存在/行格式错误/JSON 解析失败、不存在 item、打分超时/不可用兜底、fallback deny、打分故障时 Redis 兜底分优先 | 无 |
+| L2/0402 | 内外部打分故障路径与 fallback 行为、Redis 兜底分优先级 | 无（仅限 feature_scoring 范围） |

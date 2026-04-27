@@ -16,7 +16,7 @@
 
 ## 输出
 
-每个候选券的打分结果（分数列表）。
+每个候选券的打分结果（分数列表）。打分结果由打分服务计算，测试不能直接指定打分返回值；只能通过可控输入（Redis 用户特征、TSV Item 特征）间接影响分数。
 
 ## 业务规则
 
@@ -60,7 +60,7 @@
 - [test_workspace/cases/feature_scoring/business.md] 特征抽取与打分业务用例
   - 已覆盖：HTTP/gRPC 用户特征读取、item 特征合并、external=0 内部打分、external=1 外部打分、外部 user_id 加盐 SHA-256
 - [test_workspace/cases/feature_scoring/boundary.md] 特征抽取与打分边界用例
-  - 已覆盖：用户特征缺失、Redis 特征读取异常、TSV 文件不存在/行格式错误/JSON 解析失败、不存在 item、打分超时/不可用兜底、fallback deny
+  - 已覆盖：用户特征缺失、Redis 特征读取异常、TSV 文件不存在/行格式错误/JSON 解析失败、不存在 item、打分超时/不可用兜底、fallback deny、打分故障时 Redis 兜底分优先
   - 未覆盖：无
 
 ## 关联 L2

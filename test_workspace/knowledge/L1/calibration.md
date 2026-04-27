@@ -79,7 +79,7 @@
 - [cases/old-cases/coupon_service.md] 校准
   - 已覆盖：线性校准 y=kx+b + clamp、分段+线性串联、最新版本文件选取、无效条件字段不匹配
 - [test_workspace/cases/calibration/business.md] 校准业务用例
-  - 已覆盖：实验关闭、scene_id 选取实验、多条件优先级、缺字段/未知字段不匹配、仅线性、仅分段、双重校准、双不命中、最新版本文件
+  - 已覆盖：线性校准、分段+线性串联、最新版本文件、无效 condition 不匹配、实验关闭、scene_id 选取实验、多条件优先级、缺字段/未知字段不匹配、仅线性、仅分段、双重校准、双不命中
 - [test_workspace/cases/calibration/boundary.md] 校准边界用例
   - 已覆盖：目录不存在/为空/空字符串、JSON 解析失败、文件非 list、分段边界、非法分段跳过、条件类型转换
   - 未覆盖：无（可匹配字段白名单限制见 mismatch.md）

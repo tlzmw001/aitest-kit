@@ -67,17 +67,26 @@ coupon.RecommendRequest{
 
 ### TC-AB-001：HTTP 通过 hash 命中场景关联实验
 - **优先级**：P1
-- **场景变量**：HTTP 请求 `user_id="u_ab_hash_http"`、`scene_name="game"`、`device="mobile"`、`external=0`、`reqId="req-ab-001"`；不设置该用户白名单
+- **场景变量**：
+  - 协议：HTTP
+  - 请求覆盖：HTTP 请求 `user_id="u_ab_hash_http"`、`scene_name="game"`、`device="mobile"`、`external=0`、`reqId="req-ab-001"`
+  - 前置操作：不设置该用户白名单
 - **断言**：`exp` 只包含 `coarse_rank_exp_game`、`calibration_exp_game` 中实际命中的实验 key；不包含 `coarse_rank_exp_ad`、`calibration_exp_ad`
 
 ### TC-AB-002：gRPC 通过 hash 命中场景关联实验
 - **优先级**：P1
-- **场景变量**：gRPC 请求 `user_id="u_ab_hash_grpc"`、`scene_name="ad"`、`device="pc"`、`external=0`、`req_id="req-ab-002"`；不设置该用户白名单
+- **场景变量**：
+  - 协议：gRPC
+  - 请求覆盖：gRPC 请求 `user_id="u_ab_hash_grpc"`、`scene_name="ad"`、`device="pc"`、`external=0`、`req_id="req-ab-002"`
+  - 前置操作：不设置该用户白名单
 - **断言**：`exp` 只包含 `coarse_rank_exp_ad`、`calibration_exp_ad` 中实际命中的实验 key；不包含 `coarse_rank_exp_game`、`calibration_exp_game`
 
 ### TC-AB-003：白名单优先级高于 hash 分流
 - **优先级**：P1
-- **场景变量**：先执行 `PUT /api/v1/ab/whitelist/u_ab_white`，body 为 `{"strategy_map":{"coarse_rank_exp_game":"cr_off","calibration_exp_game":"cal_off"}}`；HTTP 请求 `user_id="u_ab_white"`、`scene_name="game"`、`device="mobile"`、`external=0`、`reqId="req-ab-003"`
+- **场景变量**：
+  - 协议：HTTP
+  - 请求覆盖：先执行 `PUT /api/v1/ab/whitelist/u_ab_white`，body 为 `{"strategy_map":{"coarse_rank_exp_game":"cr_off","calibration_exp_game":"cal_off"}}`
+  - 请求覆盖：HTTP 请求 `user_id="u_ab_white"`、`scene_name="game"`、`device="mobile"`、`external=0`、`reqId="req-ab-003"`
 - **断言**：`exp["coarse_rank_exp_game"] == "cr_off"`；`exp["calibration_exp_game"] == "cal_off"`
 
 ---
@@ -86,12 +95,18 @@ coupon.RecommendRequest{
 
 ### TC-AB-004：只评估当前 scene_id 映射的实验
 - **优先级**：P1
-- **场景变量**：HTTP 请求 `user_id="u_ab_scene_game"`、`scene_name="game"`、`device="mobile"`、`external=0`；AB 服务中同时存在 game/ad 两组实验
+- **场景变量**：
+  - 协议：HTTP
+  - 请求覆盖：HTTP 请求 `user_id="u_ab_scene_game"`、`scene_name="game"`、`device="mobile"`、`external=0`
+  - 请求覆盖：AB 服务中同时存在 game/ad 两组实验
 - **断言**：`set(exp.keys())` 是 `{"coarse_rank_exp_game", "calibration_exp_game"}` 的子集；`exp` 不包含任何 `_ad` 实验
 
 ### TC-AB-005：场景无实验映射时返回空实验信息
 - **优先级**：P1
-- **场景变量**：测试环境将场景实验映射中目标 `scene_id` 配置为空列表后启动主服务；HTTP 请求命中该 `scene_id`
+- **场景变量**：
+  - 协议：HTTP
+  - 环境覆盖：测试环境将场景实验映射中目标 `scene_id` 配置为空列表后启动主服务
+  - 请求覆盖：HTTP 请求命中该 `scene_id`
 - **断言**：`response.code == 0`；`exp == no_exp`
 
 ---
@@ -100,12 +115,18 @@ coupon.RecommendRequest{
 
 ### TC-AB-006：HTTP external=1 时不获取任何实验
 - **优先级**：P1
-- **场景变量**：HTTP 请求 `user_id="u_ab_external_http"`、`scene_name="game"`、`device="mobile"`、`external=1`、`reqId="req-ab-006"`；AB 服务可用且存在可命中实验
+- **场景变量**：
+  - 协议：HTTP
+  - 请求覆盖：HTTP 请求 `user_id="u_ab_external_http"`、`scene_name="game"`、`device="mobile"`、`external=1`、`reqId="req-ab-006"`
+  - 请求覆盖：AB 服务可用且存在可命中实验
 - **断言**：`response.body.experiment_info == no_exp`
 
 ### TC-AB-007：gRPC external=1 时不获取任何实验
 - **优先级**：P1
-- **场景变量**：gRPC 请求 `user_id="u_ab_external_grpc"`、`scene_name="game"`、`device="mobile"`、`external=1`、`req_id="req-ab-007"`；AB 服务可用且存在可命中实验
+- **场景变量**：
+  - 协议：gRPC
+  - 请求覆盖：gRPC 请求 `user_id="u_ab_external_grpc"`、`scene_name="game"`、`device="mobile"`、`external=1`、`req_id="req-ab-007"`
+  - 请求覆盖：AB 服务可用且存在可命中实验
 - **断言**：`response.experiment_info == no_exp`
 
 ---
@@ -114,13 +135,21 @@ coupon.RecommendRequest{
 
 ### TC-AB-008：AB 服务不可用时主服务不降级
 - **优先级**：P1 / 异常
-- **场景变量**：停止 AB 实验服务或将主服务 AB SDK 地址指向不可连接端口后启动；HTTP 请求 `user_id="u_ab_down"`、`scene_name="game"`、`device="mobile"`、`external=0`。[!可行性存疑: 需要测试环境允许控制 AB 服务可用性或启动参数]
+- **场景变量**：
+  - 协议：HTTP
+  - 请求覆盖：停止 AB 实验服务或将主服务 AB SDK 地址指向不可连接端口后启动
+  - 请求覆盖：HTTP 请求 `user_id="u_ab_down"`、`scene_name="game"`、`device="mobile"`、`external=0`
 - **断言**：`response.status_code == 500`
+- **标记**：`[!可行性存疑: 需要测试环境允许控制 AB 服务可用性或启动参数]`
 
 ### TC-AB-009：实验名不存在时静默跳过
 - **优先级**：P2 / 异常
-- **场景变量**：测试环境将 `scene_id=1001` 的实验映射设为 `["coarse_rank_exp_game","not_exists_exp"]`；HTTP 请求 `user_id="u_ab_unknown_exp"`、`scene_name="game"`、`device="mobile"`、`external=0`
-- **断言**：`response.body.code == 0`；`exp` 不包含 `not_exists_exp`；`[manual]` 应用日志包含 `ab_sdk unknown experiment: not_exists_exp`
+- **场景变量**：
+  - 协议：HTTP
+  - 前置操作：测试环境将 `scene_id=1001` 的实验映射设为 `["coarse_rank_exp_game","not_exists_exp"]`
+  - 请求覆盖：HTTP 请求 `user_id="u_ab_unknown_exp"`、`scene_name="game"`、`device="mobile"`、`external=0`
+- **断言**：`response.body.code == 0`；`exp` 不包含 `not_exists_exp`； 应用日志包含 `ab_sdk unknown experiment: not_exists_exp`
+- **标记**：`[manual]`
 
 ---
 
