@@ -36,6 +36,45 @@
 - `[manual] 应用日志包含 "calibration skipped"`
 - `[manual] Prometheus 指标 coupon_ratelimit_total 计数 +1`
 
+## 断言格式规范
+
+断言的写法直接影响 codegen 能否自动生成 pytest 代码。以下规范在保持可读性的前提下，让 emitter 能确定性匹配。
+
+### 必须结构化的断言（emitter 直接映射）
+
+凡是"检查响应某个字段的值"的断言，写成 `response.path operator value` 格式：
+
+| 场景 | 写法 | emitter 映射 |
+|------|------|-------------|
+| 状态码 | `response.code == 0` | `assert resp["code"] == 0` |
+| 字段等值 | `response.scene_id == 3001` | `assert resp["scene_id"] == 3001` |
+| 比较 | `response.score >= 0.5` | `assert resp["score"] >= 0.5` |
+| 空值 | `coupon == null` | `assert resp["coupon"] is None` |
+| 集合 | `set(response.results[*].item_id) == {"A", "B"}` | `assert {r["item_id"] for r in ...} == {"A", "B"}` |
+| 长度 | `len(response.results) == 3` | `assert len(resp["results"]) == 3` |
+| 关系 | `cal == round(clamp(k * s + b), 4)` | `assert cal == pytest.approx(...)` |
+
+这类断言占绝大多数，写成结构化格式不会损失可读性。
+
+### 允许自然语言的断言（标 `[manual]` 或由 AI codegen 补写）
+
+以下场景无法用单行表达式覆盖，允许写自然语言：
+
+- 多步计算逻辑（"得分最高的商品被选为 coupon"）
+- 跨请求对比（"第二次请求的结果与第一次不同"）
+- 需要人工判断的（日志内容、时序关系、监控指标）
+
+自然语言断言必须标 `[manual]`，或写到足够具体让 AI codegen 能翻译为代码。
+
+### 禁止的写法
+
+| 写法 | 问题 | 改为 |
+|------|------|------|
+| "应该返回正确结果" | 没有可执行信息 | 写出具体字段和期望值 |
+| "验证功能正常" | 同上 | 写出要验证的具体行为 |
+| "response 包含预期数据" | "预期数据"是什么？ | 写出具体字段路径和值 |
+| "分数应该合理" | "合理"无法断言 | 写出具体的范围或关系 |
+
 ## 禁忌
 
 - 不要为了凑固定值而猜测不可预知的数值（如模型打分结果）

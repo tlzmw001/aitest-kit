@@ -15,10 +15,10 @@
 ```json
 {
   "user_id": "{{user_id}}",
-  "scene_name": "{{scene_name}}",
-  "device": "{{device}}",
-  "policy_id": "{{policy_id}}",
-  "external": {{external}},
+  "scene_name": "game",
+  "device": "mobile",
+  "policy_id": "",
+  "external": 0,
   "reqId": "{{req_id}}",
   "score_threshold": 0.0,
   "max_claim_per_request": 1,

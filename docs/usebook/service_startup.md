@@ -91,8 +91,13 @@ python3 -m coupon_system.scoring_server.external_mock_server
 
 ### 5. 待测主服务
 
+推荐使用 `127.0.0.1` 并显式设置本机代理绕过规则：
+
 ```bash
-env AB_SERVICE_URL=http://localhost:8100 python3 -m coupon_system.main
+env AB_SERVICE_URL=http://127.0.0.1:8100 \
+  NO_PROXY=localhost,127.0.0.1 \
+  no_proxy=localhost,127.0.0.1 \
+  python3 -m coupon_system.main
 ```
 
 主服务会在同一个进程中启动：
@@ -109,6 +114,12 @@ env AB_SERVICE_URL=http://localhost:8100 python3 -m coupon_system.main
 | `COUPON_CONFIG_PATH` | `coupon_system/config/settings.yaml` | 主配置文件路径 |
 | `AB_SERVICE_URL` | 空 | 远程 AB 服务地址；为空时使用本地 SDK 模式 |
 | `AB_SDK_WHITELIST_JSON` | 空 | 本地 SDK 模式下的白名单 JSON |
+
+注意：
+
+- 推荐链路测试如果要验证远程 AB 服务，必须设置 `AB_SERVICE_URL`。
+- 本机存在 HTTP 代理环境时，`AB_SERVICE_URL=http://localhost:8100` 可能被主服务进程内的 HTTP 客户端代理拦截，导致 `/api/v1/recommend` 返回 500。优先使用 `http://127.0.0.1:8100`，并设置 `NO_PROXY`、`no_proxy`。
+- `AB_SDK_WHITELIST_JSON` 只在本地 SDK 模式生效；设置了 `AB_SERVICE_URL` 后，白名单应通过 AB 服务 API 管理。
 
 ## 配置依赖
 
@@ -172,6 +183,18 @@ curl -sS -X POST http://127.0.0.1:50053/score \
 
 `score` 带随机噪声，具体数值不固定。
 
+### AB evaluate 连通性
+
+只检查 `/health` 不能证明主服务能完成 AB 实验评估。推荐链路测试前可以直接调用 AB evaluate：
+
+```bash
+curl -sS -X POST http://127.0.0.1:8100/api/v1/ab/evaluate \
+  -H 'Content-Type: application/json' \
+  -d '{"user_id":"health_check_user","request_id":"health_check","context":{},"experiment_names":["calibration_exp_game"]}'
+```
+
+期望返回 `request_id`、`user_id` 和 `assignments`。如果该命令返回 200，但主服务日志里出现调用 `http://localhost:8100/api/v1/ab/evaluate` 的 403，优先检查主服务启动时的 `AB_SERVICE_URL` 和 `NO_PROXY`。
+
 ### 端口监听检查
 
 ```bash
@@ -205,6 +228,38 @@ lsof -nP -iTCP:8000 -sTCP:LISTEN
 - 外部打分服务：`curl -sS -X POST http://127.0.0.1:50053/score ...`
 
 如果只访问 `/health` 成功，不代表完整推荐链路可用；推荐链路还依赖 Redis、AB 服务和对应打分服务。
+
+### recommend 返回 500，AB evaluate 403
+
+典型 traceback：
+
+```text
+coupon_system/services/coupon_service.py -> self.experiment_sdk.evaluate(...)
+ab_experiment_sdk/remote_client.py -> response.raise_for_status()
+httpx.HTTPStatusError: Client error '403 Forbidden' for url 'http://localhost:8100/api/v1/ab/evaluate'
+```
+
+如果 AB 服务终端没有对应的 `POST /api/v1/ab/evaluate` 日志，通常表示主服务进程内请求没有真正打到本机 AB 服务，而是被代理拦截。
+
+处理方式：
+
+1. 停止当前主服务。
+2. 用下面命令重启：
+
+```bash
+env AB_SERVICE_URL=http://127.0.0.1:8100 \
+  NO_PROXY=localhost,127.0.0.1 \
+  no_proxy=localhost,127.0.0.1 \
+  python3 -m coupon_system.main
+```
+
+3. 再运行推荐链路或 pytest。
+
+pytest helper 里绕过代理只影响测试进程发出的请求，不能自动修复主服务进程内部到 AB 服务的请求。
+
+### calibration 集成测试注意事项
+
+calibration 模块的 pytest fixture、校准目录隔离、AB 实验参数临时覆盖和 teardown 规则属于模块代码生成规则，不放在启动文档维护。详见 `test_workspace/cases/calibration/codegen_profile.md`。
 
 ### Codex 沙箱内启动服务失败
 

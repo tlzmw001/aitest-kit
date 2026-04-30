@@ -1,0 +1,49 @@
+# Auto-generated from test_workspace/cases/logging/boundary.md
+# DO NOT EDIT — regenerate with: /test-codegen logging
+import pytest
+from test_workspace.tests.helpers import http as http_helper
+import re
+
+
+BASE_REQUEST = {
+    "user_id": None,
+    "scene_name": "game",
+    "device": "mobile",
+    "policy_id": "",
+    "external": 0,
+    "reqId": None,
+    "score_threshold": 0.0,
+    "max_claim_per_request": 1,
+    "context": {},
+    "items": [{"item_id": "COUPON_LOG_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
+}
+
+
+def _req(user_id: str, req_id: str, **overrides) -> dict:
+    body = {**BASE_REQUEST, "user_id": user_id, "reqId": req_id}
+    body.update(overrides)
+    return body
+
+
+class TestLoggingBoundary:
+    """logging 边界测试用例"""
+
+    # ── 一、日志配置风险 ──
+
+    def test_tc_log_010(self, setup_logging):
+        """TC-LOG-010：显式配置 INFO 后业务日志可见"""
+        # SETUP: 协议：HTTP
+        # SETUP: 环境覆盖：测试启动入口显式配置 logging.basicConfig(level=logging.INFO) 后启动服务
+        # SETUP: 请求覆盖：HTTP 请求 reqId="req-log-010"
+
+        case = setup_logging(case_id="TC-LOG-010")
+        case.start_with_info_logging()
+        resp = case.request("u_log_010", "req-log-010", external=0, items=[{"item_id": "COUPON_LOG_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}])
+        logs = case.stop_and_logs()
+        assert resp["code"] == 0
+        assert "recommend request: reqId=req-log-010" in logs
+
+
+# SKIPPED: TC-LOG-009 — `[!可行性存疑: 需要测试环境能区分 uvicorn 日志和业务 logger 输出]`
+# SKIPPED: TC-LOG-011 — `[!可行性存疑: 需要测试环境能注入 logging handler]`
+# SKIPPED: TC-LOG-012 — `[!可行性存疑: 黑盒接口无法覆盖，需组件级专项验证]`

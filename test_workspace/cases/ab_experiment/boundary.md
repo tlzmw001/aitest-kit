@@ -58,6 +58,7 @@ coupon.RecommendRequest{
   - 前置操作：选择 `md5(user_id)%100 == H` 的 `user_id`
   - 前置操作：将 `scene_id=1001` 映射到该实验
 - **断言**：`exp["ab_boundary_left"] == "left_hit"`
+- **标记**：`[!可行性存疑: 已确认为待测系统缺陷，主服务不支持运行时热更新 scene_experiments.json，详见 results/ab_experiment_scene_experiments_hot_reload_bug.md]`
 
 ### TC-AB-011：hash 不命中区间右开边界
 - **优先级**：P2

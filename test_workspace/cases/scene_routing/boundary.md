@@ -15,9 +15,9 @@
 ```json
 {
   "user_id": "{{user_id}}",
-  "scene_name": "{{scene_name}}",
-  "device": "{{device}}",
-  "policy_id": "{{policy_id}}",
+  "scene_name": "game",
+  "device": "mobile",
+  "policy_id": "",
   "external": 0,
   "reqId": "{{req_id}}",
   "score_threshold": 0.0,
@@ -58,6 +58,7 @@ coupon.RecommendRequest{
   - 前置操作：执行 `SET coupon:fallback:score:3001 not-a-number` 和 `SET coupon:fallback:score:default 0.6`
   - 请求覆盖：HTTP 请求命中 `policy_fallback_001`
 - **断言**：`response.body.scene_id == 3001`；`score == 0.6`
+- **标记**：`[!可行性存疑: 待测系统当前未按规格在场景级兜底分非数字时继续读取全局兜底分，已记录到 results/scene_routing_fallback_invalid_scene_score_bug.md]`
 
 ### TC-ROUTE-011：Redis 全局兜底分非数字时回退到配置默认值
 - **优先级**：P2 / 异常
@@ -123,6 +124,7 @@ coupon.RecommendRequest{
   - 前置操作：执行 `SET coupon:fallback:score:3001 not-a-number` 和 `SET coupon:fallback:score:default 0.6`
   - 请求覆盖：gRPC 请求命中 `policy_fallback_001`
 - **断言**：`response.scene_id == 3001`；`score == 0.6`
+- **标记**：`[!可行性存疑: 待测系统当前未按规格在场景级兜底分非数字时继续读取全局兜底分，已记录到 results/scene_routing_fallback_invalid_scene_score_bug.md]`
 
 ### TC-ROUTE-018：gRPC policy_id 为空字符串时不触发兜底策略
 - **优先级**：P2

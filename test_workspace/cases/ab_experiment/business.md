@@ -15,10 +15,10 @@
 ```json
 {
   "user_id": "{{user_id}}",
-  "scene_name": "{{scene_name}}",
-  "device": "{{device}}",
+  "scene_name": "game",
+  "device": "mobile",
   "policy_id": "",
-  "external": {{external}},
+  "external": 0,
   "reqId": "{{req_id}}",
   "score_threshold": 0.0,
   "max_claim_per_request": 1,
@@ -108,6 +108,7 @@ coupon.RecommendRequest{
   - 环境覆盖：测试环境将场景实验映射中目标 `scene_id` 配置为空列表后启动主服务
   - 请求覆盖：HTTP 请求命中该 `scene_id`
 - **断言**：`response.code == 0`；`exp == no_exp`
+- **标记**：`[!可行性存疑: 已确认为待测系统缺陷，主服务不支持运行时热更新 scene_experiments.json，详见 results/ab_experiment_scene_experiments_hot_reload_bug.md]`
 
 ---
 

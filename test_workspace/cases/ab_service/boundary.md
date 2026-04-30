@@ -17,7 +17,7 @@
   "user_id": "{{user_id}}",
   "request_id": "{{request_id}}",
   "context": {},
-  "experiment_names": {{experiment_names}}
+  "experiment_names": null
 }
 ```
 

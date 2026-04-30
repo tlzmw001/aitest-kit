@@ -29,6 +29,9 @@ class RedisTracker:
     def sismember(self, key: str, member: str) -> bool:
         return bool(self._client.sismember(key, member))
 
+    def smembers(self, key: str) -> set[str]:
+        return set(self._client.smembers(key))
+
     def ttl(self, key: str) -> int:
         return self._client.ttl(key)
 

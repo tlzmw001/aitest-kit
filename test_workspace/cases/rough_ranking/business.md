@@ -23,7 +23,11 @@
   "score_threshold": 0.0,
   "max_claim_per_request": 1,
   "context": {},
-  "items": {{items}}
+  "items": [
+    {"item_id": "COUPON_RANK_A", "coupon_type": "discount", "value": 100, "min_spend": 9000, "expire_days": 7},
+    {"item_id": "COUPON_RANK_B", "coupon_type": "fixed", "value": 80, "min_spend": 1000, "expire_days": 7, "isPrior": true},
+    {"item_id": "COUPON_RANK_C", "coupon_type": "free_shipping", "value": 50, "min_spend": 500, "expire_days": 7}
+  ]
 }
 ```
 

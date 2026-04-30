@@ -22,8 +22,8 @@ _WHITELIST_MAP = {
 }
 
 _USER_BY_CASE = {
-    "TC-AB-003": "u_ab_003",
-    "TC-AB-012": "u_ab_012",
+    "TC-AB-003": "u_ab_white",
+    "TC-AB-012": "u_ab_invalid_white",
 }
 
 

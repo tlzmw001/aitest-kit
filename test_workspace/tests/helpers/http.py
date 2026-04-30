@@ -14,6 +14,11 @@ def post(base_url: str, path: str, json: dict, timeout: float = 10.0) -> dict:
     return resp.json()
 
 
+def post_response(base_url: str, path: str, json: dict, timeout: float = 10.0) -> httpx.Response:
+    url = f"{base_url.rstrip('/')}{path}"
+    return _client.post(url, json=json, timeout=timeout)
+
+
 def get(base_url: str, path: str, timeout: float = 10.0) -> dict:
     url = f"{base_url.rstrip('/')}{path}"
     resp = _client.get(url, timeout=timeout)

@@ -20,10 +20,13 @@
   "policy_id": "",
   "external": 0,
   "reqId": "{{req_id}}",
-  "score_threshold": {{score_threshold}},
-  "max_claim_per_request": {{max_claim_per_request}},
+  "score_threshold": 0.0,
+  "max_claim_per_request": 1,
   "context": {},
-  "items": {{items}}
+  "items": [
+    {"item_id": "COUPON_ISSUE_A", "coupon_type": "discount", "value": 100, "min_spend": 5000, "expire_days": 7},
+    {"item_id": "COUPON_ISSUE_B", "coupon_type": "fixed", "value": 80, "min_spend": 3000, "expire_days": 7}
+  ]
 }
 ```
 
@@ -71,12 +74,12 @@ coupon.RecommendRequest{
   - 请求覆盖：`score_threshold=0.0`、`max_claim_per_request=1`
 - **断言**：`coupon.item_id == top_result.item_id`；`coupon.user_id == "u_issue_grpc_ok"`；`coupon.status == "claimed"`
 
-### TC-ISSUE-003：score_threshold 高于分数上界时不发放
+### TC-ISSUE-003：score_threshold 等于分数上界时不发放
 - **优先级**：P1
 - **场景变量**：
   - 协议：HTTP
   - 前置操作：HTTP 请求 `user_id="u_issue_high_threshold"`，两张券库存均为 100
-  - 请求覆盖：`score_threshold=1.01`
+  - 请求覆盖：`score_threshold=1.0`
 - **断言**：`coupon == null`；`all(r.recommended == false for r in results)`
 
 ---
@@ -114,7 +117,7 @@ coupon.RecommendRequest{
 - **优先级**：P1
 - **场景变量**：
   - 前置操作：同一用户隔离请求，只传 `COUPON_ISSUE_A` 且库存为 100
-  - 请求覆盖：第一次 `score_threshold=1.01`，第二次 `score_threshold=0.0`
+  - 请求覆盖：第一次 `score_threshold=1.0`，第二次 `score_threshold=0.0`
 - **断言**：第一次 `coupon == null`；第二次 `coupon.item_id == "COUPON_ISSUE_A"`
 
 ### TC-ISSUE-008：max_claim_per_request 控制尝试发放数量

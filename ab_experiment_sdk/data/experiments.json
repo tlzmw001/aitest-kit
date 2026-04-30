@@ -5,7 +5,10 @@
       "strategies": [
         {
           "id": "cr_v2_full",
-          "hash_range": [0, 30],
+          "hash_range": [
+            0,
+            30
+          ],
           "params": {
             "enable_coarse_rank": true,
             "truncate_count": 5,
@@ -37,7 +40,10 @@
         },
         {
           "id": "cr_v1_baseline",
-          "hash_range": [30, 60],
+          "hash_range": [
+            30,
+            60
+          ],
           "params": {
             "enable_coarse_rank": true,
             "truncate_count": 5,
@@ -46,7 +52,10 @@
         },
         {
           "id": "cr_off",
-          "hash_range": [60, 100],
+          "hash_range": [
+            60,
+            100
+          ],
           "params": {
             "enable_coarse_rank": false
           }
@@ -58,7 +67,10 @@
       "strategies": [
         {
           "id": "cal_on",
-          "hash_range": [0, 50],
+          "hash_range": [
+            0,
+            50
+          ],
           "params": {
             "enable_calibration": true,
             "calibration_dir": {
@@ -69,7 +81,10 @@
         },
         {
           "id": "cal_off",
-          "hash_range": [50, 100],
+          "hash_range": [
+            50,
+            100
+          ],
           "params": {
             "enable_calibration": false
           }
@@ -81,7 +96,10 @@
       "strategies": [
         {
           "id": "cr_ad_on",
-          "hash_range": [0, 30],
+          "hash_range": [
+            0,
+            30
+          ],
           "params": {
             "enable_coarse_rank": true,
             "truncate_count": 3,
@@ -90,7 +108,10 @@
         },
         {
           "id": "cr_ad_off",
-          "hash_range": [30, 100],
+          "hash_range": [
+            30,
+            100
+          ],
           "params": {
             "enable_coarse_rank": false
           }
@@ -102,7 +123,10 @@
       "strategies": [
         {
           "id": "cal_ad_on",
-          "hash_range": [0, 30],
+          "hash_range": [
+            0,
+            30
+          ],
           "params": {
             "enable_calibration": true,
             "calibration_dir": {
@@ -113,7 +137,10 @@
         },
         {
           "id": "cal_ad_off",
-          "hash_range": [30, 100],
+          "hash_range": [
+            30,
+            100
+          ],
           "params": {
             "enable_calibration": false
           }

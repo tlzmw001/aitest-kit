@@ -117,6 +117,7 @@ coupon.RecommendRequest{
   - 请求覆盖：内部打分服务超时
   - 请求覆盖：配置 `fallback.enabled=true`、`on_scoring_timeout.action="allow"`、`default_score=0.5`
 - **断言**：`response.body.code == 0`；`response.body.results[0].score == 0.5`
+- **标记**：`[!可行性存疑: 当前集成环境的内部 gRPC mock 打分服务没有公开控制接口可按用例触发超时]`
 
 ### TC-SCORE-007：打分不可用且 fallback allow 时使用默认分继续
 - **优先级**：P2 / 异常
@@ -124,6 +125,7 @@ coupon.RecommendRequest{
   - 请求覆盖：内部打分服务不可用
   - 请求覆盖：配置 `fallback.enabled=true`、`on_scoring_unavailable.action="allow"`、`default_score=0.3`
 - **断言**：`response.body.code == 0`；`response.body.results[0].score == 0.3`
+- **标记**：`[!可行性存疑: 当前集成环境的内部 gRPC mock 打分服务没有公开控制接口可按用例触发不可用]`
 
 ### TC-SCORE-008：打分超时且 fallback deny 时返回打分异常
 - **优先级**：P2 / 异常
@@ -140,6 +142,7 @@ coupon.RecommendRequest{
   - 请求覆盖：配置 `fallback.enabled=true`、`on_scoring_unavailable.action="allow"`、`default_score=0.3`
   - 前置操作：Redis 设置 `SET coupon:fallback:score:1001 0.9`
 - **断言**：`response.body.code == 0`；`response.body.results[0].score == 0.9`；`response.body.coupon != null`
+- **标记**：`[!可行性存疑: 当前集成环境的内部 gRPC mock 打分服务没有公开控制接口可按用例触发 RuntimeError]`
 
 ---
 

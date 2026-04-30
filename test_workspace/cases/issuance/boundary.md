@@ -21,9 +21,12 @@
   "external": 0,
   "reqId": "{{req_id}}",
   "score_threshold": 0.5,
-  "max_claim_per_request": {{max_claim_per_request}},
+  "max_claim_per_request": 1,
   "context": {},
-  "items": {{items}}
+  "items": [
+    {"item_id": "COUPON_ISSUE_A", "coupon_type": "discount", "value": 100, "min_spend": 5000, "expire_days": 7},
+    {"item_id": "COUPON_ISSUE_B", "coupon_type": "fixed", "value": 80, "min_spend": 3000, "expire_days": 7}
+  ]
 }
 ```
 

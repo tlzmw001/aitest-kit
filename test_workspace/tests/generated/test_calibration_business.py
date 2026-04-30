@@ -31,7 +31,7 @@ class TestCalibrationBusiness:
 
     def test_tc_cal_001(self, http_base_url, setup_calibration):
         """TC-CAL-001：线性校准按 kx+b 计算并 clamp"""
-        # SETUP: 前置操作：线性校准文件规则 conditions={"device":"mobile"}, k=1.2, b=0.1
+        # SETUP: 前置操作：线性校准文件规则 conditions={"device":"mobile"}、k=1.2、b=0.1
         setup_calibration(case_id="TC-CAL-001")
 
         resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_001", "req_cal_001"))
@@ -42,15 +42,14 @@ class TestCalibrationBusiness:
 
     def test_tc_cal_002(self, http_base_url, setup_calibration):
         """TC-CAL-002：分段和线性串联校准"""
-        # SETUP: 前置操作：分段文件配置 [0,0.3)->k=0.5,b=0.1, [0.3,0.7)->k=1.0,b=0.0, [0.7,1.0]->k=1.5,b=-0.2
-        # SETUP: 前置操作_2：线性规则 k=1.2, b=0.05
+        # SETUP: 前置操作：分段文件配置 [0,0.3)->k=0.5,b=0.1、[0.3,0.7)->k=1.0,b=0.0、[0.7,1.0]->k=1.5,b=-0.2
+        # SETUP: 前置操作_2：线性规则 k=1.2,b=0.05
         setup_calibration(case_id="TC-CAL-002")
 
         resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_002", "req_cal_002"))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
-        # 分段校准：k_pw/b_pw 由 s 所在分段决定
         if s < 0.3:
             k_pw, b_pw = 0.5, 0.1
         elif s < 0.7:
@@ -73,7 +72,7 @@ class TestCalibrationBusiness:
 
     def test_tc_cal_004(self, http_base_url, setup_calibration):
         """TC-CAL-004：无效 condition 字段不匹配"""
-        # SETUP: 前置操作：线性规则 conditions={"unknown":"x"}, k=2.0, b=0.0
+        # SETUP: 前置操作：线性规则 conditions={"unknown":"x"}、k=2.0,b=0.0
         setup_calibration(case_id="TC-CAL-004")
 
         resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_004", "req_cal_004"))
@@ -86,7 +85,7 @@ class TestCalibrationBusiness:
 
     def test_tc_cal_005(self, http_base_url, setup_calibration):
         """TC-CAL-005：HTTP 实验关闭时跳过校准"""
-        # SETUP: 环境覆盖：校准实验参数 {"enable_calibration":false,"calibration_dir":{"linear":"/tmp/cal_linear_001"}}
+        # SETUP: 环境覆盖：校准实验参数 {"enable_calibration":false,"calibration_dir":{"linear":"/tmp/cal_linear_001"}}，线性文件存在且匹配 device=mobile
         setup_calibration(case_id="TC-CAL-005")
 
         resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_005", "req_cal_005"))
@@ -97,9 +96,8 @@ class TestCalibrationBusiness:
 
     def test_tc_cal_006(self, http_base_url, setup_calibration):
         """TC-CAL-006：gRPC 根据 scene_id 选择 game 校准实验"""
-        # SETUP: 前置操作：scene_id=1001 的 calibration_exp_game 启用，线性规则 k=1.5,b=0.1
+        # SETUP: 前置操作：scene_id=1001 的 calibration_exp_game 启用，线性规则 k=1.5,b=0.1,conditions={"device":"mobile"}
         # SETUP: 请求覆盖：ad 校准实验配置不同参数
-        # TODO: gRPC call — 第一版使用 HTTP 替代验证
         setup_calibration(case_id="TC-CAL-006")
 
         resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_006", "req_cal_006"))
@@ -135,7 +133,7 @@ class TestCalibrationBusiness:
 
     def test_tc_cal_009(self, http_base_url, setup_calibration):
         """TC-CAL-009：条件字段不在白名单时规则不匹配"""
-        # SETUP: 前置操作：线性规则 conditions={"unknown_field":"x"}, k=2.0, b=0.0
+        # SETUP: 前置操作：线性规则 conditions={"unknown_field":"x"}，k=2.0,b=0.0
         setup_calibration(case_id="TC-CAL-009")
 
         resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_009", "req_cal_009"))
@@ -149,7 +147,7 @@ class TestCalibrationBusiness:
     def test_tc_cal_010(self, http_base_url, setup_calibration):
         """TC-CAL-010：仅命中线性校准"""
         # SETUP: 前置操作：只配置线性目录
-        # SETUP: 前置操作_2：规则 conditions={"device":"mobile"}, k=1.5, b=0.0
+        # SETUP: 前置操作_2：规则 conditions={"device":"mobile"}、k=1.5、b=0.0
         setup_calibration(case_id="TC-CAL-010")
 
         resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_010", "req_cal_010"))
@@ -161,7 +159,7 @@ class TestCalibrationBusiness:
     def test_tc_cal_011(self, http_base_url, setup_calibration):
         """TC-CAL-011：仅命中分段函数校准"""
         # SETUP: 前置操作：只配置分段目录
-        # SETUP: 前置操作_2：分段 [0,0.3)->k=0.5,b=0.1, [0.3,0.7)->k=1.0,b=0.0, [0.7,1.0]->k=1.5,b=-0.2
+        # SETUP: 前置操作_2：分段 [0,0.3)->k=0.5,b=0.1、[0.3,0.7)->k=1.0,b=0.0、[0.7,1.0]->k=1.5,b=-0.2，条件 device=mobile
         setup_calibration(case_id="TC-CAL-011")
 
         resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_011", "req_cal_011"))
@@ -175,10 +173,11 @@ class TestCalibrationBusiness:
         else:
             k, b = 1.5, -0.2
         assert cal == pytest.approx(max(0, min(1, k * s + b)), abs=1e-4)
+
     def test_tc_cal_012(self, http_base_url, setup_calibration):
         """TC-CAL-012：线性和分段都命中时先分段后线性"""
         # SETUP: 前置操作：分段同 TC-CAL-011
-        # SETUP: 前置操作_2：线性规则 k=1.2, b=0.05
+        # SETUP: 前置操作_2：线性规则 k=1.2,b=0.05
         # SETUP: 请求覆盖：二者都匹配 device=mobile
         setup_calibration(case_id="TC-CAL-012")
 
@@ -218,4 +217,3 @@ class TestCalibrationBusiness:
         assert cal == pytest.approx(max(0, min(1, 1.8 * s)), abs=1e-4)
 
 
-# TODO: setup_calibration fixture 需要在 conftest.py 中手写实现

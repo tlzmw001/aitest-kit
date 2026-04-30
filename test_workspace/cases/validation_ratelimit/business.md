@@ -18,10 +18,10 @@
   "scene_name": "game",
   "device": "mobile",
   "policy_id": "",
-  "external": {{external}},
+  "external": 0,
   "reqId": "{{req_id}}",
-  "score_threshold": {{score_threshold}},
-  "max_claim_per_request": {{max_claim_per_request}},
+  "score_threshold": 0.0,
+  "max_claim_per_request": 1,
   "context": {},
   "items": [
     {

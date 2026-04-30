@@ -14,7 +14,12 @@
       "Bash(python *)",
       "Skill(test-codegen)",
       "Bash(git checkout *)",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(git rm *)",
+      "Bash(git stash *)",
+      "Bash(cp test_workspace/tests/generated/test_calibration_business.py /tmp/emitter_business.py)",
+      "Bash(cp test_workspace/tests/generated/test_calibration_boundary.py /tmp/emitter_boundary.py)",
+      "Bash(echo \"EXIT: $?\")"
     ]
   }
 }

@@ -46,10 +46,9 @@ class ParseResult:
 # ---------------------------------------------------------------------------
 
 _COLON = re.compile(r"[：:]")
-_TC_HEADER = re.compile(r"^###\s+(TC-[A-Z]+-\d+)[：:]\s*(.+)")
+_TC_HEADER = re.compile(r"^###\s+(TC-[A-Z0-9]+-\d+)[：:]\s*(.+)")
 _SECTION_HEADER = re.compile(r"^##\s+[一二三四五六七八九十]+[、.．]\s*(.+)")
 _FIELD_LINE = re.compile(r"^-\s+\*\*(.+?)\*\*[：:]\s*(.*)")
-_LIST_ITEM = re.compile(r"^\s+-\s+(.*)")
 
 
 def _split_assertions(raw: str) -> list[str]:
