@@ -27,12 +27,8 @@ aitest_config/          # 项目级配置
   knowledge-build/      #   测试知识库构建/更新
   test-design/          #   测试用例设计
   test-codegen/         #   Markdown → pytest 代码生成（emitter + AI 补全）
-    SKILL.md            #     框架层：通用流程
-    project_context.md  #     项目层：断言映射、路径、协议偏好
   test-fix/             #   用例修正 + 经验沉淀
   emitter-build/        #   从已验证 .py 提取确定性模板
-    SKILL.md            #     框架层：通用提取流程
-    project_context.md  #     项目层：当前项目断言模式表
 ```
 
 ## 常用命令
@@ -121,6 +117,7 @@ emitter-build ── 从已验证的 .py 提取确定性模板到 emitter
 - 用例存放在 `test_workspace/cases/{模块名}/` 下，未指定时先询问用户
 - 模块 fixture 按模块拆分到 `test_workspace/tests/fixtures/{module}.py`，conftest.py 只放全局 fixture
 - codegen_profile 存放在 `test_workspace/tests/fixtures/codegen_profile_{module}.md`，与 fixture 文件同目录
+- 项目结构或流程发生变更时，检查是否需要同步更新 `CLAUDE.md` 和 `README.md`，并询问用户是否需要更新 `docs/usebook/` 下的文档
 
 ## 测试执行注意事项
 
@@ -159,9 +156,9 @@ codegen 管线分三层，换项目时只改配置层，不改框架层：
 │  - 通用 helpers (http.py, redis_ops.py)              │
 │  - skill 框架模板 (SKILL.md)                         │
 ├─────────────────────────────────────────────────────┤
-│  项目配置层（换项目重写，YAML/Markdown 格式）           │
+│  项目配置层（换项目重写，YAML 格式）                    │
+│  - aitest_config/config.yaml                        │
 │  - aitest_config/project_config.yaml                │
-│  - skill project_context.md                         │
 │  - grpc_ops.py（项目专属 protobuf 封装）              │
 ├─────────────────────────────────────────────────────┤
 │  模块配置层（每模块一份）                              │
@@ -172,8 +169,8 @@ codegen 管线分三层，换项目时只改配置层，不改框架层：
 
 ### 首次接入新项目的 codegen 配置
 
-1. 创建 `aitest_config/project_config.yaml`：声明 helper import 路径、API 路径、变量映射、模块缩写、内置断言规则
-2. 创建各 skill 的 `project_context.md`：声明项目专属的断言映射表、路径约定、协议偏好
+1. 创建 `aitest_config/config.yaml`：声明路径映射、服务地址、协议偏好、已知限制
+2. 创建 `aitest_config/project_config.yaml`：声明 helper import 路径、API 路径、变量映射、模块缩写、内置断言规则、模块映射
 3. 每个模块创建 `codegen_profile_{module}.md`：声明 module_type、assertion_rules、request_overrides 等
 4. 每个模块创建 `fixtures/{module}.py`：实现 setup/teardown 逻辑
 

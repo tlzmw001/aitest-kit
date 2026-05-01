@@ -27,7 +27,7 @@ effort: high
 
 1. **项目配置** — 检查 `aitest_config/project_config.yaml` 是否存在且匹配当前项目（helper_import、api_path、var_map、module_abbrevs、builtin_assertion_rules）
 2. **如果不存在**，参考现有 project_config.yaml 创建一份
-3. **project_context.md** — 读取本 skill 目录下的 `project_context.md`，了解当前项目的断言模式表、路径约定、协议偏好、模块分类
+3. **项目配置** — 读取 `aitest_config/config.yaml`（路径、协议偏好、已知限制）和 `aitest_config/project_config.yaml`（断言规则、模块分类）
 4. **提醒用户**：首个模块的 UNPARSED 率可能较高，建议选断言模式最典型的模块作为第一个
 
 ## 前置：运行 parser
@@ -40,7 +40,7 @@ effort: high
 
 ## 前置：读取 helpers API
 
-读取 `project_context.md`（本 skill 目录下）获取项目路径表，然后读取以下文件了解可用的 fixtures 和 helper 函数签名：
+读取 `aitest_config/config.yaml` 获取项目路径，然后读取以下文件了解可用的 fixtures 和 helper 函数签名：
 
 - 全局 conftest.py
 - 模块 fixture（如果已存在）
@@ -137,14 +137,14 @@ fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供，通过 conftest
 | `[manual]` 标记 | `# MANUAL CHECK: {原文}` |
 | 无法翻译 | `# UNPARSED ASSERTION: {原文}` |
 
-项目专属断言模式见 `project_context.md` 的"项目断言模式表"。
+项目专属断言模式见 `aitest_config/project_config.yaml` 的 `builtin_assertion_rules`。
 
 `round(..., 4)` -> `pytest.approx(..., abs=1e-4)`。`clamp(x)` -> `max(0, min(1, x))`。
 
 ### 请求生成
 
 1. 从共享配置取基础请求体，场景变量 `请求覆盖` 合并
-2. gRPC 用例通过场景变量中的 `协议：gRPC` 标识，具体处理方式见 `project_context.md` 的"协议偏好"
+2. gRPC 用例通过场景变量中的 `协议：gRPC` 标识，具体处理方式见 `aitest_config/config.yaml` 的 `protocols`
 3. `{{user_id}}` -> `u_{module}_{tc_number}`，`{{req_id}}` -> `req_{module}_{tc_number}`
 
 ### 标记处理

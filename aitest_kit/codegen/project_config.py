@@ -1,8 +1,11 @@
-"""Project-level codegen configuration.
+"""Project-level codegen config schema and loader.
 
-The emitter engine imports this module instead of hard-coding project paths
-and assertion rules. A project can override the defaults with
-aitest_config/project_config.yaml.
+This module is not the project configuration edit point. Project-specific
+codegen configuration should live in aitest_config/project_config.yaml.
+
+The fallback data below is only for compatibility when that YAML file is
+missing or omits optional fields; it is not the source of truth for this
+repository's active project configuration.
 """
 from __future__ import annotations
 
@@ -35,7 +38,7 @@ class ProjectConfig:
     module_types: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
-_FALLBACK_DATA: dict[str, Any] = {
+FALLBACK_PROJECT_CONFIG_DATA: dict[str, Any] = {
     "helper_import": "from test_workspace.tests.helpers import http as http_helper",
     "grpc_helper_import": "from test_workspace.tests.helpers import grpc_ops",
     "api_path": "/api/v1/recommend",
@@ -159,21 +162,21 @@ def _rules_from(raw_rules: Any) -> list[AssertionRule]:
 
 def _project_from(data: dict[str, Any]) -> ProjectConfig:
     return ProjectConfig(
-        helper_import=data.get("helper_import", _FALLBACK_DATA["helper_import"]),
-        api_path=data.get("api_path", _FALLBACK_DATA["api_path"]),
-        helper_call=data.get("helper_call", _FALLBACK_DATA["helper_call"]),
-        grpc_helper_import=data.get("grpc_helper_import", _FALLBACK_DATA["grpc_helper_import"]),
-        grpc_helper_call=data.get("grpc_helper_call", _FALLBACK_DATA["grpc_helper_call"]),
-        var_map=dict(data.get("var_map") or _FALLBACK_DATA["var_map"]),
-        module_abbrevs=dict(data.get("module_abbrevs") or _FALLBACK_DATA["module_abbrevs"]),
+        helper_import=data.get("helper_import", FALLBACK_PROJECT_CONFIG_DATA["helper_import"]),
+        api_path=data.get("api_path", FALLBACK_PROJECT_CONFIG_DATA["api_path"]),
+        helper_call=data.get("helper_call", FALLBACK_PROJECT_CONFIG_DATA["helper_call"]),
+        grpc_helper_import=data.get("grpc_helper_import", FALLBACK_PROJECT_CONFIG_DATA["grpc_helper_import"]),
+        grpc_helper_call=data.get("grpc_helper_call", FALLBACK_PROJECT_CONFIG_DATA["grpc_helper_call"]),
+        var_map=dict(data.get("var_map") or FALLBACK_PROJECT_CONFIG_DATA["var_map"]),
+        module_abbrevs=dict(data.get("module_abbrevs") or FALLBACK_PROJECT_CONFIG_DATA["module_abbrevs"]),
         builtin_assertion_rules=_rules_from(data.get("builtin_assertion_rules")),
-        named_templates=set(data.get("named_templates") or _FALLBACK_DATA["named_templates"]),
-        module_types=dict(data.get("module_types") or _FALLBACK_DATA["module_types"]),
+        named_templates=set(data.get("named_templates") or FALLBACK_PROJECT_CONFIG_DATA["named_templates"]),
+        module_types=dict(data.get("module_types") or FALLBACK_PROJECT_CONFIG_DATA["module_types"]),
     )
 
 
 def fallback_project_config() -> ProjectConfig:
-    return _project_from(_FALLBACK_DATA)
+    return _project_from(FALLBACK_PROJECT_CONFIG_DATA)
 
 
 def load_project_config(path: str | Path = "aitest_config/project_config.yaml") -> ProjectConfig:
@@ -190,7 +193,7 @@ def load_project_config(path: str | Path = "aitest_config/project_config.yaml") 
     if not isinstance(raw, dict):
         raise RuntimeError(f"项目 codegen 配置 {config_path} 必须是 YAML mapping")
 
-    return _project_from({**_FALLBACK_DATA, **raw})
+    return _project_from({**FALLBACK_PROJECT_CONFIG_DATA, **raw})
 
 
 DEFAULT_PROJECT = load_project_config()

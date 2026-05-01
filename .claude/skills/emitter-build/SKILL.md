@@ -22,7 +22,7 @@ effort: high
 首次在新项目中使用 emitter 时：
 
 1. 检查 `aitest_config/project_config.yaml` 是否存在且匹配当前项目
-2. 读取本 skill 目录下的 `project_context.md`，了解当前项目的断言模式清单和分类规则
+2. 读取 `aitest_config/project_config.yaml`，了解当前项目的断言规则和模块分类
 3. 如果 project_config.yaml 不存在，需要先创建
 
 ## 前置：读取输入
@@ -65,7 +65,7 @@ effort: high
 | 可行性存疑 | `[!可行性存疑` 在 markers 中 | 跳过不生成，末尾 `# SKIPPED:` |
 | 无法解析 | 以上都不匹配 | `# UNPARSED ASSERTION: {原文}` |
 
-项目专属模式的完整清单见 `project_context.md`。
+项目专属模式的完整清单见 `aitest_config/project_config.yaml` 的 `builtin_assertion_rules`。
 
 **模块特有模式**（写入 codegen_profile）：
 
@@ -101,13 +101,19 @@ assertion_rules:
 
 ### 第四步：分类产出
 
+分类判断规则：
+
+- 在 2+ 模块出现的断言模式 → 通用，写入 `project_config.yaml` 的 `builtin_assertion_rules`
+- 只在 1 个模块出现的断言模式 → 模块特有，写入该模块的 codegen_profile
+- 需要生成 if/elif/else 块的复杂模式 → named_template（Python 实现）
+- 简单的"匹配文本 → 替换生成代码" → YAML assertion_rule
+
 根据分析结果分别更新：
 
 **更新 project_config.yaml 的情况**：
 - 发现新的通用断言模式（在 2+ 模块出现）→ 添加到 builtin_assertion_rules
 - 发现现有通用规则的 bug（生成代码与验证通过的 .py 不一致）→ 修正规则
 - 文件级模板有新的通用模式 → 更新模板
-- 同步更新 `project_context.md` 的断言模式清单
 
 **更新 codegen_profile 的情况**：
 - 发现模块特有断言模式 → 添加到 profile 的 `## emitter 规则` 章节
@@ -122,6 +128,12 @@ assertion_rules:
 2. `python3 -c "import ast; ast.parse(open('file').read())"` 验证语法
 3. `diff` 对比重新生成的 .py 与原 .py，差异应仅限于空行/注释格式
 4. 如果有实质性差异，说明规则提取不完整 → 回到第二步补充
+
+最终验证标准：
+
+1. `aitest codegen --all --check` 通过（生成结果不变）
+2. `pytest test_workspace/tests/generated/ -v` 全部通过
+3. emitter.py 行数 < 500
 
 ## 输出摘要
 

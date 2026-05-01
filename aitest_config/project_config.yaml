@@ -1,16 +1,36 @@
-# 项目级 codegen 配置。
-# 换项目时只改这个文件和各模块 codegen_profile，不改 emitter engine。
+# ============================================================
+# 项目级 codegen 配置
+# ============================================================
+# emitter / parser 生成 pytest 代码时读取本文件。
+# 换项目时只改这个文件 + 各模块 codegen_profile，不改 emitter engine。
 
+# ------------------------------------------------------------
+# 一、生成代码的 import 和调用方式
+# ------------------------------------------------------------
+# 生成的 .py 文件顶部会插入这些 import 语句
 helper_import: "from test_workspace.tests.helpers import http as http_helper"
 grpc_helper_import: "from test_workspace.tests.helpers import grpc_ops"
+
+# 默认 API 路径（standard_recommend 模块使用，其他模块在 codegen_profile 覆盖）
 api_path: "/api/v1/recommend"
+
+# 生成的请求调用语句（HTTP / gRPC）
 helper_call: "http_helper.post"
 grpc_helper_call: "grpc_ops.recommend"
 
+# ------------------------------------------------------------
+# 二、断言中的变量简写映射
+# ------------------------------------------------------------
+# 断言规则中的短变量名 → 生成代码中的完整表达式
+# 例：断言写 `cal == ...` → 生成 `cal = resp["results"][0]["calibrated_score"]`
 var_map:
   s: 'resp["results"][0]["score"]'
   cal: 'resp["results"][0]["calibrated_score"]'
 
+# ------------------------------------------------------------
+# 三、模块缩写表
+# ------------------------------------------------------------
+# 用于生成 TC ID（如 TC-CAL-001）和函数名前缀
 module_abbrevs:
   calibration: cal
   ab_experiment: ab
@@ -23,17 +43,25 @@ module_abbrevs:
   validation_ratelimit: val
   e2e: e2e
 
+# ------------------------------------------------------------
+# 四、命名模板（Python 实现的复杂断言生成器）
+# ------------------------------------------------------------
+# 当断言逻辑需要 if/elif/else 等控制流时，用 named_template 而非 YAML 规则
 named_templates:
   - piecewise_cascade
   - piecewise_only
   - skip
 
+# ------------------------------------------------------------
+# 五、模块类型定义
+# ------------------------------------------------------------
+# codegen_profile 头部声明 module_type，emitter 根据类型校验必需字段
 module_types:
   standard_recommend:
     description: "标准推荐接口模块"
   multi_endpoint:
     description: "多端点服务模块"
-    requires: [case_bodies]
+    requires: [case_bodies]           # codegen_profile 必须提供 case_bodies
   subprocess_capture:
     description: "需要隔离进程捕获输出"
     requires: [case_bodies]
@@ -41,6 +69,44 @@ module_types:
     description: "需要隔离服务实例"
     requires: [case_bodies]
 
+# ------------------------------------------------------------
+# 六、模块注册表
+# ------------------------------------------------------------
+# 每个模块的类型和特殊说明；新增模块时在此注册
+modules:
+  calibration:
+    module_type: standard_recommend
+  ab_experiment:
+    module_type: standard_recommend
+    notes: "+ request_overrides"
+  feature_scoring:
+    module_type: standard_recommend
+    notes: "+ request_overrides"
+  issuance:
+    module_type: standard_recommend
+    notes: "+ case_bodies（多请求/查询）"
+  scene_routing:
+    module_type: standard_recommend
+    notes: "+ request_overrides"
+  ab_service:
+    module_type: multi_endpoint
+    notes: "独立 AB 服务，多端点 CRUD"
+  logging:
+    module_type: subprocess_capture
+    notes: "需要隔离子进程采集日志"
+  rough_ranking:
+    module_type: isolated_service
+    notes: "需要隔离服务 + scoring proxy"
+  validation_ratelimit:
+    module_type: isolated_service
+    notes: "限流用例需要隔离服务 + 低 QPS 配置"
+
+# ------------------------------------------------------------
+# 七、内置断言规则
+# ------------------------------------------------------------
+# emitter 用正则匹配 Markdown 断言文本，套用模板生成 pytest assert 语句。
+# 匹配优先级：codegen_profile assertion_rules > 本表 > named_templates。
+# 无法匹配的断言输出为 # UNPARSED ASSERTION，由 AI 补写。
 builtin_assertion_rules:
   - name: status_code
     regex: '^response\.(?:body\.)?code\s*==\s*(?P<value>\d+)'
