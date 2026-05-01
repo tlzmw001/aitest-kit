@@ -29,6 +29,34 @@ e2e 用例覆盖主服务、AB 服务、Redis 和打分服务的完整链路。H
 ## emitter 规则
 
 ```yaml
+request_overrides:
+  TC-E2E-002:
+    scene_name: ad
+    device: pc
+    external: 1
+    items:
+      - item_id: COUPON_SHIP_001
+        coupon_type: free_shipping
+        value: 1
+        min_spend: 0
+        expire_days: 7
+  TC-E2E-003:
+    policy_id: policy_fallback_001
+    score_threshold: 0.4
+  TC-E2E-006:
+    scene_name: ad
+    device: pc
+    external: 1
+    items:
+      - item_id: COUPON_SHIP_001
+        coupon_type: free_shipping
+        value: 1
+        min_spend: 0
+        expire_days: 7
+  TC-E2E-007:
+    policy_id: policy_fallback_001
+    score_threshold: 0.4
+
 assertion_rules:
   - pattern: 'http_status == 200'
     template: 'assert isinstance(resp, dict)'

@@ -5,6 +5,26 @@ from test_workspace.tests.helpers import http as http_helper
 from test_workspace.tests.helpers import grpc_ops
 
 
+BASE_REQUEST = {
+    "user_id": None,
+    "scene_name": "game",
+    "device": "mobile",
+    "policy_id": "",
+    "external": 0,
+    "reqId": None,
+    "score_threshold": 0.2,
+    "max_claim_per_request": 1,
+    "context": {},
+    "items": [{"item_id": "COUPON_ACT_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
+}
+
+
+def _req(user_id: str, req_id: str, **overrides) -> dict:
+    body = {**BASE_REQUEST, "user_id": user_id, "reqId": req_id}
+    body.update(overrides)
+    return body
+
+
 class TestE2eBoundary:
     """e2e 边界测试用例"""
 
@@ -63,7 +83,7 @@ class TestE2eBoundary:
         # SETUP: 请求覆盖：user_id="u_e2e_external_skip_006"、scene_name="ad"、device="pc"、external=1、score_threshold=0.2、max_claim_per_request=1、items 只包含 COUPON_SHIP_001
         setup_e2e(case_id="TC-E2E-006")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_e2e_006", "req_e2e_006"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_e2e_006", "req_e2e_006", **{"scene_name": "ad", "device": "pc", "external": 1, "items": [{"item_id": "COUPON_SHIP_001", "coupon_type": "free_shipping", "value": 1, "min_spend": 0, "expire_days": 7}]}))
         # UNPARSED ASSERTION: 异常链路需要同时断言业务响应和发放记录状态
         # UNPARSED ASSERTION: 成功链路需要断言推荐响应与用户券查询结果一致。
         assert isinstance(resp, dict)
@@ -84,7 +104,7 @@ class TestE2eBoundary:
         # SETUP: 请求覆盖_2：推荐成功后调用 HTTP GET /api/v1/coupons/u_e2e_shared_state_007
         setup_e2e(case_id="TC-E2E-007")
 
-        resp = grpc_ops.recommend(grpc_target, _req("u_e2e_007", "req_e2e_007"))
+        resp = grpc_ops.recommend(grpc_target, _req("u_e2e_007", "req_e2e_007", **{"policy_id": "policy_fallback_001", "score_threshold": 0.4}))
         # UNPARSED ASSERTION: 异常链路需要同时断言业务响应和发放记录状态
         # UNPARSED ASSERTION: 成功链路需要断言推荐响应与用户券查询结果一致。
         assert resp["code"] == 0

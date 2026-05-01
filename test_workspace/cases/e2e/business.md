@@ -11,7 +11,23 @@
 **接口**：`POST /api/v1/recommend` / `GET /api/v1/coupons/{user_id}` / `GET /api/v1/admin/stock/{coupon_id}` / `gRPC coupon.CouponService/Recommend`
 
 **基础请求体（HTTP）**：
-`{"user_id":"{{user_id}}","scene_name":"{{scene_name}}","device":"{{device}}","policy_id":"{{policy_id}}","external":{{external}},"reqId":"{{req_id}}","score_threshold":{{score_threshold}},"max_claim_per_request":{{max_claim_per_request}},"context":{{context}},"items":{{items}}}`
+
+```json
+{
+  "user_id": "{{user_id}}",
+  "scene_name": "game",
+  "device": "mobile",
+  "policy_id": "",
+  "external": 0,
+  "reqId": "{{req_id}}",
+  "score_threshold": 0.2,
+  "max_claim_per_request": 1,
+  "context": {},
+  "items": [
+    {"item_id": "COUPON_ACT_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}
+  ]
+}
+```
 
 **基础请求体（gRPC）**：
 `RecommendRequest(user_id="{{user_id}}", scene_name="{{scene_name}}", device="{{device}}", policy_id="{{policy_id}}", context={{context}}, items={{items}}, score_threshold={{score_threshold}}, max_claim_per_request={{max_claim_per_request}}, external={{external}}, req_id="{{req_id}}")`

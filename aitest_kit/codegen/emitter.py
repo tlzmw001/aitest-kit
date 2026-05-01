@@ -6,444 +6,31 @@ codegen_profile YAML blocks; everything else uses built-in patterns.
 """
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from aitest_kit.codegen.parser import ParseResult, SharedConfig, TestCase, parse_case_file
-
-
-# ---------------------------------------------------------------------------
-# Project-level configuration (override when switching projects)
-# ---------------------------------------------------------------------------
-
-@dataclass
-class ProjectConfig:
-    helper_import: str = "from test_workspace.tests.helpers import http as http_helper"
-    api_path: str = "/api/v1/recommend"
-    helper_call: str = "http_helper.post"
-    grpc_helper_import: str = "from test_workspace.tests.helpers import grpc_ops"
-    grpc_helper_call: str = "grpc_ops.recommend"
-    var_map: dict[str, str] = field(default_factory=lambda: {
-        "s": 'resp["results"][0]["score"]',
-        "cal": 'resp["results"][0]["calibrated_score"]',
-    })
-    module_abbrevs: dict[str, str] = field(default_factory=lambda: {
-        "calibration": "cal",
-        "ab_experiment": "ab",
-        "ab_service": "abs",
-        "feature_scoring": "feat",
-        "issuance": "issue",
-        "logging": "log",
-        "rough_ranking": "rank",
-        "scene_routing": "route",
-        "validation_ratelimit": "val",
-        "e2e": "e2e",
-    })
-
-
-DEFAULT_PROJECT = ProjectConfig()
-
-
-# ---------------------------------------------------------------------------
-# Profile rule loading
-# ---------------------------------------------------------------------------
-
-@dataclass
-class AssertionRule:
-    pattern: str
-    template: str
-    extract_vars: list[str] = field(default_factory=list)
-    params: dict[str, Any] = field(default_factory=dict)
-
-
-def _load_profile_yaml(profile_path: str | Path) -> dict:
-    """Extract the first YAML block from a codegen_profile."""
-    path = Path(profile_path)
-    if not path.exists():
-        return {}
-
-    text = path.read_text(encoding="utf-8")
-    m = re.search(
-        r"```ya?ml\s*\n(.*?)```",
-        text,
-        re.DOTALL,
-    )
-    if not m:
-        return {}
-
-    try:
-        import yaml
-        data = yaml.safe_load(m.group(1))
-    except Exception:
-        return {}
-
-    return data if isinstance(data, dict) else {}
-
-
-def load_profile_rules(profile_path: str | Path) -> list[AssertionRule]:
-    """Extract assertion_rules from a codegen_profile's ```yaml block."""
-    data = _load_profile_yaml(profile_path)
-    if not data:
-        return []
-
-    rules = []
-    for item in data.get("assertion_rules", []):
-        rules.append(AssertionRule(
-            pattern=item.get("pattern", ""),
-            template=item.get("template", ""),
-            extract_vars=item.get("extract_vars", []),
-            params=item.get("params", {}),
-        ))
-    return rules
-
-
-def load_profile_request_overrides(profile_path: str | Path) -> dict[str, dict[str, Any]]:
-    """Extract explicit case-level request overrides from a profile YAML block."""
-    data = _load_profile_yaml(profile_path)
-    raw = data.get("request_overrides", {})
-    if not isinstance(raw, dict):
-        return {}
-
-    result: dict[str, dict[str, Any]] = {}
-    for case_id, overrides in raw.items():
-        if isinstance(case_id, str) and isinstance(overrides, dict):
-            result[case_id] = dict(overrides)
-    return result
-
-
-def load_profile_extra_imports(profile_path: str | Path) -> list[str]:
-    """Extract extra import lines from a profile YAML block."""
-    data = _load_profile_yaml(profile_path)
-    raw = data.get("extra_imports", [])
-    if not isinstance(raw, list):
-        return []
-    return [item for item in raw if isinstance(item, str) and item.strip()]
-
-
-def load_profile_case_fixtures(profile_path: str | Path) -> dict[str, list[str]]:
-    """Extract per-case fixture signatures from a profile YAML block."""
-    data = _load_profile_yaml(profile_path)
-    raw = data.get("case_fixtures", {})
-    if not isinstance(raw, dict):
-        return {}
-
-    result: dict[str, list[str]] = {}
-    for case_id, fixtures in raw.items():
-        if not isinstance(case_id, str) or not isinstance(fixtures, list):
-            continue
-        result[case_id] = [
-            item for item in fixtures
-            if isinstance(item, str) and item.strip()
-        ]
-    return result
-
-
-def load_profile_case_bodies(profile_path: str | Path) -> dict[str, list[str]]:
-    """Extract per-case test body lines from a profile YAML block."""
-    data = _load_profile_yaml(profile_path)
-    raw = data.get("case_bodies", {})
-    if not isinstance(raw, dict):
-        return {}
-
-    result: dict[str, list[str]] = {}
-    for case_id, body in raw.items():
-        if not isinstance(case_id, str):
-            continue
-        if isinstance(body, str):
-            result[case_id] = body.splitlines()
-        elif isinstance(body, list):
-            result[case_id] = [
-                item for item in body
-                if isinstance(item, str)
-            ]
-    return result
-
-
-# ---------------------------------------------------------------------------
-# Built-in assertion patterns (priority order, first match wins)
-# ---------------------------------------------------------------------------
-
-_BACKTICK = re.compile(r"`([^`]+)`")
-
-
-def _strip_bt(s: str) -> str:
-    """Remove backticks from assertion text."""
-    return _BACKTICK.sub(r"\1", s).strip()
-
-
-def _extract_number(s: str) -> str | None:
-    m = re.search(r"[-+]?\d*\.?\d+", s)
-    return m.group(0) if m else None
-
-
-@dataclass
-class BuiltinPattern:
-    name: str
-    match: Any  # callable(assertion_text) -> dict | None
-    render: Any  # callable(match_dict, ctx) -> list[str]
-
-
-def _match_status_code(text: str) -> dict | None:
-    t = _strip_bt(text)
-    m = re.match(r"response\.(?:body\.)?code\s*==\s*(\d+)", t)
-    if m:
-        return {"value": int(m.group(1))}
-    m = re.match(r"response\.status_code\s*==\s*(\d+)", t)
-    if m:
-        return {"value": int(m.group(1)), "http_status": True}
-    m = re.match(r"status_code\s*==\s*(\d+)", t)
-    if m:
-        return {"value": int(m.group(1)), "http_status": True}
-    return None
-
-
-def _render_status_code(d: dict, ctx: dict) -> list[str]:
-    if d.get("http_status"):
-        return [f'assert resp.status_code == {d["value"]}']
-    return [f'assert resp["code"] == {d["value"]}']
-
-
-def _match_full_body(text: str) -> dict | None:
-    t = _strip_bt(text)
-    m = re.match(r"response\.body\s*==\s*(.+)", t)
-    if m:
-        return {"value": m.group(1).strip()}
-    return None
-
-
-def _render_full_body(d: dict, ctx: dict) -> list[str]:
-    return [f'assert resp == {d["value"]}']
-
-
-def _match_coupon_null(text: str) -> dict | None:
-    t = _strip_bt(text)
-    if re.match(r"coupon\s*==\s*null", t, re.IGNORECASE):
-        return {}
-    if re.match(r"response\.body\.coupon\s*==\s*null", t, re.IGNORECASE):
-        return {}
-    return None
-
-
-def _render_coupon_null(d: dict, ctx: dict) -> list[str]:
-    return ['assert resp["coupon"] is None']
-
-
-def _match_coupon_top(text: str) -> dict | None:
-    t = _strip_bt(text)
-    if "coupon.item_id" in t and "top_result" in t:
-        return {}
-    if "coupon" in t and "item_id" in t and "max" in t:
-        return {}
-    return None
-
-
-def _render_coupon_top(d: dict, ctx: dict) -> list[str]:
-    return [
-        'assert resp["coupon"]["item_id"] == '
-        'max(resp["results"], key=lambda r: r["score"])["item_id"]'
-    ]
-
-
-def _match_set_match(text: str) -> dict | None:
-    t = _strip_bt(text)
-    m = re.match(r"set\(response\.(.+?)\)\s*==\s*(\{.+\})", t)
-    if m:
-        return {"path": m.group(1), "expected": m.group(2)}
-    return None
-
-
-def _render_set_match(d: dict, ctx: dict) -> list[str]:
-    path_parts = d["path"].replace("[*]", "").split(".")
-    accessor = "".join(f'["{p}"]' for p in path_parts if p)
-    item_var = "r"
-    return [f'assert {{{item_var}{accessor} for {item_var} in resp["results"]}} == {d["expected"]}']
-
-
-def _match_length(text: str) -> dict | None:
-    t = _strip_bt(text)
-    m = re.match(r"len\((.+?)\)\s*==\s*(\d+)", t)
-    if m:
-        return {"expr": m.group(1), "n": int(m.group(2))}
-    return None
-
-
-def _render_length(d: dict, ctx: dict) -> list[str]:
-    return [f'assert len({d["expr"]}) == {d["n"]}']
-
-
-def _match_linear_cal(text: str) -> dict | None:
-    t = _strip_bt(text)
-    m = re.match(
-        r"cal\s*==\s*round\(clamp\(([0-9.]+)\s*\*\s*s\s*(?:\+\s*([0-9.]+))?\)\s*,\s*4\)",
-        t,
-    )
-    if m:
-        k = m.group(1)
-        b = m.group(2) or "0"
-        return {"k": k, "b": b}
-    # simpler form: cal == round(clamp(k * s), 4)
-    m = re.match(r"cal\s*==\s*round\(clamp\(([0-9.]+)\s*\*\s*s\)\s*,\s*4\)", t)
-    if m:
-        return {"k": m.group(1), "b": "0"}
-    return None
-
-
-def _render_linear_cal(d: dict, ctx: dict) -> list[str]:
-    k, b = d["k"], d["b"]
-    expr = f'{k} * s + {b}' if b != "0" else f'{k} * s'
-    return [f'assert cal == pytest.approx(max(0, min(1, {expr})), abs=1e-4)']
-
-
-def _match_no_cal(text: str) -> dict | None:
-    t = _strip_bt(text)
-    if re.match(r"cal\s*==\s*s\b", t):
-        return {}
-    return None
-
-
-def _render_no_cal(d: dict, ctx: dict) -> list[str]:
-    return ['assert cal == pytest.approx(s)']
-
-
-def _match_field_equality(text: str) -> dict | None:
-    """Generic response.xxx == value."""
-    t = _strip_bt(text)
-    m = re.match(r"response\.(?:body\.)?(\S+)\s*==\s*(.+)", t)
-    if m:
-        return {"path": m.group(1), "value": m.group(2).strip()}
-    return None
-
-
-def _response_path_accessor(path: str) -> str:
-    """Render a response path like results[0].score as Python accessors."""
-    accessor = "resp"
-    for part in path.split("."):
-        if not part:
-            continue
-        m = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)\[(\d+)\]", part)
-        if m:
-            accessor += f'["{m.group(1)}"][{m.group(2)}]'
-        elif part.startswith("["):
-            accessor += part
-        else:
-            accessor += f'["{part}"]'
-    return accessor
-
-
-def _render_field_equality(d: dict, ctx: dict) -> list[str]:
-    return [f'assert {_response_path_accessor(d["path"])} == {d["value"]}']
-
-
-def _match_comparison(text: str) -> dict | None:
-    t = _strip_bt(text)
-    m = re.match(r"response\.(?:body\.)?(\S+)\s*(>=|<=|>|<)\s*(.+)", t)
-    if m:
-        return {"path": m.group(1), "op": m.group(2), "value": m.group(3).strip()}
-    return None
-
-
-def _render_comparison(d: dict, ctx: dict) -> list[str]:
-    return [f'assert {_response_path_accessor(d["path"])} {d["op"]} {d["value"]}']
-
-
-BUILTIN_PATTERNS: list[BuiltinPattern] = [
-    BuiltinPattern("status_code", _match_status_code, _render_status_code),
-    BuiltinPattern("full_body", _match_full_body, _render_full_body),
-    BuiltinPattern("coupon_null", _match_coupon_null, _render_coupon_null),
-    BuiltinPattern("coupon_top", _match_coupon_top, _render_coupon_top),
-    BuiltinPattern("set_match", _match_set_match, _render_set_match),
-    BuiltinPattern("length", _match_length, _render_length),
-    BuiltinPattern("linear_cal", _match_linear_cal, _render_linear_cal),
-    BuiltinPattern("no_cal", _match_no_cal, _render_no_cal),
-    BuiltinPattern("comparison", _match_comparison, _render_comparison),
-    BuiltinPattern("field_equality", _match_field_equality, _render_field_equality),
-]
-
-
-def _render_piecewise_segments(segments: list, var_k: str = "k_pw", var_b: str = "b_pw") -> list[str]:
-    """Render if/elif/else block for piecewise segments."""
-    lines = []
-    for i, seg in enumerate(segments):
-        threshold, k, b = seg[0], seg[1], seg[2]
-        if i == 0:
-            lines.append(f"if s < {threshold}:")
-            lines.append(f"    {var_k}, {var_b} = {k}, {b}")
-        elif i < len(segments) - 1:
-            lines.append(f"elif s < {threshold}:")
-            lines.append(f"    {var_k}, {var_b} = {k}, {b}")
-        else:
-            lines.append("else:")
-            lines.append(f"    {var_k}, {var_b} = {k}, {b}")
-    return lines
-
-
-def _render_named_template(name: str, params: dict) -> list[str]:
-    """Render a named template with params from profile rules."""
-    segments = params.get("segments", [])
-
-    if name == "piecewise_cascade":
-        linear_k = params.get("linear_k", 1.0)
-        linear_b = params.get("linear_b", 0.0)
-        lines = _render_piecewise_segments(segments, "k_pw", "b_pw")
-        lines.append(f"mid = max(0, min(1, k_pw * s + b_pw))")
-        lines.append(
-            f"assert cal == pytest.approx(max(0, min(1, {linear_k} * mid + {linear_b})), abs=1e-4)"
-        )
-        return lines
-
-    if name == "piecewise_only":
-        lines = _render_piecewise_segments(segments, "k", "b")
-        lines.append("assert cal == pytest.approx(max(0, min(1, k * s + b)), abs=1e-4)")
-        return lines
-
-    if name == "skip":
-        return []
-
-    return [f"# UNKNOWN TEMPLATE: {name}"]
-
-
-NAMED_TEMPLATES = {"piecewise_cascade", "piecewise_only", "skip"}
-
-
-# ---------------------------------------------------------------------------
-# Assertion resolver
-# ---------------------------------------------------------------------------
-
-def resolve_assertion(
-    text: str,
-    profile_rules: list[AssertionRule],
-    ctx: dict,
-) -> tuple[list[str], str]:
-    """Resolve an assertion text to code lines.
-
-    Returns (code_lines, pattern_name).
-    pattern_name is "UNPARSED" if no rule matched.
-    """
-    clean = _strip_bt(text)
-
-    # Profile rules take priority
-    for rule in profile_rules:
-        pat = _strip_bt(rule.pattern)
-        if pat and pat in clean:
-            if rule.template.strip() in NAMED_TEMPLATES:
-                lines = _render_named_template(rule.template.strip(), rule.params)
-                return lines, f"profile:{rule.template.strip()}"
-            lines = []
-            for var_line in rule.extract_vars:
-                lines.append(var_line)
-            lines.append(rule.template.strip())
-            return lines, f"profile:{rule.pattern[:30]}"
-
-    # Built-in patterns
-    for bp in BUILTIN_PATTERNS:
-        match = bp.match(text)
-        if match is not None:
-            return bp.render(match, ctx), bp.name
-
-    return [f'# UNPARSED ASSERTION: {text}'], "UNPARSED"
+from aitest_kit.codegen.profile import (
+    load_profile_case_bodies,
+    load_profile_case_fixtures,
+    load_profile_extra_imports,
+    load_profile_module_type,
+    load_profile_request_overrides,
+    load_profile_rules,
+)
+from aitest_kit.codegen.project_config import (
+    DEFAULT_PROJECT,
+    AssertionRule,
+    ProjectConfig,
+)
+from aitest_kit.codegen.render_utils import (
+    dict_to_python,
+    dict_to_python_compact,
+    resolve_assertion,
+    strip_backticks,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -503,51 +90,6 @@ def _render_header(ctx: EmitContext, has_grpc: bool = False) -> list[str]:
     return lines
 
 
-def _dict_to_python_compact(obj: Any) -> str:
-    """Single-line Python repr for items inside lists."""
-    if obj is None:
-        return "None"
-    if isinstance(obj, bool):
-        return "True" if obj else "False"
-    if isinstance(obj, (int, float)):
-        return repr(obj)
-    if isinstance(obj, str):
-        return json.dumps(obj, ensure_ascii=False)
-    if isinstance(obj, list):
-        return "[" + ", ".join(_dict_to_python_compact(v) for v in obj) + "]"
-    if isinstance(obj, dict):
-        if not obj:
-            return "{}"
-        pairs = [f"{json.dumps(k, ensure_ascii=False)}: {_dict_to_python_compact(v)}" for k, v in obj.items()]
-        return "{" + ", ".join(pairs) + "}"
-    return repr(obj)
-
-
-def _dict_to_python(obj: Any, indent: int = 0) -> str:
-    """Render a Python dict literal matching the hand-written style."""
-    if obj is None:
-        return "None"
-    if isinstance(obj, bool):
-        return "True" if obj else "False"
-    if isinstance(obj, (int, float)):
-        return repr(obj)
-    if isinstance(obj, str):
-        return json.dumps(obj, ensure_ascii=False)
-    if isinstance(obj, list):
-        items = [_dict_to_python_compact(v) for v in obj]
-        return "[" + ", ".join(items) + "]"
-    if isinstance(obj, dict):
-        if not obj:
-            return "{}"
-        pad = "    " * (indent + 1)
-        end_pad = "    " * indent
-        pairs = []
-        for k, v in obj.items():
-            pairs.append(f"{pad}{json.dumps(k, ensure_ascii=False)}: {_dict_to_python(v, indent + 1)}")
-        return "{\n" + ",\n".join(pairs) + ",\n" + end_pad + "}"
-    return repr(obj)
-
-
 def _render_base_request(ctx: EmitContext) -> list[str]:
     body = ctx.shared_config.base_request_http
     if not body:
@@ -556,7 +98,7 @@ def _render_base_request(ctx: EmitContext) -> list[str]:
     sanitized = dict(body)
     sanitized["user_id"] = None
     sanitized["reqId"] = None
-    lines.append(f"BASE_REQUEST = {_dict_to_python(sanitized)}")
+    lines.append(f"BASE_REQUEST = {dict_to_python(sanitized)}")
     return lines
 
 
@@ -571,15 +113,6 @@ def _render_req_helper(ctx: EmitContext) -> list[str]:
     ]
 
 
-def _render_variable_extraction(ctx: EmitContext) -> list[str]:
-    """Generate variable extraction lines from shared config variables."""
-    lines = []
-    for var_name, var_def in ctx.variables.items():
-        if var_name in ctx.project.var_map:
-            lines.append(f"        {var_name} = {ctx.project.var_map[var_name]}")
-    return lines
-
-
 # ---------------------------------------------------------------------------
 # Test function rendering
 # ---------------------------------------------------------------------------
@@ -588,7 +121,7 @@ def _needs_variables(assertions: list[str], variables: dict[str, str]) -> set[st
     """Determine which shared variables are referenced by assertions."""
     needed = set()
     for a in assertions:
-        clean = _strip_bt(a)
+        clean = strip_backticks(a)
         for var_name in variables:
             if var_name in ("clamp(x)",):
                 continue
@@ -606,7 +139,7 @@ def _render_req_call(tc: TestCase, ctx: EmitContext, default_user_id: str, defau
     if not configured:
         return f'_req("{user_id}", "{req_id}")'
 
-    return f'_req("{user_id}", "{req_id}", **{_dict_to_python_compact(configured)})'
+    return f'_req("{user_id}", "{req_id}", **{dict_to_python_compact(configured)})'
 
 
 def _render_test_function(tc: TestCase, ctx: EmitContext) -> list[str]:
@@ -632,7 +165,7 @@ def _render_test_function(tc: TestCase, ctx: EmitContext) -> list[str]:
         for key, val in tc.scenario_vars.items():
             if key.startswith("_"):
                 continue
-            lines.append(f"        # SETUP: {key}：{_strip_bt(val)}")
+            lines.append(f"        # SETUP: {key}：{strip_backticks(val)}")
         lines.append("")
         for body_line in custom_body:
             lines.append(f"        {body_line}" if body_line else "")
@@ -649,7 +182,7 @@ def _render_test_function(tc: TestCase, ctx: EmitContext) -> list[str]:
     for key, val in tc.scenario_vars.items():
         if key.startswith("_"):
             continue
-        lines.append(f"        # SETUP: {key}：{_strip_bt(val)}")
+        lines.append(f"        # SETUP: {key}：{strip_backticks(val)}")
     lines.append(f'        setup_{ctx.module}(case_id="{tc.id}")')
 
     # Request
@@ -671,7 +204,7 @@ def _render_test_function(tc: TestCase, ctx: EmitContext) -> list[str]:
     # Common assertions (skip for manual)
     if not is_manual:
         for ca in ctx.shared_config.common_assertions:
-            code_lines, _ = resolve_assertion(ca, ctx.profile_rules, {})
+            code_lines, _ = resolve_assertion(ca, ctx.profile_rules, ctx.project)
             for cl in code_lines:
                 lines.append(f"        {cl}")
 
@@ -685,11 +218,11 @@ def _render_test_function(tc: TestCase, ctx: EmitContext) -> list[str]:
     unparsed = []
     for assertion in tc.assertions:
         if is_manual:
-            lines.append(f"        # MANUAL CHECK: {_strip_bt(assertion)}")
+            lines.append(f"        # MANUAL CHECK: {strip_backticks(assertion)}")
             continue
 
         code_lines, pattern_name = resolve_assertion(
-            assertion, ctx.profile_rules, {"tc": tc, "ctx": ctx}
+            assertion, ctx.profile_rules, ctx.project
         )
         for cl in code_lines:
             lines.append(f"        {cl}")
@@ -710,6 +243,28 @@ class EmitResult:
     skipped: list[tuple[str, str]]  # (tc_id, reason)
     unparsed: list[tuple[str, str]]  # (tc_id, assertion_text)
     manual_count: int
+    diagnostics: list[str] = field(default_factory=list)
+
+
+def _module_type_diagnostics(
+    module_type: str | None,
+    project: ProjectConfig,
+    case_bodies: dict[str, list[str]],
+) -> list[str]:
+    if not module_type:
+        return []
+
+    module_type_cfg = project.module_types.get(module_type)
+    if module_type_cfg is None:
+        return [f"E003: codegen_profile 声明了未知 module_type={module_type}"]
+
+    diagnostics: list[str] = []
+    for required in module_type_cfg.get("requires", []):
+        if required == "case_bodies" and not case_bodies:
+            diagnostics.append(
+                f"E004: module_type={module_type} 要求 codegen_profile 提供 case_bodies"
+            )
+    return diagnostics
 
 
 def emit_file(
@@ -737,6 +292,7 @@ def emit_file(
     extra_imports = load_profile_extra_imports(profile_path) if profile_path else []
     case_fixtures = load_profile_case_fixtures(profile_path) if profile_path else {}
     case_bodies = load_profile_case_bodies(profile_path) if profile_path else {}
+    module_type = load_profile_module_type(profile_path) if profile_path else None
     proj = project or DEFAULT_PROJECT
 
     ctx = EmitContext(
@@ -752,6 +308,46 @@ def emit_file(
         case_bodies=case_bodies,
         variables=parse_result.shared_config.variables,
     )
+
+    if parse_result.errors:
+        return EmitResult(
+            output_path=str(output_path),
+            case_count=0,
+            skipped=[],
+            unparsed=[],
+            manual_count=0,
+            diagnostics=list(parse_result.errors),
+        )
+
+    module_type_errors = _module_type_diagnostics(module_type, proj, case_bodies)
+    if module_type_errors:
+        return EmitResult(
+            output_path=str(output_path),
+            case_count=0,
+            skipped=[],
+            unparsed=[],
+            manual_count=0,
+            diagnostics=module_type_errors,
+        )
+
+    if ctx.shared_config.base_request_http is None:
+        uncovered = [
+            tc.id for tc in parse_result.cases
+            if not any("可行性存疑" in m for m in tc.markers)
+            and tc.id not in ctx.case_bodies
+        ]
+        if uncovered:
+            return EmitResult(
+                output_path=str(output_path),
+                case_count=0,
+                skipped=[],
+                unparsed=[],
+                manual_count=0,
+                diagnostics=[
+                    "E002: 缺少基础请求体（HTTP），且以下用例未被 codegen_profile 的 case_bodies 覆盖："
+                    + ", ".join(uncovered)
+                ],
+            )
 
     all_lines: list[str] = []
     skipped: list[tuple[str, str]] = []
@@ -894,3 +490,7 @@ if __name__ == "__main__":
         if r.unparsed:
             for tc_id, text in r.unparsed:
                 print(f"    {tc_id}: {text}")
+        if r.diagnostics:
+            print(f"  Diagnostics: {len(r.diagnostics)}")
+            for diag in r.diagnostics:
+                print(f"    {diag}")

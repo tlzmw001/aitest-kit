@@ -5,6 +5,26 @@ from test_workspace.tests.helpers import http as http_helper
 from test_workspace.tests.helpers import grpc_ops
 
 
+BASE_REQUEST = {
+    "user_id": None,
+    "scene_name": "game",
+    "device": "mobile",
+    "policy_id": "",
+    "external": 0,
+    "reqId": None,
+    "score_threshold": 0.2,
+    "max_claim_per_request": 1,
+    "context": {},
+    "items": [{"item_id": "COUPON_ACT_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
+}
+
+
+def _req(user_id: str, req_id: str, **overrides) -> dict:
+    body = {**BASE_REQUEST, "user_id": user_id, "reqId": req_id}
+    body.update(overrides)
+    return body
+
+
 class TestE2eBusiness:
     """e2e 业务测试用例"""
 
@@ -44,7 +64,7 @@ class TestE2eBusiness:
         # SETUP: 请求覆盖：user_id="u_e2e_http_external_002"、scene_name="ad"、device="pc"、external=1、score_threshold=0.2、max_claim_per_request=1、items 只包含 COUPON_SHIP_001
         setup_e2e(case_id="TC-E2E-002")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_e2e_002", "req_e2e_002"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_e2e_002", "req_e2e_002", **{"scene_name": "ad", "device": "pc", "external": 1, "items": [{"item_id": "COUPON_SHIP_001", "coupon_type": "free_shipping", "value": 1, "min_spend": 0, "expire_days": 7}]}))
         # UNPARSED ASSERTION: 请求完成后不产生跨用例共享脏数据
         # UNPARSED ASSERTION: 成功推荐场景均可通过用户券查询接口查询到同一条发放记录。
         assert isinstance(resp, dict)
@@ -67,7 +87,7 @@ class TestE2eBusiness:
         # SETUP: 请求覆盖：HTTP 与 gRPC 使用同一业务请求，user_id="u_e2e_dual_proto_003"、scene_name="game"、device="mobile"、policy_id="policy_fallback_001"、external=0、score_threshold=0.4、max_claim_per_request=1、items 只包含 COUPON_ACT_001
         setup_e2e(case_id="TC-E2E-003")
 
-        resp = grpc_ops.recommend(grpc_target, _req("u_e2e_003", "req_e2e_003"))
+        resp = grpc_ops.recommend(grpc_target, _req("u_e2e_003", "req_e2e_003", **{"policy_id": "policy_fallback_001", "score_threshold": 0.4}))
         # UNPARSED ASSERTION: 请求完成后不产生跨用例共享脏数据
         # UNPARSED ASSERTION: 成功推荐场景均可通过用户券查询接口查询到同一条发放记录。
         assert isinstance(resp, dict)

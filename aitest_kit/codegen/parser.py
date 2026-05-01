@@ -57,7 +57,7 @@ def _split_assertions(raw: str) -> list[str]:
     return [p.strip() for p in parts if p.strip()]
 
 
-def _extract_json_block(lines: list[str], start: int) -> tuple[dict | None, int]:
+def _extract_json_block(lines: list[str], start: int) -> tuple[dict | None, int, str | None]:
     """Extract a ```json ... ``` code block starting at or after `start`."""
     i = start
     while i < len(lines):
@@ -65,16 +65,16 @@ def _extract_json_block(lines: list[str], start: int) -> tuple[dict | None, int]
             break
         i += 1
     else:
-        return None, start
+        return None, start, None
     i += 1
     json_lines = []
     while i < len(lines) and not lines[i].strip().startswith("```"):
         json_lines.append(lines[i])
         i += 1
     try:
-        return json.loads("\n".join(json_lines)), i + 1
-    except json.JSONDecodeError:
-        return None, i + 1
+        return json.loads("\n".join(json_lines)), i + 1, None
+    except json.JSONDecodeError as exc:
+        return None, i + 1, f"{exc.msg}（第 {exc.lineno} 行第 {exc.colno} 列）"
 
 
 def _extract_text_block(lines: list[str], start: int) -> tuple[str | None, int]:
@@ -101,15 +101,24 @@ def _extract_text_block(lines: list[str], start: int) -> tuple[str | None, int]:
 # Shared config parsing
 # ---------------------------------------------------------------------------
 
-def _parse_shared_config(lines: list[str]) -> tuple[SharedConfig, int]:
+def _format_json_error(field_name: str, message: str | None) -> str:
+    detail = message or "未知 JSON 解析错误"
+    return (
+        f"E001: {field_name}不是合法 JSON — {detail}。修复：将模板占位符替换为合法 JSON 默认值，"
+        "case 级差异放到 codegen_profile 的 request_overrides"
+    )
+
+
+def _parse_shared_config(lines: list[str]) -> tuple[SharedConfig, int, list[str]]:
     cfg = SharedConfig()
+    errors: list[str] = []
     start = 0
     for i, line in enumerate(lines):
         if line.strip().startswith("## 共享配置"):
             start = i + 1
             break
     else:
-        return cfg, 0
+        return cfg, 0, errors
 
     end = len(lines)
     for i in range(start, len(lines)):
@@ -129,8 +138,10 @@ def _parse_shared_config(lines: list[str]) -> tuple[SharedConfig, int]:
             cfg.interfaces = [s.strip().strip("`") for s in raw.split(" / ") if s.strip()]
 
         elif line.startswith("**基础请求体（HTTP）**") or line.startswith("**基础请求体(HTTP)**"):
-            body, i = _extract_json_block(lines, i + 1)
+            body, i, json_error = _extract_json_block(lines, i + 1)
             cfg.base_request_http = body
+            if body is None and json_error:
+                errors.append(_format_json_error("基础请求体（HTTP）", json_error))
             continue
 
         elif line.startswith("**基础请求体（gRPC）**") or line.startswith("**基础请求体(gRPC)**"):
@@ -167,7 +178,7 @@ def _parse_shared_config(lines: list[str]) -> tuple[SharedConfig, int]:
 
         i += 1
 
-    return cfg, end
+    return cfg, end, errors
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +298,7 @@ def parse_case_file(path: str | Path) -> ParseResult:
     lines = path.read_text(encoding="utf-8").splitlines()
 
     module = path.parent.name
-    shared_config, config_end = _parse_shared_config(lines)
+    shared_config, config_end, errors = _parse_shared_config(lines)
     cases = _parse_cases(lines, config_end)
 
     return ParseResult(
@@ -295,6 +306,7 @@ def parse_case_file(path: str | Path) -> ParseResult:
         source_file=str(path),
         shared_config=shared_config,
         cases=cases,
+        errors=errors,
     )
 
 
@@ -318,6 +330,10 @@ if __name__ == "__main__":
     print(f"  Preconditions: {len(cfg.preconditions)}")
     print(f"  Common assertions: {cfg.common_assertions}")
     print(f"  Variables: {cfg.variables}")
+    if result.errors:
+        print("\n=== Errors ===")
+        for err in result.errors:
+            print(f"  {err}")
 
     print(f"\n=== Cases ({len(result.cases)}) ===")
     for tc in result.cases:
