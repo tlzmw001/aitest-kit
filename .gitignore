@@ -23,3 +23,5 @@ build/
 .pytest_cache/
 htmlcov/
 .coverage
+
+usebook/备忘continue.md
