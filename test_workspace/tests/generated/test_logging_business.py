@@ -33,6 +33,15 @@ class TestLoggingBusiness:
 
     def test_tc_log_001(self, setup_logging):
         """TC-LOG-001：HTTP 内部打分请求记录 route=1"""
+        __tc_meta__ = {
+            "tc_id": "TC-LOG-001",
+            "module": "logging",
+            "category": "business",
+            "source": "test_workspace/cases/logging/business.md",
+            "title": "HTTP 内部打分请求记录 route=1",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_http_internal"、external=0、reqId="req-log-001"
 
@@ -49,6 +58,15 @@ class TestLoggingBusiness:
 
     def test_tc_log_002(self, setup_logging):
         """TC-LOG-002：gRPC 内部打分请求记录 route=1"""
+        __tc_meta__ = {
+            "tc_id": "TC-LOG-002",
+            "module": "logging",
+            "category": "business",
+            "source": "test_workspace/cases/logging/business.md",
+            "title": "gRPC 内部打分请求记录 route=1",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：gRPC
         # SETUP: 请求覆盖：gRPC 请求 user_id="u_log_grpc_internal"、external=0、req_id="req-log-002"
 
@@ -64,6 +82,15 @@ class TestLoggingBusiness:
 
     def test_tc_log_003(self, setup_logging):
         """TC-LOG-003：HTTP 外部打分请求记录 route=2"""
+        __tc_meta__ = {
+            "tc_id": "TC-LOG-003",
+            "module": "logging",
+            "category": "business",
+            "source": "test_workspace/cases/logging/business.md",
+            "title": "HTTP 外部打分请求记录 route=2",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_http_external"、external=1、reqId="req-log-003"
 
@@ -79,6 +106,15 @@ class TestLoggingBusiness:
 
     def test_tc_log_004(self, setup_logging):
         """TC-LOG-004：gRPC 外部打分请求记录 route=2"""
+        __tc_meta__ = {
+            "tc_id": "TC-LOG-004",
+            "module": "logging",
+            "category": "business",
+            "source": "test_workspace/cases/logging/business.md",
+            "title": "gRPC 外部打分请求记录 route=2",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：gRPC
         # SETUP: 请求覆盖：gRPC 请求 user_id="u_log_grpc_external"、external=1、req_id="req-log-004"
 
@@ -96,6 +132,15 @@ class TestLoggingBusiness:
 
     def test_tc_log_005(self, setup_logging):
         """TC-LOG-005：reqId 为空时日志记录自动生成 UUID"""
+        __tc_meta__ = {
+            "tc_id": "TC-LOG-005",
+            "module": "logging",
+            "category": "business",
+            "source": "test_workspace/cases/logging/business.md",
+            "title": "reqId 为空时日志记录自动生成 UUID",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_auto_reqid"、external=0、reqId=""
 
@@ -108,6 +153,15 @@ class TestLoggingBusiness:
 
     def test_tc_log_006(self, setup_logging):
         """TC-LOG-006：兜底场景也记录 scene_id"""
+        __tc_meta__ = {
+            "tc_id": "TC-LOG-006",
+            "module": "logging",
+            "category": "business",
+            "source": "test_workspace/cases/logging/business.md",
+            "title": "兜底场景也记录 scene_id",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_fallback"、policy_id="policy_fallback_001"、external=0、reqId="req-log-006"
 
@@ -124,6 +178,15 @@ class TestLoggingBusiness:
     @pytest.mark.manual
     def test_tc_log_007(self, setup_logging):
         """TC-LOG-007：route 字段不下发给内部打分服务"""
+        __tc_meta__ = {
+            "tc_id": "TC-LOG-007",
+            "module": "logging",
+            "category": "business",
+            "source": "test_workspace/cases/logging/business.md",
+            "title": "route 字段不下发给内部打分服务",
+            "priority": "P1",
+            "markers": ["`[manual]`"],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_no_route_internal"、external=0、reqId="req-log-007"
 
@@ -137,6 +200,15 @@ class TestLoggingBusiness:
     @pytest.mark.manual
     def test_tc_log_008(self, setup_logging):
         """TC-LOG-008：route 字段不下发给外部打分服务"""
+        __tc_meta__ = {
+            "tc_id": "TC-LOG-008",
+            "module": "logging",
+            "category": "business",
+            "source": "test_workspace/cases/logging/business.md",
+            "title": "route 字段不下发给外部打分服务",
+            "priority": "P1",
+            "markers": ["`[manual]`"],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_no_route_external"、external=1、reqId="req-log-008"
 
@@ -148,3 +220,5 @@ class TestLoggingBusiness:
         # MANUAL CHECK: 外部打分服务收到的 JSON body 中不存在 route
 
 
+
+__codegen_skipped__ = []

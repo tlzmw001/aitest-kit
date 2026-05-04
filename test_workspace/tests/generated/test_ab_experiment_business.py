@@ -32,6 +32,15 @@ class TestAbExperimentBusiness:
 
     def test_tc_ab_001(self, http_base_url, setup_ab_experiment):
         """TC-AB-001：HTTP 通过 hash 命中场景关联实验"""
+        __tc_meta__ = {
+            "tc_id": "TC-AB-001",
+            "module": "ab_experiment",
+            "category": "business",
+            "source": "test_workspace/cases/ab_experiment/business.md",
+            "title": "HTTP 通过 hash 命中场景关联实验",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_ab_hash_http"、scene_name="game"、device="mobile"、external=0、reqId="req-ab-001"
         # SETUP: 前置操作：不设置该用户白名单
@@ -46,6 +55,15 @@ class TestAbExperimentBusiness:
 
     def test_tc_ab_002(self, grpc_target, setup_ab_experiment):
         """TC-AB-002：gRPC 通过 hash 命中场景关联实验"""
+        __tc_meta__ = {
+            "tc_id": "TC-AB-002",
+            "module": "ab_experiment",
+            "category": "business",
+            "source": "test_workspace/cases/ab_experiment/business.md",
+            "title": "gRPC 通过 hash 命中场景关联实验",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：gRPC
         # SETUP: 请求覆盖：gRPC 请求 user_id="u_ab_hash_grpc"、scene_name="ad"、device="pc"、external=0、req_id="req-ab-002"
         # SETUP: 前置操作：不设置该用户白名单
@@ -60,6 +78,15 @@ class TestAbExperimentBusiness:
 
     def test_tc_ab_003(self, http_base_url, setup_ab_experiment):
         """TC-AB-003：白名单优先级高于 hash 分流"""
+        __tc_meta__ = {
+            "tc_id": "TC-AB-003",
+            "module": "ab_experiment",
+            "category": "business",
+            "source": "test_workspace/cases/ab_experiment/business.md",
+            "title": "白名单优先级高于 hash 分流",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：先执行 PUT /api/v1/ab/whitelist/u_ab_white，body 为 {"strategy_map":{"coarse_rank_exp_game":"cr_off","calibration_exp_game":"cal_off"}}
         # SETUP: 请求覆盖_2：HTTP 请求 user_id="u_ab_white"、scene_name="game"、device="mobile"、external=0、reqId="req-ab-003"
@@ -76,6 +103,15 @@ class TestAbExperimentBusiness:
 
     def test_tc_ab_004(self, http_base_url, setup_ab_experiment):
         """TC-AB-004：只评估当前 scene_id 映射的实验"""
+        __tc_meta__ = {
+            "tc_id": "TC-AB-004",
+            "module": "ab_experiment",
+            "category": "business",
+            "source": "test_workspace/cases/ab_experiment/business.md",
+            "title": "只评估当前 scene_id 映射的实验",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_ab_scene_game"、scene_name="game"、device="mobile"、external=0
         # SETUP: 请求覆盖_2：AB 服务中同时存在 game/ad 两组实验
@@ -92,6 +128,15 @@ class TestAbExperimentBusiness:
 
     def test_tc_ab_006(self, http_base_url, setup_ab_experiment):
         """TC-AB-006：HTTP external=1 时不获取任何实验"""
+        __tc_meta__ = {
+            "tc_id": "TC-AB-006",
+            "module": "ab_experiment",
+            "category": "business",
+            "source": "test_workspace/cases/ab_experiment/business.md",
+            "title": "HTTP external=1 时不获取任何实验",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_ab_external_http"、scene_name="game"、device="mobile"、external=1、reqId="req-ab-006"
         # SETUP: 请求覆盖_2：AB 服务可用且存在可命中实验
@@ -105,6 +150,15 @@ class TestAbExperimentBusiness:
 
     def test_tc_ab_007(self, grpc_target, setup_ab_experiment):
         """TC-AB-007：gRPC external=1 时不获取任何实验"""
+        __tc_meta__ = {
+            "tc_id": "TC-AB-007",
+            "module": "ab_experiment",
+            "category": "business",
+            "source": "test_workspace/cases/ab_experiment/business.md",
+            "title": "gRPC external=1 时不获取任何实验",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：gRPC
         # SETUP: 请求覆盖：gRPC 请求 user_id="u_ab_external_grpc"、scene_name="game"、device="mobile"、external=1、req_id="req-ab-007"
         # SETUP: 请求覆盖_2：AB 服务可用且存在可命中实验
@@ -121,6 +175,15 @@ class TestAbExperimentBusiness:
     @pytest.mark.manual
     def test_tc_ab_009(self, http_base_url, setup_ab_experiment):
         """TC-AB-009：实验名不存在时静默跳过"""
+        __tc_meta__ = {
+            "tc_id": "TC-AB-009",
+            "module": "ab_experiment",
+            "category": "business",
+            "source": "test_workspace/cases/ab_experiment/business.md",
+            "title": "实验名不存在时静默跳过",
+            "priority": "P2 / 异常",
+            "markers": ["`[manual]`"],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 前置操作：测试环境将 scene_id=1001 的实验映射设为 ["coarse_rank_exp_game","not_exists_exp"]
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_ab_unknown_exp"、scene_name="game"、device="mobile"、external=0
@@ -134,3 +197,5 @@ class TestAbExperimentBusiness:
 
 # SKIPPED: TC-AB-005 — `[!可行性存疑: 已确认为待测系统缺陷，主服务不支持运行时热更新 scene_experiments.json，详见 results/ab_experiment_scene_experiments_hot_reload_bug.md]`
 # SKIPPED: TC-AB-008 — `[!可行性存疑: 需要测试环境允许控制 AB 服务可用性或启动参数]`
+
+__codegen_skipped__ = [{"tc_id": "TC-AB-005", "module": "ab_experiment", "category": "business", "source": "test_workspace/cases/ab_experiment/business.md", "title": "场景无实验映射时返回空实验信息", "priority": "P1", "markers": ["`[!可行性存疑: 已确认为待测系统缺陷，主服务不支持运行时热更新 scene_experiments.json，详见 results/ab_experiment_scene_experiments_hot_reload_bug.md]`"], "reason": "`[!可行性存疑: 已确认为待测系统缺陷，主服务不支持运行时热更新 scene_experiments.json，详见 results/ab_experiment_scene_experiments_hot_reload_bug.md]`"}, {"tc_id": "TC-AB-008", "module": "ab_experiment", "category": "business", "source": "test_workspace/cases/ab_experiment/business.md", "title": "AB 服务不可用时主服务不降级", "priority": "P1 / 异常", "markers": ["`[!可行性存疑: 需要测试环境允许控制 AB 服务可用性或启动参数]`"], "reason": "`[!可行性存疑: 需要测试环境允许控制 AB 服务可用性或启动参数]`"}]

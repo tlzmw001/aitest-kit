@@ -31,6 +31,15 @@ class TestCalibrationBusiness:
 
     def test_tc_cal_001(self, http_base_url, setup_calibration):
         """TC-CAL-001：线性校准按 kx+b 计算并 clamp"""
+        __tc_meta__ = {
+            "tc_id": "TC-CAL-001",
+            "module": "calibration",
+            "category": "business",
+            "source": "test_workspace/cases/calibration/business.md",
+            "title": "线性校准按 kx+b 计算并 clamp",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 前置操作：线性校准文件规则 conditions={"device":"mobile"}、k=1.2、b=0.1
         setup_calibration(case_id="TC-CAL-001")
 
@@ -42,6 +51,15 @@ class TestCalibrationBusiness:
 
     def test_tc_cal_002(self, http_base_url, setup_calibration):
         """TC-CAL-002：分段和线性串联校准"""
+        __tc_meta__ = {
+            "tc_id": "TC-CAL-002",
+            "module": "calibration",
+            "category": "business",
+            "source": "test_workspace/cases/calibration/business.md",
+            "title": "分段和线性串联校准",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 前置操作：分段文件配置 [0,0.3)->k=0.5,b=0.1、[0.3,0.7)->k=1.0,b=0.0、[0.7,1.0]->k=1.5,b=-0.2
         # SETUP: 前置操作_2：线性规则 k=1.2,b=0.05
         setup_calibration(case_id="TC-CAL-002")
@@ -61,6 +79,15 @@ class TestCalibrationBusiness:
 
     def test_tc_cal_003(self, http_base_url, setup_calibration):
         """TC-CAL-003：加载目录中序号最大的校准文件"""
+        __tc_meta__ = {
+            "tc_id": "TC-CAL-003",
+            "module": "calibration",
+            "category": "business",
+            "source": "test_workspace/cases/calibration/business.md",
+            "title": "加载目录中序号最大的校准文件",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 前置操作：线性目录同时存在 1.json 规则 k=0.8,b=0 和 3.json 规则 k=1.3,b=0，二者均匹配
         setup_calibration(case_id="TC-CAL-003")
 
@@ -72,6 +99,15 @@ class TestCalibrationBusiness:
 
     def test_tc_cal_004(self, http_base_url, setup_calibration):
         """TC-CAL-004：无效 condition 字段不匹配"""
+        __tc_meta__ = {
+            "tc_id": "TC-CAL-004",
+            "module": "calibration",
+            "category": "business",
+            "source": "test_workspace/cases/calibration/business.md",
+            "title": "无效 condition 字段不匹配",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 前置操作：线性规则 conditions={"unknown":"x"}、k=2.0,b=0.0
         setup_calibration(case_id="TC-CAL-004")
 
@@ -85,6 +121,15 @@ class TestCalibrationBusiness:
 
     def test_tc_cal_005(self, http_base_url, setup_calibration):
         """TC-CAL-005：HTTP 实验关闭时跳过校准"""
+        __tc_meta__ = {
+            "tc_id": "TC-CAL-005",
+            "module": "calibration",
+            "category": "business",
+            "source": "test_workspace/cases/calibration/business.md",
+            "title": "HTTP 实验关闭时跳过校准",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 环境覆盖：校准实验参数 {"enable_calibration":false,"calibration_dir":{"linear":"/tmp/cal_linear_001"}}，线性文件存在且匹配 device=mobile
         setup_calibration(case_id="TC-CAL-005")
 
@@ -96,6 +141,15 @@ class TestCalibrationBusiness:
 
     def test_tc_cal_006(self, http_base_url, setup_calibration):
         """TC-CAL-006：gRPC 根据 scene_id 选择 game 校准实验"""
+        __tc_meta__ = {
+            "tc_id": "TC-CAL-006",
+            "module": "calibration",
+            "category": "business",
+            "source": "test_workspace/cases/calibration/business.md",
+            "title": "gRPC 根据 scene_id 选择 game 校准实验",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 前置操作：scene_id=1001 的 calibration_exp_game 启用，线性规则 k=1.5,b=0.1,conditions={"device":"mobile"}
         # SETUP: 请求覆盖：ad 校准实验配置不同参数
         setup_calibration(case_id="TC-CAL-006")
@@ -110,6 +164,15 @@ class TestCalibrationBusiness:
 
     def test_tc_cal_007(self, http_base_url, setup_calibration):
         """TC-CAL-007：多条件匹配时靠上的规则优先"""
+        __tc_meta__ = {
+            "tc_id": "TC-CAL-007",
+            "module": "calibration",
+            "category": "business",
+            "source": "test_workspace/cases/calibration/business.md",
+            "title": "多条件匹配时靠上的规则优先",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 前置操作：线性文件两条规则都匹配：第 1 条 k=1.2,b=0.0，第 2 条 k=2.0,b=0.0
         setup_calibration(case_id="TC-CAL-007")
 
@@ -121,6 +184,15 @@ class TestCalibrationBusiness:
 
     def test_tc_cal_008(self, http_base_url, setup_calibration):
         """TC-CAL-008：条件字段缺失时规则不匹配"""
+        __tc_meta__ = {
+            "tc_id": "TC-CAL-008",
+            "module": "calibration",
+            "category": "business",
+            "source": "test_workspace/cases/calibration/business.md",
+            "title": "条件字段缺失时规则不匹配",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 前置操作：线性规则 conditions={"gender":"male"}
         # SETUP: 前置操作_2：Redis 不设置用户 gender 特征
         setup_calibration(case_id="TC-CAL-008")
@@ -133,6 +205,15 @@ class TestCalibrationBusiness:
 
     def test_tc_cal_009(self, http_base_url, setup_calibration):
         """TC-CAL-009：条件字段不在白名单时规则不匹配"""
+        __tc_meta__ = {
+            "tc_id": "TC-CAL-009",
+            "module": "calibration",
+            "category": "business",
+            "source": "test_workspace/cases/calibration/business.md",
+            "title": "条件字段不在白名单时规则不匹配",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 前置操作：线性规则 conditions={"unknown_field":"x"}，k=2.0,b=0.0
         setup_calibration(case_id="TC-CAL-009")
 
@@ -146,6 +227,15 @@ class TestCalibrationBusiness:
 
     def test_tc_cal_010(self, http_base_url, setup_calibration):
         """TC-CAL-010：仅命中线性校准"""
+        __tc_meta__ = {
+            "tc_id": "TC-CAL-010",
+            "module": "calibration",
+            "category": "business",
+            "source": "test_workspace/cases/calibration/business.md",
+            "title": "仅命中线性校准",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 前置操作：只配置线性目录
         # SETUP: 前置操作_2：规则 conditions={"device":"mobile"}、k=1.5、b=0.0
         setup_calibration(case_id="TC-CAL-010")
@@ -158,6 +248,15 @@ class TestCalibrationBusiness:
 
     def test_tc_cal_011(self, http_base_url, setup_calibration):
         """TC-CAL-011：仅命中分段函数校准"""
+        __tc_meta__ = {
+            "tc_id": "TC-CAL-011",
+            "module": "calibration",
+            "category": "business",
+            "source": "test_workspace/cases/calibration/business.md",
+            "title": "仅命中分段函数校准",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 前置操作：只配置分段目录
         # SETUP: 前置操作_2：分段 [0,0.3)->k=0.5,b=0.1、[0.3,0.7)->k=1.0,b=0.0、[0.7,1.0]->k=1.5,b=-0.2，条件 device=mobile
         setup_calibration(case_id="TC-CAL-011")
@@ -176,6 +275,15 @@ class TestCalibrationBusiness:
 
     def test_tc_cal_012(self, http_base_url, setup_calibration):
         """TC-CAL-012：线性和分段都命中时先分段后线性"""
+        __tc_meta__ = {
+            "tc_id": "TC-CAL-012",
+            "module": "calibration",
+            "category": "business",
+            "source": "test_workspace/cases/calibration/business.md",
+            "title": "线性和分段都命中时先分段后线性",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 前置操作：分段同 TC-CAL-011
         # SETUP: 前置操作_2：线性规则 k=1.2,b=0.05
         # SETUP: 请求覆盖：二者都匹配 device=mobile
@@ -196,6 +304,15 @@ class TestCalibrationBusiness:
 
     def test_tc_cal_013(self, http_base_url, setup_calibration):
         """TC-CAL-013：两类规则都不匹配时不校准"""
+        __tc_meta__ = {
+            "tc_id": "TC-CAL-013",
+            "module": "calibration",
+            "category": "business",
+            "source": "test_workspace/cases/calibration/business.md",
+            "title": "两类规则都不匹配时不校准",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 前置操作：线性和分段规则条件均为 device=ios，请求为 mobile
         setup_calibration(case_id="TC-CAL-013")
 
@@ -207,6 +324,15 @@ class TestCalibrationBusiness:
 
     def test_tc_cal_014(self, http_base_url, setup_calibration):
         """TC-CAL-014：目录中选取序号最大的版本文件"""
+        __tc_meta__ = {
+            "tc_id": "TC-CAL-014",
+            "module": "calibration",
+            "category": "business",
+            "source": "test_workspace/cases/calibration/business.md",
+            "title": "目录中选取序号最大的版本文件",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 前置操作：线性目录包含 1.json 规则 k=1.1,b=0 和 3.json 规则 k=1.8,b=0，均匹配 device=mobile
         setup_calibration(case_id="TC-CAL-014")
 
@@ -217,3 +343,5 @@ class TestCalibrationBusiness:
         assert cal == pytest.approx(max(0, min(1, 1.8 * s)), abs=1e-4)
 
 
+
+__codegen_skipped__ = []

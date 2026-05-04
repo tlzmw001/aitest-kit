@@ -34,6 +34,15 @@ class TestIssuanceBusiness:
 
     def test_tc_issue_001(self, setup_issuance):
         """TC-ISSUE-001：HTTP 正常发放最高分券"""
+        __tc_meta__ = {
+            "tc_id": "TC-ISSUE-001",
+            "module": "issuance",
+            "category": "business",
+            "source": "test_workspace/cases/issuance/business.md",
+            "title": "HTTP 正常发放最高分券",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 前置操作：HTTP 请求 user_id="u_issue_http_ok"，两张券库存均为 100
         # SETUP: 请求覆盖：score_threshold=0.0、max_claim_per_request=1
@@ -54,6 +63,15 @@ class TestIssuanceBusiness:
 
     def test_tc_issue_002(self, setup_issuance):
         """TC-ISSUE-002：gRPC 正常发放最高分券"""
+        __tc_meta__ = {
+            "tc_id": "TC-ISSUE-002",
+            "module": "issuance",
+            "category": "business",
+            "source": "test_workspace/cases/issuance/business.md",
+            "title": "gRPC 正常发放最高分券",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：gRPC
         # SETUP: 前置操作：gRPC 请求 user_id="u_issue_grpc_ok"，两张券库存均为 100
         # SETUP: 请求覆盖：score_threshold=0.0、max_claim_per_request=1
@@ -74,6 +92,15 @@ class TestIssuanceBusiness:
 
     def test_tc_issue_003(self, setup_issuance):
         """TC-ISSUE-003：score_threshold 等于分数上界时不发放"""
+        __tc_meta__ = {
+            "tc_id": "TC-ISSUE-003",
+            "module": "issuance",
+            "category": "business",
+            "source": "test_workspace/cases/issuance/business.md",
+            "title": "score_threshold 等于分数上界时不发放",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 前置操作：HTTP 请求 user_id="u_issue_high_threshold"，两张券库存均为 100
         # SETUP: 请求覆盖：score_threshold=1.0
@@ -94,6 +121,15 @@ class TestIssuanceBusiness:
 
     def test_tc_issue_004(self, setup_issuance):
         """TC-ISSUE-004：发放成功后库存扣减 1"""
+        __tc_meta__ = {
+            "tc_id": "TC-ISSUE-004",
+            "module": "issuance",
+            "category": "business",
+            "source": "test_workspace/cases/issuance/business.md",
+            "title": "发放成功后库存扣减 1",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 前置操作：SET coupon:stock:COUPON_ISSUE_A 2 EX 86400
         # SETUP: 请求覆盖：HTTP 请求只传 A
@@ -118,6 +154,15 @@ class TestIssuanceBusiness:
 
     def test_tc_issue_005(self, setup_issuance):
         """TC-ISSUE-005：发放记录可通过用户券查询接口查到"""
+        __tc_meta__ = {
+            "tc_id": "TC-ISSUE-005",
+            "module": "issuance",
+            "category": "business",
+            "source": "test_workspace/cases/issuance/business.md",
+            "title": "发放记录可通过用户券查询接口查到",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_issue_query" 成功发放 A
 
@@ -138,6 +183,15 @@ class TestIssuanceBusiness:
 
     def test_tc_issue_006(self, setup_issuance):
         """TC-ISSUE-006：coupon 过期时间按 expire_days 计算"""
+        __tc_meta__ = {
+            "tc_id": "TC-ISSUE-006",
+            "module": "issuance",
+            "category": "business",
+            "source": "test_workspace/cases/issuance/business.md",
+            "title": "coupon 过期时间按 expire_days 计算",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 item A 的 expire_days=3，成功发放
 
@@ -157,6 +211,15 @@ class TestIssuanceBusiness:
 
     def test_tc_issue_007(self, setup_issuance):
         """TC-ISSUE-007：score_threshold 请求参数控制是否推荐"""
+        __tc_meta__ = {
+            "tc_id": "TC-ISSUE-007",
+            "module": "issuance",
+            "category": "business",
+            "source": "test_workspace/cases/issuance/business.md",
+            "title": "score_threshold 请求参数控制是否推荐",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 前置操作：同一用户隔离请求，只传 COUPON_ISSUE_A 且库存为 100
         # SETUP: 请求覆盖：第一次 score_threshold=1.0，第二次 score_threshold=0.0
 
@@ -181,6 +244,15 @@ class TestIssuanceBusiness:
 
     def test_tc_issue_008(self, setup_issuance):
         """TC-ISSUE-008：max_claim_per_request 控制尝试发放数量"""
+        __tc_meta__ = {
+            "tc_id": "TC-ISSUE-008",
+            "module": "issuance",
+            "category": "business",
+            "source": "test_workspace/cases/issuance/business.md",
+            "title": "max_claim_per_request 控制尝试发放数量",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 请求覆盖：先用同一 user_id 和 A/B 候选发送探测请求，按响应 results[*].score 得到 top_item 与 second_item
         # SETUP: 前置操作：清理探测用户领取记录并重置库存后，设置 top_item 库存为 0、second_item 库存为 100
         # SETUP: 请求覆盖_2：第一次 max_claim_per_request=1，第二次 max_claim_per_request=2，两次 score_threshold=0.0
@@ -214,6 +286,15 @@ class TestIssuanceBusiness:
 
     def test_tc_issue_009(self, setup_issuance):
         """TC-ISSUE-009：未领券用户查询返回空列表"""
+        __tc_meta__ = {
+            "tc_id": "TC-ISSUE-009",
+            "module": "issuance",
+            "category": "business",
+            "source": "test_workspace/cases/issuance/business.md",
+            "title": "未领券用户查询返回空列表",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 接口调用：调用 GET /api/v1/coupons/user_no_coupons，该用户没有领取记录
 
         issue = setup_issuance(case_id="TC-ISSUE-009")
@@ -225,6 +306,15 @@ class TestIssuanceBusiness:
 
     def test_tc_issue_010(self, setup_issuance):
         """TC-ISSUE-010：查询接口 user_id 为空返回参数错误"""
+        __tc_meta__ = {
+            "tc_id": "TC-ISSUE-010",
+            "module": "issuance",
+            "category": "business",
+            "source": "test_workspace/cases/issuance/business.md",
+            "title": "查询接口 user_id 为空返回参数错误",
+            "priority": "P1 / 异常",
+            "markers": [],
+        }
         # SETUP: 协议：gRPC
         # SETUP: 请求覆盖：通过 gRPC 或业务层查询接口传入 user_id=""
 
@@ -236,3 +326,5 @@ class TestIssuanceBusiness:
         assert resp["total"] == 0
 
 
+
+__codegen_skipped__ = []

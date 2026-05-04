@@ -19,6 +19,15 @@ class TestAbServiceBoundary:
 
     def test_tc_abs_023(self, setup_ab_service):
         """TC-ABS-023：hash_range 重叠时命中第一个匹配策略"""
+        __tc_meta__ = {
+            "tc_id": "TC-ABS-023",
+            "module": "ab_service",
+            "category": "boundary",
+            "source": "test_workspace/cases/ab_service/boundary.md",
+            "title": "hash_range 重叠时命中第一个匹配策略",
+            "priority": "P2",
+            "markers": [],
+        }
         # SETUP: 请求覆盖：实验 exp_abs_overlap 策略顺序为 s_first [0,80)、s_second [50,100)
         # SETUP: 前置操作：选择 hash=60 的 user_id
 
@@ -29,6 +38,15 @@ class TestAbServiceBoundary:
 
     def test_tc_abs_024(self, setup_ab_service):
         """TC-ABS-024：空策略实验评估后不返回 assignment"""
+        __tc_meta__ = {
+            "tc_id": "TC-ABS-024",
+            "module": "ab_service",
+            "category": "boundary",
+            "source": "test_workspace/cases/ab_service/boundary.md",
+            "title": "空策略实验评估后不返回 assignment",
+            "priority": "P2 / 异常",
+            "markers": [],
+        }
         # SETUP: 前置操作：创建实验 exp_abs_empty，strategies=[]
         # SETUP: 接口调用：evaluate 指定该实验
 
@@ -39,6 +57,15 @@ class TestAbServiceBoundary:
 
     def test_tc_abs_025(self, setup_ab_service):
         """TC-ABS-025：evaluate 指定不存在实验名时静默跳过"""
+        __tc_meta__ = {
+            "tc_id": "TC-ABS-025",
+            "module": "ab_service",
+            "category": "boundary",
+            "source": "test_workspace/cases/ab_service/boundary.md",
+            "title": "evaluate 指定不存在实验名时静默跳过",
+            "priority": "P2 / 异常",
+            "markers": [],
+        }
         # SETUP: 接口调用：evaluate experiment_names=["not_exists_exp"]
 
         ab = setup_ab_service(case_id="TC-ABS-025")
@@ -50,6 +77,15 @@ class TestAbServiceBoundary:
 
     def test_tc_abs_026(self, tmp_path):
         """TC-ABS-026：实验配置文件不存在时自动创建空配置"""
+        __tc_meta__ = {
+            "tc_id": "TC-ABS-026",
+            "module": "ab_service",
+            "category": "boundary",
+            "source": "test_workspace/cases/ab_service/boundary.md",
+            "title": "实验配置文件不存在时自动创建空配置",
+            "priority": "P2",
+            "markers": [],
+        }
         # SETUP: 环境覆盖：使用不存在的 AB_SERVICE_EXPERIMENTS_PATH=/tmp/aitest_ab_service_boundary/new/experiments.json 启动服务
 
         experiments_path = tmp_path / "new" / "experiments.json"
@@ -63,6 +99,15 @@ class TestAbServiceBoundary:
     @pytest.mark.manual
     def test_tc_abs_027(self, tmp_path, caplog):
         """TC-ABS-027：白名单文件损坏时忽略并以空白名单启动"""
+        __tc_meta__ = {
+            "tc_id": "TC-ABS-027",
+            "module": "ab_service",
+            "category": "boundary",
+            "source": "test_workspace/cases/ab_service/boundary.md",
+            "title": "白名单文件损坏时忽略并以空白名单启动",
+            "priority": "P2 / 异常",
+            "markers": ["`[manual]`"],
+        }
         # SETUP: 环境覆盖：白名单文件内容为 {bad json，启动服务
 
         caplog.set_level(logging.WARNING, logger="ab_experiment_sdk.service")
@@ -75,6 +120,15 @@ class TestAbServiceBoundary:
 
     def test_tc_abs_028(self, tmp_path):
         """TC-ABS-028：实验策略 hash_range 格式异常时回退到 [0,100]"""
+        __tc_meta__ = {
+            "tc_id": "TC-ABS-028",
+            "module": "ab_service",
+            "category": "boundary",
+            "source": "test_workspace/cases/ab_service/boundary.md",
+            "title": "实验策略 hash_range 格式异常时回退到 [0,100]",
+            "priority": "P2 / 异常",
+            "markers": [],
+        }
         # SETUP: 请求覆盖：实验配置文件中策略 s_bad 的 hash_range=["bad"]
 
         client, _, _ = build_isolated_client(tmp_path, experiments=[
@@ -87,6 +141,15 @@ class TestAbServiceBoundary:
 
     def test_tc_abs_029(self, tmp_path):
         """TC-ABS-029：实验策略 params 非 dict 时回退为空 dict"""
+        __tc_meta__ = {
+            "tc_id": "TC-ABS-029",
+            "module": "ab_service",
+            "category": "boundary",
+            "source": "test_workspace/cases/ab_service/boundary.md",
+            "title": "实验策略 params 非 dict 时回退为空 dict",
+            "priority": "P2 / 异常",
+            "markers": [],
+        }
         # SETUP: 请求覆盖：实验配置文件中策略 s_bad_params 的 params="bad"
 
         client, _, _ = build_isolated_client(tmp_path, experiments=[
@@ -101,6 +164,15 @@ class TestAbServiceBoundary:
 
     def test_tc_abs_030(self, setup_ab_service):
         """TC-ABS-030：evaluate 缺少 user_id 返回 422"""
+        __tc_meta__ = {
+            "tc_id": "TC-ABS-030",
+            "module": "ab_service",
+            "category": "boundary",
+            "source": "test_workspace/cases/ab_service/boundary.md",
+            "title": "evaluate 缺少 user_id 返回 422",
+            "priority": "P2 / 异常",
+            "markers": [],
+        }
         # SETUP: 接口调用：POST /api/v1/ab/evaluate body 缺少 user_id
 
         ab = setup_ab_service(case_id="TC-ABS-030")
@@ -110,6 +182,15 @@ class TestAbServiceBoundary:
 
     def test_tc_abs_031(self, setup_ab_service):
         """TC-ABS-031：创建实验 strategies 类型错误返回 422"""
+        __tc_meta__ = {
+            "tc_id": "TC-ABS-031",
+            "module": "ab_service",
+            "category": "boundary",
+            "source": "test_workspace/cases/ab_service/boundary.md",
+            "title": "创建实验 strategies 类型错误返回 422",
+            "priority": "P2 / 异常",
+            "markers": [],
+        }
         # SETUP: 接口调用：POST /api/v1/ab/experiments body {"name":"exp_abs_bad_schema","strategies":"bad"}
 
         ab = setup_ab_service(case_id="TC-ABS-031")
@@ -118,6 +199,15 @@ class TestAbServiceBoundary:
 
     def test_tc_abs_032(self, setup_ab_service):
         """TC-ABS-032：单用户白名单 strategy_map 类型错误返回 422"""
+        __tc_meta__ = {
+            "tc_id": "TC-ABS-032",
+            "module": "ab_service",
+            "category": "boundary",
+            "source": "test_workspace/cases/ab_service/boundary.md",
+            "title": "单用户白名单 strategy_map 类型错误返回 422",
+            "priority": "P2 / 异常",
+            "markers": [],
+        }
         # SETUP: 接口调用：PUT /api/v1/ab/whitelist/u_abs_bad_schema body {"strategy_map":"bad"}
 
         ab = setup_ab_service(case_id="TC-ABS-032")
@@ -128,6 +218,15 @@ class TestAbServiceBoundary:
 
     def test_tc_abs_033(self, tmp_path):
         """TC-ABS-033：service 模块可独立导入"""
+        __tc_meta__ = {
+            "tc_id": "TC-ABS-033",
+            "module": "ab_service",
+            "category": "boundary",
+            "source": "test_workspace/cases/ab_service/boundary.md",
+            "title": "service 模块可独立导入",
+            "priority": "P2",
+            "markers": [],
+        }
         # SETUP: 请求覆盖：在仅包含 ab_experiment_sdk 包的隔离 Python 进程中执行 import ab_experiment_sdk.service
 
         repo_root = Path(__file__).resolve().parents[3]
@@ -152,6 +251,15 @@ class TestAbServiceBoundary:
 
     def test_tc_abs_034(self, tmp_path):
         """TC-ABS-034：service 导入不在当前目录产生副作用文件"""
+        __tc_meta__ = {
+            "tc_id": "TC-ABS-034",
+            "module": "ab_service",
+            "category": "boundary",
+            "source": "test_workspace/cases/ab_service/boundary.md",
+            "title": "service 导入不在当前目录产生副作用文件",
+            "priority": "P2",
+            "markers": [],
+        }
         # SETUP: 前置操作：在临时目录中执行 import ab_experiment_sdk.service，随后检查当前工作目录
 
         repo_root = Path(__file__).resolve().parents[3]
@@ -171,6 +279,15 @@ class TestAbServiceBoundary:
 
     def test_tc_abs_035(self, setup_ab_service, tmp_path):
         """TC-ABS-035：Remote SDK evaluate 端到端调用"""
+        __tc_meta__ = {
+            "tc_id": "TC-ABS-035",
+            "module": "ab_service",
+            "category": "boundary",
+            "source": "test_workspace/cases/ab_service/boundary.md",
+            "title": "Remote SDK evaluate 端到端调用",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 前置操作：AB 服务启动，白名单 u1 -> {"exp_game":"game_on"}
         # SETUP: 请求覆盖：调用 RemoteABExperimentSDK.evaluate(user_id="u1", experiment_names=["exp_game"])
 
@@ -185,6 +302,15 @@ class TestAbServiceBoundary:
 
     def test_tc_abs_036(self, setup_ab_service, tmp_path):
         """TC-ABS-036：Remote SDK 设置单用户白名单并验证 evaluate"""
+        __tc_meta__ = {
+            "tc_id": "TC-ABS-036",
+            "module": "ab_service",
+            "category": "boundary",
+            "source": "test_workspace/cases/ab_service/boundary.md",
+            "title": "Remote SDK 设置单用户白名单并验证 evaluate",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 接口调用：调用 sdk.set_user_whitelist("u2", {"exp_cal":"cal_on"})，随后 evaluate user_id="u2"、experiment_names=["exp_cal"]
 
         ab = setup_ab_service(case_id="TC-ABS-036")
@@ -198,6 +324,15 @@ class TestAbServiceBoundary:
 
     def test_tc_abs_037(self, setup_ab_service, tmp_path):
         """TC-ABS-037：Remote SDK 清除单用户白名单"""
+        __tc_meta__ = {
+            "tc_id": "TC-ABS-037",
+            "module": "ab_service",
+            "category": "boundary",
+            "source": "test_workspace/cases/ab_service/boundary.md",
+            "title": "Remote SDK 清除单用户白名单",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 前置操作：u2 白名单已存在
         # SETUP: 请求覆盖：调用 sdk.clear_whitelist("u2")
 
@@ -211,6 +346,15 @@ class TestAbServiceBoundary:
 
     def test_tc_abs_038(self, setup_ab_service, tmp_path):
         """TC-ABS-038：Remote SDK 批量覆盖白名单"""
+        __tc_meta__ = {
+            "tc_id": "TC-ABS-038",
+            "module": "ab_service",
+            "category": "boundary",
+            "source": "test_workspace/cases/ab_service/boundary.md",
+            "title": "Remote SDK 批量覆盖白名单",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 前置操作：已有白名单数据
         # SETUP: 请求覆盖：调用 sdk.set_whitelist({"u3":{"exp_game":"game_on"}})
 
@@ -223,6 +367,15 @@ class TestAbServiceBoundary:
 
     def test_tc_abs_039(self, setup_ab_service, tmp_path):
         """TC-ABS-039：Remote SDK 清空全部白名单"""
+        __tc_meta__ = {
+            "tc_id": "TC-ABS-039",
+            "module": "ab_service",
+            "category": "boundary",
+            "source": "test_workspace/cases/ab_service/boundary.md",
+            "title": "Remote SDK 清空全部白名单",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 前置操作：已有白名单数据
         # SETUP: 请求覆盖：调用 sdk.clear_whitelist()
 
@@ -236,6 +389,15 @@ class TestAbServiceBoundary:
 
     def test_tc_abs_040(self, setup_ab_service):
         """TC-ABS-040：Remote SDK 遇到服务端 500 时抛出 HTTPStatusError"""
+        __tc_meta__ = {
+            "tc_id": "TC-ABS-040",
+            "module": "ab_service",
+            "category": "boundary",
+            "source": "test_workspace/cases/ab_service/boundary.md",
+            "title": "Remote SDK 遇到服务端 500 时抛出 HTTPStatusError",
+            "priority": "P2 / 异常",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：mock AB 服务端对 /api/v1/ab/evaluate 固定返回 HTTP 500
         # SETUP: 请求覆盖_2：调用 sdk.evaluate(user_id="u_err")
@@ -250,3 +412,5 @@ class TestAbServiceBoundary:
         sdk.close()
 
 
+
+__codegen_skipped__ = []

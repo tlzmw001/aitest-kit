@@ -32,6 +32,15 @@ class TestE2eBusiness:
 
     def test_tc_e2e_001(self, grpc_target, setup_e2e):
         """TC-E2E-001：通过 HTTP 走内部打分时完成主服务到 AB 服务再到发放的全链路"""
+        __tc_meta__ = {
+            "tc_id": "TC-E2E-001",
+            "module": "e2e",
+            "category": "business",
+            "source": "test_workspace/cases/e2e/business.md",
+            "title": "通过 HTTP 走内部打分时完成主服务到 AB 服务再到发放的全链路",
+            "priority": "P0",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 环境覆盖：启动 Redis、AB 实验服务、内部 gRPC mock 打分服务和主服务；主服务配置 AB_SERVICE_URL={{ab_base_url}}
         # SETUP: 前置操作：在 AB 服务设置 u_e2e_http_internal_001 白名单，命中 {"coarse_rank_exp_game":"cr_v2_full","calibration_exp_game":"cal_on"}
@@ -57,6 +66,15 @@ class TestE2eBusiness:
 
     def test_tc_e2e_002(self, http_base_url, setup_e2e):
         """TC-E2E-002：通过 HTTP 走外部打分时跳过实验但仍完成推荐与发放"""
+        __tc_meta__ = {
+            "tc_id": "TC-E2E-002",
+            "module": "e2e",
+            "category": "business",
+            "source": "test_workspace/cases/e2e/business.md",
+            "title": "通过 HTTP 走外部打分时跳过实验但仍完成推荐与发放",
+            "priority": "P0",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 环境覆盖：启动 Redis、AB 实验服务、外部 HTTP mock 打分服务和主服务；主服务配置 AB_SERVICE_URL={{ab_base_url}}
         # SETUP: 前置操作：写入用户特征 {"gender":"male","age":"31","total_spend":"8000","purchase_frequency":"5","register_days":"120","is_new_user":"False","is_member":"True"}
@@ -81,6 +99,15 @@ class TestE2eBusiness:
 
     def test_tc_e2e_003(self, grpc_target, setup_e2e):
         """TC-E2E-003：同一兜底请求通过 HTTP 和 gRPC 返回一致的业务结果"""
+        __tc_meta__ = {
+            "tc_id": "TC-E2E-003",
+            "module": "e2e",
+            "category": "business",
+            "source": "test_workspace/cases/e2e/business.md",
+            "title": "同一兜底请求通过 HTTP 和 gRPC 返回一致的业务结果",
+            "priority": "P0",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP / gRPC
         # SETUP: 环境覆盖：启动 Redis 和主服务；不依赖 AB 服务命中；不写入任何 coupon:fallback:score:* Redis key
         # SETUP: 前置操作：设置 COUPON_ACT_001 库存为 2
@@ -99,3 +126,5 @@ class TestE2eBusiness:
         assert isinstance(resp, dict)
 
 
+
+__codegen_skipped__ = []

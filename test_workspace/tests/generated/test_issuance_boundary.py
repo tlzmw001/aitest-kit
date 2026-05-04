@@ -34,6 +34,15 @@ class TestIssuanceBoundary:
 
     def test_tc_issue_011(self, setup_issuance):
         """TC-ISSUE-011：最高分券库存不足时尝试下一张券"""
+        __tc_meta__ = {
+            "tc_id": "TC-ISSUE-011",
+            "module": "issuance",
+            "category": "boundary",
+            "source": "test_workspace/cases/issuance/boundary.md",
+            "title": "最高分券库存不足时尝试下一张券",
+            "priority": "P2",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 前置操作：HTTP 探测请求传入 A/B 且库存均为 100，读取 top_item 与 second_item
         # SETUP: 前置操作_2：重置库存为 top_item=0、second_item=100
@@ -58,6 +67,15 @@ class TestIssuanceBoundary:
 
     def test_tc_issue_012(self, setup_issuance):
         """TC-ISSUE-012：所有候选券库存不足时返回成功但 coupon 为空"""
+        __tc_meta__ = {
+            "tc_id": "TC-ISSUE-012",
+            "module": "issuance",
+            "category": "boundary",
+            "source": "test_workspace/cases/issuance/boundary.md",
+            "title": "所有候选券库存不足时返回成功但 coupon 为空",
+            "priority": "P2 / 异常",
+            "markers": [],
+        }
         # SETUP: 前置操作：A/B 库存均为 0
         # SETUP: 请求覆盖：max_claim_per_request=2、score_threshold=0.0
 
@@ -77,6 +95,15 @@ class TestIssuanceBoundary:
 
     def test_tc_issue_013(self, setup_issuance):
         """TC-ISSUE-013：并发请求同一库存只成功发放一次"""
+        __tc_meta__ = {
+            "tc_id": "TC-ISSUE-013",
+            "module": "issuance",
+            "category": "boundary",
+            "source": "test_workspace/cases/issuance/boundary.md",
+            "title": "并发请求同一库存只成功发放一次",
+            "priority": "P2",
+            "markers": [],
+        }
         # SETUP: 前置操作：SET coupon:stock:COUPON_ISSUE_CONCURRENT 1 EX 86400
         # SETUP: 请求覆盖：两个不同 user_id 并发请求同一券
         # SETUP: 请求覆盖_2：score_threshold=0.0
@@ -111,6 +138,15 @@ class TestIssuanceBoundary:
 
     def test_tc_issue_016(self, setup_issuance):
         """TC-ISSUE-016：expire_days 缺省时 HTTP item 默认值为 7 天"""
+        __tc_meta__ = {
+            "tc_id": "TC-ISSUE-016",
+            "module": "issuance",
+            "category": "boundary",
+            "source": "test_workspace/cases/issuance/boundary.md",
+            "title": "expire_days 缺省时 HTTP item 默认值为 7 天",
+            "priority": "P2",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 item 省略 expire_days，其他字段完整
         # SETUP: 请求覆盖_2：成功发放
@@ -129,6 +165,15 @@ class TestIssuanceBoundary:
 
     def test_tc_issue_017(self, setup_issuance):
         """TC-ISSUE-017：max_claim_per_request 大于候选数时最多尝试全部候选"""
+        __tc_meta__ = {
+            "tc_id": "TC-ISSUE-017",
+            "module": "issuance",
+            "category": "boundary",
+            "source": "test_workspace/cases/issuance/boundary.md",
+            "title": "max_claim_per_request 大于候选数时最多尝试全部候选",
+            "priority": "P2",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 前置操作：HTTP 探测请求传入 A/B 且库存均为 100，读取 top_item 与 second_item
         # SETUP: 前置操作_2：重置库存为 top_item=0、second_item=100
@@ -152,6 +197,15 @@ class TestIssuanceBoundary:
 
     def test_tc_issue_018(self, setup_issuance):
         """TC-ISSUE-018：gRPC 最高分券库存不足时尝试下一张券"""
+        __tc_meta__ = {
+            "tc_id": "TC-ISSUE-018",
+            "module": "issuance",
+            "category": "boundary",
+            "source": "test_workspace/cases/issuance/boundary.md",
+            "title": "gRPC 最高分券库存不足时尝试下一张券",
+            "priority": "P2",
+            "markers": [],
+        }
         # SETUP: 协议：gRPC
         # SETUP: 前置操作：gRPC 探测请求传入 A/B 且库存均为 100，读取 top_item 与 second_item
         # SETUP: 前置操作_2：重置库存为 top_item=0、second_item=100
@@ -176,6 +230,15 @@ class TestIssuanceBoundary:
 
     def test_tc_issue_019(self, setup_issuance):
         """TC-ISSUE-019：gRPC 所有候选券库存不足时返回成功但 coupon 为空"""
+        __tc_meta__ = {
+            "tc_id": "TC-ISSUE-019",
+            "module": "issuance",
+            "category": "boundary",
+            "source": "test_workspace/cases/issuance/boundary.md",
+            "title": "gRPC 所有候选券库存不足时返回成功但 coupon 为空",
+            "priority": "P2 / 异常",
+            "markers": [],
+        }
         # SETUP: 协议：gRPC
         # SETUP: 前置操作：gRPC 请求传入 A/B，库存均为 0
         # SETUP: 请求覆盖：max_claim_per_request=2、score_threshold=0.0
@@ -196,6 +259,15 @@ class TestIssuanceBoundary:
 
     def test_tc_issue_020(self, setup_issuance):
         """TC-ISSUE-020：gRPC max_claim_per_request 大于候选数时不报错"""
+        __tc_meta__ = {
+            "tc_id": "TC-ISSUE-020",
+            "module": "issuance",
+            "category": "boundary",
+            "source": "test_workspace/cases/issuance/boundary.md",
+            "title": "gRPC max_claim_per_request 大于候选数时不报错",
+            "priority": "P2",
+            "markers": [],
+        }
         # SETUP: 协议：gRPC
         # SETUP: 前置操作：gRPC 请求传入两张库存充足的候选券
         # SETUP: 请求覆盖：max_claim_per_request=10、score_threshold=0.0
@@ -214,3 +286,5 @@ class TestIssuanceBoundary:
 
 # SKIPPED: TC-ISSUE-014 — `[!可行性存疑: L1 未规定去重限制，当前实现未调用 has_claimed，需产品确认是否允许重复领取]`
 # SKIPPED: TC-ISSUE-015 — `[!可行性存疑: 需要测试环境能在扣库存后注入 Redis 写失败]`
+
+__codegen_skipped__ = [{"tc_id": "TC-ISSUE-014", "module": "issuance", "category": "boundary", "source": "test_workspace/cases/issuance/boundary.md", "title": "同一用户重复请求同一券不会因已领取被拦截", "priority": "P2", "markers": ["`[!可行性存疑: L1 未规定去重限制，当前实现未调用 has_claimed，需产品确认是否允许重复领取]`"], "reason": "`[!可行性存疑: L1 未规定去重限制，当前实现未调用 has_claimed，需产品确认是否允许重复领取]`"}, {"tc_id": "TC-ISSUE-015", "module": "issuance", "category": "boundary", "source": "test_workspace/cases/issuance/boundary.md", "title": "Redis 保存发放记录失败时请求异常", "priority": "P2 / 异常", "markers": ["`[!可行性存疑: 需要测试环境能在扣库存后注入 Redis 写失败]`"], "reason": "`[!可行性存疑: 需要测试环境能在扣库存后注入 Redis 写失败]`"}]

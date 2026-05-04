@@ -33,6 +33,15 @@ class TestValidationRatelimitBoundary:
 
     def test_tc_rate_006(self, setup_validation_ratelimit):
         """TC-RATE-006：HTTP 用户级限流窗口过期后恢复请求"""
+        __tc_meta__ = {
+            "tc_id": "TC-RATE-006",
+            "module": "validation_ratelimit",
+            "category": "boundary",
+            "source": "test_workspace/cases/validation_ratelimit/boundary.md",
+            "title": "HTTP 用户级限流窗口过期后恢复请求",
+            "priority": "P2",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 环境覆盖：服务配置 rate_limit.enabled=true、max_qps=100、per_user_qps=1、window_seconds=1
         # SETUP: 请求覆盖：HTTP 请求固定 user_id="u_rate_http_window"
@@ -49,6 +58,15 @@ class TestValidationRatelimitBoundary:
 
     def test_tc_rate_007(self, setup_validation_ratelimit):
         """TC-RATE-007：gRPC 用户级限流窗口过期后恢复请求"""
+        __tc_meta__ = {
+            "tc_id": "TC-RATE-007",
+            "module": "validation_ratelimit",
+            "category": "boundary",
+            "source": "test_workspace/cases/validation_ratelimit/boundary.md",
+            "title": "gRPC 用户级限流窗口过期后恢复请求",
+            "priority": "P2",
+            "markers": [],
+        }
         # SETUP: 协议：gRPC
         # SETUP: 环境覆盖：服务配置 rate_limit.enabled=true、max_qps=100、per_user_qps=1、window_seconds=1
         # SETUP: 请求覆盖：gRPC 请求固定 user_id="u_rate_grpc_window"
@@ -68,3 +86,5 @@ class TestValidationRatelimitBoundary:
 # SKIPPED: TC-RATE-009 — `[!可行性存疑: 需要测试环境允许控制 Redis 可用性，且不能修改仓库内 .env 或配置文件]`
 # SKIPPED: TC-RATE-010 — `[!可行性存疑: 黑盒接口测试无法直接固定服务进程内 time.time()，需要测试环境提供可控时钟或专项白盒验证；详见 mismatch.md]`
 # SKIPPED: TC-SCHEMA-004 — `[!可行性存疑: 当前实现的 RecommendRequest.items 是裸 list，不会使用已定义的 CouponItemRequest 校验子字段；详见 mismatch.md]`
+
+__codegen_skipped__ = [{"tc_id": "TC-RATE-008", "module": "validation_ratelimit", "category": "boundary", "source": "test_workspace/cases/validation_ratelimit/boundary.md", "title": "HTTP 限流 Redis 不可用时返回 500", "priority": "P2 / 异常", "markers": ["`[!可行性存疑: 需要测试环境允许控制 Redis 可用性，且不能修改仓库内 .env 或配置文件]`"], "reason": "`[!可行性存疑: 需要测试环境允许控制 Redis 可用性，且不能修改仓库内 .env 或配置文件]`"}, {"tc_id": "TC-RATE-009", "module": "validation_ratelimit", "category": "boundary", "source": "test_workspace/cases/validation_ratelimit/boundary.md", "title": "gRPC 限流 Redis 不可用时返回 UNKNOWN", "priority": "P2 / 异常", "markers": ["`[!可行性存疑: 需要测试环境允许控制 Redis 可用性，且不能修改仓库内 .env 或配置文件]`"], "reason": "`[!可行性存疑: 需要测试环境允许控制 Redis 可用性，且不能修改仓库内 .env 或配置文件]`"}, {"tc_id": "TC-RATE-010", "module": "validation_ratelimit", "category": "boundary", "source": "test_workspace/cases/validation_ratelimit/boundary.md", "title": "同一时间戳的 3 次请求仍应按 3 次计数", "priority": "P2", "markers": ["`[!可行性存疑: 黑盒接口测试无法直接固定服务进程内 time.time()，需要测试环境提供可控时钟或专项白盒验证；详见 mismatch.md]`"], "reason": "`[!可行性存疑: 黑盒接口测试无法直接固定服务进程内 time.time()，需要测试环境提供可控时钟或专项白盒验证；详见 mismatch.md]`"}, {"tc_id": "TC-SCHEMA-004", "module": "validation_ratelimit", "category": "boundary", "source": "test_workspace/cases/validation_ratelimit/boundary.md", "title": "HTTP item 缺少 value 时应被 Schema 拦截", "priority": "P2 / 异常", "markers": ["`[!可行性存疑: 当前实现的 RecommendRequest.items 是裸 list，不会使用已定义的 CouponItemRequest 校验子字段；详见 mismatch.md]`"], "reason": "`[!可行性存疑: 当前实现的 RecommendRequest.items 是裸 list，不会使用已定义的 CouponItemRequest 校验子字段；详见 mismatch.md]`"}]

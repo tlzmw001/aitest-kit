@@ -32,6 +32,15 @@ class TestE2eBoundary:
 
     def test_tc_e2e_004(self, grpc_target, setup_e2e):
         """TC-E2E-004：远程 AB 命中 cal_on 且 game/mobile 请求在端到端链路中产生大于原分的校准分"""
+        __tc_meta__ = {
+            "tc_id": "TC-E2E-004",
+            "module": "e2e",
+            "category": "boundary",
+            "source": "test_workspace/cases/e2e/boundary.md",
+            "title": "远程 AB 命中 cal_on 且 game/mobile 请求在端到端链路中产生大于原分的校准分",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 环境覆盖：启动 Redis、AB 实验服务、内部 gRPC mock 打分服务和主服务；主服务配置 AB_SERVICE_URL={{ab_base_url}}
         # SETUP: 前置操作：确认测试配置中的 game/mobile 线性校准规则包含 {"conditions":{"device":"mobile"},"k":1.2,"b":0.1}
@@ -59,6 +68,15 @@ class TestE2eBoundary:
 
     def test_tc_e2e_005(self, grpc_target, setup_e2e):
         """TC-E2E-005：内部打分链路在 AB 服务不可用时直接返回 HTTP 500"""
+        __tc_meta__ = {
+            "tc_id": "TC-E2E-005",
+            "module": "e2e",
+            "category": "boundary",
+            "source": "test_workspace/cases/e2e/boundary.md",
+            "title": "内部打分链路在 AB 服务不可用时直接返回 HTTP 500",
+            "priority": "P1 / 异常",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 环境覆盖：启动 Redis、内部 gRPC mock 打分服务和主服务；主服务配置 AB_SERVICE_URL={{unreachable_ab_base_url}}
         # SETUP: 前置操作：确认 {{unreachable_ab_base_url}}/health 不可访问
@@ -75,6 +93,15 @@ class TestE2eBoundary:
 
     def test_tc_e2e_006(self, http_base_url, setup_e2e):
         """TC-E2E-006：外部打分链路在 AB 服务不可用时仍可成功完成推荐"""
+        __tc_meta__ = {
+            "tc_id": "TC-E2E-006",
+            "module": "e2e",
+            "category": "boundary",
+            "source": "test_workspace/cases/e2e/boundary.md",
+            "title": "外部打分链路在 AB 服务不可用时仍可成功完成推荐",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 环境覆盖：启动 Redis、外部 HTTP mock 打分服务和主服务；主服务配置 AB_SERVICE_URL={{unreachable_ab_base_url}}
         # SETUP: 前置操作：确认 {{unreachable_ab_base_url}}/health 不可访问
@@ -97,6 +124,15 @@ class TestE2eBoundary:
 
     def test_tc_e2e_007(self, grpc_target, setup_e2e):
         """TC-E2E-007：gRPC 发放成功后可立即通过 HTTP 查询同一条领取记录"""
+        __tc_meta__ = {
+            "tc_id": "TC-E2E-007",
+            "module": "e2e",
+            "category": "boundary",
+            "source": "test_workspace/cases/e2e/boundary.md",
+            "title": "gRPC 发放成功后可立即通过 HTTP 查询同一条领取记录",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：gRPC / HTTP
         # SETUP: 环境覆盖：启动 Redis 和主服务；不写入任何 coupon:fallback:score:* Redis key
         # SETUP: 前置操作：设置 COUPON_ACT_001 库存为 1
@@ -115,3 +151,5 @@ class TestE2eBoundary:
         assert isinstance(resp, dict)
 
 
+
+__codegen_skipped__ = []

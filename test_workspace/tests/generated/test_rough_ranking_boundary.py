@@ -32,6 +32,15 @@ class TestRoughRankingBoundary:
 
     def test_tc_rank_013(self, setup_rough_ranking):
         """TC-RANK-013：候选券为空时参数校验拦截"""
+        __tc_meta__ = {
+            "tc_id": "TC-RANK-013",
+            "module": "rough_ranking",
+            "category": "boundary",
+            "source": "test_workspace/cases/rough_ranking/boundary.md",
+            "title": "候选券为空时参数校验拦截",
+            "priority": "P2 / 异常",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 items=[]
 
@@ -43,6 +52,15 @@ class TestRoughRankingBoundary:
 
     def test_tc_rank_014(self, setup_rough_ranking):
         """TC-RANK-014：truncate_count 小于等于 0 时返回空推荐结果"""
+        __tc_meta__ = {
+            "tc_id": "TC-RANK-014",
+            "module": "rough_ranking",
+            "category": "boundary",
+            "source": "test_workspace/cases/rough_ranking/boundary.md",
+            "title": "truncate_count 小于等于 0 时返回空推荐结果",
+            "priority": "P2 / 异常",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":0,"truncate_rule":"top_value"}
         # SETUP: 请求覆盖：HTTP 请求传入 3 张合法券
@@ -56,6 +74,15 @@ class TestRoughRankingBoundary:
 
     def test_tc_rank_015(self, setup_rough_ranking):
         """TC-RANK-015：truncate_count 非数字时默认不截断"""
+        __tc_meta__ = {
+            "tc_id": "TC-RANK-015",
+            "module": "rough_ranking",
+            "category": "boundary",
+            "source": "test_workspace/cases/rough_ranking/boundary.md",
+            "title": "truncate_count 非数字时默认不截断",
+            "priority": "P2 / 异常",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":"bad","truncate_rule":"top_value"}
         # SETUP: 请求覆盖：HTTP 请求传入 3 张合法券
@@ -70,6 +97,15 @@ class TestRoughRankingBoundary:
     @pytest.mark.manual
     def test_tc_rank_016(self, setup_rough_ranking):
         """TC-RANK-016：未知 truncate_rule 降级到 top_value"""
+        __tc_meta__ = {
+            "tc_id": "TC-RANK-016",
+            "module": "rough_ranking",
+            "category": "boundary",
+            "source": "test_workspace/cases/rough_ranking/boundary.md",
+            "title": "未知 truncate_rule 降级到 top_value",
+            "priority": "P2 / 异常",
+            "markers": ["`[manual]`"],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":2,"truncate_rule":"unknown_rule"}
         # SETUP: 请求覆盖：HTTP 请求传入 A/B/C
@@ -82,6 +118,15 @@ class TestRoughRankingBoundary:
 
     def test_tc_rank_017(self, setup_rough_ranking):
         """TC-RANK-017：sort_keys 格式异常时跳过异常 key"""
+        __tc_meta__ = {
+            "tc_id": "TC-RANK-017",
+            "module": "rough_ranking",
+            "category": "boundary",
+            "source": "test_workspace/cases/rough_ranking/boundary.md",
+            "title": "sort_keys 格式异常时跳过异常 key",
+            "priority": "P2 / 异常",
+            "markers": [],
+        }
         # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":2,"sort_keys":["bad",{"field":123,"weight":1},{"field":"value","weight":"bad"}]}
 
         case = setup_rough_ranking(case_id="TC-RANK-017")
@@ -92,6 +137,15 @@ class TestRoughRankingBoundary:
     @pytest.mark.manual
     def test_tc_rank_018(self, setup_rough_ranking):
         """TC-RANK-018：filters 操作符未知时该条件不通过"""
+        __tc_meta__ = {
+            "tc_id": "TC-RANK-018",
+            "module": "rough_ranking",
+            "category": "boundary",
+            "source": "test_workspace/cases/rough_ranking/boundary.md",
+            "title": "filters 操作符未知时该条件不通过",
+            "priority": "P2 / 异常",
+            "markers": ["`[manual]`"],
+        }
         # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":3,"filters":[{"field":"value","op":"bad_op","value":80}]}
 
         case = setup_rough_ranking(case_id="TC-RANK-018")
@@ -103,6 +157,15 @@ class TestRoughRankingBoundary:
 
     def test_tc_rank_019(self, setup_rough_ranking):
         """TC-RANK-019：diversity 参数异常时跳过打散"""
+        __tc_meta__ = {
+            "tc_id": "TC-RANK-019",
+            "module": "rough_ranking",
+            "category": "boundary",
+            "source": "test_workspace/cases/rough_ranking/boundary.md",
+            "title": "diversity 参数异常时跳过打散",
+            "priority": "P2 / 异常",
+            "markers": [],
+        }
         # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":2,"truncate_rule":"top_value","diversity":{"enabled":true,"group_field":123,"max_per_group":0}}
 
         case = setup_rough_ranking(case_id="TC-RANK-019")
@@ -113,6 +176,15 @@ class TestRoughRankingBoundary:
     @pytest.mark.manual
     def test_tc_rank_020(self, setup_rough_ranking):
         """TC-RANK-020：prior_count 大于 truncate_count 时截断到 truncate_count"""
+        __tc_meta__ = {
+            "tc_id": "TC-RANK-020",
+            "module": "rough_ranking",
+            "category": "boundary",
+            "source": "test_workspace/cases/rough_ranking/boundary.md",
+            "title": "prior_count 大于 truncate_count 时截断到 truncate_count",
+            "priority": "P2 / 异常",
+            "markers": ["`[manual]`"],
+        }
         # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":1,"prior_count":3,"prior_rule":"top_value"}
         # SETUP: 请求覆盖：B 为 isPrior=true
 
@@ -124,6 +196,15 @@ class TestRoughRankingBoundary:
 
     def test_tc_rank_021(self, setup_rough_ranking):
         """TC-RANK-021：gRPC truncate_count 非数字时默认不截断"""
+        __tc_meta__ = {
+            "tc_id": "TC-RANK-021",
+            "module": "rough_ranking",
+            "category": "boundary",
+            "source": "test_workspace/cases/rough_ranking/boundary.md",
+            "title": "gRPC truncate_count 非数字时默认不截断",
+            "priority": "P2 / 异常",
+            "markers": [],
+        }
         # SETUP: 协议：gRPC
         # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":"bad","truncate_rule":"top_value"}
         # SETUP: 请求覆盖：gRPC 请求传入 3 张合法券
@@ -136,6 +217,15 @@ class TestRoughRankingBoundary:
     @pytest.mark.manual
     def test_tc_rank_022(self, setup_rough_ranking):
         """TC-RANK-022：gRPC 未知 truncate_rule 降级到 top_value"""
+        __tc_meta__ = {
+            "tc_id": "TC-RANK-022",
+            "module": "rough_ranking",
+            "category": "boundary",
+            "source": "test_workspace/cases/rough_ranking/boundary.md",
+            "title": "gRPC 未知 truncate_rule 降级到 top_value",
+            "priority": "P2 / 异常",
+            "markers": ["`[manual]`"],
+        }
         # SETUP: 协议：gRPC
         # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":2,"truncate_rule":"unknown_rule"}
         # SETUP: 请求覆盖：gRPC 请求传入 A/B/C
@@ -149,6 +239,15 @@ class TestRoughRankingBoundary:
     @pytest.mark.manual
     def test_tc_rank_023(self, setup_rough_ranking):
         """TC-RANK-023：gRPC prior_count 大于 truncate_count 时截断到 truncate_count"""
+        __tc_meta__ = {
+            "tc_id": "TC-RANK-023",
+            "module": "rough_ranking",
+            "category": "boundary",
+            "source": "test_workspace/cases/rough_ranking/boundary.md",
+            "title": "gRPC prior_count 大于 truncate_count 时截断到 truncate_count",
+            "priority": "P2 / 异常",
+            "markers": ["`[manual]`"],
+        }
         # SETUP: 协议：gRPC
         # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":1,"prior_count":3,"prior_rule":"top_value"}
         # SETUP: 请求覆盖：gRPC 请求中 COUPON_RANK_B.is_prior=true
@@ -160,3 +259,5 @@ class TestRoughRankingBoundary:
         # MANUAL CHECK: 应用日志包含 prior_count=3 大于 truncate_count=1
 
 
+
+__codegen_skipped__ = []

@@ -35,6 +35,15 @@ class TestFeatureScoringBusiness:
     @pytest.mark.manual
     def test_tc_feat_001(self, http_base_url, setup_feature_scoring):
         """TC-FEAT-001：HTTP 读取 Redis 用户特征并透传给打分"""
+        __tc_meta__ = {
+            "tc_id": "TC-FEAT-001",
+            "module": "feature_scoring",
+            "category": "business",
+            "source": "test_workspace/cases/feature_scoring/business.md",
+            "title": "HTTP 读取 Redis 用户特征并透传给打分",
+            "priority": "P1",
+            "markers": ["`[manual]`"],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_feat_http"、external=0
         # SETUP: 前置操作：Redis 设置 gender=male、total_spend=1200
@@ -47,6 +56,15 @@ class TestFeatureScoringBusiness:
     @pytest.mark.manual
     def test_tc_feat_002(self, grpc_target, setup_feature_scoring):
         """TC-FEAT-002：gRPC 读取 Redis 用户特征并透传给打分"""
+        __tc_meta__ = {
+            "tc_id": "TC-FEAT-002",
+            "module": "feature_scoring",
+            "category": "business",
+            "source": "test_workspace/cases/feature_scoring/business.md",
+            "title": "gRPC 读取 Redis 用户特征并透传给打分",
+            "priority": "P1",
+            "markers": ["`[manual]`"],
+        }
         # SETUP: 协议：gRPC
         # SETUP: 请求覆盖：gRPC 请求 user_id="u_feat_grpc"、external=0
         # SETUP: 前置操作：Redis 设置 age=30、is_member=true
@@ -59,6 +77,15 @@ class TestFeatureScoringBusiness:
     @pytest.mark.manual
     def test_tc_feat_003(self, http_base_url, setup_feature_scoring):
         """TC-FEAT-003：请求 item 字段与 TSV item 特征合并后进入打分"""
+        __tc_meta__ = {
+            "tc_id": "TC-FEAT-003",
+            "module": "feature_scoring",
+            "category": "business",
+            "source": "test_workspace/cases/feature_scoring/business.md",
+            "title": "请求 item 字段与 TSV item 特征合并后进入打分",
+            "priority": "P1",
+            "markers": ["`[manual]`"],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 item 为 COUPON_FEAT_001，请求体包含 coupon_type="discount"、value=80、min_spend=5000、expire_days=7
         # SETUP: 前置操作：TSV 中存在该 item 的其他特征
@@ -72,6 +99,15 @@ class TestFeatureScoringBusiness:
     @pytest.mark.manual
     def test_tc_score_001(self, http_base_url, setup_feature_scoring):
         """TC-SCORE-001：HTTP external=0 调用内部 gRPC 打分"""
+        __tc_meta__ = {
+            "tc_id": "TC-SCORE-001",
+            "module": "feature_scoring",
+            "category": "business",
+            "source": "test_workspace/cases/feature_scoring/business.md",
+            "title": "HTTP external=0 调用内部 gRPC 打分",
+            "priority": "P1",
+            "markers": ["`[manual]`"],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_score_internal_http"、external=0、reqId="req-score-001"
         setup_feature_scoring(case_id="TC-SCORE-001")
@@ -84,6 +120,15 @@ class TestFeatureScoringBusiness:
     @pytest.mark.manual
     def test_tc_score_002(self, grpc_target, setup_feature_scoring):
         """TC-SCORE-002：gRPC external=0 调用内部 gRPC 打分"""
+        __tc_meta__ = {
+            "tc_id": "TC-SCORE-002",
+            "module": "feature_scoring",
+            "category": "business",
+            "source": "test_workspace/cases/feature_scoring/business.md",
+            "title": "gRPC external=0 调用内部 gRPC 打分",
+            "priority": "P1",
+            "markers": ["`[manual]`"],
+        }
         # SETUP: 协议：gRPC
         # SETUP: 请求覆盖：gRPC 请求 user_id="u_score_internal_grpc"、external=0、req_id="req-score-002"
         setup_feature_scoring(case_id="TC-SCORE-002")
@@ -95,6 +140,15 @@ class TestFeatureScoringBusiness:
 
     def test_tc_score_003(self, http_base_url, setup_feature_scoring):
         """TC-SCORE-003：HTTP external=1 调用外部 HTTP 打分"""
+        __tc_meta__ = {
+            "tc_id": "TC-SCORE-003",
+            "module": "feature_scoring",
+            "category": "business",
+            "source": "test_workspace/cases/feature_scoring/business.md",
+            "title": "HTTP external=1 调用外部 HTTP 打分",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_score_external_http"、external=1、reqId="req-score-003"
         setup_feature_scoring(case_id="TC-SCORE-003")
@@ -107,6 +161,15 @@ class TestFeatureScoringBusiness:
 
     def test_tc_score_004(self, grpc_target, setup_feature_scoring):
         """TC-SCORE-004：gRPC external=1 调用外部 HTTP 打分"""
+        __tc_meta__ = {
+            "tc_id": "TC-SCORE-004",
+            "module": "feature_scoring",
+            "category": "business",
+            "source": "test_workspace/cases/feature_scoring/business.md",
+            "title": "gRPC external=1 调用外部 HTTP 打分",
+            "priority": "P1",
+            "markers": [],
+        }
         # SETUP: 协议：gRPC
         # SETUP: 请求覆盖：gRPC 请求 user_id="u_score_external_grpc"、external=1、req_id="req-score-004"
         setup_feature_scoring(case_id="TC-SCORE-004")
@@ -120,6 +183,15 @@ class TestFeatureScoringBusiness:
     @pytest.mark.manual
     def test_tc_score_005(self, http_base_url, setup_feature_scoring):
         """TC-SCORE-005：外部打分 user_id 使用加盐 SHA-256"""
+        __tc_meta__ = {
+            "tc_id": "TC-SCORE-005",
+            "module": "feature_scoring",
+            "category": "business",
+            "source": "test_workspace/cases/feature_scoring/business.md",
+            "title": "外部打分 user_id 使用加盐 SHA-256",
+            "priority": "P1",
+            "markers": ["`[manual]`"],
+        }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_score_encrypt"、external=1
         # SETUP: 请求覆盖_2：外部打分服务 salt 使用默认 coupon_external_uid_salt
@@ -130,3 +202,5 @@ class TestFeatureScoringBusiness:
         # MANUAL CHECK: 不包含明文 u_score_encrypt
 
 
+
+__codegen_skipped__ = []
