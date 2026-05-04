@@ -154,6 +154,46 @@ pytest test_workspace/tests/generated/test_calibration_business.py::TestCalibrat
 pytest test_workspace/tests/generated/ -v -m "not manual"
 ```
 
+### 3.3 生成结构化测试报告
+
+推荐使用 `aitest run` 作为 generated pytest 的执行入口：
+
+```bash
+# 执行单模块并生成报告
+aitest run calibration
+
+# 执行全部模块并生成报告
+aitest run
+
+# 默认不执行 manual；需要时显式包含
+aitest run calibration --include-manual
+
+# 从最近一次 result.json 重新渲染 report.md
+aitest report
+```
+
+`aitest run` 会先检查 generated pytest 是否与 Markdown/profile 一致；如果不一致，会生成 `BLOCKED_RUN` 报告并停止，不执行过期测试。
+
+报告输出到：
+
+```text
+test_workspace/reports/
+├── latest/
+│   ├── junit.xml
+│   ├── result.json
+│   └── report.md
+└── runs/{run_id}/
+    ├── junit.xml
+    ├── result.json
+    └── report.md
+```
+
+报告会单独统计：
+
+- `pytest_skipped`：pytest 已收集但运行时 skip 的测试
+- `codegen_skipped`：标记为可行性存疑、未生成 pytest 函数的用例
+- `manual_total` / `manual_executed` / `manual_not_run`：manual 用例执行情况
+
 ## 第四步：看懂测试结果 / 处理失败
 
 ### 全部通过

@@ -34,10 +34,16 @@ def _ast_error(path: Path) -> str | None:
     return None
 
 
-def _check_consistency(modules: list[str], cases_dir: Path) -> int:
+def _check_consistency(modules: list[str], cases_dir: Path, include_all_generated: bool = False) -> int:
     generated_dir = Path("test_workspace/tests/generated")
     stale_count = 0
     blocked_count = 0
+    target_files: set[str] = set()
+    for mod in modules:
+        mod_dir = cases_dir / mod
+        for file_type in ("business", "boundary"):
+            if (mod_dir / f"{file_type}.md").exists():
+                target_files.add(f"test_{mod}_{file_type}.py")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         for mod in modules:
@@ -63,7 +69,8 @@ def _check_consistency(modules: list[str], cases_dir: Path) -> int:
                 click.echo(f"  {syntax_error}")
                 stale_count += 1
         for f in generated_dir.glob("test_*.py"):
-            all_files.add(f.name)
+            if include_all_generated or f.name in target_files:
+                all_files.add(f.name)
 
         for fname in sorted(all_files):
             new_file = tmp_path / fname
@@ -122,7 +129,7 @@ def codegen(module: str | None, all_modules: bool, dry_run: bool, check: bool):
         sys.exit(1)
 
     if check:
-        sys.exit(_check_consistency(modules, cases_dir))
+        sys.exit(_check_consistency(modules, cases_dir, include_all_generated=all_modules))
 
     total_generated = 0
     total_blocked = 0

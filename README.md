@@ -35,6 +35,11 @@ pytest tests/
 # 运行 codegen 生成的集成测试
 pytest test_workspace/tests/generated/ -v
 
+# 执行 generated 测试并生成结构化报告
+aitest run calibration              # 默认跳过 manual 用例
+aitest run calibration --include-manual
+aitest report                       # 从 latest/result.json 重新渲染 report.md
+
 # 用 codegen CLI 生成/校验测试代码
 aitest codegen calibration          # 生成单个模块
 aitest codegen --all                # 生成全部模块
@@ -65,16 +70,18 @@ AIAutoTest/
 │   │   ├── helpers/            #     HTTP / gRPC / Redis 测试工具
 │   │   └── generated/          #     codegen 生成的 pytest 文件（编译产物）
 │   ├── results/                #   待测系统 bug 记录
+│   ├── reports/                #   测试执行报告（运行产物，不入库）
 │   └── plans/                  #   方案文档
 │
 ├── aitest_kit/                 # Python 工具库
 │   ├── cli.py                  #   命令行入口（aitest 命令）
-│   └── codegen/                #   代码生成引擎
-│       ├── parser.py           #     Markdown → 结构化数据
-│       ├── emitter.py          #     结构化数据 → pytest 代码
-│       ├── project_config.py   #     项目配置加载器
-│       ├── profile.py          #     模块 profile 加载器
-│       └── render_utils.py     #     代码渲染工具
+│   ├── codegen/                #   代码生成引擎
+│   │   ├── parser.py           #     Markdown → 结构化数据
+│   │   ├── emitter.py          #     结构化数据 → pytest 代码
+│   │   ├── project_config.py   #     项目配置加载器
+│   │   ├── profile.py          #     模块 profile 加载器
+│   │   └── render_utils.py     #     代码渲染工具
+│   └── report/                 #   测试结果采集与 Markdown 报告
 │
 ├── aitest_config/              # 项目级配置（详见下方"配置文件"章节）
 │   ├── config.yaml             #   项目路径 / 服务 / 协议 / 已知限制
@@ -105,8 +112,9 @@ docs/（开发文档）
 ── 执行阶段 ──
 
   ↓  /test-codegen   Markdown 用例 → pytest 代码
-  ↓  pytest 执行
-  ↓  失败分流 → /test-fix 或更新 fixture
+  ↓  aitest run / pytest 执行
+  ↓  result.json + report.md
+  ↓  失败分流 → /test-fix 或更新 fixture/profile/emitter
   ↓  测试全部通过
   ↓  /emitter-build  从已验证 .py 提取确定性模板
 ```
@@ -222,6 +230,26 @@ emitter / parser 生成 pytest 代码时读取。换项目时修改此文件。
 |------|------|
 | `tests/fixtures/codegen_profile_{module}.md` | 模块的 codegen 配置：module_type、断言规则、请求模板、setup 映射、调试经验 |
 | `tests/fixtures/{module}.py` | 模块的 pytest fixture：setup/teardown 逻辑、`_CASE_CONFIGS` 数据 |
+
+## 测试报告
+
+`aitest run` 会先执行 generated freshness check，确认 Markdown/profile 与 generated pytest 一致；检查失败时生成 `BLOCKED_RUN` 报告并停止，不执行过期测试。
+
+报告产物默认写入 `test_workspace/reports/`：
+
+```
+test_workspace/reports/
+├── latest/
+│   ├── junit.xml
+│   ├── result.json
+│   └── report.md
+└── runs/{run_id}/
+    ├── junit.xml
+    ├── result.json
+    └── report.md
+```
+
+`manual` 用例默认不执行，报告会单独统计 `manual_total`、`manual_executed`、`manual_not_run`。如需执行 manual 用例，使用 `aitest run --include-manual`。
 
 ## 待测系统
 

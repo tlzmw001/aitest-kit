@@ -15,6 +15,7 @@ test_workspace/         # AI 生成内容的工作目录
     fixtures/           #     模块 fixture（每模块一个 .py + codegen_profile.md）
     helpers/            #     HTTP/Redis 等测试工具函数
     generated/          #     codegen 生成的 pytest 文件（编译产物）
+  reports/              #   测试执行报告（运行产物，不入库）
   results/              #   待测系统 bug 记录
   plans/                #   方案文档
 aitest_kit/             # Python 测试工具库（parser、emitter、CLI）
@@ -42,6 +43,10 @@ python -m coupon_system.main
 
 # 运行单测
 pytest tests/
+
+# 执行 generated 测试并生成结构化报告
+aitest run calibration
+aitest report
 ```
 
 ## 技术栈
@@ -76,7 +81,9 @@ test-fix    ── 修正用例错误，沉淀经验到 TEST_SPEC 和相关 skil
 
 test-codegen ── Markdown 用例 → pytest 代码
   ↓
-pytest 执行
+aitest run / pytest 执行
+  ↓
+result.json + report.md
   ↓
 失败时分流：
   ├─ 用例问题 → test-fix → 重新 codegen
@@ -107,6 +114,7 @@ emitter-build ── 从已验证的 .py 提取确定性模板到 emitter
 - **需求迭代**：新文档放入 `docs/` → `/knowledge-build`（增量更新）→ `/test-design`（增量生成）
 - **用例出错**：`/test-fix`（修用例 + 记 TEST_SPEC 陷阱 + 更新 skill）
 - **生成 pytest**：`/test-codegen <模块名>`
+- **执行并报告**：`aitest run <模块名>`，默认排除 manual；需要时加 `--include-manual`
 - **只想看文档质量**：`/doc-review`
 
 ### 关键约定
@@ -117,7 +125,16 @@ emitter-build ── 从已验证的 .py 提取确定性模板到 emitter
 - 用例存放在 `test_workspace/cases/{模块名}/` 下，未指定时先询问用户
 - 模块 fixture 按模块拆分到 `test_workspace/tests/fixtures/{module}.py`，conftest.py 只放全局 fixture
 - codegen_profile 存放在 `test_workspace/tests/fixtures/codegen_profile_{module}.md`，与 fixture 文件同目录
+- 测试执行报告写入 `test_workspace/reports/`，属于运行产物，不提交；待测系统 bug 仍记录到 `test_workspace/results/`
 - 项目结构或流程发生变更时，检查是否需要同步更新 `CLAUDE.md` 和 `README.md`，并询问用户是否需要更新 `docs/usebook/` 下的文档
+
+### test-report 流程细节
+
+1. **freshness check** — `aitest run` 默认先检查 generated pytest 是否与 Markdown/profile 一致；失败时生成 `BLOCKED_RUN` 报告并停止。
+2. **pytest 执行** — 默认追加 `-m "not manual"`；`--include-manual` 才执行 manual 用例。
+3. **metadata join** — generated pytest 中的 `__tc_meta__` 连接 JUnit XML 结果；`__codegen_skipped__` 记录未生成 pytest 函数的可行性存疑用例。
+4. **结果落盘** — 输出 `junit.xml`、`result.json`、`report.md` 到 `test_workspace/reports/runs/{run_id}/`，并同步到 `latest/`。
+5. **反哺清单** — 报告按环境、fixture/codegen、断言失败、未知问题生成下一步处理建议。
 
 ## 测试执行注意事项
 

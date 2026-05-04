@@ -28,8 +28,13 @@ from aitest_kit.codegen.project_config import (
 from aitest_kit.codegen.render_utils import (
     dict_to_python,
     dict_to_python_compact,
+    module_abbrev,
+    module_class_name,
+    render_assignment,
     resolve_assertion,
     strip_backticks,
+    tc_func_name,
+    tc_number,
 )
 
 
@@ -55,27 +60,6 @@ class EmitContext:
 # ---------------------------------------------------------------------------
 # File-level template rendering
 # ---------------------------------------------------------------------------
-
-def _module_class_name(module: str, file_type: str) -> str:
-    parts = module.split("_")
-    camel = "".join(p.capitalize() for p in parts)
-    suffix = "Business" if file_type == "business" else "Boundary"
-    return f"Test{camel}{suffix}"
-
-
-def _tc_func_name(tc_id: str) -> str:
-    return "test_" + tc_id.lower().replace("-", "_")
-
-
-def _tc_number(tc_id: str) -> str:
-    m = re.search(r"(\d+)$", tc_id)
-    return m.group(1) if m else "000"
-
-
-def _module_abbrev(module: str, project: ProjectConfig) -> str:
-    """Short abbreviation for user_id/req_id generation."""
-    return project.module_abbrevs.get(module, module[:4])
-
 
 def _render_header(ctx: EmitContext, has_grpc: bool = False) -> list[str]:
     lines = [
@@ -144,9 +128,9 @@ def _render_req_call(tc: TestCase, ctx: EmitContext, default_user_id: str, defau
 
 def _render_test_function(tc: TestCase, ctx: EmitContext) -> list[str]:
     """Render a single test function."""
-    abbrev = _module_abbrev(ctx.module, ctx.project)
-    num = _tc_number(tc.id)
-    func_name = _tc_func_name(tc.id)
+    abbrev = module_abbrev(ctx.module, ctx.project)
+    num = tc_number(tc.id)
+    func_name = tc_func_name(tc.id)
     is_manual = any("manual" in m.lower() for m in tc.markers)
     is_grpc = any("gRPC" in v for v in tc.scenario_vars.values())
 
@@ -162,6 +146,7 @@ def _render_test_function(tc: TestCase, ctx: EmitContext) -> list[str]:
         signature = ", ".join(["self", *fixtures])
         lines.append(f"    def {func_name}({signature}):")
         lines.append(f'        """{tc.id}：{tc.title}"""')
+        lines.extend(render_assignment("__tc_meta__", _case_meta(tc, ctx), indent=2))
         for key, val in tc.scenario_vars.items():
             if key.startswith("_"):
                 continue
@@ -177,6 +162,7 @@ def _render_test_function(tc: TestCase, ctx: EmitContext) -> list[str]:
     else:
         lines.append(f"    def {func_name}(self, http_base_url, setup_{ctx.module}):")
     lines.append(f'        """{tc.id}：{tc.title}"""')
+    lines.extend(render_assignment("__tc_meta__", _case_meta(tc, ctx), indent=2))
 
     # Setup comments + fixture call
     for key, val in tc.scenario_vars.items():
@@ -267,6 +253,18 @@ def _module_type_diagnostics(
     return diagnostics
 
 
+def _case_meta(tc: TestCase, ctx: EmitContext) -> dict[str, Any]:
+    return {
+        "tc_id": tc.id,
+        "module": ctx.module,
+        "category": ctx.file_type,
+        "source": ctx.source_path,
+        "title": tc.title,
+        "priority": tc.priority,
+        "markers": list(tc.markers),
+    }
+
+
 def emit_file(
     parse_result: ParseResult,
     file_type: str,
@@ -351,6 +349,7 @@ def emit_file(
 
     all_lines: list[str] = []
     skipped: list[tuple[str, str]] = []
+    skipped_meta: list[dict[str, Any]] = []
     all_unparsed: list[tuple[str, str]] = []
     manual_count = 0
     case_count = 0
@@ -372,7 +371,7 @@ def emit_file(
         all_lines.extend(_render_req_helper(ctx))
 
     # Class
-    class_name = _module_class_name(module, file_type)
+    class_name = module_class_name(module, file_type)
     desc = f"{module} {'业务' if file_type == 'business' else '边界'}测试用例"
     all_lines.extend(["", "", f"class {class_name}:"])
     all_lines.append(f'    """{desc}"""')
@@ -388,6 +387,9 @@ def emit_file(
         if skip_markers:
             reason = skip_markers[0]
             skipped.append((tc.id, reason))
+            meta = _case_meta(tc, ctx)
+            meta["reason"] = reason
+            skipped_meta.append(meta)
             continue
 
         is_manual = any("manual" in m.lower() for m in tc.markers)
@@ -422,6 +424,8 @@ def emit_file(
     for tc_id, reason in skipped:
         all_lines.append(f"# SKIPPED: {tc_id} — {reason}")
 
+    all_lines.append("")
+    all_lines.extend(render_assignment("__codegen_skipped__", skipped_meta, indent=0))
     all_lines.append("")
 
     output_path.write_text("\n".join(all_lines), encoding="utf-8")

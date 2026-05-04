@@ -57,6 +57,9 @@
 - `test_workspace/tests/generated/`
   codegen 生成的 pytest 文件，视为编译产物。
 
+- `test_workspace/reports/`
+  测试执行报告目录，包含 `result.json`、`report.md` 和 JUnit XML。该目录是运行产物，不入库。
+
 - `test_workspace/results/`
   待测系统 bug、测试发现和执行结果记录。
 
@@ -92,6 +95,8 @@
 pip install -e ".[dev,server]"
 python -m coupon_system.main
 python3 -m aitest_kit.cli codegen --all --check
+python3 -m aitest_kit.cli run calibration
+python3 -m aitest_kit.cli report
 python3 -m compileall aitest_kit/codegen
 python3 -m pytest test_workspace/tests/generated
 ```
@@ -123,6 +128,7 @@ docs/
 执行阶段：
 test-codegen
   -> pytest 执行
+  -> result.json + report.md
   -> 失败分流
      -> 用例问题：test-fix -> 重新 codegen
      -> fixture/codegen 问题：更新 fixture/profile/emitter -> 重新 codegen
@@ -146,6 +152,9 @@ test-codegen
 
 - 生成 pytest：
   使用 `test-codegen`，从 Markdown 用例和 profile 生成 `test_workspace/tests/generated/` 下的 pytest。
+
+- 执行并生成报告：
+  使用 `aitest run <模块名>`，默认排除 manual 用例；需要执行 manual 时加 `--include-manual`。报告写入 `test_workspace/reports/`，失败反哺清单用于后续 `test-fix` 或 fixture/profile 修正。
 
 - 测试全部通过后：
   使用 `emitter-build` 从已验证的 pytest 提取确定性模板，减少后续 AI 补写比例。
@@ -178,6 +187,9 @@ test-codegen
 
 - 待测系统 bug 记录到 `test_workspace/results/`。
   不跳过、不放宽断言、不伪造成功响应。等待系统修复后重新执行验证。
+
+- 例行执行报告记录到 `test_workspace/reports/`。
+  `results/` 放待测系统 bug 记录，`reports/` 放运行产物，两者不要混用。
 
 ## 测试角色边界
 
@@ -223,6 +235,16 @@ AI 的角色是测试工程师，不是被测系统的开发者。
 
 10. 经验沉淀。
     调试经验写入 `codegen_profile_{module}.md`、`TEST_SPEC` 或 skill；测试稳定通过后再使用 `emitter-build` 提取新规则。
+
+## 测试报告流程
+
+`aitest run` 是 generated pytest 的结构化执行入口：
+
+1. 默认先执行 generated freshness check，确认 Markdown/profile 与 generated pytest 一致；失败时生成 `BLOCKED_RUN` 报告并停止，不执行过期测试。
+2. 默认排除 `@pytest.mark.manual` 用例；报告仍统计 `manual_total`、`manual_executed`、`manual_not_run`。需要执行 manual 时使用 `--include-manual`。
+3. collector 用 generated pytest 中的 `__tc_meta__` 与 JUnit XML 结果关联；`__codegen_skipped__` 统计可行性存疑且未生成 pytest 函数的用例。
+4. 输出 `junit.xml`、`result.json`、`report.md` 到 `test_workspace/reports/runs/{run_id}/`，并同步到 `test_workspace/reports/latest/`。
+5. report 的反哺清单只做规则化初判；断言失败不自动判定为产品 bug，需人工确认后再记录到 `test_workspace/results/`。
 
 ## codegen 可移植架构
 

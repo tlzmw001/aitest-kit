@@ -25,6 +25,12 @@ paths:
   # 测试用例输出目录（按模块分子目录，如 cases/calibration/business.md）
   cases_dir: test_workspace/cases
 
+  # codegen 生成的 pytest 目录（编译产物）
+  generated_dir: test_workspace/tests/generated
+
+  # pytest 执行报告输出目录（运行产物，不入库）
+  reports_dir: test_workspace/reports
+
   # 历史用例目录（旧格式用例，逐步迁移中，编号不回收）
   old_cases_dir: cases/old-cases
 

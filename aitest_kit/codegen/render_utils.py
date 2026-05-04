@@ -17,6 +17,27 @@ def strip_backticks(s: str) -> str:
     return _BACKTICK.sub(r"\1", s).strip()
 
 
+def module_class_name(module: str, file_type: str) -> str:
+    parts = module.split("_")
+    camel = "".join(p.capitalize() for p in parts)
+    suffix = "Business" if file_type == "business" else "Boundary"
+    return f"Test{camel}{suffix}"
+
+
+def tc_func_name(tc_id: str) -> str:
+    return "test_" + tc_id.lower().replace("-", "_")
+
+
+def tc_number(tc_id: str) -> str:
+    m = re.search(r"(\d+)$", tc_id)
+    return m.group(1) if m else "000"
+
+
+def module_abbrev(module: str, project: ProjectConfig) -> str:
+    """Short abbreviation for user_id/req_id generation."""
+    return project.module_abbrevs.get(module, module[:4])
+
+
 def dict_to_python_compact(obj: Any) -> str:
     """Single-line Python repr for items inside lists."""
     if obj is None:
@@ -60,6 +81,13 @@ def dict_to_python(obj: Any, indent: int = 0) -> str:
             pairs.append(f"{pad}{json.dumps(k, ensure_ascii=False)}: {dict_to_python(v, indent + 1)}")
         return "{\n" + ",\n".join(pairs) + ",\n" + end_pad + "}"
     return repr(obj)
+
+
+def render_assignment(name: str, value: Any, indent: int = 0) -> list[str]:
+    """Render a Python assignment with the shared generated style."""
+    prefix = "    " * indent
+    rendered = dict_to_python(value, indent=indent)
+    return (f"{prefix}{name} = {rendered}").splitlines()
 
 
 def response_path_accessor(path: str) -> str:

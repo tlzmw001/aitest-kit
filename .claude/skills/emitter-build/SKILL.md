@@ -34,9 +34,9 @@ effort: high
 
 ## 分析流程
 
-### 第一步：逐函数对齐
+### 第一步：逐函数对齐与分流
 
-将每条 test 函数与 parser 输出的 TestCase 一一对齐：
+将每条 test 函数与 parser 输出的 TestCase 一一对齐，并按函数体结构分流：
 
 | 对齐项 | parser 输出 | .py 中的代码 |
 |--------|-------------|-------------|
@@ -44,6 +44,11 @@ effort: high
 | setup 描述 | `TestCase.scenario_vars` | `# SETUP:` 注释 + fixture 调用 |
 | 请求体 | `SharedConfig.base_request_http` + 覆盖 | `_req()` 调用 |
 | 标记 | `TestCase.markers` | `@pytest.mark.manual` |
+
+**逐函数分流**：对齐时判断每个函数属于哪条路线：
+
+- **标准模板函数**：函数体包含 `_req()` 调用 + 标准断言 → 进入第二步提取断言规则
+- **case_bodies 函数**：函数体不包含 `_req()` 调用，或结构完全自定义（多请求、并发、非标准接口等）→ 进入第二步的 case_bodies 提取
 
 ### 第二步：提取断言模板
 
@@ -89,6 +94,18 @@ assertion_rules:
       segments_source: "_CASE_CONFIGS[case_id].piecewise"
 ```
 
+### case_bodies 提取（针对非标准模板函数）
+
+第一步中分流为 case_bodies 的函数，无法提取断言规则，改为提取完整函数体写入 profile：
+
+1. **提取函数体**：从 .py 函数中去掉 emitter 自动生成的部分（docstring、`__tc_meta__`、`# SETUP:` 注释），剩余的业务代码即为 case_bodies 内容
+2. **提取 fixture 依赖**：从函数签名中提取 fixture 参数列表（去掉 `self`），写入 profile 的 `case_fixtures`
+3. **diff 对比**：与 profile 已有的 case_bodies 对比
+   - 一致 → 无需更新
+   - .py 中有修改（调试修复导致）→ 用验证通过的 .py 版本覆盖 profile 中的旧 case_bodies
+   - profile 中无此用例的 case_bodies（首次提取）→ 新增
+4. **晋升候选标记**：如果 3+ 个 case_bodies 函数结构相似（如都是"发请求→取字段→断言"），在输出摘要中标记为"可晋升为断言规则"的候选，由用户决定是否提取为 assertion_rule。不自动晋升
+
 ### 第三步：提取文件级模板
 
 从 .py 中提取文件级结构模板：
@@ -118,6 +135,7 @@ assertion_rules:
 **更新 codegen_profile 的情况**：
 - 发现模块特有断言模式 → 添加到 profile 的 `## emitter 规则` 章节
 - 发现模块特有的 BASE_REQUEST 差异 → 更新 profile 的请求模板章节
+- case_bodies 提取或更新 → 写入 profile 的 `case_bodies` 和 `case_fixtures` 段
 - 发现新的调试经验 → 更新 profile 的调试经验章节
 
 ## 质量检查
@@ -152,8 +170,14 @@ assertion_rules:
 - 新增到 codegen_profile：{列表}
 - 无变更
 
+case_bodies：
+- 提取/更新：{A} 条
+- 首次提取：{B} 条
+- 晋升候选：{列表或"无"}
+
 覆盖率：
-- emitter 可覆盖：{X}/{total} 条断言
+- 标准模板覆盖：{X}/{total} 条
+- case_bodies 覆盖：{A}/{total} 条
 - UNPARSED：{Y} 条（列出）
 - MANUAL/SKIP：{Z} 条
 
