@@ -94,7 +94,9 @@
 ```bash
 pip install -e ".[dev,server]"
 python -m coupon_system.main
+python3 -m aitest_kit.cli codegen --all --validate-profile
 python3 -m aitest_kit.cli codegen --all --check
+python3 -m aitest_kit.cli codegen --all --health-report --write-report
 python3 -m aitest_kit.cli run calibration
 python3 -m aitest_kit.cli report
 python3 -m compileall aitest_kit/codegen
@@ -204,37 +206,53 @@ AI 的角色是测试工程师，不是被测系统的开发者。
 
 ## codegen 流程细节
 
-`test-codegen` 采用 emitter 优先、AI 补写 UNPARSED 的模式：
+`test-codegen` 采用 Case IR + emitter 优先、AI 补写 UNPARSED 的模式：
 
-1. parser 解析 Markdown 用例。
+1. profile 硬门禁。
+   普通 codegen、`--check`、`--dump-ir`、`--explain` 和 promotion 分析必须先通过 profile gate；JSON Schema 或语义校验有 ERROR 时不进入 IR/emitter。`--dry-run` 只跑 parser，不要求 profile 通过。
+
+2. parser 解析 Markdown 用例。
    使用 `aitest_kit/codegen/parser.py` 确定性提取结构。JSON 块解析失败时输出诊断信息，例如 E001，不静默返回 `None`。
 
-2. 诊断门控。
+3. 诊断门控。
    parser 输出有 errors 时，codegen 终止并打印诊断与修复建议，不生成残缺 pytest。
 
-3. 读取项目配置。
+4. 读取项目配置。
    `aitest_config/project_config.yaml` 是项目级配置入口；`aitest_kit/codegen/project_config.py` 是 schema/loader，不是项目配置编辑入口。fallback 用于配置缺失或缺字段时兼容，不能随意删除。
 
-4. 读取模块 profile。
+5. 读取模块 profile。
    检查 `test_workspace/tests/fixtures/codegen_profile_{module}.md`。如果不存在，参考其他模块已有 profile 的结构，但不复制模块特有断言逻辑。
 
-5. emitter 生成 pytest。
-   `aitest_kit/codegen/emitter.py` 确定性生成 `.py`。断言匹配优先级为 `profile assertion_rules > project_config builtin_assertion_rules > named_templates`。
+6. Case IR planner 生成计划。
+   `aitest_kit/codegen/planner.py` 结合 ParseResult、project_config 和 profile 选择 `default_http`、`default_grpc`、`structured_case_flow`、`custom_case_body`、`manual` 或 `skipped`，并记录 source_trace。
 
-6. module_type 校验。
-   profile 声明的模块类型必须满足 `project_config` 中该类型的 `requires` 字段。
+7. emitter/IR renderer 生成 pytest。
+   `aitest_kit/codegen/emitter.py` 负责装载、诊断和落盘，`aitest_kit/codegen/ir_renderer.py` 负责确定性渲染 `.py`。断言匹配优先级为 `profile assertion_rules > project_config builtin_assertion_rules > named_templates`。
 
-7. 生成后验证。
+8. module_type 校验。
+   profile 声明的模块类型必须满足 `project_config` 中该类型的 `requires` 字段；需要 `case_bodies` 的类型可由 `case_bodies` 或 `case_flows` 满足。
+
+9. 生成后验证。
    执行 AST 校验和未定义名检测，避免 `_req` 等关键名缺失。
 
-8. AI 补写 UNPARSED。
+10. AI 补写 UNPARSED。
    emitter 输出的 `# UNPARSED ASSERTION:` 由 AI 翻译为可执行断言；UNPARSED 为 0 时跳过。
 
-9. 端到端验证。
+11. 端到端验证。
    运行对应生成测试，必要时运行全量 `test_workspace/tests/generated/`。
 
-10. 经验沉淀。
+12. 经验沉淀。
     调试经验写入 `codegen_profile_{module}.md`、`TEST_SPEC` 或 skill；测试稳定通过后再使用 `emitter-build` 提取新规则。
+
+日常 codegen 门禁顺序：
+
+```bash
+python3 -m aitest_kit.cli codegen --all --validate-profile
+python3 -m aitest_kit.cli codegen --all --dump-ir
+python3 -m aitest_kit.cli codegen --all --check
+python3 -m aitest_kit.cli codegen --all
+python3 -m pytest test_workspace/tests/generated --collect-only -q
+```
 
 ## 测试报告流程
 
@@ -285,9 +303,9 @@ codegen 管线分三层，换项目时只改配置层，不改框架层：
 | module_type | 适用场景 | 必需字段 |
 |-------------|---------|---------|
 | `standard_recommend` | 标准推荐接口模块 | 无额外要求 |
-| `multi_endpoint` | 多端点服务模块 | `case_bodies` 或 `endpoint_map` |
-| `subprocess_capture` | 需要隔离进程捕获输出 | `case_bodies` |
-| `isolated_service` | 需要隔离服务实例 | `case_bodies` |
+| `multi_endpoint` | 多端点服务模块 | `case_bodies` 或 `case_flows` |
+| `subprocess_capture` | 需要隔离进程捕获输出 | `case_bodies` 或 `case_flows` |
+| `isolated_service` | 需要隔离服务实例 | `case_bodies` 或 `case_flows` |
 
 ## Markdown 用例格式规范
 

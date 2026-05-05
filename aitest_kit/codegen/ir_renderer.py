@@ -288,6 +288,7 @@ def _render_default_body(
     common_assertions, case_assertions = _split_default_assertions(case_ir, ctx)
     for cl in _render_assertions(common_assertions):
         lines.append(f"        {cl}")
+    unparsed.extend(_unparsed_sources(common_assertions))
 
     for var in case_ir.variables:
         lines.append(f"        {var.name} = {var.expression}")

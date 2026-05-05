@@ -13,7 +13,7 @@ effort: high
 
 从 `$target_module` 模块已验证的 pytest 代码中提取确定性模板，更新 emitter 规则。
 
-`emitter-build` 的核心职责是把“已经跑通的 AI/人工补写经验”沉淀为确定性模式；不要从未验证的 pytest、失败用例或猜测出的业务语义中提取规则。
+`emitter-build` 的核心职责是把"已经跑通的 AI/人工补写经验"沉淀为确定性模式；不要从未验证的 pytest、失败用例或猜测出的业务语义中提取规则。
 
 ## 前提条件
 

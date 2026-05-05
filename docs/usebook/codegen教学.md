@@ -31,6 +31,18 @@ python3 -m aitest_kit.cli codegen --all --health-report --write-report
 
 普通 codegen、`--check`、`--dump-ir`、`--explain` 和 promotion 分析现在都会先跑 profile 硬门禁；profile 有 ERROR 时不会进入 IR/emitter。`--dry-run` 只跑 parser，统计 Auto/Manual/Skipped，不写生成文件，也不要求 profile 通过。`--dump-ir`/`--explain` 用来观察单条用例为什么走 HTTP、gRPC、case_body、case_flow、manual 或 skip；普通 codegen 会调用 `emit_module()` 写入 generated；`--check` 会生成到临时目录，再和现有 generated 做 diff。
 
+日常收口顺序建议固定为：
+
+```bash
+python3 -m aitest_kit.cli codegen --all --validate-profile
+python3 -m aitest_kit.cli codegen --all --dump-ir
+python3 -m aitest_kit.cli codegen --all --check
+python3 -m aitest_kit.cli codegen --all
+python3 -m pytest test_workspace/tests/generated --collect-only -q
+```
+
+其中 `--dump-ir` 主要用于观察策略，不一定每次都人工读完；真正的阻断点是 profile gate 和 `--check`。
+
 **二、parser：只负责把 Markdown 变结构化数据**
 parser 的数据模型很简单：`SharedConfig`、`TestCase`、`ParseResult` 定义在 [parser.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/parser.py:14)。它不理解业务语义，只做确定性提取：
 
@@ -163,7 +175,7 @@ python3 -m aitest_kit.cli codegen --all --validate-profile --write-report
 python3 -m aitest_kit.cli codegen --all --health-report --write-report
 ```
 
-报告会统计每个模块的 case 总数、`case_flow` 数、`case_body` 数、UNPARSED 数、profile 错误数和成熟度。它不是新的源文件，只是 codegen 的体检产物。
+报告会统计每个模块的 case 总数、`case_flow` 数、`case_body` 数、UNPARSED 数、profile 错误数和成熟度。当前成熟度最高自动计算到 L3；L4 作为未来人工审计标记暂不自动产生。它不是新的源文件，只是 codegen 的体检产物。
 
 一个容易踩的点：HTTP/gRPC 分流不是看标题，也不是看共享配置里的接口，而是 Case IR planner 检查场景变量的 value 是否包含 `"gRPC"`，见 [planner.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/planner.py:52)。所以新增 gRPC 用例时，Markdown 的场景变量里要明确出现 `协议：gRPC` 这类内容，否则会走 HTTP 生成路径。你也可以用 `--explain TC-XXX` 看 `protocol.source` 到底来自哪个场景变量。
 

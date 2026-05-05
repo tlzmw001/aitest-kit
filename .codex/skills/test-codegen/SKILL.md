@@ -45,7 +45,7 @@ effort: high
 
 ## 前置：构建或解释 Case IR
 
-Case IR 的职责是解释“这条用例为什么这么生成”，不是替代 parser 做 Markdown 解析，也不是做业务推理。
+Case IR 的职责是解释"这条用例为什么这么生成"，不是替代 parser 做 Markdown 解析，也不是做业务推理。
 
 Case IR 第一版应覆盖以下 strategy：
 

@@ -31,10 +31,11 @@
 - promotion patch 草案落盘：支持生成 review-only 的 patch Markdown 和 diff 草案，默认不修改 profile。
 - profile 生成前体检：`codegen --validate-profile` 校验 profile 结构、case_id 引用、`case_flow` 格式和 module_type，并可落盘审计报告。
 
-尚未落地：
+明确延后：
 
 - 自动从已验证 pytest 反向提取 `case_flows`，以及自动应用 promotion patch；两者延后。
 - 新项目迁移 playbook 和迁移演练延后，待当前项目门禁和报告稳定后再做。
+- L4 成熟度人工审计标记暂不落 profile；后续如需再设计 `profile.health` 或外部 registry。
 
 ## 当前用例分布
 
@@ -223,7 +224,7 @@ assertions[0]:
 
 校验分两层：
 
-- JSON Schema：顶层字段、基础类型、未知字段、`case_flow` step shape。
+- JSON Schema：顶层字段、基础类型、case_id key pattern、未知字段、`case_flow` step shape。
 - 语义校验：case_id 是否存在、case_body/case_flow 冲突、`assert` 必须显式 `assert ...`、`ref` 只能引用前置变量、module_type requirements。
 
 中心 schema 路径：
@@ -261,10 +262,10 @@ L0 = 仍有 profile ERROR
 L1 = 可生成但仍有 UNPARSED
 L2 = 主要靠默认模板和 assertion_rules
 L3 = 已有稳定 case_flow，仅保留合理 case_body
-L4 = profile/check/collect 长期稳定后人工标记
+L4 = 暂不自动产生；未来如需，再设计人工审计标记
 ```
 
-第一版成熟度由 report 计算，不写回 profile。
+第一版成熟度由 report 计算，不写回 profile；当前最高自动等级为 L3。
 
 ## `case_bodies` 晋升机制
 
@@ -430,7 +431,7 @@ case_flows:
 - 新增 `aitest_kit/codegen/profile_validator.py`，独立执行 profile 结构校验。
 - `codegen --validate-profile` 支持单模块和 `--all`。
 - `ProjectConfig` 读取 `modules` 注册表，供 module_type 校验使用。
-- 状态：已完成第一版；下一步接入 JSON Schema 和硬门禁。
+- 状态：已完成第一版；JSON Schema 与硬门禁已在 Phase 8 落地。
 
 ### Phase 8: profile JSON Schema 与硬门禁
 

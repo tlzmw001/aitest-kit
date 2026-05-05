@@ -130,6 +130,13 @@ emitter-build ── 从已验证的 .py 提取确定性模板到 emitter
 ### codegen CLI 常用命令
 
 ```bash
+# 日常收口顺序
+aitest codegen --all --validate-profile
+aitest codegen --all --dump-ir
+aitest codegen --all --check
+aitest codegen --all
+python3 -m pytest test_workspace/tests/generated --collect-only -q
+
 # 生成（含 profile 硬门禁）
 aitest codegen calibration
 aitest codegen --all

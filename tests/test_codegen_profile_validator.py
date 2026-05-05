@@ -30,7 +30,7 @@ def _write_case_file(cases_dir: Path, module: str, case_id: str = "TC-DEMO-001")
 
 
 def _write_profile(profile_dir: Path, module: str, yaml_body: str) -> None:
-    profile_dir.mkdir(parents=True)
+    profile_dir.mkdir(parents=True, exist_ok=True)
     (profile_dir / f"codegen_profile_{module}.md").write_text(
         f"```yaml\n{yaml_body}```\n",
         encoding="utf-8",
@@ -162,6 +162,31 @@ def test_profile_validator_rejects_schema_unknown_nested_field(tmp_path):
 
     assert any(diag.code == "E501" for diag in report.errors)
     assert any("profile schema violation" in diag.message for diag in report.errors)
+
+
+def test_profile_validator_rejects_schema_invalid_case_id_mapping_keys(tmp_path):
+    cases_dir = tmp_path / "cases"
+    profile_dir = tmp_path / "fixtures"
+    _write_case_file(cases_dir, "demo")
+    sections = {
+        "request_overrides": "request_overrides:\n  not-a-case:\n    user_id: u_bad\n",
+        "case_fixtures": "case_fixtures:\n  not-a-case: [setup_demo]\n",
+        "case_bodies": "case_bodies:\n  not-a-case: |\n    assert True\n",
+    }
+
+    for section, yaml_body in sections.items():
+        _write_profile(profile_dir, "demo", yaml_body)
+        report = validate_profile_module(
+            "demo",
+            cases_dir=cases_dir,
+            profile_dir=profile_dir,
+            project=_project(),
+        )
+        messages = "\n".join(diag.message for diag in report.errors if diag.code == "E501")
+        sources = {diag.source for diag in report.errors if diag.code == "E501"}
+
+        assert "does not match any of the regexes" in messages
+        assert section in sources
 
 
 def test_profile_validator_checks_module_type_requirements(tmp_path):
