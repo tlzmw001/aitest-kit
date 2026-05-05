@@ -10,8 +10,8 @@
 
 ## 请求模板
 
-`ab_service` 不是推荐主服务模块，不能使用默认 `/api/v1/recommend` 模板。该模块通过 `case_bodies`
-为每条用例显式声明请求入口和断言：
+`ab_service` 不是推荐主服务模块，不能使用默认 `/api/v1/recommend` 模板。该模块通过 `case_flows`
+描述稳定的运行中 API 调用，通过 `case_bodies` 保留文件、subprocess、Remote SDK 生命周期和 mock 场景：
 
 - 运行中 AB 服务 API：使用 `setup_ab_service(...).get/post/put/delete(...)`，返回 `httpx.Response`，不自动 `raise_for_status`
 - 文件启动/重启类：使用 fixture 中的 `build_isolated_client(...)` 构造独立 `TestClient`
@@ -29,131 +29,40 @@ extra_imports:
   - from ab_experiment_sdk import ABExperimentRequest
   - from ab_experiment_sdk.remote_client import RemoteABExperimentSDK
   - from test_workspace.tests.fixtures.ab_service import build_isolated_client, write_experiments_file
-
 case_fixtures:
-  TC-ABS-012: [tmp_path]
-  TC-ABS-018: [tmp_path]
-  TC-ABS-026: [tmp_path]
-  TC-ABS-027: [tmp_path, caplog]
-  TC-ABS-028: [tmp_path]
-  TC-ABS-029: [tmp_path]
-  TC-ABS-033: [tmp_path]
-  TC-ABS-034: [tmp_path]
-  TC-ABS-035: [setup_ab_service, tmp_path]
-  TC-ABS-036: [setup_ab_service, tmp_path]
-  TC-ABS-037: [setup_ab_service, tmp_path]
-  TC-ABS-038: [setup_ab_service, tmp_path]
-  TC-ABS-039: [setup_ab_service, tmp_path]
-
+  TC-ABS-012:
+    - tmp_path
+  TC-ABS-018:
+    - tmp_path
+  TC-ABS-026:
+    - tmp_path
+  TC-ABS-027:
+    - tmp_path
+    - caplog
+  TC-ABS-028:
+    - tmp_path
+  TC-ABS-029:
+    - tmp_path
+  TC-ABS-033:
+    - tmp_path
+  TC-ABS-034:
+    - tmp_path
+  TC-ABS-035:
+    - setup_ab_service
+    - tmp_path
+  TC-ABS-036:
+    - setup_ab_service
+    - tmp_path
+  TC-ABS-037:
+    - setup_ab_service
+    - tmp_path
+  TC-ABS-038:
+    - setup_ab_service
+    - tmp_path
+  TC-ABS-039:
+    - setup_ab_service
+    - tmp_path
 case_bodies:
-  TC-ABS-001: |
-    ab = setup_ab_service(case_id="TC-ABS-001")
-    resp = ab.get("/health")
-    assert resp.status_code == 200
-    assert resp.json() == {"status": "ok"}
-
-  TC-ABS-002: |
-    ab = setup_ab_service(case_id="TC-ABS-002")
-    resp = ab.post("/api/v1/ab/evaluate", {
-        "user_id": "u_abs_hash_0",
-        "request_id": "req_abs_002",
-        "context": {},
-        "experiment_names": ["exp_ab_basic"],
-    })
-    assert resp.status_code == 200
-    assign = resp.json()["assignments"]
-    assert assign["exp_ab_basic"]["strategy_id"] == "s_a"
-    assert assign["exp_ab_basic"]["hit_reason"] == "hash"
-
-  TC-ABS-003: |
-    ab = setup_ab_service(case_id="TC-ABS-003")
-    resp = ab.post("/api/v1/ab/evaluate", {
-        "user_id": "u_abs_white",
-        "request_id": "req_abs_003",
-        "context": {},
-        "experiment_names": ["exp_ab_basic"],
-    })
-    assert resp.status_code == 200
-    assign = resp.json()["assignments"]
-    assert assign["exp_ab_basic"]["strategy_id"] == "s_b"
-    assert assign["exp_ab_basic"]["hit_reason"] == "whitelist"
-
-  TC-ABS-004: |
-    ab = setup_ab_service(case_id="TC-ABS-004")
-    resp = ab.post("/api/v1/ab/evaluate", {
-        "user_id": "u_abs_hash_0",
-        "request_id": "req_abs_004",
-        "context": {},
-        "experiment_names": None,
-    })
-    assert resp.status_code == 200
-    assign = resp.json()["assignments"]
-    assert {"exp_ab_basic", "exp_ab_extra"} <= set(assign.keys())
-
-  TC-ABS-005: |
-    ab = setup_ab_service(case_id="TC-ABS-005")
-    resp = ab.post("/api/v1/ab/evaluate", {
-        "user_id": "u_abs_hash_0",
-        "request_id": "req_abs_005",
-        "context": {},
-        "experiment_names": [],
-    })
-    assert resp.status_code == 200
-    assert resp.json()["assignments"] == {}
-
-  TC-ABS-006: |
-    ab = setup_ab_service(case_id="TC-ABS-006")
-    resp = ab.post("/api/v1/ab/evaluate", {
-        "user_id": "u_abs_hash_0",
-        "request_id": "req_abs_006",
-        "context": {},
-        "experiment_names": ["exp_ab_basic"],
-    })
-    assert resp.status_code == 200
-    assert set(resp.json()["assignments"].keys()) <= {"exp_ab_basic"}
-
-  TC-ABS-007: |
-    ab = setup_ab_service(case_id="TC-ABS-007")
-    resp = ab.get("/api/v1/ab/experiments")
-    assert resp.status_code == 200
-    assert {"exp_game", "exp_cal"} <= {item["name"] for item in resp.json()}
-
-  TC-ABS-008: |
-    ab = setup_ab_service(case_id="TC-ABS-008")
-    resp = ab.get("/api/v1/ab/experiments/exp_game")
-    assert resp.status_code == 200
-    assert resp.json()["name"] == "exp_game"
-
-  TC-ABS-009: |
-    ab = setup_ab_service(case_id="TC-ABS-009")
-    payload = {"name": "exp_abs_create", "strategies": [{"id": "s1", "hash_range": [0, 100], "params": {"k": "v"}}]}
-    ab.snapshot_experiment("exp_abs_create")
-    resp = ab.post("/api/v1/ab/experiments", payload)
-    assert resp.status_code == 200
-    assert resp.json()["name"] == "exp_abs_create"
-    resp = ab.get("/api/v1/ab/experiments/exp_abs_create")
-    assert resp.status_code == 200
-    assert resp.json()["name"] == "exp_abs_create"
-
-  TC-ABS-010: |
-    ab = setup_ab_service(case_id="TC-ABS-010")
-    ab.upsert_experiment({"name": "exp_abs_update", "strategies": [{"id": "s_old", "hash_range": [0, 100], "params": {}}]})
-    payload = {"name": "exp_abs_update", "strategies": [{"id": "s_new", "hash_range": [0, 100], "params": {}}]}
-    resp = ab.put("/api/v1/ab/experiments/exp_abs_update", payload)
-    assert resp.status_code == 200
-    resp = ab.get("/api/v1/ab/experiments/exp_abs_update")
-    assert [item["id"] for item in resp.json()["strategies"]] == ["s_new"]
-
-  TC-ABS-011: |
-    ab = setup_ab_service(case_id="TC-ABS-011")
-    ab.upsert_experiment({"name": "exp_abs_delete", "strategies": [{"id": "s1", "hash_range": [0, 100], "params": {}}]})
-    resp = ab.delete("/api/v1/ab/experiments/exp_abs_delete")
-    assert resp.status_code == 200
-    assert resp.json() == {"deleted": True}
-    resp = ab.get("/api/v1/ab/experiments/exp_abs_delete")
-    assert resp.status_code == 404
-    assert resp.json()["detail"] == "experiment not found"
-
   TC-ABS-012: |
     client1, _, _ = build_isolated_client(tmp_path, experiments=[])
     payload = {"name": "exp_abs_persist", "strategies": [{"id": "s1", "hash_range": [0, 100], "params": {}}]}
@@ -165,48 +74,6 @@ case_bodies:
     assert resp.status_code == 200
     assert resp.json()["name"] == "exp_abs_persist"
     client2.close()
-
-  TC-ABS-013: |
-    ab = setup_ab_service(case_id="TC-ABS-013")
-    resp = ab.get("/api/v1/ab/whitelist")
-    assert resp.status_code == 200
-    assert "u_white" in resp.json()
-
-  TC-ABS-014: |
-    ab = setup_ab_service(case_id="TC-ABS-014")
-    ab.snapshot_whitelist()
-    resp = ab.put("/api/v1/ab/whitelist/u_abs_user", {"strategy_map": {"exp_ab_basic": "s_a"}})
-    assert resp.status_code == 200
-    resp = ab.get("/api/v1/ab/whitelist/u_abs_user")
-    assert resp.status_code == 200
-    assert resp.json() == {"exp_ab_basic": "s_a"}
-
-  TC-ABS-015: |
-    ab = setup_ab_service(case_id="TC-ABS-015")
-    ab.snapshot_whitelist()
-    resp = ab.put("/api/v1/ab/whitelist", {"u_abs_1": {"exp_ab_basic": "s_a"}, "u_abs_2": {"exp_ab_basic": "s_b"}})
-    assert resp.status_code == 200
-    resp = ab.get("/api/v1/ab/whitelist")
-    assert resp.status_code == 200
-    assert resp.json() == {"u_abs_1": {"exp_ab_basic": "s_a"}, "u_abs_2": {"exp_ab_basic": "s_b"}}
-
-  TC-ABS-016: |
-    ab = setup_ab_service(case_id="TC-ABS-016")
-    resp = ab.delete("/api/v1/ab/whitelist/user_b")
-    assert resp.status_code == 200
-    assert resp.json() == {"cleared": True}
-    resp = ab.get("/api/v1/ab/whitelist/user_b")
-    assert resp.status_code == 404
-
-  TC-ABS-017: |
-    ab = setup_ab_service(case_id="TC-ABS-017")
-    resp = ab.delete("/api/v1/ab/whitelist")
-    assert resp.status_code == 200
-    assert resp.json() == {"cleared": True}
-    resp = ab.get("/api/v1/ab/whitelist")
-    assert resp.status_code == 200
-    assert resp.json() == {}
-
   TC-ABS-018: |
     client1, _, _ = build_isolated_client(tmp_path, experiments=[
         {"name": "exp_game", "strategies": [{"id": "game_on", "hash_range": [0, 100], "params": {}}]},
@@ -219,53 +86,6 @@ case_bodies:
     assert resp.status_code == 200
     assert resp.json() == {"exp_game": "game_on"}
     client2.close()
-
-  TC-ABS-019: |
-    ab = setup_ab_service(case_id="TC-ABS-019")
-    payload = {"name": "exp_abs_dup", "strategies": [{"id": "s1", "hash_range": [0, 100], "params": {}}]}
-    ab.snapshot_experiment("exp_abs_dup")
-    first = ab.post("/api/v1/ab/experiments", payload)
-    assert first.status_code == 200
-    second = ab.post("/api/v1/ab/experiments", payload)
-    assert second.status_code == 409
-    assert second.json()["detail"] == "experiment already exists: exp_abs_dup"
-
-  TC-ABS-020: |
-    ab = setup_ab_service(case_id="TC-ABS-020")
-    resp = ab.put("/api/v1/ab/experiments/exp_abs_path", {"name": "exp_abs_body", "strategies": []})
-    assert resp.status_code == 400
-    assert resp.json()["detail"] == "path name and payload name mismatch"
-
-  TC-ABS-021: |
-    ab = setup_ab_service(case_id="TC-ABS-021")
-    resp = ab.get("/api/v1/ab/whitelist/u_abs_not_exists")
-    assert resp.status_code == 404
-    assert resp.json()["detail"] == "user whitelist not found"
-
-  TC-ABS-022: |
-    ab = setup_ab_service(case_id="TC-ABS-022")
-    resp = ab.delete("/api/v1/ab/whitelist/u_abs_not_exists")
-    assert resp.status_code == 200
-    assert resp.json() == {"cleared": True}
-
-  TC-ABS-023: |
-    ab = setup_ab_service(case_id="TC-ABS-023")
-    resp = ab.post("/api/v1/ab/evaluate", {"user_id": "u_abs_overlap_243", "request_id": "req_abs_023", "experiment_names": ["exp_abs_overlap"]})
-    assert resp.status_code == 200
-    assert resp.json()["assignments"]["exp_abs_overlap"]["strategy_id"] == "s_first"
-
-  TC-ABS-024: |
-    ab = setup_ab_service(case_id="TC-ABS-024")
-    resp = ab.post("/api/v1/ab/evaluate", {"user_id": "u_abs_hash_0", "request_id": "req_abs_024", "experiment_names": ["exp_abs_empty"]})
-    assert resp.status_code == 200
-    assert resp.json()["assignments"] == {}
-
-  TC-ABS-025: |
-    ab = setup_ab_service(case_id="TC-ABS-025")
-    resp = ab.post("/api/v1/ab/evaluate", {"user_id": "u_abs_hash_0", "request_id": "req_abs_025", "experiment_names": ["not_exists_exp"]})
-    assert resp.status_code == 200
-    assert resp.json()["assignments"] == {}
-
   TC-ABS-026: |
     experiments_path = tmp_path / "new" / "experiments.json"
     client, _, _ = build_isolated_client(experiments_path.parent)
@@ -274,7 +94,6 @@ case_bodies:
     assert resp.json() == []
     assert experiments_path.exists()
     client.close()
-
   TC-ABS-027: |
     caplog.set_level(logging.WARNING, logger="ab_experiment_sdk.service")
     client, _, _ = build_isolated_client(tmp_path, whitelist_text="{bad json")
@@ -283,7 +102,6 @@ case_bodies:
     assert resp.json() == {}
     assert "白名单文件读取失败" in caplog.text
     client.close()
-
   TC-ABS-028: |
     client, _, _ = build_isolated_client(tmp_path, experiments=[
         {"name": "exp_abs_bad_hash", "strategies": [{"id": "s_bad", "hash_range": ["bad"], "params": {}}]},
@@ -292,7 +110,6 @@ case_bodies:
     assert resp.status_code == 200
     assert resp.json()["assignments"]["exp_abs_bad_hash"]["strategy_id"] == "s_bad"
     client.close()
-
   TC-ABS-029: |
     client, _, _ = build_isolated_client(tmp_path, experiments=[
         {"name": "exp_abs_bad_params", "strategies": [{"id": "s_bad_params", "hash_range": [0, 100], "params": "bad"}]},
@@ -301,23 +118,6 @@ case_bodies:
     assert resp.status_code == 200
     assert resp.json()["assignments"]["exp_abs_bad_params"]["params"] == {}
     client.close()
-
-  TC-ABS-030: |
-    ab = setup_ab_service(case_id="TC-ABS-030")
-    resp = ab.post("/api/v1/ab/evaluate", {"request_id": "req_abs_030", "experiment_names": ["exp_ab_basic"]})
-    assert resp.status_code == 422
-    assert ["body", "user_id"] in [item["loc"] for item in resp.json()["detail"]]
-
-  TC-ABS-031: |
-    ab = setup_ab_service(case_id="TC-ABS-031")
-    resp = ab.post("/api/v1/ab/experiments", {"name": "exp_abs_bad_schema", "strategies": "bad"})
-    assert resp.status_code == 422
-
-  TC-ABS-032: |
-    ab = setup_ab_service(case_id="TC-ABS-032")
-    resp = ab.put("/api/v1/ab/whitelist/u_abs_bad_schema", {"strategy_map": "bad"})
-    assert resp.status_code == 422
-
   TC-ABS-033: |
     repo_root = Path(__file__).resolve().parents[3]
     src_pkg = repo_root / "ab_experiment_sdk"
@@ -338,7 +138,6 @@ case_bodies:
     completed = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
     assert completed.returncode == 0, completed.stderr
     assert "ok ab_experiment_sdk.service" in completed.stdout
-
   TC-ABS-034: |
     repo_root = Path(__file__).resolve().parents[3]
     run_dir = tmp_path / "run_side_effect"
@@ -354,7 +153,6 @@ case_bodies:
     completed = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
     assert completed.returncode == 0, completed.stderr
     assert "exists False" in completed.stdout
-
   TC-ABS-035: |
     ab = setup_ab_service(case_id="TC-ABS-035")
     sdk, client = ab.remote_sdk(tmp_path)
@@ -364,7 +162,6 @@ case_bodies:
     assert response.assignments["exp_game"].hit_reason == "whitelist"
     sdk.close()
     client.close()
-
   TC-ABS-036: |
     ab = setup_ab_service(case_id="TC-ABS-036")
     sdk, client = ab.remote_sdk(tmp_path)
@@ -374,7 +171,6 @@ case_bodies:
     assert response.assignments["exp_cal"].hit_reason == "whitelist"
     sdk.close()
     client.close()
-
   TC-ABS-037: |
     ab = setup_ab_service(case_id="TC-ABS-037")
     sdk, client = ab.remote_sdk(tmp_path)
@@ -383,7 +179,6 @@ case_bodies:
     assert "u2" not in sdk.get_whitelist()
     sdk.close()
     client.close()
-
   TC-ABS-038: |
     ab = setup_ab_service(case_id="TC-ABS-038")
     sdk, client = ab.remote_sdk(tmp_path)
@@ -391,7 +186,6 @@ case_bodies:
     assert sdk.get_whitelist() == {"u3": {"exp_game": "game_on"}}
     sdk.close()
     client.close()
-
   TC-ABS-039: |
     ab = setup_ab_service(case_id="TC-ABS-039")
     sdk, client = ab.remote_sdk(tmp_path)
@@ -400,7 +194,6 @@ case_bodies:
     assert sdk.get_whitelist() == {}
     sdk.close()
     client.close()
-
   TC-ABS-040: |
     def handler(request):
         return httpx.Response(500, json={"detail": "internal error"})
@@ -410,4 +203,477 @@ case_bodies:
     with pytest.raises(httpx.HTTPStatusError):
         sdk.evaluate(ABExperimentRequest(user_id="u_err"))
     sdk.close()
+case_flows:
+  TC-ABS-001:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-001
+        save_as: ab
+      - call: ab.get
+        args:
+          - /health
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assert: 'assert resp.json() == {''status'': ''ok''}'
+  TC-ABS-002:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-002
+        save_as: ab
+      - call: ab.post
+        args:
+          - /api/v1/ab/evaluate
+          - user_id: u_abs_hash_0
+            request_id: req_abs_002
+            context: {}
+            experiment_names:
+              - exp_ab_basic
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assign: assign
+        expr: resp.json()['assignments']
+      - assert: assert assign['exp_ab_basic']['strategy_id'] == 's_a'
+      - assert: assert assign['exp_ab_basic']['hit_reason'] == 'hash'
+  TC-ABS-003:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-003
+        save_as: ab
+      - call: ab.post
+        args:
+          - /api/v1/ab/evaluate
+          - user_id: u_abs_white
+            request_id: req_abs_003
+            context: {}
+            experiment_names:
+              - exp_ab_basic
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assign: assign
+        expr: resp.json()['assignments']
+      - assert: assert assign['exp_ab_basic']['strategy_id'] == 's_b'
+      - assert: assert assign['exp_ab_basic']['hit_reason'] == 'whitelist'
+  TC-ABS-004:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-004
+        save_as: ab
+      - call: ab.post
+        args:
+          - /api/v1/ab/evaluate
+          - user_id: u_abs_hash_0
+            request_id: req_abs_004
+            context: {}
+            experiment_names: null
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assign: assign
+        expr: resp.json()['assignments']
+      - assert: assert {'exp_ab_basic', 'exp_ab_extra'} <= set(assign.keys())
+  TC-ABS-005:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-005
+        save_as: ab
+      - call: ab.post
+        args:
+          - /api/v1/ab/evaluate
+          - user_id: u_abs_hash_0
+            request_id: req_abs_005
+            context: {}
+            experiment_names: []
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assert: assert resp.json()['assignments'] == {}
+  TC-ABS-006:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-006
+        save_as: ab
+      - call: ab.post
+        args:
+          - /api/v1/ab/evaluate
+          - user_id: u_abs_hash_0
+            request_id: req_abs_006
+            context: {}
+            experiment_names:
+              - exp_ab_basic
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assert: assert set(resp.json()['assignments'].keys()) <= {'exp_ab_basic'}
+  TC-ABS-007:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-007
+        save_as: ab
+      - call: ab.get
+        args:
+          - /api/v1/ab/experiments
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assert: assert {'exp_game', 'exp_cal'} <= {item['name'] for item in resp.json()}
+  TC-ABS-008:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-008
+        save_as: ab
+      - call: ab.get
+        args:
+          - /api/v1/ab/experiments/exp_game
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assert: assert resp.json()['name'] == 'exp_game'
+  TC-ABS-009:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-009
+        save_as: ab
+      - assign: payload
+        expr: '{''name'': ''exp_abs_create'', ''strategies'': [{''id'': ''s1'', ''hash_range'': [0, 100], ''params'': {''k'':
+          ''v''}}]}'
+      - call: ab.snapshot_experiment
+        args:
+          - exp_abs_create
+      - call: ab.post
+        args:
+          - /api/v1/ab/experiments
+          - expr: payload
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assert: assert resp.json()['name'] == 'exp_abs_create'
+      - call: ab.get
+        args:
+          - /api/v1/ab/experiments/exp_abs_create
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assert: assert resp.json()['name'] == 'exp_abs_create'
+  TC-ABS-010:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-010
+        save_as: ab
+      - call: ab.upsert_experiment
+        args:
+          - name: exp_abs_update
+            strategies:
+              - id: s_old
+                hash_range:
+                  - 0
+                  - 100
+                params: {}
+      - assign: payload
+        expr: '{''name'': ''exp_abs_update'', ''strategies'': [{''id'': ''s_new'', ''hash_range'': [0, 100], ''params'': {}}]}'
+      - call: ab.put
+        args:
+          - /api/v1/ab/experiments/exp_abs_update
+          - expr: payload
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - call: ab.get
+        args:
+          - /api/v1/ab/experiments/exp_abs_update
+        save_as: resp
+      - assert: assert [item['id'] for item in resp.json()['strategies']] == ['s_new']
+  TC-ABS-011:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-011
+        save_as: ab
+      - call: ab.upsert_experiment
+        args:
+          - name: exp_abs_delete
+            strategies:
+              - id: s1
+                hash_range:
+                  - 0
+                  - 100
+                params: {}
+      - call: ab.delete
+        args:
+          - /api/v1/ab/experiments/exp_abs_delete
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assert: 'assert resp.json() == {''deleted'': True}'
+      - call: ab.get
+        args:
+          - /api/v1/ab/experiments/exp_abs_delete
+        save_as: resp
+      - assert: assert resp.status_code == 404
+      - assert: assert resp.json()['detail'] == 'experiment not found'
+  TC-ABS-013:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-013
+        save_as: ab
+      - call: ab.get
+        args:
+          - /api/v1/ab/whitelist
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assert: assert 'u_white' in resp.json()
+  TC-ABS-014:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-014
+        save_as: ab
+      - call: ab.snapshot_whitelist
+      - call: ab.put
+        args:
+          - /api/v1/ab/whitelist/u_abs_user
+          - strategy_map:
+              exp_ab_basic: s_a
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - call: ab.get
+        args:
+          - /api/v1/ab/whitelist/u_abs_user
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assert: 'assert resp.json() == {''exp_ab_basic'': ''s_a''}'
+  TC-ABS-015:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-015
+        save_as: ab
+      - call: ab.snapshot_whitelist
+      - call: ab.put
+        args:
+          - /api/v1/ab/whitelist
+          - u_abs_1:
+              exp_ab_basic: s_a
+            u_abs_2:
+              exp_ab_basic: s_b
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - call: ab.get
+        args:
+          - /api/v1/ab/whitelist
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assert: 'assert resp.json() == {''u_abs_1'': {''exp_ab_basic'': ''s_a''}, ''u_abs_2'': {''exp_ab_basic'': ''s_b''}}'
+  TC-ABS-016:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-016
+        save_as: ab
+      - call: ab.delete
+        args:
+          - /api/v1/ab/whitelist/user_b
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assert: 'assert resp.json() == {''cleared'': True}'
+      - call: ab.get
+        args:
+          - /api/v1/ab/whitelist/user_b
+        save_as: resp
+      - assert: assert resp.status_code == 404
+  TC-ABS-017:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-017
+        save_as: ab
+      - call: ab.delete
+        args:
+          - /api/v1/ab/whitelist
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assert: 'assert resp.json() == {''cleared'': True}'
+      - call: ab.get
+        args:
+          - /api/v1/ab/whitelist
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assert: assert resp.json() == {}
+  TC-ABS-019:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-019
+        save_as: ab
+      - assign: payload
+        expr: '{''name'': ''exp_abs_dup'', ''strategies'': [{''id'': ''s1'', ''hash_range'': [0, 100], ''params'': {}}]}'
+      - call: ab.snapshot_experiment
+        args:
+          - exp_abs_dup
+      - call: ab.post
+        args:
+          - /api/v1/ab/experiments
+          - expr: payload
+        save_as: first
+      - assert: assert first.status_code == 200
+      - call: ab.post
+        args:
+          - /api/v1/ab/experiments
+          - expr: payload
+        save_as: second
+      - assert: assert second.status_code == 409
+      - assert: 'assert second.json()[''detail''] == ''experiment already exists: exp_abs_dup'''
+  TC-ABS-020:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-020
+        save_as: ab
+      - call: ab.put
+        args:
+          - /api/v1/ab/experiments/exp_abs_path
+          - name: exp_abs_body
+            strategies: []
+        save_as: resp
+      - assert: assert resp.status_code == 400
+      - assert: assert resp.json()['detail'] == 'path name and payload name mismatch'
+  TC-ABS-021:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-021
+        save_as: ab
+      - call: ab.get
+        args:
+          - /api/v1/ab/whitelist/u_abs_not_exists
+        save_as: resp
+      - assert: assert resp.status_code == 404
+      - assert: assert resp.json()['detail'] == 'user whitelist not found'
+  TC-ABS-022:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-022
+        save_as: ab
+      - call: ab.delete
+        args:
+          - /api/v1/ab/whitelist/u_abs_not_exists
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assert: 'assert resp.json() == {''cleared'': True}'
+  TC-ABS-023:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-023
+        save_as: ab
+      - call: ab.post
+        args:
+          - /api/v1/ab/evaluate
+          - user_id: u_abs_overlap_243
+            request_id: req_abs_023
+            experiment_names:
+              - exp_abs_overlap
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assert: assert resp.json()['assignments']['exp_abs_overlap']['strategy_id'] == 's_first'
+  TC-ABS-024:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-024
+        save_as: ab
+      - call: ab.post
+        args:
+          - /api/v1/ab/evaluate
+          - user_id: u_abs_hash_0
+            request_id: req_abs_024
+            experiment_names:
+              - exp_abs_empty
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assert: assert resp.json()['assignments'] == {}
+  TC-ABS-025:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-025
+        save_as: ab
+      - call: ab.post
+        args:
+          - /api/v1/ab/evaluate
+          - user_id: u_abs_hash_0
+            request_id: req_abs_025
+            experiment_names:
+              - not_exists_exp
+        save_as: resp
+      - assert: assert resp.status_code == 200
+      - assert: assert resp.json()['assignments'] == {}
+  TC-ABS-030:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-030
+        save_as: ab
+      - call: ab.post
+        args:
+          - /api/v1/ab/evaluate
+          - request_id: req_abs_030
+            experiment_names:
+              - exp_ab_basic
+        save_as: resp
+      - assert: assert resp.status_code == 422
+      - assert: assert ['body', 'user_id'] in [item['loc'] for item in resp.json()['detail']]
+  TC-ABS-031:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-031
+        save_as: ab
+      - call: ab.post
+        args:
+          - /api/v1/ab/experiments
+          - name: exp_abs_bad_schema
+            strategies: bad
+        save_as: resp
+      - assert: assert resp.status_code == 422
+  TC-ABS-032:
+    fixture: setup_ab_service
+    steps:
+      - call: setup_ab_service
+        kwargs:
+          case_id: TC-ABS-032
+        save_as: ab
+      - call: ab.put
+        args:
+          - /api/v1/ab/whitelist/u_abs_bad_schema
+          - strategy_map: bad
+        save_as: resp
+      - assert: assert resp.status_code == 422
 ```

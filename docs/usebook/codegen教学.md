@@ -3,7 +3,8 @@
 ```text
 test_workspace/cases/{module}/business.md 或 boundary.md
   -> parser.py 解析成 SharedConfig + TestCase[]
-  -> emitter.py 读取 project_config + codegen_profile
+  -> planner.py 结合 project_config + codegen_profile 生成 Case IR
+  -> emitter.py 调 ir_renderer.py 渲染 Case IR
   -> 生成 test_workspace/tests/generated/test_{module}_{business|boundary}.py
   -> pytest 导入 generated 文件
   -> conftest 注册模块 fixture
@@ -22,9 +23,11 @@ python3 -m aitest_kit.cli codegen calibration
 python3 -m aitest_kit.cli codegen --all
 python3 -m aitest_kit.cli codegen --all --check
 python3 -m aitest_kit.cli codegen calibration --dry-run
+python3 -m aitest_kit.cli codegen calibration --dump-ir
+python3 -m aitest_kit.cli codegen calibration --explain TC-CAL-025
 ```
 
-`--dry-run` 只跑 parser，统计 Auto/Manual/Skipped，不写生成文件；普通 codegen 会调用 `emit_module()` 写入 generated；`--check` 会生成到临时目录，再和现有 generated 做 diff。
+`--dry-run` 只跑 parser，统计 Auto/Manual/Skipped，不写生成文件；`--dump-ir`/`--explain` 用来观察单条用例为什么走 HTTP、gRPC、case_body、case_flow、manual 或 skip；普通 codegen 会调用 `emit_module()` 写入 generated；`--check` 会生成到临时目录，再和现有 generated 做 diff。
 
 **二、parser：只负责把 Markdown 变结构化数据**
 parser 的数据模型很简单：`SharedConfig`、`TestCase`、`ParseResult` 定义在 [parser.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/parser.py:14)。它不理解业务语义，只做确定性提取：
@@ -58,8 +61,9 @@ TestCase(
 - `extra_imports`：给生成文件追加 import，见 [profile.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/profile.py:66)。
 - `case_fixtures`：某些 case 的函数签名不用默认 fixture，见 [profile.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/profile.py:75)。
 - `case_bodies`：完全手写某条用例的测试体，见 [profile.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/profile.py:93)。
+- `case_flows`：已验证 `case_bodies` 的结构化晋升形态，见 [profile.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/profile.py:125)，校验规则见 [profile.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/profile.py:132)。
 
-这里最关键的分叉是：标准模块尽量走“基础请求 + overrides + 断言规则”；复杂模块直接用 `case_bodies`。例如 calibration profile 主要提供断言规则，见 [codegen_profile_calibration.md](/Users/zmw/AIAutoTest/test_workspace/tests/fixtures/codegen_profile_calibration.md:88)；ab_service profile 几乎每条用例都提供 `case_bodies`，见 [codegen_profile_ab_service.md](/Users/zmw/AIAutoTest/test_workspace/tests/fixtures/codegen_profile_ab_service.md:48)；issuance 因为有库存、查询、并发、多请求，也走 `case_bodies`，见 [codegen_profile_issuance.md](/Users/zmw/AIAutoTest/test_workspace/tests/fixtures/codegen_profile_issuance.md:27)。
+这里最关键的分叉是：标准模块尽量走“基础请求 + overrides + 断言规则”；复杂生命周期场景继续用 `case_bodies`；重复稳定的多步骤测试晋升为 `case_flows`。例如 calibration profile 主要提供断言规则，见 [codegen_profile_calibration.md](/Users/zmw/AIAutoTest/test_workspace/tests/fixtures/codegen_profile_calibration.md:88)；ab_service 现在用 `case_flows` 表达运行中 API 调用，文件/SDK/mock 场景保留 `case_bodies`，见 [codegen_profile_ab_service.md](/Users/zmw/AIAutoTest/test_workspace/tests/fixtures/codegen_profile_ab_service.md:68)；issuance 只把并发库存用例留在 `case_bodies`，见 [codegen_profile_issuance.md](/Users/zmw/AIAutoTest/test_workspace/tests/fixtures/codegen_profile_issuance.md:27)。
 
 **四、project_config：全局默认生成规则**
 全局配置加载在 [project_config.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/project_config.py:182)，最终形成 `DEFAULT_PROJECT`，见 [project_config.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/project_config.py:199)。它决定：
@@ -73,31 +77,38 @@ TestCase(
 
 例如 `response.code == 0` 会变成 `assert resp["code"] == 0`；`cal == round(clamp(1.2 * s + 0.1), 4)` 会变成 `pytest.approx(...)`。这些内置规则定义在 [project_config.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/project_config.py:70)。
 
-一个很重要的后续优化点：`aitest_config/project_config.yaml` 里有 `modules:` 注册表，但当前 `ProjectConfig` dataclass 没有读取 `modules` 字段，emitter 真正用于校验的 `module_type` 是从 profile YAML 里读的，见 [emitter.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/emitter.py:295)。我统计了一下，当前所有 profile 的 YAML 都没有声明 `module_type`，所以 `_module_type_diagnostics()` 这层校验实际上没启用；`case_bodies`、`request_overrides`、`assertion_rules` 仍然正常生效。
+一个很重要的后续优化点：`aitest_config/project_config.yaml` 里有 `modules:` 注册表，但当前 `ProjectConfig` dataclass 没有读取 `modules` 字段，emitter 真正用于校验的 `module_type` 是从 profile YAML 里读的，见 [emitter.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/emitter.py:116)。我统计了一下，当前所有 profile 的 YAML 都没有声明 `module_type`，所以 `_module_type_diagnostics()` 这层校验实际上没启用；`case_bodies`、`case_flows`、`request_overrides`、`assertion_rules` 仍然正常生效。
 
 **五、emitter：真正写 pytest 文件**
-主调用链在 [emitter.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/emitter.py:442)：`emit_module(module)` 依次找 `business.md`、`boundary.md`，每个文件先 `parse_case_file()`，再交给 `emit_file()`。
+主调用链在 [emitter.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/emitter.py:190)：`emit_module(module)` 依次找 `business.md`、`boundary.md`，每个文件先 `parse_case_file()`，再交给 `emit_file()`。
 
-`emit_file()` 的主要流程在 [emitter.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/emitter.py:270)：
+`emit_file()` 的主要流程在 [emitter.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/emitter.py:64)：
 
 1. 算输出路径：`test_{module}_{file_type}.py`
-2. 读取 profile 里的 rules、overrides、imports、case_bodies
+2. 读取 profile 里的 rules、overrides、imports、case_bodies、case_flows
 3. 如果 parser 有错误，返回 diagnostics，不生成残缺文件
-4. 如果没有基础 HTTP 请求体，且未被 `case_bodies` 覆盖，报 E002
-5. 渲染文件头、`BASE_REQUEST`、`_req()` helper、测试类
-6. 遍历每个 `TestCase`
-7. `可行性存疑` 的 case 不生成测试函数，只在文件末尾写 `# SKIPPED`
-8. `manual` case 加 `@pytest.mark.manual`，断言写成 `# MANUAL CHECK`
-9. 普通 case 调 `_render_test_function()`
-10. 最后 `write_text()` 写入 generated 文件，见 [emitter.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/emitter.py:427)
+4. 如果没有基础 HTTP 请求体，且未被 `case_bodies` 或 `case_flows` 覆盖，报 E002
+5. 调 `build_file_ir()` 生成 Case IR，见 [emitter.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/emitter.py:146)
+6. 如果 IR planner 有文件级 diagnostics，直接阻断生成
+7. 调 `render_file_from_ir()` 渲染 pytest 文本，见 [emitter.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/emitter.py:164)
+8. 最后 `write_text()` 写入 generated 文件，见 [emitter.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/emitter.py:175)
 
-`_render_test_function()` 是最核心的单条用例生成函数，见 [emitter.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/emitter.py:145)。它里面又分两条路：
+真正决定“这条用例走哪条生成路线”的是 [planner.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/planner.py:59) 的 `_strategy_for()`，优先级是：
+
+```text
+skipped > custom_case_body > structured_case_flow > manual > default_grpc > default_http
+```
+
+真正把 Case IR 写成 pytest 的是 [ir_renderer.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/ir_renderer.py:323) 的 `render_file_from_ir()`。单条用例的核心分叉在 [ir_renderer.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/ir_renderer.py:302) 的 `_render_test_function()`。
 
 第一条路：profile 有 `case_bodies`。  
-emitter 不再自动拼请求和断言，而是把 profile 里的 body 原样缩进到测试函数中，见 [emitter.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/emitter.py:159)。ab_service 的生成结果就是这样：profile 里的 `ab = setup_ab_service(...)`、`resp = ab.get(...)` 直接出现在 [test_ab_service_business.py](/Users/zmw/AIAutoTest/test_workspace/tests/generated/test_ab_service_business.py:20)。
+renderer 不再自动拼请求和断言，而是把 profile 里的 body 原样缩进到测试函数中，见 [ir_renderer.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/ir_renderer.py:152)。ab_service 的文件持久化用例仍是这样：profile 里的 `build_isolated_client(tmp_path, ...)` 直接出现在 [test_ab_service_business.py](/Users/zmw/AIAutoTest/test_workspace/tests/generated/test_ab_service_business.py:252)。
 
-第二条路：默认推荐接口模板。  
-emitter 自动生成函数签名、setup 调用、请求体、HTTP/gRPC 调用、断言，见 [emitter.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/emitter.py:174)。calibration 的生成结果就是这样：Markdown 的 `TC-CAL-001` 被编译成 [test_calibration_business.py](/Users/zmw/AIAutoTest/test_workspace/tests/generated/test_calibration_business.py:32)，其中 `_req("u_cal_001", "req_cal_001")`、`http_helper.post(...)`、`assert cal == pytest.approx(...)` 都是 emitter 生成的。
+第二条路：profile 有 `case_flows`。
+planner 会把它标成 `structured_case_flow`，renderer 按步骤生成“调用 helper -> 保存变量 -> 派生变量 -> 断言/注释”，见 [ir_renderer.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/ir_renderer.py:198)。目前 `validation_ratelimit` 已全部迁移到 `case_flows`；`rough_ranking` 的 23 条 recommend flow 已迁移；`issuance` 迁移 17 条并保留并发 `case_body`；`ab_service` 迁移 26 条运行中 API flow，并保留文件、subprocess、Remote SDK 生命周期和 mock 相关 body。schema 422 这组用 `assign` step 把 `locs = [item["loc"] for item in resp.json()["detail"]]` 结构化表达出来；manual 日志核查用 `comment` step 渲染为注释，见 [codegen_profile_validation_ratelimit.md](/Users/zmw/AIAutoTest/test_workspace/tests/fixtures/codegen_profile_validation_ratelimit.md:33)。
+
+第三条路：默认推荐接口模板。
+renderer 自动生成函数签名、setup 调用、请求体、HTTP/gRPC 调用、断言，见 [ir_renderer.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/ir_renderer.py:243)。calibration 的生成结果就是这样：Markdown 的 `TC-CAL-001` 被编译成 [test_calibration_business.py](/Users/zmw/AIAutoTest/test_workspace/tests/generated/test_calibration_business.py:32)，其中 `_req("u_cal_001", "req_cal_001")`、`http_helper.post(...)`、`assert cal == pytest.approx(...)` 都是 renderer 生成的。
 
 **六、断言是怎么翻译的**
 断言翻译集中在 [render_utils.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/render_utils.py:176) 的 `resolve_assertion()`。优先级非常重要：
@@ -123,13 +134,13 @@ profile assertion_rules
 | `feature_scoring` | 默认推荐接口 + request_overrides，部分 manual/skip | 特征和打分链路有些日志/故障注入无法纯黑盒自动化 |
 | `scene_routing` | 默认推荐接口 + request_overrides + Redis fixture | 场景/兜底主要可通过请求字段和 Redis 状态控制 |
 | `e2e` | 默认推荐接口 + request_overrides + 断言规则，但仍有 UNPARSED | 跨主服务、AB、Redis、发放记录，断言语义更复合 |
-| `ab_service` | 全量 `case_bodies` | 多端点 CRUD、SDK、文件持久化，不能套 `/api/v1/recommend` |
-| `issuance` | `case_bodies` | 发放后还要查库存、查用户券、并发，不是单请求模型 |
+| `ab_service` | `case_flows` + `case_bodies` | 运行中 API CRUD 已结构化；文件持久化、Remote SDK 生命周期、mock 保留 body |
+| `issuance` | `case_flows` + 1 条 `case_body` | 发放后查库存/查用户券/gRPC 查询已结构化；并发库存用例保留 body |
 | `logging` | `case_bodies` | 需要启动隔离服务并采集日志 |
-| `rough_ranking` | `case_bodies` | 需要隔离主服务 + recording scoring gRPC proxy |
-| `validation_ratelimit` | `case_bodies` | 覆盖 HTTP schema、gRPC 字段、限流，很多要原始 response 或隔离限流配置 |
+| `rough_ranking` | `case_flows` | 隔离主服务 + recording scoring gRPC proxy 留在 fixture，测试体已结构化 |
+| `validation_ratelimit` | `case_flows` | 覆盖 HTTP schema、gRPC 字段、限流；可执行用例已结构化，存疑用例仍 skip |
 
-一个容易踩的点：HTTP/gRPC 分流不是看标题，也不是看共享配置里的接口，而是 `_render_test_function()` 里检查场景变量的 value 是否包含 `"gRPC"`，见 [emitter.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/emitter.py:151)。所以新增 gRPC 用例时，Markdown 的场景变量里要明确出现 `协议：gRPC` 这类内容，否则会走 HTTP 生成路径。
+一个容易踩的点：HTTP/gRPC 分流不是看标题，也不是看共享配置里的接口，而是 Case IR planner 检查场景变量的 value 是否包含 `"gRPC"`，见 [planner.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/planner.py:52)。所以新增 gRPC 用例时，Markdown 的场景变量里要明确出现 `协议：gRPC` 这类内容，否则会走 HTTP 生成路径。你也可以用 `--explain TC-XXX` 看 `protocol.source` 到底来自哪个场景变量。
 
 **八、pytest 执行时发生什么**
 pytest 执行 generated 文件时，先加载 [conftest.py](/Users/zmw/AIAutoTest/test_workspace/tests/conftest.py:10)，这里注册了所有模块 fixture plugin，并提供 `http_base_url`、`grpc_target`、`ab_base_url`、`redis_url`，这些都能通过环境变量覆盖，见 [conftest.py](/Users/zmw/AIAutoTest/test_workspace/tests/conftest.py:26)。

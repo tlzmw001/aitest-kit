@@ -61,13 +61,13 @@ module_types:
     description: "标准推荐接口模块"
   multi_endpoint:
     description: "多端点服务模块"
-    requires: [case_bodies]           # codegen_profile 必须提供 case_bodies
+    requires: [case_bodies]           # codegen_profile 必须提供 case_bodies 或 case_flows
   subprocess_capture:
     description: "需要隔离进程捕获输出"
-    requires: [case_bodies]
+    requires: [case_bodies]           # case_flows 可满足稳定结构化流程，复杂生命周期继续用 case_bodies
   isolated_service:
     description: "需要隔离服务实例"
-    requires: [case_bodies]
+    requires: [case_bodies]           # case_flows 可满足稳定结构化流程，复杂生命周期继续用 case_bodies
 
 # ------------------------------------------------------------
 # 六、模块注册表
@@ -82,6 +82,9 @@ modules:
   feature_scoring:
     module_type: standard_recommend
     notes: "+ request_overrides"
+  e2e:
+    module_type: standard_recommend
+    notes: "端到端链路组合验证"
   issuance:
     module_type: standard_recommend
     notes: "+ case_bodies（多请求/查询）"

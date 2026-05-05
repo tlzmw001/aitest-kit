@@ -13,6 +13,8 @@ effort: high
 
 从 `$target_module` 模块已验证的 pytest 代码中提取确定性模板，更新 emitter 规则。
 
+`emitter-build` 的核心职责是把“已经跑通的 AI/人工补写经验”沉淀为确定性模式；不要从未验证的 pytest、失败用例或猜测出的业务语义中提取规则。
+
 ## 前提条件
 
 该模块的 codegen 生成的 pytest 必须已全部通过（或 manual/skip 用例已标记）。未通过的模块不应运行此 skill。
@@ -29,26 +31,31 @@ effort: high
 
 1. **已验证的 .py** — `test_workspace/tests/generated/test_{module}_business.py` 和 `test_{module}_boundary.py`
 2. **parser 输出** — 运行 `python3 -m aitest_kit.codegen.parser` 获取 SharedConfig + TestCase 列表
-3. **codegen profile** — `test_workspace/tests/fixtures/codegen_profile_{module}.md`（如果存在）
-4. **emitter 现有规则** — `aitest_kit/codegen/emitter.py`（如果已存在）
+3. **Case IR 输出** — 如果仓库已支持 `--dump-ir` / `--explain`，读取每条用例的 strategy、protocol、fixtures、assertion resolution
+4. **codegen profile** — `test_workspace/tests/fixtures/codegen_profile_{module}.md`（如果存在）
+5. **emitter/renderer 现有规则** — `aitest_kit/codegen/emitter.py`、`aitest_kit/codegen/ir_renderer.py`、`aitest_kit/codegen/render_utils.py`（如果已存在）
+
+如果当前仓库尚未实现 Case IR CLI，仍按 parser/profile/generated pytest 对齐，不因此阻断规则提取。
 
 ## 分析流程
 
 ### 第一步：逐函数对齐与分流
 
-将每条 test 函数与 parser 输出的 TestCase 一一对齐，并按函数体结构分流：
+将每条 test 函数与 parser 输出的 TestCase 一一对齐。若 Case IR 已可用，同时对齐 IR 中的 strategy 和 assertion resolution：
 
-| 对齐项 | parser 输出 | .py 中的代码 |
-|--------|-------------|-------------|
-| 断言文本 | `TestCase.assertions` | `assert ...` 语句 |
-| setup 描述 | `TestCase.scenario_vars` | `# SETUP:` 注释 + fixture 调用 |
-| 请求体 | `SharedConfig.base_request_http` + 覆盖 | `_req()` 调用 |
-| 标记 | `TestCase.markers` | `@pytest.mark.manual` |
+| 对齐项 | parser / IR 输出 | .py 中的代码 |
+|--------|------------------|-------------|
+| 断言文本 | `TestCase.assertions` / `AssertionIR.source` | `assert ...` 语句 |
+| setup 描述 | `TestCase.scenario_vars` / `setup_call` | `# SETUP:` 注释 + fixture 调用 |
+| 请求体 | `SharedConfig.base_request_http` + 覆盖 / `RequestIR` | `_req()` 调用 |
+| 标记 | `TestCase.markers` / `strategy=manual/skipped` | `@pytest.mark.manual` / `# SKIPPED` |
+| 执行策略 | `CaseIR.strategy` | 默认模板、case_body 或 case_flow 函数体 |
 
 **逐函数分流**：对齐时判断每个函数属于哪条路线：
 
 - **标准模板函数**：函数体包含 `_req()` 调用 + 标准断言 → 进入第二步提取断言规则
-- **case_bodies 函数**：函数体不包含 `_req()` 调用，或结构完全自定义（多请求、并发、非标准接口等）→ 进入第二步的 case_bodies 提取
+- **case_bodies 函数**：函数体不包含 `_req()` 调用，或结构完全自定义（多请求、并发、非标准接口等）→ 进入 case_bodies 提取与晋升分析
+- **case_flows 函数**：如果 profile 已有 `case_flows` 且 generated pytest 来自结构化 flow → 对齐 flow steps 与生成代码，不退化为 case_body
 
 ### 第二步：提取断言模板
 
@@ -94,7 +101,7 @@ assertion_rules:
       segments_source: "_CASE_CONFIGS[case_id].piecewise"
 ```
 
-### case_bodies 提取（针对非标准模板函数）
+### case_bodies 提取与晋升分析（针对非标准模板函数）
 
 第一步中分流为 case_bodies 的函数，无法提取断言规则，改为提取完整函数体写入 profile：
 
@@ -104,7 +111,62 @@ assertion_rules:
    - 一致 → 无需更新
    - .py 中有修改（调试修复导致）→ 用验证通过的 .py 版本覆盖 profile 中的旧 case_bodies
    - profile 中无此用例的 case_bodies（首次提取）→ 新增
-4. **晋升候选标记**：如果 3+ 个 case_bodies 函数结构相似（如都是"发请求→取字段→断言"），在输出摘要中标记为"可晋升为断言规则"的候选，由用户决定是否提取为 assertion_rule。不自动晋升
+4. **晋升候选分析**：如果 3+ 个 case_bodies 函数结构相似，在输出摘要中标记候选，由用户决定是否晋升。不自动晋升，不静默改写 profile。
+
+晋升为 `case_flow` 时，必须同时删除对应旧 `case_body`；同一个 case_id 同时存在于 `case_bodies` 和 `case_flows` 会被 codegen 视为 profile 错误。
+
+晋升目标按下表分类：
+
+| 晋升目标 | 适用场景 |
+|----------|----------|
+| `promote_to_default_template` | 可退回默认模板，只需补 `request_overrides` / `assertion_rules` |
+| `promote_to_assertion_rule` | 请求流程标准，只有断言需要模板化 |
+| `promote_to_named_template` | 断言需要 if/elif/else 或复杂代码生成 |
+| `promote_to_case_flow` | 多步骤流程稳定，差异主要是参数、保存变量和期望值 |
+| `promote_to_helper` | 多个 body 重复 Python 逻辑，应下沉 fixture/helper |
+| `keep_case_body` | 少见、复杂、并发、进程、mock、文件生命周期等暂不晋升 |
+
+建议晋升必须满足：
+
+1. 至少 3 条已验证通过的 case_body 结构相似。
+2. 差异主要是参数、期望值、case_id。
+3. 使用 fixture/helper 的公开测试能力。
+4. 不依赖复杂循环、分支、线程、进程生命周期或 monkeypatch。
+5. 晋升后比原 case_body 更可读、更可解释、更容易校验。
+
+不满足时保留 case_body，并在输出摘要中说明原因。
+
+晋升分析报告和 patch 草案应落到 `test_workspace/reports/codegen/latest/`，不要写入 `test_workspace/plans/`。推荐命令：
+
+```bash
+python3 -m aitest_kit.cli codegen $target_module --validate-profile
+python3 -m aitest_kit.cli codegen $target_module --validate-profile --write-report
+python3 -m aitest_kit.cli codegen $target_module --analyze-promotion --write-report
+python3 -m aitest_kit.cli codegen $target_module --suggest-promotion-patch
+```
+
+`promotion_report.md/json` 用于解释和工具消费；`promotion_patch.md/diff` 是 review-only 草案，默认不自动修改 `codegen_profile_{module}.md`。
+如果新增或迁移了 `case_flow`，必须先通过 `--validate-profile`，再重新 codegen。
+
+### case_flow 提取（针对稳定多步骤函数）
+
+`case_flow` 是 `case_bodies` 的一种晋升目标，适合稳定的 Arrange/Act/Observe/Assert 多步骤流程。第一版只支持：
+
+- 调用 fixture/helper 对象方法。
+- `args` / `kwargs` 传入字面量、`ref` 引用或显式 `expr`。
+- `save_as` 保存中间变量。
+- `assign` 用显式 `expr` 派生中间变量，例如从 raw response 提取 `locs`。
+- `assert` 使用可执行 Python 断言，必须以 `assert ` 开头，例如 `assert resp["code"] == 0`。
+- `comment` 渲染受控注释，例如 manual check 说明。
+
+不要把以下场景晋升为 case_flow：
+
+- 线程池、子进程、服务生命周期管理。
+- 复杂 `for` / `while` / `if` 控制流。
+- monkeypatch、mock transport、日志 handler 注入。
+- 文件持久化和临时目录生命周期本身就是测试主体。
+
+这些场景继续保留 case_body，或者先抽取 fixture/helper 后再评估。
 
 ### 第三步：提取文件级模板
 
@@ -136,6 +198,7 @@ assertion_rules:
 - 发现模块特有断言模式 → 添加到 profile 的 `## emitter 规则` 章节
 - 发现模块特有的 BASE_REQUEST 差异 → 更新 profile 的请求模板章节
 - case_bodies 提取或更新 → 写入 profile 的 `case_bodies` 和 `case_fixtures` 段
+- case_bodies 晋升为结构化流程 → 写入 profile 的 `case_flows` 段，并在用户确认后移除对应旧 `case_bodies`
 - 发现新的调试经验 → 更新 profile 的调试经验章节
 
 ## 质量检查
@@ -151,7 +214,7 @@ assertion_rules:
 
 1. `aitest codegen --all --check` 通过（生成结果不变）
 2. `pytest test_workspace/tests/generated/ -v` 全部通过
-3. emitter.py 行数 < 500
+3. emitter.py / ir_renderer.py 行数均 < 500
 
 ## 输出摘要
 
@@ -173,11 +236,23 @@ assertion_rules:
 case_bodies：
 - 提取/更新：{A} 条
 - 首次提取：{B} 条
-- 晋升候选：{列表或"无"}
+- 晋升候选：
+  - default_template：{列表或"无"}
+  - assertion_rule：{列表或"无"}
+  - named_template：{列表或"无"}
+  - case_flow：{列表或"无"}
+  - helper：{列表或"无"}
+  - keep_case_body：{列表和原因或"无"}
+
+case_flows：
+- 已有对齐：{C} 条
+- 新增候选：{D} 条
+- 本次实际更新：{E} 条（仅用户确认后）
 
 覆盖率：
 - 标准模板覆盖：{X}/{total} 条
 - case_bodies 覆盖：{A}/{total} 条
+- case_flows 覆盖：{C}/{total} 条
 - UNPARSED：{Y} 条（列出）
 - MANUAL/SKIP：{Z} 条
 

@@ -15,11 +15,15 @@ effort: high
 
 ## 生成策略
 
-采用 **emitter 优先 + AI 补全** 模式：
+采用 **emitter 优先 + AI 补全** 模式。当前生成链路为 `parser -> Case IR planner -> emitter/IR renderer -> pytest`：
 
-1. emitter（`aitest_kit/codegen/emitter.py`）确定性生成 .py，通用规则 + codegen_profile 特殊规则覆盖大部分断言
-2. AI 只处理 emitter 输出的 `# UNPARSED ASSERTION:` 部分，将其翻译为可执行的 pytest 代码
-3. `@pytest.mark.manual` 和 `# SKIPPED` 用例不需要 AI 补写
+1. parser 只把 Markdown 转为 `ParseResult`，不读取 profile，不判断协议/策略。
+2. Case IR planner 结合 `ParseResult`、`project_config` 和 `codegen_profile` 生成可解释的生成计划。
+3. emitter（`aitest_kit/codegen/emitter.py`）负责装载、诊断和落盘，IR renderer（`aitest_kit/codegen/ir_renderer.py`）确定性生成 .py，通用规则 + codegen_profile 特殊规则覆盖大部分断言。
+4. AI 只处理 emitter 输出的 `# UNPARSED ASSERTION:` 部分，将其翻译为可执行的 pytest 代码。
+5. `@pytest.mark.manual` 和 `# SKIPPED` 用例不需要 AI 补写。
+
+如果迁移到其他仓库时尚未实现 Case IR CLI，仍按现有 parser/emitter 流程执行；不要因为缺少 dump/explain 命令阻断 codegen。
 
 ## 前置：新项目首次使用检查
 
@@ -28,7 +32,8 @@ effort: high
 1. **项目配置** — 检查 `aitest_config/project_config.yaml` 是否存在且匹配当前项目（helper_import、api_path、var_map、module_abbrevs、builtin_assertion_rules）
 2. **如果不存在**，参考现有 project_config.yaml 创建一份
 3. **项目配置** — 读取 `aitest_config/config.yaml`（路径、协议偏好、已知限制）和 `aitest_config/project_config.yaml`（断言规则、模块分类）
-4. **提醒用户**：首个模块的 UNPARSED 率可能较高，建议选断言模式最典型的模块作为第一个
+4. **profile 格式** — profile 继续使用 Markdown 内 YAML；结构契约按 JSON Schema 风格校验，第一版不为此引入新依赖
+5. **提醒用户**：首个模块的 UNPARSED / case_body 比例可能较高，建议选断言模式最典型的模块作为第一个
 
 ## 前置：运行 parser
 
@@ -37,6 +42,34 @@ effort: high
 3. 读取 parser 输出，理解共享配置和每条用例的结构
 
 如果 `$dry_run` 为 true，只输出可生成/不可生成用例列表，不生成代码。
+
+## 前置：构建或解释 Case IR
+
+Case IR 的职责是解释“这条用例为什么这么生成”，不是替代 parser 做 Markdown 解析，也不是做业务推理。
+
+Case IR 第一版应覆盖以下 strategy：
+
+| strategy | 含义 |
+|----------|------|
+| `default_http` | 标准 HTTP 推荐接口 |
+| `default_grpc` | 场景变量标注 gRPC 的标准推荐接口 |
+| `custom_case_body` | profile 中存在 `case_bodies[case_id]` |
+| `manual` | marker 包含 manual |
+| `skipped` | marker 包含可行性存疑 |
+| `structured_case_flow` | profile 中存在 `case_flows[case_id]` |
+
+如果 CLI 已支持，优先用 dump/explain 排查生成策略：
+
+```bash
+python3 -m aitest_kit.cli codegen $target_module --validate-profile
+python3 -m aitest_kit.cli codegen $target_module --validate-profile --write-report
+python3 -m aitest_kit.cli codegen $target_module --dump-ir
+python3 -m aitest_kit.cli codegen $target_module --explain TC-XXX
+python3 -m aitest_kit.cli codegen $target_module --analyze-promotion --write-report
+python3 -m aitest_kit.cli codegen $target_module --suggest-promotion-patch
+```
+
+如果 CLI 尚未支持，手动对齐 parser 输出、project_config 和 codegen_profile，不要发明 IR 中没有来源的策略。
 
 ## 前置：读取 helpers API
 
@@ -54,7 +87,7 @@ effort: high
 python3 -m aitest_kit.codegen.emitter $target_module
 ```
 
-检查输出摘要中的 UNPARSED 数量。
+检查输出摘要中的 UNPARSED 数量。若 Case IR 已接入，先确认每条用例的 strategy/protocol/fixtures 与预期一致，再分析 generated pytest。
 
 ## 第二步：AI 补写 UNPARSED
 
@@ -144,8 +177,19 @@ fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供，通过 conftest
 ### 请求生成
 
 1. 从共享配置取基础请求体，场景变量 `请求覆盖` 合并
-2. gRPC 用例通过场景变量中的 `协议：gRPC` 标识，具体处理方式见 `aitest_config/config.yaml` 的 `protocols`
+2. gRPC 用例通过场景变量中的 `协议：gRPC` 标识，Case IR 应记录该判断来源
 3. `{{user_id}}` -> `u_{module}_{tc_number}`，`{{req_id}}` -> `req_{module}_{tc_number}`
+
+### case_body 与 case_flow
+
+- `case_bodies` 是复杂场景的逃生通道，适合多端点、多请求、副作用、日志、隔离服务、并发等默认模板难以覆盖的用例。
+- `case_flows` 是已验证且结构稳定的 `case_bodies` 晋升形态，适合"调用 helper -> 保存结果 -> 派生变量 -> 观察副作用 -> 断言/注释"这类重复多步骤流程；当前支持 `call`、`assign`、`assert`、`comment` 四类 step。
+- 同一个 case_id 不允许同时出现在 `case_bodies` 和 `case_flows`；正式晋升为 `case_flow` 时必须删除旧 `case_body`，否则 codegen 会报错。
+- `case_flow` 的 `assert` step 必须写成可执行 Python 断言，例如 `assert resp["code"] == 0`；裸表达式如 `` `resp == ERR` `` 会被 profile 校验拒绝。
+- 不要把复杂 Python 控制流硬塞进 `case_flow`；包含线程、进程、mock、复杂文件生命周期时继续保留 `case_body`。
+- 新增 `case_flow` 前必须能解释它比原 `case_body` 更稳定、更可读、更可校验。
+- 生成或迁移前优先运行 `python3 -m aitest_kit.cli codegen $target_module --validate-profile`；profile 校验只读，不生成 pytest，用于提前发现格式、case_id 引用、case_flow assert 和 module_type 必需字段问题。
+- `--analyze-promotion --write-report` 和 `--suggest-promotion-patch` 的产物写入 `test_workspace/reports/codegen/latest/`，不要放到 `plans/`；patch 草案默认只供 review，不自动修改 profile。
 
 ### 标记处理
 
@@ -159,6 +203,7 @@ fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供，通过 conftest
 3. 不 import 待测服务内部模块
 4. 不硬编码端口，通过 fixture 获取 base_url
 5. 不发明用例中没有的断言
+6. parser、Case IR、emitter 的错误边界清晰：Markdown 结构问题归 parser，策略/配置问题归 IR planner，渲染问题归 emitter
 
 ## 输出
 
@@ -195,6 +240,7 @@ TODO：
 | **请求模板** | 固定字段、差异字段、helper 用法 |
 | **断言模式** | 断言 -> pytest 映射表 |
 | **setup 映射** | 场景变量 -> _CASE_CONFIGS 映射 |
+| **case_bodies / case_flows** | 复杂用例的自定义执行体，或已晋升的结构化多步骤流程 |
 | **已知阻塞项** | 无法自动化的用例及原因 |
 | **调试经验** | 模块特有排错经验 |
 | **emitter 规则** | YAML code block，模块特有断言规则 |

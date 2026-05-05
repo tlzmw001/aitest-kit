@@ -6,15 +6,16 @@ codegen_profile YAML blocks; everything else uses built-in patterns.
 """
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
-from aitest_kit.codegen.parser import ParseResult, SharedConfig, TestCase, parse_case_file
+from aitest_kit.codegen.ir_renderer import EmitContext, render_file_from_ir
+from aitest_kit.codegen.parser import ParseResult, parse_case_file
+from aitest_kit.codegen.planner import build_file_ir
 from aitest_kit.codegen.profile import (
     load_profile_case_bodies,
     load_profile_case_fixtures,
+    load_profile_case_flows,
     load_profile_extra_imports,
     load_profile_module_type,
     load_profile_request_overrides,
@@ -22,200 +23,8 @@ from aitest_kit.codegen.profile import (
 )
 from aitest_kit.codegen.project_config import (
     DEFAULT_PROJECT,
-    AssertionRule,
     ProjectConfig,
 )
-from aitest_kit.codegen.render_utils import (
-    dict_to_python,
-    dict_to_python_compact,
-    module_abbrev,
-    module_class_name,
-    render_assignment,
-    resolve_assertion,
-    strip_backticks,
-    tc_func_name,
-    tc_number,
-)
-
-
-# ---------------------------------------------------------------------------
-# Code generation context
-# ---------------------------------------------------------------------------
-
-@dataclass
-class EmitContext:
-    module: str
-    file_type: str  # "business" or "boundary"
-    source_path: str
-    shared_config: SharedConfig
-    project: ProjectConfig = field(default_factory=ProjectConfig)
-    profile_rules: list[AssertionRule] = field(default_factory=list)
-    request_overrides: dict[str, dict[str, Any]] = field(default_factory=dict)
-    extra_imports: list[str] = field(default_factory=list)
-    case_fixtures: dict[str, list[str]] = field(default_factory=dict)
-    case_bodies: dict[str, list[str]] = field(default_factory=dict)
-    variables: dict[str, str] = field(default_factory=dict)
-
-
-# ---------------------------------------------------------------------------
-# File-level template rendering
-# ---------------------------------------------------------------------------
-
-def _render_header(ctx: EmitContext, has_grpc: bool = False) -> list[str]:
-    lines = [
-        f"# Auto-generated from {ctx.source_path}",
-        f"# DO NOT EDIT — regenerate with: /test-codegen {ctx.module}",
-        "import pytest",
-        ctx.project.helper_import,
-    ]
-    if has_grpc:
-        lines.append(ctx.project.grpc_helper_import)
-    lines.extend(ctx.extra_imports)
-    return lines
-
-
-def _render_base_request(ctx: EmitContext) -> list[str]:
-    body = ctx.shared_config.base_request_http
-    if not body:
-        return []
-    lines = ["", ""]
-    sanitized = dict(body)
-    sanitized["user_id"] = None
-    sanitized["reqId"] = None
-    lines.append(f"BASE_REQUEST = {dict_to_python(sanitized)}")
-    return lines
-
-
-def _render_req_helper(ctx: EmitContext) -> list[str]:
-    return [
-        "",
-        "",
-        "def _req(user_id: str, req_id: str, **overrides) -> dict:",
-        '    body = {**BASE_REQUEST, "user_id": user_id, "reqId": req_id}',
-        "    body.update(overrides)",
-        "    return body",
-    ]
-
-
-# ---------------------------------------------------------------------------
-# Test function rendering
-# ---------------------------------------------------------------------------
-
-def _needs_variables(assertions: list[str], variables: dict[str, str]) -> set[str]:
-    """Determine which shared variables are referenced by assertions."""
-    needed = set()
-    for a in assertions:
-        clean = strip_backticks(a)
-        for var_name in variables:
-            if var_name in ("clamp(x)",):
-                continue
-            if re.search(rf"\b{re.escape(var_name)}\b", clean):
-                needed.add(var_name)
-    return needed
-
-
-def _render_req_call(tc: TestCase, ctx: EmitContext, default_user_id: str, default_req_id: str) -> str:
-    """Render _req(...) using optional profile-specified case overrides."""
-    configured = dict(ctx.request_overrides.get(tc.id, {}))
-    user_id = configured.pop("user_id", default_user_id)
-    req_id = configured.pop("reqId", configured.pop("req_id", default_req_id))
-
-    if not configured:
-        return f'_req("{user_id}", "{req_id}")'
-
-    return f'_req("{user_id}", "{req_id}", **{dict_to_python_compact(configured)})'
-
-
-def _render_test_function(tc: TestCase, ctx: EmitContext) -> list[str]:
-    """Render a single test function."""
-    abbrev = module_abbrev(ctx.module, ctx.project)
-    num = tc_number(tc.id)
-    func_name = tc_func_name(tc.id)
-    is_manual = any("manual" in m.lower() for m in tc.markers)
-    is_grpc = any("gRPC" in v for v in tc.scenario_vars.values())
-
-    lines = []
-
-    # Decorator
-    if is_manual:
-        lines.append("    @pytest.mark.manual")
-
-    custom_body = ctx.case_bodies.get(tc.id)
-    if custom_body is not None:
-        fixtures = ctx.case_fixtures.get(tc.id, [f"setup_{ctx.module}"])
-        signature = ", ".join(["self", *fixtures])
-        lines.append(f"    def {func_name}({signature}):")
-        lines.append(f'        """{tc.id}：{tc.title}"""')
-        lines.extend(render_assignment("__tc_meta__", _case_meta(tc, ctx), indent=2))
-        for key, val in tc.scenario_vars.items():
-            if key.startswith("_"):
-                continue
-            lines.append(f"        # SETUP: {key}：{strip_backticks(val)}")
-        lines.append("")
-        for body_line in custom_body:
-            lines.append(f"        {body_line}" if body_line else "")
-        return lines, []
-
-    # Function signature
-    if is_grpc:
-        lines.append(f"    def {func_name}(self, grpc_target, setup_{ctx.module}):")
-    else:
-        lines.append(f"    def {func_name}(self, http_base_url, setup_{ctx.module}):")
-    lines.append(f'        """{tc.id}：{tc.title}"""')
-    lines.extend(render_assignment("__tc_meta__", _case_meta(tc, ctx), indent=2))
-
-    # Setup comments + fixture call
-    for key, val in tc.scenario_vars.items():
-        if key.startswith("_"):
-            continue
-        lines.append(f"        # SETUP: {key}：{strip_backticks(val)}")
-    lines.append(f'        setup_{ctx.module}(case_id="{tc.id}")')
-
-    # Request
-    user_id = f"u_{abbrev}_{num}"
-    req_id = f"req_{abbrev}_{num}"
-    req_call = _render_req_call(tc, ctx, user_id, req_id)
-    lines.append("")
-    if is_grpc:
-        lines.append(
-            f'        resp = {ctx.project.grpc_helper_call}(grpc_target, '
-            f'{req_call})'
-        )
-    else:
-        lines.append(
-            f'        resp = {ctx.project.helper_call}(http_base_url, "{ctx.project.api_path}", '
-            f'json={req_call})'
-        )
-
-    # Common assertions (skip for manual)
-    if not is_manual:
-        for ca in ctx.shared_config.common_assertions:
-            code_lines, _ = resolve_assertion(ca, ctx.profile_rules, ctx.project)
-            for cl in code_lines:
-                lines.append(f"        {cl}")
-
-    # Variable extraction (only if assertions reference them)
-    needed_vars = _needs_variables(tc.assertions, ctx.variables)
-    for var_name in ctx.project.var_map:
-        if var_name in needed_vars:
-            lines.append(f"        {var_name} = {ctx.project.var_map[var_name]}")
-
-    # Case-specific assertions
-    unparsed = []
-    for assertion in tc.assertions:
-        if is_manual:
-            lines.append(f"        # MANUAL CHECK: {strip_backticks(assertion)}")
-            continue
-
-        code_lines, pattern_name = resolve_assertion(
-            assertion, ctx.profile_rules, ctx.project
-        )
-        for cl in code_lines:
-            lines.append(f"        {cl}")
-        if pattern_name == "UNPARSED":
-            unparsed.append(assertion)
-
-    return lines, unparsed
 
 
 # ---------------------------------------------------------------------------
@@ -236,6 +45,7 @@ def _module_type_diagnostics(
     module_type: str | None,
     project: ProjectConfig,
     case_bodies: dict[str, list[str]],
+    case_flows: dict[str, dict],
 ) -> list[str]:
     if not module_type:
         return []
@@ -246,23 +56,11 @@ def _module_type_diagnostics(
 
     diagnostics: list[str] = []
     for required in module_type_cfg.get("requires", []):
-        if required == "case_bodies" and not case_bodies:
+        if required == "case_bodies" and not (case_bodies or case_flows):
             diagnostics.append(
-                f"E004: module_type={module_type} 要求 codegen_profile 提供 case_bodies"
+                f"E004: module_type={module_type} 要求 codegen_profile 提供 case_bodies 或 case_flows"
             )
     return diagnostics
-
-
-def _case_meta(tc: TestCase, ctx: EmitContext) -> dict[str, Any]:
-    return {
-        "tc_id": tc.id,
-        "module": ctx.module,
-        "category": ctx.file_type,
-        "source": ctx.source_path,
-        "title": tc.title,
-        "priority": tc.priority,
-        "markers": list(tc.markers),
-    }
 
 
 def emit_file(
@@ -290,6 +88,7 @@ def emit_file(
     extra_imports = load_profile_extra_imports(profile_path) if profile_path else []
     case_fixtures = load_profile_case_fixtures(profile_path) if profile_path else {}
     case_bodies = load_profile_case_bodies(profile_path) if profile_path else {}
+    case_flows = load_profile_case_flows(profile_path) if profile_path else {}
     module_type = load_profile_module_type(profile_path) if profile_path else None
     proj = project or DEFAULT_PROJECT
 
@@ -317,7 +116,7 @@ def emit_file(
             diagnostics=list(parse_result.errors),
         )
 
-    module_type_errors = _module_type_diagnostics(module_type, proj, case_bodies)
+    module_type_errors = _module_type_diagnostics(module_type, proj, case_bodies, case_flows)
     if module_type_errors:
         return EmitResult(
             output_path=str(output_path),
@@ -333,6 +132,7 @@ def emit_file(
             tc.id for tc in parse_result.cases
             if not any("可行性存疑" in m for m in tc.markers)
             and tc.id not in ctx.case_bodies
+            and tc.id not in case_flows
         ]
         if uncovered:
             return EmitResult(
@@ -342,100 +142,48 @@ def emit_file(
                 unparsed=[],
                 manual_count=0,
                 diagnostics=[
-                    "E002: 缺少基础请求体（HTTP），且以下用例未被 codegen_profile 的 case_bodies 覆盖："
+                    "E002: 缺少基础请求体（HTTP），且以下用例未被 codegen_profile 的 case_bodies/case_flows 覆盖："
                     + ", ".join(uncovered)
                 ],
             )
 
-    all_lines: list[str] = []
-    skipped: list[tuple[str, str]] = []
-    skipped_meta: list[dict[str, Any]] = []
-    all_unparsed: list[tuple[str, str]] = []
-    manual_count = 0
-    case_count = 0
-
-    has_grpc = any(
-        any("gRPC" in v for v in tc.scenario_vars.values())
-        for tc in parse_result.cases
-        if not any("可行性存疑" in m for m in tc.markers)
+    file_ir = build_file_ir(
+        parse_result,
+        file_type,
+        profile_path=profile_path,
+        project=proj,
     )
-
-    # Header
-    all_lines.extend(_render_header(ctx, has_grpc=has_grpc))
-
-    # BASE_REQUEST
-    all_lines.extend(_render_base_request(ctx))
-
-    # _req helper
-    if ctx.shared_config.base_request_http:
-        all_lines.extend(_render_req_helper(ctx))
-
-    # Class
-    class_name = module_class_name(module, file_type)
-    desc = f"{module} {'业务' if file_type == 'business' else '边界'}测试用例"
-    all_lines.extend(["", "", f"class {class_name}:"])
-    all_lines.append(f'    """{desc}"""')
-
-    _CN_NUMBERS = "一二三四五六七八九十"
-
-    current_section = ""
-    section_idx = 0
-
-    for tc in parse_result.cases:
-        # Skip feasibility-questioned cases
-        skip_markers = [m for m in tc.markers if "可行性存疑" in m]
-        if skip_markers:
-            reason = skip_markers[0]
-            skipped.append((tc.id, reason))
-            meta = _case_meta(tc, ctx)
-            meta["reason"] = reason
-            skipped_meta.append(meta)
-            continue
-
-        is_manual = any("manual" in m.lower() for m in tc.markers)
-        if is_manual:
-            manual_count += 1
-
-        # Section comment
-        if tc.section and tc.section != current_section:
-            current_section = tc.section
-            cn_num = _CN_NUMBERS[section_idx] if section_idx < len(_CN_NUMBERS) else str(section_idx + 1)
-            section_idx += 1
-            all_lines.append("")
-            all_lines.append(f"    # ── {cn_num}、{current_section} ──")
-
-        all_lines.append("")
-        func_lines, unparsed = _render_test_function(tc, ctx)
-        all_lines.extend(func_lines)
-        case_count += 1
-
-        for u in unparsed:
-            all_unparsed.append((tc.id, u))
-
-    # Footer: TODO + SKIPPED
-    all_lines.append("")
-    all_lines.append("")
-    fixture_path = Path("test_workspace/tests/fixtures") / f"{module}.py"
-    if not fixture_path.exists():
-        all_lines.append(
-            f"# TODO: setup_{module} fixture 需要手写实现（→ tests/fixtures/{module}.py）"
+    if file_ir.diagnostics:
+        return EmitResult(
+            output_path=str(output_path),
+            case_count=0,
+            skipped=[],
+            unparsed=[],
+            manual_count=0,
+            diagnostics=[
+                f"{diag.code}: {diag.message}" for diag in file_ir.diagnostics
+            ],
         )
 
-    for tc_id, reason in skipped:
-        all_lines.append(f"# SKIPPED: {tc_id} — {reason}")
+    rendered = render_file_from_ir(file_ir, parse_result.cases, ctx)
+    if rendered.diagnostics:
+        return EmitResult(
+            output_path=str(output_path),
+            case_count=0,
+            skipped=[],
+            unparsed=[],
+            manual_count=0,
+            diagnostics=rendered.diagnostics,
+        )
 
-    all_lines.append("")
-    all_lines.extend(render_assignment("__codegen_skipped__", skipped_meta, indent=0))
-    all_lines.append("")
-
-    output_path.write_text("\n".join(all_lines), encoding="utf-8")
+    output_path.write_text("\n".join(rendered.lines), encoding="utf-8")
 
     return EmitResult(
         output_path=str(output_path),
-        case_count=case_count,
-        skipped=skipped,
-        unparsed=all_unparsed,
-        manual_count=manual_count,
+        case_count=rendered.case_count,
+        skipped=rendered.skipped,
+        unparsed=rendered.unparsed,
+        manual_count=rendered.manual_count,
     )
 
 

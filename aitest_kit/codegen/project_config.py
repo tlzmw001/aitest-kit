@@ -36,6 +36,7 @@ class ProjectConfig:
     builtin_assertion_rules: list[AssertionRule] = field(default_factory=list)
     named_templates: set[str] = field(default_factory=set)
     module_types: dict[str, dict[str, Any]] = field(default_factory=dict)
+    modules: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 FALLBACK_PROJECT_CONFIG_DATA: dict[str, Any] = {
@@ -67,6 +68,7 @@ FALLBACK_PROJECT_CONFIG_DATA: dict[str, Any] = {
         "subprocess_capture": {"description": "需要隔离进程捕获输出", "requires": ["case_bodies"]},
         "isolated_service": {"description": "需要隔离服务实例", "requires": ["case_bodies"]},
     },
+    "modules": {},
     "builtin_assertion_rules": [
         {
             "name": "status_code",
@@ -172,6 +174,7 @@ def _project_from(data: dict[str, Any]) -> ProjectConfig:
         builtin_assertion_rules=_rules_from(data.get("builtin_assertion_rules")),
         named_templates=set(data.get("named_templates") or FALLBACK_PROJECT_CONFIG_DATA["named_templates"]),
         module_types=dict(data.get("module_types") or FALLBACK_PROJECT_CONFIG_DATA["module_types"]),
+        modules=dict(data.get("modules") or FALLBACK_PROJECT_CONFIG_DATA["modules"]),
     )
 
 

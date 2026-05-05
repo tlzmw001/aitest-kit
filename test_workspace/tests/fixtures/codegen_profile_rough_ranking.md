@@ -32,134 +32,272 @@
 ## emitter 规则
 
 ```yaml
-case_bodies:
-  TC-RANK-001: |
-    case = setup_rough_ranking(case_id="TC-RANK-001")
-    resp = case.recommend_http()
-    assert resp["code"] == 0
-    assert case.rank_input_items == ["COUPON_RANK_A", "COUPON_RANK_B", "COUPON_RANK_C"]
-  TC-RANK-002: |
-    case = setup_rough_ranking(case_id="TC-RANK-002")
-    resp = case.recommend_grpc()
-    assert resp["code"] == 0
-    assert case.rank_input_items == ["COUPON_RANK_A", "COUPON_RANK_B", "COUPON_RANK_C"]
-  TC-RANK-003: |
-    case = setup_rough_ranking(case_id="TC-RANK-003")
-    resp = case.recommend_http()
-    assert resp["code"] == 0
-    assert case.rank_input_items == ["COUPON_RANK_A", "COUPON_RANK_B"]
-  TC-RANK-004: |
-    case = setup_rough_ranking(case_id="TC-RANK-004")
-    resp = case.recommend_http()
-    assert resp["code"] == 0
-    assert case.rank_input_items == ["COUPON_RANK_A", "COUPON_RANK_B"]
-  TC-RANK-005: |
-    case = setup_rough_ranking(case_id="TC-RANK-005")
-    resp = case.recommend_http()
-    assert resp["code"] == 0
-    assert len(case.rank_input_items) == 2
-    assert set(case.rank_input_items) <= {"COUPON_RANK_A", "COUPON_RANK_B", "COUPON_RANK_C"}
-  TC-RANK-006: |
-    case = setup_rough_ranking(case_id="TC-RANK-006")
-    resp = case.recommend_http()
-    assert resp["code"] == 0
-    assert case.rank_input_items[0] == "COUPON_RANK_B"
-    assert len(case.rank_input_items) == 2
-  TC-RANK-007: |
-    case = setup_rough_ranking(case_id="TC-RANK-007")
-    resp = case.recommend_http()
-    assert resp["code"] == 0
-    assert case.rank_input_items == ["COUPON_RANK_A", "COUPON_RANK_B"]
-  TC-RANK-008: |
-    case = setup_rough_ranking(case_id="TC-RANK-008")
-    resp = case.recommend_http()
-    assert resp["code"] == 0
-    assert case.rank_input_items[0] == "COUPON_RANK_B"
-  TC-RANK-009: |
-    case = setup_rough_ranking(case_id="TC-RANK-009")
-    resp = case.recommend_http()
-    assert resp["code"] == 0
-    assert len(case.rank_input_items) == 3
-    assert case.rank_input_items[:2] == ["COUPON_RANK_D1", "COUPON_RANK_F1"]
-  TC-RANK-010: |
-    case = setup_rough_ranking(case_id="TC-RANK-010")
-    resp = case.recommend_http()
-    assert resp["code"] == 0
-    assert len(case.rank_input_items) == 1
-    assert case.rank_input_items == ["COUPON_RANK_A"]
-  TC-RANK-011: |
-    case = setup_rough_ranking(case_id="TC-RANK-011")
-    resp = case.recommend_grpc()
-    assert resp["code"] == 0
-    assert case.rank_input_items == ["COUPON_RANK_B"]
-  TC-RANK-012: |
-    case = setup_rough_ranking(case_id="TC-RANK-012")
-    resp = case.recommend_http()
-    assert resp["code"] == 0
-    assert case.rank_input_items == ["P1", "P2", "A", "C", "E"]
-    assert case.rank_input_items[:2] == ["P1", "P2"]
-  TC-RANK-013: |
-    case = setup_rough_ranking(case_id="TC-RANK-013")
-    resp = case.recommend_http()
-    assert resp["code"] == 1001
-    assert resp["results"] == []
-    assert case.rank_input_items == []
-  TC-RANK-014: |
-    case = setup_rough_ranking(case_id="TC-RANK-014")
-    resp = case.recommend_http()
-    assert resp["code"] == 0
-    assert resp["results"] == []
-    assert resp["coupon"] is None
-    assert case.rank_input_items == []
-  TC-RANK-015: |
-    case = setup_rough_ranking(case_id="TC-RANK-015")
-    resp = case.recommend_http()
-    assert resp["code"] == 0
-    assert len(case.rank_input_items) == 3
-  TC-RANK-016: |
-    case = setup_rough_ranking(case_id="TC-RANK-016")
-    resp = case.recommend_http()
-    assert resp["code"] == 0
-    assert case.rank_input_items == ["COUPON_RANK_A", "COUPON_RANK_B"]
-    # MANUAL CHECK: 应用日志包含 未知粗排规则
-  TC-RANK-017: |
-    case = setup_rough_ranking(case_id="TC-RANK-017")
-    resp = case.recommend_http()
-    assert resp["code"] == 0
-    assert len(case.rank_input_items) == 2
-  TC-RANK-018: |
-    case = setup_rough_ranking(case_id="TC-RANK-018")
-    resp = case.recommend_http()
-    assert resp["code"] == 0
-    assert resp["results"] == []
-    assert case.rank_input_items == []
-    # MANUAL CHECK: 应用日志包含 未知过滤操作符
-  TC-RANK-019: |
-    case = setup_rough_ranking(case_id="TC-RANK-019")
-    resp = case.recommend_http()
-    assert resp["code"] == 0
-    assert case.rank_input_items == ["COUPON_RANK_A", "COUPON_RANK_B"]
-  TC-RANK-020: |
-    case = setup_rough_ranking(case_id="TC-RANK-020")
-    resp = case.recommend_http()
-    assert resp["code"] == 0
-    assert case.rank_input_items == ["COUPON_RANK_B"]
-    # MANUAL CHECK: 应用日志包含 prior_count=3 大于 truncate_count=1
-  TC-RANK-021: |
-    case = setup_rough_ranking(case_id="TC-RANK-021")
-    resp = case.recommend_grpc()
-    assert resp["code"] == 0
-    assert len(case.rank_input_items) == 3
-  TC-RANK-022: |
-    case = setup_rough_ranking(case_id="TC-RANK-022")
-    resp = case.recommend_grpc()
-    assert resp["code"] == 0
-    assert case.rank_input_items == ["COUPON_RANK_A", "COUPON_RANK_B"]
-    # MANUAL CHECK: 应用日志包含 未知粗排规则
-  TC-RANK-023: |
-    case = setup_rough_ranking(case_id="TC-RANK-023")
-    resp = case.recommend_grpc()
-    assert resp["code"] == 0
-    assert case.rank_input_items == ["COUPON_RANK_B"]
-    # MANUAL CHECK: 应用日志包含 prior_count=3 大于 truncate_count=1
+case_flows:
+  TC-RANK-001:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-001
+        save_as: case
+      - call: case.recommend_http
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B', 'COUPON_RANK_C']
+  TC-RANK-002:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-002
+        save_as: case
+      - call: case.recommend_grpc
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B', 'COUPON_RANK_C']
+  TC-RANK-003:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-003
+        save_as: case
+      - call: case.recommend_http
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
+  TC-RANK-004:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-004
+        save_as: case
+      - call: case.recommend_http
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
+  TC-RANK-005:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-005
+        save_as: case
+      - call: case.recommend_http
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert len(case.rank_input_items) == 2
+      - assert: assert set(case.rank_input_items) <= {'COUPON_RANK_A', 'COUPON_RANK_B', 'COUPON_RANK_C'}
+  TC-RANK-006:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-006
+        save_as: case
+      - call: case.recommend_http
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert case.rank_input_items[0] == 'COUPON_RANK_B'
+      - assert: assert len(case.rank_input_items) == 2
+  TC-RANK-007:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-007
+        save_as: case
+      - call: case.recommend_http
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
+  TC-RANK-008:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-008
+        save_as: case
+      - call: case.recommend_http
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert case.rank_input_items[0] == 'COUPON_RANK_B'
+  TC-RANK-009:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-009
+        save_as: case
+      - call: case.recommend_http
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert len(case.rank_input_items) == 3
+      - assert: assert case.rank_input_items[:2] == ['COUPON_RANK_D1', 'COUPON_RANK_F1']
+  TC-RANK-010:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-010
+        save_as: case
+      - call: case.recommend_http
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert len(case.rank_input_items) == 1
+      - assert: assert case.rank_input_items == ['COUPON_RANK_A']
+  TC-RANK-011:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-011
+        save_as: case
+      - call: case.recommend_grpc
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert case.rank_input_items == ['COUPON_RANK_B']
+  TC-RANK-012:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-012
+        save_as: case
+      - call: case.recommend_http
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert case.rank_input_items == ['P1', 'P2', 'A', 'C', 'E']
+      - assert: assert case.rank_input_items[:2] == ['P1', 'P2']
+  TC-RANK-013:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-013
+        save_as: case
+      - call: case.recommend_http
+        save_as: resp
+      - assert: assert resp['code'] == 1001
+      - assert: assert resp['results'] == []
+      - assert: assert case.rank_input_items == []
+  TC-RANK-014:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-014
+        save_as: case
+      - call: case.recommend_http
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert resp['results'] == []
+      - assert: assert resp['coupon'] is None
+      - assert: assert case.rank_input_items == []
+  TC-RANK-015:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-015
+        save_as: case
+      - call: case.recommend_http
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert len(case.rank_input_items) == 3
+  TC-RANK-016:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-016
+        save_as: case
+      - call: case.recommend_http
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
+      - comment: 'MANUAL CHECK: 应用日志包含 未知粗排规则'
+  TC-RANK-017:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-017
+        save_as: case
+      - call: case.recommend_http
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert len(case.rank_input_items) == 2
+  TC-RANK-018:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-018
+        save_as: case
+      - call: case.recommend_http
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert resp['results'] == []
+      - assert: assert case.rank_input_items == []
+      - comment: 'MANUAL CHECK: 应用日志包含 未知过滤操作符'
+  TC-RANK-019:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-019
+        save_as: case
+      - call: case.recommend_http
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
+  TC-RANK-020:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-020
+        save_as: case
+      - call: case.recommend_http
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert case.rank_input_items == ['COUPON_RANK_B']
+      - comment: 'MANUAL CHECK: 应用日志包含 prior_count=3 大于 truncate_count=1'
+  TC-RANK-021:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-021
+        save_as: case
+      - call: case.recommend_grpc
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert len(case.rank_input_items) == 3
+  TC-RANK-022:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-022
+        save_as: case
+      - call: case.recommend_grpc
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
+      - comment: 'MANUAL CHECK: 应用日志包含 未知粗排规则'
+  TC-RANK-023:
+    fixture: setup_rough_ranking
+    steps:
+      - call: setup_rough_ranking
+        kwargs:
+          case_id: TC-RANK-023
+        save_as: case
+      - call: case.recommend_grpc
+        save_as: resp
+      - assert: assert resp['code'] == 0
+      - assert: assert case.rank_input_items == ['COUPON_RANK_B']
+      - comment: 'MANUAL CHECK: 应用日志包含 prior_count=3 大于 truncate_count=1'
 ```

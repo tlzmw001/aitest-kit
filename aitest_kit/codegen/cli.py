@@ -2,16 +2,31 @@
 from __future__ import annotations
 
 import ast
+import difflib
+import json
 import sys
 import tempfile
-import difflib
 from pathlib import Path
 
 import click
 import yaml
 
-from aitest_kit.codegen.parser import parse_case_file
 from aitest_kit.codegen.emitter import emit_module
+from aitest_kit.codegen.ir import FileIR, ir_to_dict
+from aitest_kit.codegen.parser import parse_case_file
+from aitest_kit.codegen.planner import build_file_ir
+from aitest_kit.codegen.project_config import load_project_config
+from aitest_kit.codegen.promotion import (
+    PromotionReport,
+    analyze_case_body_promotion,
+    promotion_to_dict,
+    write_promotion_patch,
+    write_promotion_report,
+)
+from aitest_kit.codegen.profile_validator import (
+    validate_profile_module,
+    write_profile_validation_report,
+)
 
 
 def _load_cases_dir() -> Path:
@@ -23,7 +38,12 @@ def _load_cases_dir() -> Path:
 
 
 def _list_modules(cases_dir: Path) -> list[str]:
-    return sorted(d.name for d in cases_dir.iterdir() if d.is_dir() and not d.name.startswith("."))
+    return sorted(
+        d.name for d in cases_dir.iterdir()
+        if d.is_dir()
+        and not d.name.startswith(".")
+        and ((d / "business.md").exists() or (d / "boundary.md").exists())
+    )
 
 
 def _ast_error(path: Path) -> str | None:
@@ -32,6 +52,148 @@ def _ast_error(path: Path) -> str | None:
     except SyntaxError as exc:
         return f"{path}: {exc.msg} at line {exc.lineno}, column {exc.offset}"
     return None
+
+
+def _profile_path(module: str) -> Path | None:
+    path = Path("test_workspace/tests/fixtures") / f"codegen_profile_{module}.md"
+    return path if path.exists() else None
+
+
+def _build_module_ir(module: str, cases_dir: Path) -> list[FileIR]:
+    project = load_project_config()
+    module_dir = cases_dir / module
+    profile_path = _profile_path(module)
+    files: list[FileIR] = []
+    for file_type in ("business", "boundary"):
+        md_path = module_dir / f"{file_type}.md"
+        if not md_path.exists():
+            continue
+        parse_result = parse_case_file(md_path)
+        files.append(build_file_ir(
+            parse_result,
+            file_type,
+            profile_path=profile_path,
+            project=project,
+        ))
+    return files
+
+
+def _dump_ir(modules: list[str], cases_dir: Path) -> int:
+    payload = {
+        "modules": [
+            {
+                "module": module,
+                "files": [ir_to_dict(file_ir) for file_ir in _build_module_ir(module, cases_dir)],
+            }
+            for module in modules
+        ]
+    }
+    click.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _explain_case(module: str, case_id: str, cases_dir: Path) -> int:
+    for file_ir in _build_module_ir(module, cases_dir):
+        for case_ir in file_ir.cases:
+            if case_ir.case_id == case_id:
+                click.echo(yaml.safe_dump(
+                    ir_to_dict(case_ir),
+                    allow_unicode=True,
+                    sort_keys=False,
+                ).rstrip())
+                return 0
+    click.echo(f"Case {case_id} not found in module {module}")
+    return 1
+
+
+def _default_codegen_report_dir() -> Path:
+    return Path("test_workspace/reports/codegen/latest")
+
+
+def _analyze_promotion(
+    modules: list[str],
+    *,
+    output_dir: str | None = None,
+    write_report: bool = False,
+    write_patch: bool = False,
+    echo_yaml: bool = True,
+) -> int:
+    report_dir = Path(output_dir) if output_dir else _default_codegen_report_dir()
+    reports = []
+    written: list[Path] = []
+    for module in modules:
+        profile_path = _profile_path(module)
+        if profile_path is None:
+            report = PromotionReport(module=module, total_case_bodies=0)
+            item = promotion_to_dict(report)
+            item["note"] = "codegen profile not found"
+            reports.append(item)
+            if write_report:
+                written.extend(write_promotion_report(report, report_dir).values())
+            if write_patch:
+                written.extend(write_promotion_patch(report, report_dir).values())
+            continue
+        report = analyze_case_body_promotion(module, profile_path)
+        reports.append(promotion_to_dict(report))
+        if write_report:
+            written.extend(write_promotion_report(report, report_dir).values())
+        if write_patch:
+            written.extend(write_promotion_patch(
+                report,
+                report_dir,
+                profile_path=profile_path,
+            ).values())
+
+    if echo_yaml:
+        click.echo(yaml.safe_dump(
+            {"promotion_reports": reports},
+            allow_unicode=True,
+            sort_keys=False,
+        ).rstrip())
+    if written:
+        click.echo("Promotion artifacts written:")
+        for path in written:
+            click.echo(f"- {path}")
+    return 0
+
+
+def _validate_profiles(
+    modules: list[str],
+    cases_dir: Path,
+    *,
+    output_dir: str | None = None,
+    write_report: bool = False,
+) -> int:
+    report_dir = Path(output_dir) if output_dir else _default_codegen_report_dir()
+    error_count = 0
+    warning_count = 0
+    written: list[Path] = []
+    for module in modules:
+        report = validate_profile_module(module, cases_dir=cases_dir)
+        error_count += len(report.errors)
+        warning_count += len(report.warnings)
+        if write_report:
+            written.extend(write_profile_validation_report(report, report_dir).values())
+        click.echo(f"\nModule: {module}")
+        click.echo(f"  Profile: {report.profile_path}")
+        click.echo(f"  Case files: {len(report.case_files)}")
+        click.echo(f"  Cases: {len(report.case_ids)}")
+        if report.diagnostics:
+            click.echo("  Diagnostics:")
+            for diag in report.diagnostics:
+                click.echo(f"    {diag.format()}")
+        else:
+            click.echo("  Status: OK")
+
+    click.echo(
+        f"\nProfile validation summary: modules={len(modules)}, "
+        f"errors={error_count}, warnings={warning_count}"
+    )
+    if written:
+        click.echo("Profile validation artifacts written:")
+        for path in written:
+            click.echo(f"- {path}")
+    return 1 if error_count else 0
 
 
 def _check_consistency(modules: list[str], cases_dir: Path, include_all_generated: bool = False) -> int:
@@ -112,10 +274,51 @@ def _check_consistency(modules: list[str], cases_dir: Path, include_all_generate
 @click.option("--all", "all_modules", is_flag=True, help="Generate for all modules")
 @click.option("--dry-run", is_flag=True, help="Parse only, show what would be generated")
 @click.option("--check", is_flag=True, help="Verify generated files are up to date")
-def codegen(module: str | None, all_modules: bool, dry_run: bool, check: bool):
+@click.option("--dump-ir", is_flag=True, help="Print Case IR as JSON without generating files")
+@click.option("--explain", metavar="TC_ID", help="Print Case IR explanation for one case")
+@click.option("--analyze-promotion", is_flag=True, help="Analyze profile case_bodies promotion candidates")
+@click.option("--write-report", is_flag=True, help="Write promotion report artifacts under reports/codegen")
+@click.option("--suggest-promotion-patch", is_flag=True, help="Write review-only promotion patch artifacts")
+@click.option("--report-dir", type=click.Path(file_okay=False, dir_okay=True), help="Codegen report artifact output directory")
+@click.option("--validate-profile", is_flag=True, help="Validate codegen_profile before generating files")
+def codegen(
+    module: str | None,
+    all_modules: bool,
+    dry_run: bool,
+    check: bool,
+    dump_ir: bool,
+    explain: str | None,
+    analyze_promotion: bool,
+    write_report: bool,
+    suggest_promotion_patch: bool,
+    report_dir: str | None,
+    validate_profile: bool,
+):
     """Generate pytest from Markdown test cases."""
     if check and dry_run:
         click.echo("Error: --check and --dry-run are mutually exclusive")
+        sys.exit(2)
+    promotion_mode = analyze_promotion or suggest_promotion_patch
+    if (dump_ir or explain or promotion_mode or validate_profile) and (check or dry_run):
+        click.echo("Error: --dump-ir/--explain/--analyze-promotion/--suggest-promotion-patch/--validate-profile cannot be combined with --check or --dry-run")
+        sys.exit(2)
+    exclusive_modes = sum(bool(item) for item in [
+        dump_ir,
+        explain,
+        promotion_mode,
+        validate_profile,
+    ])
+    if exclusive_modes > 1:
+        click.echo("Error: --dump-ir, --explain, promotion analysis, and --validate-profile are mutually exclusive")
+        sys.exit(2)
+    if explain and all_modules:
+        click.echo("Error: --explain requires a single module, not --all")
+        sys.exit(2)
+    if write_report and not (promotion_mode or validate_profile):
+        click.echo("Error: --write-report requires promotion analysis or --validate-profile")
+        sys.exit(2)
+    if report_dir and not (write_report or suggest_promotion_patch):
+        click.echo("Error: --report-dir requires --write-report or --suggest-promotion-patch")
         sys.exit(2)
 
     cases_dir = _load_cases_dir()
@@ -130,6 +333,28 @@ def codegen(module: str | None, all_modules: bool, dry_run: bool, check: bool):
 
     if check:
         sys.exit(_check_consistency(modules, cases_dir, include_all_generated=all_modules))
+    if validate_profile:
+        sys.exit(_validate_profiles(
+            modules,
+            cases_dir,
+            output_dir=report_dir,
+            write_report=write_report,
+        ))
+    if dump_ir:
+        sys.exit(_dump_ir(modules, cases_dir))
+    if explain:
+        if not module:
+            click.echo("Error: --explain requires a module")
+            sys.exit(2)
+        sys.exit(_explain_case(module, explain, cases_dir))
+    if promotion_mode:
+        sys.exit(_analyze_promotion(
+            modules,
+            output_dir=report_dir,
+            write_report=write_report or suggest_promotion_patch,
+            write_patch=suggest_promotion_patch,
+            echo_yaml=analyze_promotion,
+        ))
 
     total_generated = 0
     total_blocked = 0
