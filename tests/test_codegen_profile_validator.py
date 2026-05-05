@@ -136,6 +136,34 @@ def test_profile_validator_rejects_unknown_case_reference(tmp_path):
     assert any("does not exist" in diag.message for diag in report.errors)
 
 
+def test_profile_validator_rejects_schema_unknown_nested_field(tmp_path):
+    cases_dir = tmp_path / "cases"
+    profile_dir = tmp_path / "fixtures"
+    _write_case_file(cases_dir, "demo")
+    _write_profile(
+        profile_dir,
+        "demo",
+        """case_flows:
+  TC-DEMO-001:
+    fixture: setup_demo
+    steps:
+      - call: setup_demo
+        save_as: case
+        unexpected: true
+""",
+    )
+
+    report = validate_profile_module(
+        "demo",
+        cases_dir=cases_dir,
+        profile_dir=profile_dir,
+        project=_project(),
+    )
+
+    assert any(diag.code == "E501" for diag in report.errors)
+    assert any("profile schema violation" in diag.message for diag in report.errors)
+
+
 def test_profile_validator_checks_module_type_requirements(tmp_path):
     cases_dir = tmp_path / "cases"
     profile_dir = tmp_path / "fixtures"
@@ -151,3 +179,26 @@ def test_profile_validator_checks_module_type_requirements(tmp_path):
 
     assert any(diag.code == "E504" for diag in report.errors)
     assert any("requires case_bodies or case_flows" in diag.message for diag in report.errors)
+
+
+def test_codegen_hard_gate_blocks_generation_before_emitter(tmp_path):
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        cases_dir = Path("test_workspace/cases")
+        profile_dir = Path("test_workspace/tests/fixtures")
+        _write_case_file(cases_dir, "demo")
+        _write_profile(
+            profile_dir,
+            "demo",
+            """case_flows:
+  TC-DEMO-001:
+    fixture: setup_demo
+    steps:
+      - assert: "`resp == ERR`"
+""",
+        )
+        result = runner.invoke(codegen, ["demo"])
+
+    assert result.exit_code == 1
+    assert "Profile gate blocked codegen" in result.output
+    assert "must start with 'assert '" in result.output

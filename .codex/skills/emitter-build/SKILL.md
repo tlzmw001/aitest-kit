@@ -143,10 +143,20 @@ python3 -m aitest_kit.cli codegen $target_module --validate-profile
 python3 -m aitest_kit.cli codegen $target_module --validate-profile --write-report
 python3 -m aitest_kit.cli codegen $target_module --analyze-promotion --write-report
 python3 -m aitest_kit.cli codegen $target_module --suggest-promotion-patch
+python3 -m aitest_kit.cli codegen --all --health-report --write-report
 ```
 
 `promotion_report.md/json` 用于解释和工具消费；`promotion_patch.md/diff` 是 review-only 草案，默认不自动修改 `codegen_profile_{module}.md`。
-如果新增或迁移了 `case_flow`，必须先通过 `--validate-profile`，再重新 codegen。
+如果新增或迁移了 `case_flow`，必须先通过 `--validate-profile`，再重新 codegen。普通生成、`--check`、IR explain/dump 和 promotion 分析也会自动执行 profile gate；有 ERROR 时不要绕过门禁。
+
+人工晋升闭环：
+
+1. 先确认对应 generated pytest 已验证通过。
+2. 运行 `--analyze-promotion --write-report` 生成候选依据。
+3. 运行 `--suggest-promotion-patch` 生成 review-only 草案。
+4. 人工修改 profile：新增 `case_flows`，同时删除对应旧 `case_bodies`。
+5. 运行 `--validate-profile`、`codegen --check` 和 pytest collect/run。
+6. 用 `--health-report --write-report` 确认 case_body/UNPARSED 数量下降。
 
 ### case_flow 提取（针对稳定多步骤函数）
 

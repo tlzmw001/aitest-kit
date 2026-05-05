@@ -4,10 +4,13 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import yaml
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import ValidationError
 
 from aitest_kit.codegen.parser import parse_case_file
 from aitest_kit.codegen.profile import (
@@ -19,6 +22,8 @@ from aitest_kit.codegen.project_config import ProjectConfig, load_project_config
 
 _YAML_BLOCK_RE = re.compile(r"```ya?ml\s*\n(.*?)```", re.DOTALL)
 _CASE_ID_RE = re.compile(r"^TC-[A-Z0-9]+-\d+$")
+_PROFILE_SCHEMA_RELATIVE_PATH = Path("aitest_config/schemas/codegen_profile.schema.json")
+_REPO_PROFILE_SCHEMA_PATH = Path(__file__).resolve().parents[2] / _PROFILE_SCHEMA_RELATIVE_PATH
 _TOP_LEVEL_KEYS = {
     "module_type",
     "assertion_rules",
@@ -144,6 +149,7 @@ def validate_profile_module(
     if data is None:
         return report
 
+    _validate_profile_schema(report, data)
     _validate_top_level_shape(report, data)
     case_bodies = _mapping(data, "case_bodies")
     case_flows = _mapping(data, "case_flows")
@@ -201,6 +207,50 @@ def _load_profile_yaml_strict(report: ProfileValidationReport) -> dict[str, Any]
         _error(report, "E501", "profile YAML root must be a mapping", str(report.profile_path))
         return None
     return data
+
+
+@lru_cache(maxsize=1)
+def _profile_schema_validator() -> Draft202012Validator:
+    schema = json.loads(_profile_schema_path().read_text(encoding="utf-8"))
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema)
+
+
+def _profile_schema_path() -> Path:
+    cwd_schema = _PROFILE_SCHEMA_RELATIVE_PATH
+    return cwd_schema if cwd_schema.exists() else _REPO_PROFILE_SCHEMA_PATH
+
+
+def _validate_profile_schema(report: ProfileValidationReport, data: dict[str, Any]) -> None:
+    try:
+        validator = _profile_schema_validator()
+    except Exception as exc:
+        _error(report, "E501", f"profile JSON Schema is unavailable: {exc}", str(_profile_schema_path()))
+        return
+
+    for error in sorted(validator.iter_errors(data), key=_schema_error_sort_key):
+        _error(report, "E501", _format_schema_error(error), _schema_error_source(error))
+
+
+def _schema_error_sort_key(error: ValidationError) -> tuple[str, str]:
+    return (_schema_error_source(error), error.message)
+
+
+def _schema_error_source(error: ValidationError) -> str:
+    parts: list[str] = []
+    for part in error.absolute_path:
+        if isinstance(part, int):
+            if parts:
+                parts[-1] = f"{parts[-1]}[{part}]"
+            else:
+                parts.append(f"[{part}]")
+        else:
+            parts.append(str(part))
+    return ".".join(parts) or "<root>"
+
+
+def _format_schema_error(error: ValidationError) -> str:
+    return f"profile schema violation: {error.message}"
 
 
 def _validate_top_level_shape(report: ProfileValidationReport, data: dict[str, Any]) -> None:

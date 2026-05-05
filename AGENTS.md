@@ -268,6 +268,16 @@ codegen 管线分三层，换项目时只改配置层，不改框架层：
   - test_workspace/tests/fixtures/{module}.py
 ```
 
+## AI 与代码生成边界
+
+本项目的 codegen 哲学是：AI 负责探索未知和做迁移判断，代码负责稳定、可验证、可重复的生成路径。
+
+- AI 可以做：理解新项目业务、生成初版 Markdown/profile、解释失败原因、判断已验证 body 是否值得晋升、补写少量 UNPARSED。
+- 代码必须做：Markdown 解析、profile JSON Schema/语义校验、case_id 对齐、IR strategy 选择、请求体合并、默认断言生成、case_flow 渲染、generated freshness check。
+- 普通 codegen、`--check`、`--dump-ir`、`--explain` 和 promotion 分析必须先通过 profile gate；格式错误不进入 IR/emitter。
+- 稳定模式优先沉淀到 `project_config.yaml`、`codegen_profile_{module}.md`、fixture/helper 或 `case_flows`，不要长期依赖 AI 重写同类 pytest。
+- `case_bodies` 是复杂场景逃生通道，不是默认路线；并发、进程、文件生命周期、mock、Remote SDK 生命周期等复杂控制流可以保留。
+
 ## module_type 分类
 
 `codegen_profile` 头部必须声明 `module_type`，emitter 根据类型校验必需字段：

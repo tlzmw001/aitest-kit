@@ -32,7 +32,7 @@ effort: high
 1. **项目配置** — 检查 `aitest_config/project_config.yaml` 是否存在且匹配当前项目（helper_import、api_path、var_map、module_abbrevs、builtin_assertion_rules）
 2. **如果不存在**，参考现有 project_config.yaml 创建一份
 3. **项目配置** — 读取 `aitest_config/config.yaml`（路径、协议偏好、已知限制）和 `aitest_config/project_config.yaml`（断言规则、模块分类）
-4. **profile 格式** — profile 继续使用 Markdown 内 YAML；结构契约按 JSON Schema 风格校验，第一版不为此引入新依赖
+4. **profile 格式** — profile 继续使用 Markdown 内 YAML；结构契约由 `aitest_config/schemas/codegen_profile.schema.json` 校验，再叠加 case_id/module_type/case_flow 语义校验
 5. **提醒用户**：首个模块的 UNPARSED / case_body 比例可能较高，建议选断言模式最典型的模块作为第一个
 
 ## 前置：运行 parser
@@ -67,9 +67,10 @@ python3 -m aitest_kit.cli codegen $target_module --dump-ir
 python3 -m aitest_kit.cli codegen $target_module --explain TC-XXX
 python3 -m aitest_kit.cli codegen $target_module --analyze-promotion --write-report
 python3 -m aitest_kit.cli codegen $target_module --suggest-promotion-patch
+python3 -m aitest_kit.cli codegen --all --health-report --write-report
 ```
 
-如果 CLI 尚未支持，手动对齐 parser 输出、project_config 和 codegen_profile，不要发明 IR 中没有来源的策略。
+普通生成、`--check`、`--dump-ir`、`--explain` 和 promotion 分析已经接入 profile 硬门禁；profile 有 ERROR 时不要绕过门禁继续生成。如果 CLI 尚未支持，手动对齐 parser 输出、project_config 和 codegen_profile，不要发明 IR 中没有来源的策略。
 
 ## 前置：读取 helpers API
 
@@ -79,12 +80,12 @@ python3 -m aitest_kit.cli codegen $target_module --suggest-promotion-patch
 - 模块 fixture（如果已存在）
 - HTTP/gRPC/Redis helpers
 
-## 第一步：emitter 生成
+## 第一步：codegen 生成
 
-执行 emitter 生成 .py 文件：
+执行 codegen 生成 .py 文件；该入口会先执行 profile 硬门禁，再进入 IR/emitter：
 
 ```bash
-python3 -m aitest_kit.codegen.emitter $target_module
+python3 -m aitest_kit.cli codegen $target_module
 ```
 
 检查输出摘要中的 UNPARSED 数量。若 Case IR 已接入，先确认每条用例的 strategy/protocol/fixtures 与预期一致，再分析 generated pytest。
@@ -188,8 +189,9 @@ fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供，通过 conftest
 - `case_flow` 的 `assert` step 必须写成可执行 Python 断言，例如 `assert resp["code"] == 0`；裸表达式如 `` `resp == ERR` `` 会被 profile 校验拒绝。
 - 不要把复杂 Python 控制流硬塞进 `case_flow`；包含线程、进程、mock、复杂文件生命周期时继续保留 `case_body`。
 - 新增 `case_flow` 前必须能解释它比原 `case_body` 更稳定、更可读、更可校验。
-- 生成或迁移前优先运行 `python3 -m aitest_kit.cli codegen $target_module --validate-profile`；profile 校验只读，不生成 pytest，用于提前发现格式、case_id 引用、case_flow assert 和 module_type 必需字段问题。
+- 生成或迁移前显式运行 `python3 -m aitest_kit.cli codegen $target_module --validate-profile`；普通生成也会自动硬门禁，用于提前发现 JSON Schema 格式、case_id 引用、case_flow assert 和 module_type 必需字段问题。
 - `--analyze-promotion --write-report` 和 `--suggest-promotion-patch` 的产物写入 `test_workspace/reports/codegen/latest/`，不要放到 `plans/`；patch 草案默认只供 review，不自动修改 profile。
+- `--health-report --write-report` 输出模块成熟度、case_flow/case_body/UNPARSED 和断言命中统计，用来决定下一轮沉淀优先级。
 
 ### 标记处理
 

@@ -12,6 +12,11 @@ import click
 import yaml
 
 from aitest_kit.codegen.emitter import emit_module
+from aitest_kit.codegen.health import (
+    build_codegen_health_report,
+    codegen_health_to_dict,
+    write_codegen_health_report,
+)
 from aitest_kit.codegen.ir import FileIR, ir_to_dict
 from aitest_kit.codegen.parser import parse_case_file
 from aitest_kit.codegen.planner import build_file_ir
@@ -196,6 +201,50 @@ def _validate_profiles(
     return 1 if error_count else 0
 
 
+def _profile_gate(modules: list[str], cases_dir: Path) -> int:
+    reports = [validate_profile_module(module, cases_dir=cases_dir) for module in modules]
+    error_count = sum(len(report.errors) for report in reports)
+    if not error_count:
+        return 0
+
+    warning_count = sum(len(report.warnings) for report in reports)
+    click.echo(
+        f"Profile gate: modules={len(modules)}, "
+        f"errors={error_count}, warnings={warning_count}"
+    )
+    click.echo("Profile gate blocked codegen:")
+    for report in reports:
+        if not report.errors:
+            continue
+        click.echo(f"\nModule: {report.module}")
+        for diag in report.errors:
+            click.echo(f"  {diag.format()}")
+    click.echo("\nRun `python3 -m aitest_kit.cli codegen --all --validate-profile --write-report` for artifacts.")
+    return 1
+
+
+def _health_report(
+    modules: list[str],
+    cases_dir: Path,
+    *,
+    output_dir: str | None = None,
+    write_report: bool = False,
+) -> int:
+    report = build_codegen_health_report(modules, cases_dir)
+    click.echo(yaml.safe_dump(
+        codegen_health_to_dict(report),
+        allow_unicode=True,
+        sort_keys=False,
+    ).rstrip())
+    if write_report:
+        report_dir = Path(output_dir) if output_dir else _default_codegen_report_dir()
+        written = write_codegen_health_report(report, report_dir)
+        click.echo("Codegen health artifacts written:")
+        for path in written.values():
+            click.echo(f"- {path}")
+    return 1 if report.error_count else 0
+
+
 def _check_consistency(modules: list[str], cases_dir: Path, include_all_generated: bool = False) -> int:
     generated_dir = Path("test_workspace/tests/generated")
     stale_count = 0
@@ -279,8 +328,9 @@ def _check_consistency(modules: list[str], cases_dir: Path, include_all_generate
 @click.option("--analyze-promotion", is_flag=True, help="Analyze profile case_bodies promotion candidates")
 @click.option("--write-report", is_flag=True, help="Write promotion report artifacts under reports/codegen")
 @click.option("--suggest-promotion-patch", is_flag=True, help="Write review-only promotion patch artifacts")
-@click.option("--report-dir", type=click.Path(file_okay=False, dir_okay=True), help="Codegen report artifact output directory")
+@click.option("--report-dir", type=click.Path(file_okay=False, dir_okay=True), help="Codegen report output directory")
 @click.option("--validate-profile", is_flag=True, help="Validate codegen_profile before generating files")
+@click.option("--health-report", is_flag=True, help="Report codegen module health and maturity")
 def codegen(
     module: str | None,
     all_modules: bool,
@@ -293,29 +343,25 @@ def codegen(
     suggest_promotion_patch: bool,
     report_dir: str | None,
     validate_profile: bool,
+    health_report: bool,
 ):
     """Generate pytest from Markdown test cases."""
     if check and dry_run:
         click.echo("Error: --check and --dry-run are mutually exclusive")
         sys.exit(2)
     promotion_mode = analyze_promotion or suggest_promotion_patch
-    if (dump_ir or explain or promotion_mode or validate_profile) and (check or dry_run):
-        click.echo("Error: --dump-ir/--explain/--analyze-promotion/--suggest-promotion-patch/--validate-profile cannot be combined with --check or --dry-run")
+    if (dump_ir or explain or promotion_mode or validate_profile or health_report) and (check or dry_run):
+        click.echo("Error: report/IR/profile modes cannot be combined with --check or --dry-run")
         sys.exit(2)
-    exclusive_modes = sum(bool(item) for item in [
-        dump_ir,
-        explain,
-        promotion_mode,
-        validate_profile,
-    ])
+    exclusive_modes = sum(bool(item) for item in [dump_ir, explain, promotion_mode, validate_profile, health_report])
     if exclusive_modes > 1:
-        click.echo("Error: --dump-ir, --explain, promotion analysis, and --validate-profile are mutually exclusive")
+        click.echo("Error: report/IR/profile modes are mutually exclusive")
         sys.exit(2)
     if explain and all_modules:
         click.echo("Error: --explain requires a single module, not --all")
         sys.exit(2)
-    if write_report and not (promotion_mode or validate_profile):
-        click.echo("Error: --write-report requires promotion analysis or --validate-profile")
+    if write_report and not (promotion_mode or validate_profile or health_report):
+        click.echo("Error: --write-report requires promotion analysis, --validate-profile, or --health-report")
         sys.exit(2)
     if report_dir and not (write_report or suggest_promotion_patch):
         click.echo("Error: --report-dir requires --write-report or --suggest-promotion-patch")
@@ -332,6 +378,9 @@ def codegen(
         sys.exit(1)
 
     if check:
+        gate_result = _profile_gate(modules, cases_dir)
+        if gate_result:
+            sys.exit(gate_result)
         sys.exit(_check_consistency(modules, cases_dir, include_all_generated=all_modules))
     if validate_profile:
         sys.exit(_validate_profiles(
@@ -340,6 +389,17 @@ def codegen(
             output_dir=report_dir,
             write_report=write_report,
         ))
+    if health_report:
+        sys.exit(_health_report(
+            modules,
+            cases_dir,
+            output_dir=report_dir,
+            write_report=write_report,
+        ))
+    if not dry_run:
+        gate_result = _profile_gate(modules, cases_dir)
+        if gate_result:
+            sys.exit(gate_result)
     if dump_ir:
         sys.exit(_dump_ir(modules, cases_dir))
     if explain:
