@@ -72,33 +72,10 @@ class TestAbExperimentBoundary:
         # MANUAL CHECK: exp["coarse_rank_exp_game"] != "not_exists_strategy"
         # MANUAL CHECK: AB 服务日志包含 ab_sdk whitelist invalid
 
-    # ── 三、远程 SDK 异常 ──
-
-    def test_tc_ab_015(self, http_base_url, setup_ab_experiment):
-        """TC-AB-015：主服务早于 AB 服务启动时首个实验请求失败"""
-        __tc_meta__ = {
-            "tc_id": "TC-AB-015",
-            "module": "ab_experiment",
-            "category": "boundary",
-            "source": "test_workspace/cases/ab_experiment/boundary.md",
-            "title": "主服务早于 AB 服务启动时首个实验请求失败",
-            "priority": "P2 / 异常",
-            "markers": [],
-        }
-        # SETUP: 协议：HTTP
-        # SETUP: 环境覆盖：先启动主服务，不启动 AB 服务
-        # SETUP: 请求覆盖：发送 external=0 的 HTTP 推荐请求
-        # SETUP: 请求覆盖_2：随后启动 AB 服务再次发送同请求
-        setup_ab_experiment(case_id="TC-AB-015")
-
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_ab_015", "req_ab_015"))
-        assert resp["code"] == 0
-        assert isinstance(resp, dict)
-        assert resp["code"] == 0
-
 
 # SKIPPED: TC-AB-010 — `[!可行性存疑: 已确认为待测系统缺陷，主服务不支持运行时热更新 scene_experiments.json，详见 results/ab_experiment_scene_experiments_hot_reload_bug.md]`
 # SKIPPED: TC-AB-013 — `[!可行性存疑: 需要测试环境支持本地 SDK 模式启动主服务]`
 # SKIPPED: TC-AB-014 — `[!可行性存疑: 需要测试环境提供慢响应 AB 服务]`
+# SKIPPED: TC-AB-015 — `[!可行性存疑: 需要测试环境允许控制 AB 服务启动顺序并在同一用例内重试请求]`
 
-__codegen_skipped__ = [{"tc_id": "TC-AB-010", "module": "ab_experiment", "category": "boundary", "source": "test_workspace/cases/ab_experiment/boundary.md", "title": "hash 命中区间左闭边界", "priority": "P2", "markers": ["`[!可行性存疑: 已确认为待测系统缺陷，主服务不支持运行时热更新 scene_experiments.json，详见 results/ab_experiment_scene_experiments_hot_reload_bug.md]`"], "reason": "`[!可行性存疑: 已确认为待测系统缺陷，主服务不支持运行时热更新 scene_experiments.json，详见 results/ab_experiment_scene_experiments_hot_reload_bug.md]`"}, {"tc_id": "TC-AB-013", "module": "ab_experiment", "category": "boundary", "source": "test_workspace/cases/ab_experiment/boundary.md", "title": "本地 SDK 白名单环境变量格式错误时忽略白名单", "priority": "P2 / 异常", "markers": ["`[!可行性存疑: 需要测试环境支持本地 SDK 模式启动主服务]`"], "reason": "`[!可行性存疑: 需要测试环境支持本地 SDK 模式启动主服务]`"}, {"tc_id": "TC-AB-014", "module": "ab_experiment", "category": "boundary", "source": "test_workspace/cases/ab_experiment/boundary.md", "title": "远程 SDK 超时直接导致请求失败", "priority": "P2 / 异常", "markers": ["`[!可行性存疑: 需要测试环境提供慢响应 AB 服务]`"], "reason": "`[!可行性存疑: 需要测试环境提供慢响应 AB 服务]`"}]
+__codegen_skipped__ = [{"tc_id": "TC-AB-010", "module": "ab_experiment", "category": "boundary", "source": "test_workspace/cases/ab_experiment/boundary.md", "title": "hash 命中区间左闭边界", "priority": "P2", "markers": ["`[!可行性存疑: 已确认为待测系统缺陷，主服务不支持运行时热更新 scene_experiments.json，详见 results/ab_experiment_scene_experiments_hot_reload_bug.md]`"], "reason": "`[!可行性存疑: 已确认为待测系统缺陷，主服务不支持运行时热更新 scene_experiments.json，详见 results/ab_experiment_scene_experiments_hot_reload_bug.md]`"}, {"tc_id": "TC-AB-013", "module": "ab_experiment", "category": "boundary", "source": "test_workspace/cases/ab_experiment/boundary.md", "title": "本地 SDK 白名单环境变量格式错误时忽略白名单", "priority": "P2 / 异常", "markers": ["`[!可行性存疑: 需要测试环境支持本地 SDK 模式启动主服务]`"], "reason": "`[!可行性存疑: 需要测试环境支持本地 SDK 模式启动主服务]`"}, {"tc_id": "TC-AB-014", "module": "ab_experiment", "category": "boundary", "source": "test_workspace/cases/ab_experiment/boundary.md", "title": "远程 SDK 超时直接导致请求失败", "priority": "P2 / 异常", "markers": ["`[!可行性存疑: 需要测试环境提供慢响应 AB 服务]`"], "reason": "`[!可行性存疑: 需要测试环境提供慢响应 AB 服务]`"}, {"tc_id": "TC-AB-015", "module": "ab_experiment", "category": "boundary", "source": "test_workspace/cases/ab_experiment/boundary.md", "title": "主服务早于 AB 服务启动时首个实验请求失败", "priority": "P2 / 异常", "markers": ["`[!可行性存疑: 需要测试环境允许控制 AB 服务启动顺序并在同一用例内重试请求]`"], "reason": "`[!可行性存疑: 需要测试环境允许控制 AB 服务启动顺序并在同一用例内重试请求]`"}]

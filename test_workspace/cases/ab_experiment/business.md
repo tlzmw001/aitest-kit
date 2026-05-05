@@ -53,9 +53,9 @@ coupon.RecommendRequest{
 - AB 实验数据包含可 hash 命中的策略；需要白名单时通过 `PUT /api/v1/ab/whitelist/{user_id}` 设置
 
 **通用断言**：
-- HTTP：`response.status_code == 200`
-- gRPC：收到 `coupon.RecommendResponse`
 - 非兜底、非 external=1 场景：`response.code == 0`
+
+**说明**：HTTP 2xx 和 gRPC 响应可达性由测试 helper 的调用成功隐式覆盖；共享断言只保留业务响应码，避免生成重复的弱断言。
 
 **变量定义**：
 - `exp` = `response.experiment_info`

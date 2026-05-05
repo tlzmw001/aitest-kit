@@ -47,8 +47,6 @@ class TestAbExperimentBusiness:
         setup_ab_experiment(case_id="TC-AB-001")
 
         resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_ab_hash_http", "req-ab-001", **{"scene_name": "game", "device": "mobile", "external": 0}))
-        assert isinstance(resp, dict)
-        assert isinstance(resp, dict)
         assert resp["code"] == 0
         assert set(resp["experiment_info"].keys()) <= {"coarse_rank_exp_game", "calibration_exp_game"}
         assert "coarse_rank_exp_ad" not in resp["experiment_info"] and "calibration_exp_ad" not in resp["experiment_info"]
@@ -70,8 +68,6 @@ class TestAbExperimentBusiness:
         setup_ab_experiment(case_id="TC-AB-002")
 
         resp = grpc_ops.recommend(grpc_target, _req("u_ab_hash_grpc", "req-ab-002", **{"scene_name": "ad", "device": "pc", "external": 0}))
-        assert isinstance(resp, dict)
-        assert isinstance(resp, dict)
         assert resp["code"] == 0
         assert set(resp["experiment_info"].keys()) <= {"coarse_rank_exp_ad", "calibration_exp_ad"}
         assert "coarse_rank_exp_game" not in resp["experiment_info"] and "calibration_exp_game" not in resp["experiment_info"]
@@ -93,8 +89,6 @@ class TestAbExperimentBusiness:
         setup_ab_experiment(case_id="TC-AB-003")
 
         resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_ab_white", "req-ab-003", **{"scene_name": "game", "device": "mobile", "external": 0}))
-        assert isinstance(resp, dict)
-        assert isinstance(resp, dict)
         assert resp["code"] == 0
         assert resp["experiment_info"].get("coarse_rank_exp_game") == "cr_off"
         assert resp["experiment_info"].get("calibration_exp_game") == "cal_off"
@@ -118,8 +112,6 @@ class TestAbExperimentBusiness:
         setup_ab_experiment(case_id="TC-AB-004")
 
         resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_ab_scene_game", "req-ab-004", **{"scene_name": "game", "device": "mobile", "external": 0}))
-        assert isinstance(resp, dict)
-        assert isinstance(resp, dict)
         assert resp["code"] == 0
         assert set(resp["experiment_info"].keys()) <= {"coarse_rank_exp_game", "calibration_exp_game"}
         assert not any(k.endswith("_ad") for k in resp["experiment_info"])
@@ -143,8 +135,6 @@ class TestAbExperimentBusiness:
         setup_ab_experiment(case_id="TC-AB-006")
 
         resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_ab_external_http", "req-ab-006", **{"scene_name": "game", "device": "mobile", "external": 1}))
-        assert isinstance(resp, dict)
-        assert isinstance(resp, dict)
         assert resp["code"] == 0
         assert resp["experiment_info"] == {}
 
@@ -165,8 +155,6 @@ class TestAbExperimentBusiness:
         setup_ab_experiment(case_id="TC-AB-007")
 
         resp = grpc_ops.recommend(grpc_target, _req("u_ab_external_grpc", "req-ab-007", **{"scene_name": "game", "device": "mobile", "external": 1}))
-        assert isinstance(resp, dict)
-        assert isinstance(resp, dict)
         assert resp["code"] == 0
         assert resp["experiment_info"] == {}
 

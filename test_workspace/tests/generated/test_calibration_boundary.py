@@ -154,7 +154,6 @@ class TestCalibrationBoundary:
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
-        # UNPARSED ASSERTION: 非法第一段不生效
         assert cal == pytest.approx(s)
 
     # ── 三、条件类型转换 ──
@@ -179,28 +178,6 @@ class TestCalibrationBoundary:
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
         assert cal == pytest.approx(max(0, min(1, 1.5 * s)), abs=1e-4)
-
-    def test_tc_cal_024(self, http_base_url, setup_calibration):
-        """TC-CAL-024：布尔条件支持字符串和布尔等值匹配"""
-        __tc_meta__ = {
-            "tc_id": "TC-CAL-024",
-            "module": "calibration",
-            "category": "boundary",
-            "source": "test_workspace/cases/calibration/boundary.md",
-            "title": "布尔条件支持字符串和布尔等值匹配",
-            "priority": "P2",
-            "markers": [],
-        }
-        # SETUP: 前置操作：请求 item 包含 isPrior=true 但 isPrior 不在校准匹配白名单
-        # SETUP: 前置操作_2：线性规则 conditions={"isPrior":"true"}、k=2,b=0
-        setup_calibration(case_id="TC-CAL-024")
-
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_024", "req_cal_024"))
-        assert resp["code"] == 0
-        s = resp["results"][0]["score"]
-        cal = resp["results"][0]["calibrated_score"]
-        assert cal == pytest.approx(s)
-        # UNPARSED ASSERTION: 详见 mismatch.md
 
     def test_tc_cal_025(self, grpc_target, setup_calibration):
         """TC-CAL-025：gRPC 校准目录不存在时降级为不校准"""

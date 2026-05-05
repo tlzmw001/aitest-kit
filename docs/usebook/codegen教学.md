@@ -136,7 +136,28 @@ profile assertion_rules
 
 比如 calibration 的分段校准不是一行 assert 能表达，所以 profile 用 `piecewise_cascade` 命名模板，见 [codegen_profile_calibration.md](/Users/zmw/AIAutoTest/test_workspace/tests/fixtures/codegen_profile_calibration.md:89)。真正把模板渲染成 `if/elif/else + pytest.approx` 的逻辑在 [render_utils.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/render_utils.py:103)。生成结果就是 [test_calibration_business.py](/Users/zmw/AIAutoTest/test_workspace/tests/generated/test_calibration_business.py:53) 里的分段计算。
 
-如果规则都匹配不上，就会写 `# UNPARSED ASSERTION`，见 [render_utils.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/render_utils.py:197)。当前主要残留在 e2e 和 calibration boundary：e2e business 有 6 个，e2e boundary 有 8 个，calibration boundary 有 2 个。
+如果规则都匹配不上，就会写 `# UNPARSED ASSERTION`，见 [render_utils.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/render_utils.py:197)。当前全量 generated 已经没有 `UNPARSED ASSERTION`。
+
+看到 `UNPARSED ASSERTION` 时，第一反应不要是马上加 emitter 规则。先把它分成四类：
+
+1. **说明性文字混入断言**：例如 `TC-CAL-022` 曾把“非法第一段不生效”写进 `**断言**`，但真正可执行的检查已经是 `cal == s`。这类应改 Markdown，把解释移到 `**说明**`。
+2. **用例设计与当前能力不一致**：例如 `TC-CAL-024` 想验证 item 字段 `isPrior` 可作为校准条件，但当前待测系统不支持 item 字段匹配。它不应作为正常回归用例保留，应转入 mismatch/results，等产品能力补齐后再恢复正向用例。
+3. **真实缺少生成规则**：如果断言本身可执行、可观测、会在多个用例复用，再考虑补 `assertion_rules`、builtin rule 或 `case_flow`。
+4. **无法黑盒稳定验证**：如果断言依赖不可控内部状态或精确中间值，应标记可行性存疑、manual，或记录为测试基础设施需求。
+
+这个分流很重要：`UNPARSED` 是体检信号，不等于 codegen 能力不足。它可能暴露的是 Markdown 表达问题、用例设计问题、产品缺口，或者真正的规则缺口。
+
+还有一种更隐蔽的信号：**弱断言**。例如 profile 里曾经为了消除 UNPARSED，把 `http_status == 200`、库存查询、用户券查询这类断言映射成 `assert isinstance(resp, dict)`。这会让 generated 能执行，但没有验证业务契约。每轮收口建议额外跑一次：
+
+```bash
+rg -n "assert isinstance\\(resp, dict\\)|# UNPARSED ASSERTION" test_workspace/tests/generated
+```
+
+弱断言也要先分流：
+
+1. **调用成功隐式覆盖**：HTTP helper 的 `post()` 已经 `raise_for_status()`，gRPC helper 成功返回也说明收到了响应。此时应把共享断言从“HTTP 200 / 收到 gRPC response”改成说明，保留真正的业务断言，例如 `response.code == 0`。
+2. **默认单请求模板做不到**：库存、发放记录、跨协议对比需要第二次查询或第二种协议调用，应晋升为 `case_flow`，像 e2e 现在这样显式写 `post_recommend_response -> response.json -> query_coupons -> stock -> assert`。
+3. **环境编排做不到**：启动顺序、服务不可用、慢响应这类需要控制进程生命周期的用例，如果 fixture 没有能力，不要生成假断言，应标记 `[!可行性存疑]` 或沉淀为测试基础设施需求。
 
 **七、profile 格式门禁**
 profile 仍然写在 `codegen_profile_{module}.md` 的 YAML 代码块里，但格式契约已经由中心 JSON Schema 管住：
@@ -159,10 +180,10 @@ python3 -m aitest_kit.cli codegen --all --validate-profile --write-report
 | 模块 | 当前生成方式 | 为什么这样 |
 |---|---|---|
 | `calibration` | 默认推荐接口 + profile 断言规则 | 主要是响应字段和校准公式断言，适合规则化 |
-| `ab_experiment` | 默认推荐接口 + request_overrides + 断言规则 | 通过主服务推荐接口观察 AB 命中策略 |
+| `ab_experiment` | 默认推荐接口 + request_overrides + 断言规则，环境编排类用例 skip | 通过主服务推荐接口观察 AB 命中策略；HTTP/gRPC 可达性不再生成弱断言 |
 | `feature_scoring` | 默认推荐接口 + request_overrides，部分 manual/skip | 特征和打分链路有些日志/故障注入无法纯黑盒自动化 |
 | `scene_routing` | 默认推荐接口 + request_overrides + Redis fixture | 场景/兜底主要可通过请求字段和 Redis 状态控制 |
-| `e2e` | 默认推荐接口 + request_overrides + 断言规则，但仍有 UNPARSED | 跨主服务、AB、Redis、发放记录，断言语义更复合 |
+| `e2e` | `case_flows` | 跨主服务、AB、Redis、发放记录、库存和 HTTP/gRPC 对比，需要多步骤执行 |
 | `ab_service` | `case_flows` + `case_bodies` | 运行中 API CRUD 已结构化；文件持久化、Remote SDK 生命周期、mock 保留 body |
 | `issuance` | `case_flows` + 1 条 `case_body` | 发放后查库存/查用户券/gRPC 查询已结构化；并发库存用例保留 body |
 | `logging` | `case_bodies` | 需要启动隔离服务并采集日志 |
@@ -177,16 +198,45 @@ python3 -m aitest_kit.cli codegen --all --health-report --write-report
 
 报告会统计每个模块的 case 总数、`case_flow` 数、`case_body` 数、UNPARSED 数、profile 错误数和成熟度。当前成熟度最高自动计算到 L3；L4 作为未来人工审计标记暂不自动产生。它不是新的源文件，只是 codegen 的体检产物。
 
-一个容易踩的点：HTTP/gRPC 分流不是看标题，也不是看共享配置里的接口，而是 Case IR planner 检查场景变量的 value 是否包含 `"gRPC"`，见 [planner.py](/Users/zmw/AIAutoTest/aitest_kit/codegen/planner.py:52)。所以新增 gRPC 用例时，Markdown 的场景变量里要明确出现 `协议：gRPC` 这类内容，否则会走 HTTP 生成路径。你也可以用 `--explain TC-XXX` 看 `protocol.source` 到底来自哪个场景变量。
+一个容易踩的点：HTTP/gRPC 分流不是看标题，也不是看共享配置里的接口，而是 Case IR planner 只检查协议类场景变量（例如 `协议`、`protocol`）里是否包含 `"gRPC"`。所以新增 gRPC 用例时，Markdown 的场景变量里要明确出现 `协议：gRPC` 这类内容；单纯在“环境覆盖”里写“内部 gRPC mock 打分服务”不会再把用例误判成 gRPC。你也可以用 `--explain TC-XXX` 看 `protocol.source` 到底来自哪个场景变量。
 
-**九、pytest 执行时发生什么**
+**九、如何读 health report 决定下一步**
+health report 不是为了把所有模块都推到 L3/L4，而是帮我们判断下一轮沉淀该做什么。先看硬指标，再看成熟度：
+
+```bash
+python3 -m aitest_kit.cli codegen --all --health-report --write-report
+```
+
+优先级可以固定成下面这张表：
+
+| 信号 | 意味着什么 | 下一步 |
+|---|---|---|
+| Profile errors > 0 | profile 格式、case_id、case_flow 或 module_type 有硬错误 | 先修 profile，不能继续生成 |
+| UNPARSED > 0 | Markdown 断言没有被确定性翻译 | 先做四类分流：说明文字、用例能力不一致、缺规则、无法黑盒验证 |
+| 生成代码里有 `assert isinstance(resp, dict)` | 可能是弱断言 | 判断是隐式调用成功、该晋升 case_flow，还是环境编排做不到 |
+| case_body 很多 | 有些复杂场景还靠手写函数体 | 只把重复、稳定、低控制流的部分晋升为 case_flow |
+| manual/skipped 很多 | 可观测性或测试环境能力不足 | 不为了“数字好看”改成假自动化，先记录 bug 或基础设施需求 |
+| L2 | 不是坏状态 | 默认模板 + 规则已经稳定时可以保持 L2 |
+| L3 | 有结构化 case_flow 或稳定复杂生成路径 | 继续观察是否还剩可晋升的 case_body |
+
+所以现在的判断是：`UNPARSED=0`、profile `0E/0W`、弱断言扫描为空，说明 codegen 主链路已经健康。剩下的 L2 模块不一定要继续改，例如 calibration 主要是公式断言，默认模板已经足够；feature_scoring 和 scene_routing 的 skipped 多数是环境控制能力问题，不应该硬写成假断言；logging 的主体就是隔离进程和日志捕获，保留 case_body 反而更清楚。
+
+每次继续优化时，先问三个问题：
+
+1. 这条用例现在是不是已经有真实业务断言？
+2. 如果没有，是 Markdown 写法问题、profile 规则问题，还是测试环境做不到？
+3. 如果要晋升 case_flow，它是不是“调用 helper -> 保存结果 -> 查询副作用 -> assert”这种稳定流程？
+
+只有第三个答案明确为“是”时，才值得动 `case_flows`。否则就应该改 Markdown、补 assertion_rules、记录 bug，或者保留 manual/skipped。
+
+**十、pytest 执行时发生什么**
 pytest 执行 generated 文件时，先加载 [conftest.py](/Users/zmw/AIAutoTest/test_workspace/tests/conftest.py:10)，这里注册了所有模块 fixture plugin，并提供 `http_base_url`、`grpc_target`、`ab_base_url`、`redis_url`，这些都能通过环境变量覆盖，见 [conftest.py](/Users/zmw/AIAutoTest/test_workspace/tests/conftest.py:26)。
 
 默认 HTTP 请求走 [http.py](/Users/zmw/AIAutoTest/test_workspace/tests/helpers/http.py:10)，它用 `httpx.Client(transport=httpx.HTTPTransport())` 绕过系统代理，`post()` 会 `raise_for_status()` 并返回 JSON；需要断言 422 的场景用 `post_response()` 返回原始 `httpx.Response`，见 [http.py](/Users/zmw/AIAutoTest/test_workspace/tests/helpers/http.py:17)。
 
 gRPC 请求走 [grpc_ops.py](/Users/zmw/AIAutoTest/test_workspace/tests/helpers/grpc_ops.py:28)，它把 dict 请求转成 protobuf request，再把响应转回 dict。issuance 这种模块则通过 fixture 返回领域操作对象，例如 `IssuanceCase.post_recommend()`、`grpc_recommend()`、`query_coupons()`，见 [issuance.py](/Users/zmw/AIAutoTest/test_workspace/tests/fixtures/issuance.py:121)。rough_ranking 更复杂，会启动 recording scoring server 和隔离主服务，见 [rough_ranking.py](/Users/zmw/AIAutoTest/test_workspace/tests/fixtures/rough_ranking.py:221)。
 
-**十、执行命令**
+**十一、执行命令**
 完整跑测试前要先启动 Redis、AB 服务、打分 mock、主服务；这个流程在 [test_execution_guide.md](/Users/zmw/AIAutoTest/docs/usebook/test_execution_guide.md:103)。真正跑 pytest 的命令在 [test_execution_guide.md](/Users/zmw/AIAutoTest/docs/usebook/test_execution_guide.md:141)：
 
 ```bash
@@ -203,7 +253,7 @@ python3 -m aitest_kit.cli codegen --all --check
 # All generated files are up to date.
 
 python3 -m pytest test_workspace/tests/generated --collect-only -q
-# 185 tests collected in 0.06s
+# 183 tests collected in 0.13s
 ```
 
-所以当前可以确认两件事：Markdown/profile 到 generated 的编译结果是同步的；pytest 能成功导入并收集全部 185 条 generated 测试。真正执行这些测试时，失败排查顺序就是：先看是服务/环境连接失败，还是 fixture 前置不对，还是断言规则/profile 生成不对，最后才考虑 Markdown 用例本身要修。
+所以当前可以确认两件事：Markdown/profile 到 generated 的编译结果是同步的；pytest 能成功导入并收集全部 generated 测试。真正执行这些测试时，失败排查顺序就是：先看是服务/环境连接失败，还是 fixture 前置不对，还是断言规则/profile 生成不对，最后才考虑 Markdown 用例本身要修。

@@ -50,9 +50,14 @@ def _skip_reason(tc: TestCase) -> str | None:
     return None
 
 
+def _is_protocol_key(key: str) -> bool:
+    normalized = key.lower()
+    return "协议" in key or "protocol" in normalized
+
+
 def _grpc_source(tc: TestCase) -> tuple[bool, str, str]:
     for key, value in tc.scenario_vars.items():
-        if "gRPC" in value:
+        if _is_protocol_key(key) and "gRPC" in value:
             return True, f"scenario_vars.{key}", value
     return False, "", ""
 

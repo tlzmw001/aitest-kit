@@ -20,7 +20,7 @@
 | `exp` 只包含 game/ad 实验 | 对 `resp["experiment_info"].keys()` 做子集断言 |
 | `exp["..."] == "..."` | 对 `resp["experiment_info"]` 指定 key 断言 |
 | `exp == no_exp` | `resp["experiment_info"] == {}` |
-| AB 服务启动顺序类断言 | 当前生成单请求代码，仅保留链路成功断言 |
+| AB 服务启动顺序类断言 | 需要测试环境编排启动顺序，Markdown 中标记为可行性存疑，不生成默认单请求代码 |
 
 ## setup 映射
 
@@ -83,10 +83,6 @@ request_overrides:
     external: 0
 
 assertion_rules:
-  - pattern: 'response.status_code == 200'
-    template: 'assert isinstance(resp, dict)'
-  - pattern: '收到 coupon.RecommendResponse'
-    template: 'assert isinstance(resp, dict)'
   - pattern: '非兜底、非 external=1 场景'
     template: 'assert resp["code"] == 0'
   - pattern: 'response.body.code == 0'
@@ -117,8 +113,6 @@ assertion_rules:
     template: 'assert resp["experiment_info"].get("ab_boundary_left") == "left_hit"'
   - pattern: 'exp 不包含 ab_boundary_right'
     template: 'assert "ab_boundary_right" not in resp["experiment_info"]'
-  - pattern: 'AB 服务未启动时返回 500'
-    template: 'assert isinstance(resp, dict)'
   - pattern: 'AB 服务启动后同请求返回 code == 0'
     template: 'assert resp["code"] == 0'
 ```

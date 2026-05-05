@@ -38,7 +38,9 @@
 - 需要模拟 AB 服务不可用时，主服务使用独立环境变量或测试配置 `AB_SERVICE_URL={{unreachable_ab_base_url}}` 启动，不修改仓库默认 `.env`。
 - 用例之间隔离 `user_id`、`reqId`、库存 key、白名单数据和测试配置目录。
 
-**通用断言**：异常链路需要同时断言业务响应和发放记录状态；成功链路需要断言推荐响应与用户券查询结果一致。
+**通用断言**：
+
+**说明**：异常链路与成功链路的响应、发放记录状态由各用例断言逐条描述；共享配置只保留可复用前置和变量定义。
 
 **变量定义**：
 - `http_json` = HTTP 推荐响应 JSON。
@@ -70,6 +72,7 @@
 
 ### TC-E2E-005：内部打分链路在 AB 服务不可用时直接返回 HTTP 500
 - **优先级**：P1 / 异常
+- **标记**：`[!可行性存疑: 需要 fixture 支持以不可达 AB_SERVICE_URL 启动独立主服务；默认集成环境使用正常 AB 服务时该用例会返回 200，详见 results/e2e_unreachable_ab_requires_isolated_main_service.md]`
 - **场景变量**：
   - 协议：HTTP
   - 环境覆盖：启动 Redis、内部 gRPC mock 打分服务和主服务；主服务配置 `AB_SERVICE_URL={{unreachable_ab_base_url}}`

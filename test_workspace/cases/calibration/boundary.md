@@ -109,7 +109,8 @@ coupon.RecommendRequest{
 - **场景变量**：
   - 请求覆盖：第一段 `range=[0.7,0.3]`，第二段 `range=[0,1] k=1,b=0`
   - 请求覆盖：请求命中条件
-- **断言**：非法第一段不生效；`cal == s`
+- **断言**：`cal == s`
+- **说明**：第一段 `range=[0.7,0.3]` 非法，应不参与匹配；第二段 `[0,1] k=1,b=0` 生效，因此校准后分数等于原始分数。
 
 ---
 
@@ -121,13 +122,6 @@ coupon.RecommendRequest{
   - 前置操作：线性规则 `conditions={"external":"0"}`、`k=1.5,b=0`
   - 请求覆盖：请求 `external=0`
 - **断言**：`cal == round(clamp(1.5 * s), 4)`
-
-### TC-CAL-024：布尔条件支持字符串和布尔等值匹配
-- **优先级**：P2
-- **场景变量**：
-  - 前置操作：请求 item 包含 `isPrior=true` 但 `isPrior` 不在校准匹配白名单
-  - 前置操作：线性规则 `conditions={"isPrior":"true"}`、`k=2,b=0`
-- **断言**：`cal == s`；详见 mismatch.md
 
 ### TC-CAL-025：gRPC 校准目录不存在时降级为不校准
 - **优先级**：P2 / 异常

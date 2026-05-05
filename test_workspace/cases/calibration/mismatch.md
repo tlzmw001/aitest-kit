@@ -11,7 +11,8 @@
 - **知识库描述**：L1 描述校准文件条件“由请求字段组成”，容易理解为请求 item 字段也可作为条件参与匹配。
 - **实际实现**：`coupon_system/services/calibrator.py` 的 `_MATCHABLE_FIELDS` 仅包含 `item_id`、`coupon_type`、`device`、`external`、`gender`、`age`、`total_spend`，不包含请求 item 中的 `isPrior`、`value`、`min_spend`、`expire_days`。
 - **影响**：使用 `isPrior`、`value` 等 item 字段配置校准条件时规则永远不匹配，最终分数原样透传，且没有日志提示条件字段被拒绝。
-- **建议**：补文档
+- **测试侧处理**：原 boundary.md 中的 `TC-CAL-024` 会把当前不支持 item 字段的行为固化为正常回归用例，已从正常自动化用例中移除。
+- **建议**：如果产品目标是支持 item 字段作为校准条件，应作为待测系统需求/缺陷跟进，修复后再补充正向自动化用例。
 
 ### MISMATCH-002：推荐接口无法稳定构造精确 score 分段边界
 - **关联**：L1/calibration、boundary.md TC-CAL-020/021

@@ -95,9 +95,6 @@ _CASE_CONFIGS = {
     "TC-CAL-023": {
         "linear": {"999.json": [{"conditions": {"external": "0"}, "k": 1.5, "b": 0}]},
     },
-    "TC-CAL-024": {
-        "linear": {"999.json": [{"conditions": {"isPrior": "true"}, "k": 2, "b": 0}]},
-    },
     "TC-CAL-025": {"missing_dirs": True},
     "TC-CAL-026": {"linear_raw": {"999.json": "{bad json"}},
     "TC-CAL-027": {
