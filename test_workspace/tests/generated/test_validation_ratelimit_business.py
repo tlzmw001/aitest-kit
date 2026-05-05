@@ -248,7 +248,7 @@ class TestValidationRatelimitBusiness:
 
         case = setup_validation_ratelimit(case_id="TC-VAL-012")
         resp = case.http("u_reqid_http_auto", "", external=0, score_threshold=0.0, max_claim_per_request=1)
-        assert resp["code"] == 0
+        assert resp['code'] == 0
         # MANUAL CHECK: 应用日志存在 recommend request:，其中 reqId= 的值匹配 UUID 正则
 
     @pytest.mark.manual
@@ -268,7 +268,7 @@ class TestValidationRatelimitBusiness:
 
         case = setup_validation_ratelimit(case_id="TC-VAL-013")
         resp = case.grpc("u_reqid_grpc_auto", "", external=0, score_threshold=0.0, max_claim_per_request=1)
-        assert resp["code"] == 0
+        assert resp['code'] == 0
         # MANUAL CHECK: 应用日志存在 recommend request:，其中 reqId= 的值匹配 UUID 正则
 
     # ── 三、HTTP Schema 校验 ──
@@ -411,7 +411,7 @@ class TestValidationRatelimitBusiness:
 
         case = setup_validation_ratelimit(case_id="TC-GRPC-004")
         resp = case.grpc("u_grpc_valid", "req-grpc-004", external=0, score_threshold=0.5, max_claim_per_request=1)
-        assert resp["code"] == 0
+        assert resp['code'] == 0
 
     # ── 五、限流 ──
 
@@ -434,8 +434,8 @@ class TestValidationRatelimitBusiness:
         r1 = case.http("u_rate_old_user", "req-rate-001-1", external=0, score_threshold=0.0, max_claim_per_request=1)
         r2 = case.http("u_rate_old_user", "req-rate-001-2", external=0, score_threshold=0.0, max_claim_per_request=1)
         r3 = case.http("u_rate_old_user", "req-rate-001-3", external=0, score_threshold=0.0, max_claim_per_request=1)
-        assert r1["code"] == 0
-        assert r2["code"] == 0
+        assert r1['code'] == 0
+        assert r2['code'] == 0
         assert r3 == LIMITED
 
     def test_tc_rate_002(self, setup_validation_ratelimit):
@@ -457,8 +457,8 @@ class TestValidationRatelimitBusiness:
         r1 = case.http("u_rate_http_global_1", "req-rate-002-1", external=0, score_threshold=0.0, max_claim_per_request=1)
         r2 = case.http("u_rate_http_global_2", "req-rate-002-2", external=0, score_threshold=0.0, max_claim_per_request=1)
         r3 = case.http("u_rate_http_global_3", "req-rate-002-3", external=0, score_threshold=0.0, max_claim_per_request=1)
-        assert r1["code"] == 0
-        assert r2["code"] == 0
+        assert r1['code'] == 0
+        assert r2['code'] == 0
         assert r3 == LIMITED
 
     def test_tc_rate_003(self, setup_validation_ratelimit):
@@ -480,8 +480,8 @@ class TestValidationRatelimitBusiness:
         r1 = case.grpc("u_rate_grpc_global_1", "req-rate-003-1", external=0, score_threshold=0.0, max_claim_per_request=1)
         r2 = case.grpc("u_rate_grpc_global_2", "req-rate-003-2", external=0, score_threshold=0.0, max_claim_per_request=1)
         r3 = case.grpc("u_rate_grpc_global_3", "req-rate-003-3", external=0, score_threshold=0.0, max_claim_per_request=1)
-        assert r1["code"] == 0
-        assert r2["code"] == 0
+        assert r1['code'] == 0
+        assert r2['code'] == 0
         assert r3 == LIMITED
 
     def test_tc_rate_004(self, setup_validation_ratelimit):
@@ -502,7 +502,7 @@ class TestValidationRatelimitBusiness:
         case = setup_validation_ratelimit(case_id="TC-RATE-004")
         r1 = case.http("u_rate_http_user", "req-rate-004-1", external=0, score_threshold=0.0, max_claim_per_request=1)
         r2 = case.http("u_rate_http_user", "req-rate-004-2", external=0, score_threshold=0.0, max_claim_per_request=1)
-        assert r1["code"] == 0
+        assert r1['code'] == 0
         assert r2 == LIMITED
 
     def test_tc_rate_005(self, setup_validation_ratelimit):
@@ -523,7 +523,7 @@ class TestValidationRatelimitBusiness:
         case = setup_validation_ratelimit(case_id="TC-RATE-005")
         r1 = case.grpc("u_rate_grpc_user", "req-rate-005-1", external=0, score_threshold=0.0, max_claim_per_request=1)
         r2 = case.grpc("u_rate_grpc_user", "req-rate-005-2", external=0, score_threshold=0.0, max_claim_per_request=1)
-        assert r1["code"] == 0
+        assert r1['code'] == 0
         assert r2 == LIMITED
 
 

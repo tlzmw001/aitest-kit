@@ -47,8 +47,8 @@ class TestRoughRankingBusiness:
 
         case = setup_rough_ranking(case_id="TC-RANK-001")
         resp = case.recommend_http()
-        assert resp["code"] == 0
-        assert case.rank_input_items == ["COUPON_RANK_A", "COUPON_RANK_B", "COUPON_RANK_C"]
+        assert resp['code'] == 0
+        assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B', 'COUPON_RANK_C']
 
     def test_tc_rank_002(self, setup_rough_ranking):
         """TC-RANK-002：gRPC 实验开启且不配置增强能力时保持向后兼容"""
@@ -67,8 +67,8 @@ class TestRoughRankingBusiness:
 
         case = setup_rough_ranking(case_id="TC-RANK-002")
         resp = case.recommend_grpc()
-        assert resp["code"] == 0
-        assert case.rank_input_items == ["COUPON_RANK_A", "COUPON_RANK_B", "COUPON_RANK_C"]
+        assert resp['code'] == 0
+        assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B', 'COUPON_RANK_C']
 
     # ── 二、基础截断 ──
 
@@ -89,8 +89,8 @@ class TestRoughRankingBusiness:
 
         case = setup_rough_ranking(case_id="TC-RANK-003")
         resp = case.recommend_http()
-        assert resp["code"] == 0
-        assert case.rank_input_items == ["COUPON_RANK_A", "COUPON_RANK_B"]
+        assert resp['code'] == 0
+        assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
 
     def test_tc_rank_004(self, setup_rough_ranking):
         """TC-RANK-004：top_min_spend 按门槛降序截断"""
@@ -109,8 +109,8 @@ class TestRoughRankingBusiness:
 
         case = setup_rough_ranking(case_id="TC-RANK-004")
         resp = case.recommend_http()
-        assert resp["code"] == 0
-        assert case.rank_input_items == ["COUPON_RANK_A", "COUPON_RANK_B"]
+        assert resp['code'] == 0
+        assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
 
     def test_tc_rank_005(self, setup_rough_ranking):
         """TC-RANK-005：random 截断只保证数量和来源"""
@@ -129,9 +129,9 @@ class TestRoughRankingBusiness:
 
         case = setup_rough_ranking(case_id="TC-RANK-005")
         resp = case.recommend_http()
-        assert resp["code"] == 0
+        assert resp['code'] == 0
         assert len(case.rank_input_items) == 2
-        assert set(case.rank_input_items) <= {"COUPON_RANK_A", "COUPON_RANK_B", "COUPON_RANK_C"}
+        assert set(case.rank_input_items) <= {'COUPON_RANK_A', 'COUPON_RANK_B', 'COUPON_RANK_C'}
 
     # ── 三、增强能力 ──
 
@@ -151,8 +151,8 @@ class TestRoughRankingBusiness:
 
         case = setup_rough_ranking(case_id="TC-RANK-006")
         resp = case.recommend_http()
-        assert resp["code"] == 0
-        assert case.rank_input_items[0] == "COUPON_RANK_B"
+        assert resp['code'] == 0
+        assert case.rank_input_items[0] == 'COUPON_RANK_B'
         assert len(case.rank_input_items) == 2
 
     def test_tc_rank_007(self, setup_rough_ranking):
@@ -170,8 +170,8 @@ class TestRoughRankingBusiness:
 
         case = setup_rough_ranking(case_id="TC-RANK-007")
         resp = case.recommend_http()
-        assert resp["code"] == 0
-        assert case.rank_input_items == ["COUPON_RANK_A", "COUPON_RANK_B"]
+        assert resp['code'] == 0
+        assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
 
     def test_tc_rank_008(self, setup_rough_ranking):
         """TC-RANK-008：多维排序按加权分排序"""
@@ -188,8 +188,8 @@ class TestRoughRankingBusiness:
 
         case = setup_rough_ranking(case_id="TC-RANK-008")
         resp = case.recommend_http()
-        assert resp["code"] == 0
-        assert case.rank_input_items[0] == "COUPON_RANK_B"
+        assert resp['code'] == 0
+        assert case.rank_input_items[0] == 'COUPON_RANK_B'
 
     def test_tc_rank_009(self, setup_rough_ranking):
         """TC-RANK-009：类型打散限制同类型数量并回填"""
@@ -207,9 +207,9 @@ class TestRoughRankingBusiness:
 
         case = setup_rough_ranking(case_id="TC-RANK-009")
         resp = case.recommend_http()
-        assert resp["code"] == 0
+        assert resp['code'] == 0
         assert len(case.rank_input_items) == 3
-        assert case.rank_input_items[:2] == ["COUPON_RANK_D1", "COUPON_RANK_F1"]
+        assert case.rank_input_items[:2] == ['COUPON_RANK_D1', 'COUPON_RANK_F1']
 
     def test_tc_rank_010(self, setup_rough_ranking):
         """TC-RANK-010：truncate_count 超过候选数时不截断"""
@@ -227,9 +227,9 @@ class TestRoughRankingBusiness:
 
         case = setup_rough_ranking(case_id="TC-RANK-010")
         resp = case.recommend_http()
-        assert resp["code"] == 0
+        assert resp['code'] == 0
         assert len(case.rank_input_items) == 1
-        assert case.rank_input_items == ["COUPON_RANK_A"]
+        assert case.rank_input_items == ['COUPON_RANK_A']
 
     def test_tc_rank_011(self, setup_rough_ranking):
         """TC-RANK-011：gRPC is_prior 字段映射为内部 isPrior"""
@@ -248,8 +248,8 @@ class TestRoughRankingBusiness:
 
         case = setup_rough_ranking(case_id="TC-RANK-011")
         resp = case.recommend_grpc()
-        assert resp["code"] == 0
-        assert case.rank_input_items == ["COUPON_RANK_B"]
+        assert resp['code'] == 0
+        assert case.rank_input_items == ['COUPON_RANK_B']
 
     def test_tc_rank_012(self, setup_rough_ranking):
         """TC-RANK-012：完整粗排 pipeline 组合生效"""
@@ -267,9 +267,9 @@ class TestRoughRankingBusiness:
 
         case = setup_rough_ranking(case_id="TC-RANK-012")
         resp = case.recommend_http()
-        assert resp["code"] == 0
-        assert case.rank_input_items == ["P1", "P2", "A", "C", "E"]
-        assert case.rank_input_items[:2] == ["P1", "P2"]
+        assert resp['code'] == 0
+        assert case.rank_input_items == ['P1', 'P2', 'A', 'C', 'E']
+        assert case.rank_input_items[:2] == ['P1', 'P2']
 
 
 

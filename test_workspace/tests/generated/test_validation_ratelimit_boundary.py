@@ -52,9 +52,9 @@ class TestValidationRatelimitBoundary:
         r2 = case.http("u_rate_http_window", "req-rate-006-2", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
         case.wait_rate_key_gone("u_rate_http_window")
         r3 = case.http("u_rate_http_window", "req-rate-006-3", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
-        assert r1["code"] == 0
+        assert r1['code'] == 0
         assert r2 == LIMITED
-        assert r3["code"] == 0
+        assert r3['code'] == 0
 
     def test_tc_rate_007(self, setup_validation_ratelimit):
         """TC-RATE-007：gRPC 用户级限流窗口过期后恢复请求"""
@@ -77,9 +77,9 @@ class TestValidationRatelimitBoundary:
         r2 = case.grpc("u_rate_grpc_window", "req-rate-007-2", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
         case.wait_rate_key_gone("u_rate_grpc_window")
         r3 = case.grpc("u_rate_grpc_window", "req-rate-007-3", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
-        assert r1["code"] == 0
+        assert r1['code'] == 0
         assert r2 == LIMITED
-        assert r3["code"] == 0
+        assert r3['code'] == 0
 
 
 # SKIPPED: TC-RATE-008 — `[!可行性存疑: 需要测试环境允许控制 Redis 可用性，且不能修改仓库内 .env 或配置文件]`

@@ -34,7 +34,7 @@ class TestAbServiceBoundary:
         ab = setup_ab_service(case_id="TC-ABS-023")
         resp = ab.post("/api/v1/ab/evaluate", {"user_id": "u_abs_overlap_243", "request_id": "req_abs_023", "experiment_names": ["exp_abs_overlap"]})
         assert resp.status_code == 200
-        assert resp.json()["assignments"]["exp_abs_overlap"]["strategy_id"] == "s_first"
+        assert resp.json()['assignments']['exp_abs_overlap']['strategy_id'] == 's_first'
 
     def test_tc_abs_024(self, setup_ab_service):
         """TC-ABS-024：空策略实验评估后不返回 assignment"""
@@ -53,7 +53,7 @@ class TestAbServiceBoundary:
         ab = setup_ab_service(case_id="TC-ABS-024")
         resp = ab.post("/api/v1/ab/evaluate", {"user_id": "u_abs_hash_0", "request_id": "req_abs_024", "experiment_names": ["exp_abs_empty"]})
         assert resp.status_code == 200
-        assert resp.json()["assignments"] == {}
+        assert resp.json()['assignments'] == {}
 
     def test_tc_abs_025(self, setup_ab_service):
         """TC-ABS-025：evaluate 指定不存在实验名时静默跳过"""
@@ -71,7 +71,7 @@ class TestAbServiceBoundary:
         ab = setup_ab_service(case_id="TC-ABS-025")
         resp = ab.post("/api/v1/ab/evaluate", {"user_id": "u_abs_hash_0", "request_id": "req_abs_025", "experiment_names": ["not_exists_exp"]})
         assert resp.status_code == 200
-        assert resp.json()["assignments"] == {}
+        assert resp.json()['assignments'] == {}
 
     # ── 二、文件容错 ──
 
@@ -178,7 +178,7 @@ class TestAbServiceBoundary:
         ab = setup_ab_service(case_id="TC-ABS-030")
         resp = ab.post("/api/v1/ab/evaluate", {"request_id": "req_abs_030", "experiment_names": ["exp_ab_basic"]})
         assert resp.status_code == 422
-        assert ["body", "user_id"] in [item["loc"] for item in resp.json()["detail"]]
+        assert ['body', 'user_id'] in [item['loc'] for item in resp.json()['detail']]
 
     def test_tc_abs_031(self, setup_ab_service):
         """TC-ABS-031：创建实验 strategies 类型错误返回 422"""

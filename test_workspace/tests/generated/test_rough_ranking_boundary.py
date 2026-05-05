@@ -46,8 +46,8 @@ class TestRoughRankingBoundary:
 
         case = setup_rough_ranking(case_id="TC-RANK-013")
         resp = case.recommend_http()
-        assert resp["code"] == 1001
-        assert resp["results"] == []
+        assert resp['code'] == 1001
+        assert resp['results'] == []
         assert case.rank_input_items == []
 
     def test_tc_rank_014(self, setup_rough_ranking):
@@ -67,9 +67,9 @@ class TestRoughRankingBoundary:
 
         case = setup_rough_ranking(case_id="TC-RANK-014")
         resp = case.recommend_http()
-        assert resp["code"] == 0
-        assert resp["results"] == []
-        assert resp["coupon"] is None
+        assert resp['code'] == 0
+        assert resp['results'] == []
+        assert resp['coupon'] is None
         assert case.rank_input_items == []
 
     def test_tc_rank_015(self, setup_rough_ranking):
@@ -89,7 +89,7 @@ class TestRoughRankingBoundary:
 
         case = setup_rough_ranking(case_id="TC-RANK-015")
         resp = case.recommend_http()
-        assert resp["code"] == 0
+        assert resp['code'] == 0
         assert len(case.rank_input_items) == 3
 
     # ── 二、异常规则降级 ──
@@ -112,8 +112,8 @@ class TestRoughRankingBoundary:
 
         case = setup_rough_ranking(case_id="TC-RANK-016")
         resp = case.recommend_http()
-        assert resp["code"] == 0
-        assert case.rank_input_items == ["COUPON_RANK_A", "COUPON_RANK_B"]
+        assert resp['code'] == 0
+        assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
         # MANUAL CHECK: 应用日志包含 未知粗排规则
 
     def test_tc_rank_017(self, setup_rough_ranking):
@@ -131,7 +131,7 @@ class TestRoughRankingBoundary:
 
         case = setup_rough_ranking(case_id="TC-RANK-017")
         resp = case.recommend_http()
-        assert resp["code"] == 0
+        assert resp['code'] == 0
         assert len(case.rank_input_items) == 2
 
     @pytest.mark.manual
@@ -150,8 +150,8 @@ class TestRoughRankingBoundary:
 
         case = setup_rough_ranking(case_id="TC-RANK-018")
         resp = case.recommend_http()
-        assert resp["code"] == 0
-        assert resp["results"] == []
+        assert resp['code'] == 0
+        assert resp['results'] == []
         assert case.rank_input_items == []
         # MANUAL CHECK: 应用日志包含 未知过滤操作符
 
@@ -170,8 +170,8 @@ class TestRoughRankingBoundary:
 
         case = setup_rough_ranking(case_id="TC-RANK-019")
         resp = case.recommend_http()
-        assert resp["code"] == 0
-        assert case.rank_input_items == ["COUPON_RANK_A", "COUPON_RANK_B"]
+        assert resp['code'] == 0
+        assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
 
     @pytest.mark.manual
     def test_tc_rank_020(self, setup_rough_ranking):
@@ -190,8 +190,8 @@ class TestRoughRankingBoundary:
 
         case = setup_rough_ranking(case_id="TC-RANK-020")
         resp = case.recommend_http()
-        assert resp["code"] == 0
-        assert case.rank_input_items == ["COUPON_RANK_B"]
+        assert resp['code'] == 0
+        assert case.rank_input_items == ['COUPON_RANK_B']
         # MANUAL CHECK: 应用日志包含 prior_count=3 大于 truncate_count=1
 
     def test_tc_rank_021(self, setup_rough_ranking):
@@ -211,7 +211,7 @@ class TestRoughRankingBoundary:
 
         case = setup_rough_ranking(case_id="TC-RANK-021")
         resp = case.recommend_grpc()
-        assert resp["code"] == 0
+        assert resp['code'] == 0
         assert len(case.rank_input_items) == 3
 
     @pytest.mark.manual
@@ -232,8 +232,8 @@ class TestRoughRankingBoundary:
 
         case = setup_rough_ranking(case_id="TC-RANK-022")
         resp = case.recommend_grpc()
-        assert resp["code"] == 0
-        assert case.rank_input_items == ["COUPON_RANK_A", "COUPON_RANK_B"]
+        assert resp['code'] == 0
+        assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
         # MANUAL CHECK: 应用日志包含 未知粗排规则
 
     @pytest.mark.manual
@@ -254,8 +254,8 @@ class TestRoughRankingBoundary:
 
         case = setup_rough_ranking(case_id="TC-RANK-023")
         resp = case.recommend_grpc()
-        assert resp["code"] == 0
-        assert case.rank_input_items == ["COUPON_RANK_B"]
+        assert resp['code'] == 0
+        assert case.rank_input_items == ['COUPON_RANK_B']
         # MANUAL CHECK: 应用日志包含 prior_count=3 大于 truncate_count=1
 
 

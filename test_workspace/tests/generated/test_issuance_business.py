@@ -48,18 +48,13 @@ class TestIssuanceBusiness:
         # SETUP: 请求覆盖：score_threshold=0.0、max_claim_per_request=1
 
         issue = setup_issuance(case_id="TC-ISSUE-001")
-        body = issue.request(
-            "u_issue_http_ok",
-            "req_issue_001",
-            score_threshold=0.0,
-            max_claim_per_request=1,
-        )
+        body = issue.request("u_issue_http_ok", "req_issue_001", score_threshold=0.0, max_claim_per_request=1)
         resp = issue.post_recommend(body)
-        assert resp["code"] == 0
-        assert resp["coupon"] is not None
-        assert resp["coupon"]["item_id"] == max(resp["results"], key=lambda r: r["score"])["item_id"]
-        assert resp["coupon"]["user_id"] == "u_issue_http_ok"
-        assert resp["coupon"]["status"] == "claimed"
+        assert resp['code'] == 0
+        assert resp['coupon'] is not None
+        assert resp['coupon']['item_id'] == max(resp['results'], key=lambda r: r['score'])['item_id']
+        assert resp['coupon']['user_id'] == 'u_issue_http_ok'
+        assert resp['coupon']['status'] == 'claimed'
 
     def test_tc_issue_002(self, setup_issuance):
         """TC-ISSUE-002：gRPC 正常发放最高分券"""
@@ -77,18 +72,13 @@ class TestIssuanceBusiness:
         # SETUP: 请求覆盖：score_threshold=0.0、max_claim_per_request=1
 
         issue = setup_issuance(case_id="TC-ISSUE-002")
-        body = issue.request(
-            "u_issue_grpc_ok",
-            "req_issue_002",
-            score_threshold=0.0,
-            max_claim_per_request=1,
-        )
+        body = issue.request("u_issue_grpc_ok", "req_issue_002", score_threshold=0.0, max_claim_per_request=1)
         resp = issue.grpc_recommend(body)
-        assert resp["code"] == 0
-        assert resp["coupon"] is not None
-        assert resp["coupon"]["item_id"] == max(resp["results"], key=lambda r: r["score"])["item_id"]
-        assert resp["coupon"]["user_id"] == "u_issue_grpc_ok"
-        assert resp["coupon"]["status"] == "claimed"
+        assert resp['code'] == 0
+        assert resp['coupon'] is not None
+        assert resp['coupon']['item_id'] == max(resp['results'], key=lambda r: r['score'])['item_id']
+        assert resp['coupon']['user_id'] == 'u_issue_grpc_ok'
+        assert resp['coupon']['status'] == 'claimed'
 
     def test_tc_issue_003(self, setup_issuance):
         """TC-ISSUE-003：score_threshold 等于分数上界时不发放"""
@@ -106,16 +96,11 @@ class TestIssuanceBusiness:
         # SETUP: 请求覆盖：score_threshold=1.0
 
         issue = setup_issuance(case_id="TC-ISSUE-003")
-        body = issue.request(
-            "u_issue_high_threshold",
-            "req_issue_003",
-            score_threshold=1.0,
-            max_claim_per_request=1,
-        )
+        body = issue.request("u_issue_high_threshold", "req_issue_003", score_threshold=1.0, max_claim_per_request=1)
         resp = issue.post_recommend(body)
-        assert resp["code"] == 0
-        assert resp["coupon"] is None
-        assert all(not r["recommended"] for r in resp["results"])
+        assert resp['code'] == 0
+        assert resp['coupon'] is None
+        assert all((not r['recommended'] for r in resp['results']))
 
     # ── 二、库存与查询 ──
 
@@ -138,17 +123,12 @@ class TestIssuanceBusiness:
         issue = setup_issuance(case_id="TC-ISSUE-004")
         issue.set_stock("COUPON_ISSUE_A", 2)
         before = issue.stock("COUPON_ISSUE_A")
-        body = issue.request(
-            "u_issue_stock_decr",
-            "req_issue_004",
-            items=issue_items("COUPON_ISSUE_A"),
-            score_threshold=0.0,
-        )
+        body = issue.request("u_issue_stock_decr", "req_issue_004", items=issue_items('COUPON_ISSUE_A'), score_threshold=0.0)
         resp = issue.post_recommend(body)
         after = issue.stock("COUPON_ISSUE_A")
-        assert resp["code"] == 0
-        assert resp["coupon"] is not None
-        assert resp["coupon"]["item_id"] == "COUPON_ISSUE_A"
+        assert resp['code'] == 0
+        assert resp['coupon'] is not None
+        assert resp['coupon']['item_id'] == 'COUPON_ISSUE_A'
         assert before == 2
         assert after == 1
 
@@ -167,19 +147,14 @@ class TestIssuanceBusiness:
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_issue_query" 成功发放 A
 
         issue = setup_issuance(case_id="TC-ISSUE-005")
-        body = issue.request(
-            "u_issue_query",
-            "req_issue_005",
-            items=issue_items("COUPON_ISSUE_A"),
-            score_threshold=0.0,
-        )
+        body = issue.request("u_issue_query", "req_issue_005", items=issue_items('COUPON_ISSUE_A'), score_threshold=0.0)
         resp = issue.post_recommend(body)
         query = issue.query_coupons("u_issue_query")
-        assert resp["code"] == 0
-        assert resp["coupon"] is not None
-        assert query["code"] == 0
-        assert query["total"] >= 1
-        assert "COUPON_ISSUE_A" in {c["item_id"] for c in query["coupons"]}
+        assert resp['code'] == 0
+        assert resp['coupon'] is not None
+        assert query['code'] == 0
+        assert query['total'] >= 1
+        assert 'COUPON_ISSUE_A' in {c['item_id'] for c in query['coupons']}
 
     def test_tc_issue_006(self, setup_issuance):
         """TC-ISSUE-006：coupon 过期时间按 expire_days 计算"""
@@ -196,16 +171,11 @@ class TestIssuanceBusiness:
         # SETUP: 请求覆盖：HTTP 请求 item A 的 expire_days=3，成功发放
 
         issue = setup_issuance(case_id="TC-ISSUE-006")
-        body = issue.request(
-            "u_issue_expire_3",
-            "req_issue_006",
-            items=[issue_item("COUPON_ISSUE_A", expire_days=3)],
-            score_threshold=0.0,
-        )
+        body = issue.request("u_issue_expire_3", "req_issue_006", items=[issue_item('COUPON_ISSUE_A', expire_days=3)], score_threshold=0.0)
         resp = issue.post_recommend(body)
-        assert resp["code"] == 0
-        assert resp["coupon"] is not None
-        assert resp["coupon"]["expire_time"] - resp["coupon"]["claim_time"] == 3 * 86400
+        assert resp['code'] == 0
+        assert resp['coupon'] is not None
+        assert resp['coupon']['expire_time'] - resp['coupon']['claim_time'] == 3 * 86400
 
     # ── 三、请求级控制 ──
 
@@ -224,23 +194,13 @@ class TestIssuanceBusiness:
         # SETUP: 请求覆盖：第一次 score_threshold=1.0，第二次 score_threshold=0.0
 
         issue = setup_issuance(case_id="TC-ISSUE-007")
-        first = issue.post_recommend(issue.request(
-            "u_issue_threshold_control",
-            "req_issue_007a",
-            items=issue_items("COUPON_ISSUE_A"),
-            score_threshold=1.0,
-        ))
-        second = issue.post_recommend(issue.request(
-            "u_issue_threshold_control",
-            "req_issue_007b",
-            items=issue_items("COUPON_ISSUE_A"),
-            score_threshold=0.0,
-        ))
-        assert first["code"] == 0
-        assert first["coupon"] is None
-        assert second["code"] == 0
-        assert second["coupon"] is not None
-        assert second["coupon"]["item_id"] == "COUPON_ISSUE_A"
+        first = issue.post_recommend(issue.request('u_issue_threshold_control', 'req_issue_007a', items=issue_items('COUPON_ISSUE_A'), score_threshold=1.0))
+        second = issue.post_recommend(issue.request('u_issue_threshold_control', 'req_issue_007b', items=issue_items('COUPON_ISSUE_A'), score_threshold=0.0))
+        assert first['code'] == 0
+        assert first['coupon'] is None
+        assert second['code'] == 0
+        assert second['coupon'] is not None
+        assert second['coupon']['item_id'] == 'COUPON_ISSUE_A'
 
     def test_tc_issue_008(self, setup_issuance):
         """TC-ISSUE-008：max_claim_per_request 控制尝试发放数量"""
@@ -260,27 +220,13 @@ class TestIssuanceBusiness:
         issue = setup_issuance(case_id="TC-ISSUE-008")
         issue.set_stock("COUPON_ISSUE_A", 0)
         issue.set_stock("COUPON_ISSUE_B", 100)
-        first = issue.post_recommend(issue.request(
-            "u_issue_max_claim",
-            "req_issue_008a",
-            items=issue_items("COUPON_ISSUE_A", "COUPON_ISSUE_B"),
-            score_threshold=0.0,
-            max_claim_per_request=1,
-            policy_id="policy_fallback_001",
-        ))
-        second = issue.post_recommend(issue.request(
-            "u_issue_max_claim",
-            "req_issue_008b",
-            items=issue_items("COUPON_ISSUE_A", "COUPON_ISSUE_B"),
-            score_threshold=0.0,
-            max_claim_per_request=2,
-            policy_id="policy_fallback_001",
-        ))
-        assert first["code"] == 0
-        assert first["coupon"] is None
-        assert second["code"] == 0
-        assert second["coupon"] is not None
-        assert second["coupon"]["item_id"] == "COUPON_ISSUE_B"
+        first = issue.post_recommend(issue.request('u_issue_max_claim', 'req_issue_008a', items=issue_items('COUPON_ISSUE_A', 'COUPON_ISSUE_B'), score_threshold=0.0, max_claim_per_request=1, policy_id='policy_fallback_001'))
+        second = issue.post_recommend(issue.request('u_issue_max_claim', 'req_issue_008b', items=issue_items('COUPON_ISSUE_A', 'COUPON_ISSUE_B'), score_threshold=0.0, max_claim_per_request=2, policy_id='policy_fallback_001'))
+        assert first['code'] == 0
+        assert first['coupon'] is None
+        assert second['code'] == 0
+        assert second['coupon'] is not None
+        assert second['coupon']['item_id'] == 'COUPON_ISSUE_B'
 
     # ── 四、查询接口 ──
 
@@ -300,9 +246,9 @@ class TestIssuanceBusiness:
         issue = setup_issuance(case_id="TC-ISSUE-009")
         issue.cleanup_user("user_no_coupons")
         resp = issue.query_coupons("user_no_coupons")
-        assert resp["code"] == 0
-        assert resp["coupons"] == []
-        assert resp["total"] == 0
+        assert resp['code'] == 0
+        assert resp['coupons'] == []
+        assert resp['total'] == 0
 
     def test_tc_issue_010(self, setup_issuance):
         """TC-ISSUE-010：查询接口 user_id 为空返回参数错误"""
@@ -320,10 +266,10 @@ class TestIssuanceBusiness:
 
         issue = setup_issuance(case_id="TC-ISSUE-010")
         resp = issue.grpc_query_coupons("")
-        assert resp["code"] == 1001
-        assert resp["message"] == "user_id不能为空"
-        assert resp["coupons"] == []
-        assert resp["total"] == 0
+        assert resp['code'] == 1001
+        assert resp['message'] == 'user_id不能为空'
+        assert resp['coupons'] == []
+        assert resp['total'] == 0
 
 
 
