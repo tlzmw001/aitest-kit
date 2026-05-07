@@ -14,8 +14,8 @@
 
 ```json
 {
-  "user_id": "{{user_id}}",
-  "request_id": "{{request_id}}",
+  "user_id": "u_abs_default",
+  "request_id": "req_abs_default",
   "context": {},
   "experiment_names": null
 }

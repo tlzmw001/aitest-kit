@@ -14,12 +14,12 @@
 
 ```json
 {
-  "user_id": "{{user_id}}",
+  "user_id": "u_feat_default",
   "scene_name": "game",
   "device": "mobile",
   "policy_id": "",
   "external": 0,
-  "reqId": "{{req_id}}",
+  "reqId": "req_feat_default",
   "score_threshold": 0.0,
   "max_claim_per_request": 1,
   "context": {"channel": "test"},
