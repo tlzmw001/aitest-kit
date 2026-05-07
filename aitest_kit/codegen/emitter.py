@@ -68,6 +68,7 @@ def emit_file(
     file_type: str,
     profile_path: str | Path | None = None,
     output_dir: str | Path = "test_workspace/tests/generated",
+    fixture_dir: str | Path = "test_workspace/tests/fixtures",
     project: ProjectConfig | None = None,
 ) -> EmitResult:
     """Emit a pytest file from a ParseResult.
@@ -104,6 +105,7 @@ def emit_file(
         case_fixtures=case_fixtures,
         case_bodies=case_bodies,
         variables=parse_result.shared_config.variables,
+        fixture_dir=Path(fixture_dir),
     )
 
     if parse_result.errors:
@@ -215,6 +217,7 @@ def emit_module(
             file_type,
             profile_path=profile_path,
             output_dir=output_dir,
+            fixture_dir=profile_dir,
             project=project,
         )
         results.append(result)

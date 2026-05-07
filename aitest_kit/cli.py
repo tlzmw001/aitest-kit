@@ -4,6 +4,7 @@ from __future__ import annotations
 import click
 
 from aitest_kit.codegen.cli import codegen
+from aitest_kit.init_workspace import init_command
 from aitest_kit.report.cli import report_command, run_command
 
 
@@ -13,6 +14,7 @@ def main():
 
 
 main.add_command(codegen)
+main.add_command(init_command)
 main.add_command(run_command)
 main.add_command(report_command)
 

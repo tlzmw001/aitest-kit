@@ -49,6 +49,7 @@ _COLON = re.compile(r"[：:]")
 _TC_HEADER = re.compile(r"^###\s+(TC-[A-Z0-9]+-\d+)[：:]\s*(.+)")
 _SECTION_HEADER = re.compile(r"^##\s+[一二三四五六七八九十]+[、.．]\s*(.+)")
 _FIELD_LINE = re.compile(r"^-\s+\*\*(.+?)\*\*[：:]\s*(.*)")
+_TEMPLATE_PLACEHOLDER = re.compile(r"\{\{[^{}\n]+\}\}")
 
 
 def _split_assertions(raw: str) -> list[str]:
@@ -72,9 +73,30 @@ def _extract_json_block(lines: list[str], start: int) -> tuple[dict | None, int,
         json_lines.append(lines[i])
         i += 1
     try:
-        return json.loads("\n".join(json_lines)), i + 1, None
+        body = json.loads("\n".join(json_lines))
     except json.JSONDecodeError as exc:
         return None, i + 1, f"{exc.msg}（第 {exc.lineno} 行第 {exc.colno} 列）"
+    placeholders = _find_template_placeholders(body)
+    if placeholders:
+        joined = ", ".join(placeholders[:5])
+        suffix = " ..." if len(placeholders) > 5 else ""
+        return None, i + 1, f"JSON 中禁止模板占位符：{joined}{suffix}"
+    return body, i + 1, None
+
+
+def _find_template_placeholders(value: object, path: str = "$") -> list[str]:
+    """Return template placeholder locations inside a parsed JSON value."""
+    found: list[str] = []
+    if isinstance(value, str):
+        for match in _TEMPLATE_PLACEHOLDER.finditer(value):
+            found.append(f"{path}={match.group(0)}")
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            found.extend(_find_template_placeholders(item, f"{path}[{index}]"))
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            found.extend(_find_template_placeholders(item, f"{path}.{key}"))
+    return found
 
 
 def _extract_text_block(lines: list[str], start: int) -> tuple[str | None, int]:
@@ -107,6 +129,13 @@ def _format_json_error(field_name: str, message: str | None) -> str:
         f"E001: {field_name}不是合法 JSON — {detail}。修复：将模板占位符替换为合法 JSON 默认值，"
         "case 级差异放到 codegen_profile 的 request_overrides"
     )
+
+
+def _shared_field_name(line: str) -> str:
+    match = re.match(r"^\*\*(.+?)\*\*", line)
+    if match:
+        return match.group(1).strip()
+    return _COLON.split(line, 1)[0].strip("* ")
 
 
 def _parse_shared_config(lines: list[str]) -> tuple[SharedConfig, int, list[str]]:
@@ -147,6 +176,12 @@ def _parse_shared_config(lines: list[str]) -> tuple[SharedConfig, int, list[str]
         elif line.startswith("**基础请求体（gRPC）**") or line.startswith("**基础请求体(gRPC)**"):
             text, i = _extract_text_block(lines, i + 1)
             cfg.base_request_grpc = text
+            continue
+
+        elif line.startswith("**基础请求体"):
+            body, i, json_error = _extract_json_block(lines, i + 1)
+            if body is None and json_error:
+                errors.append(_format_json_error(_shared_field_name(line), json_error))
             continue
 
         elif line.startswith("**标准前置**"):

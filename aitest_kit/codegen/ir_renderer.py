@@ -31,6 +31,7 @@ class EmitContext:
     case_fixtures: dict[str, list[str]] = field(default_factory=dict)
     case_bodies: dict[str, list[str]] = field(default_factory=dict)
     variables: dict[str, str] = field(default_factory=dict)
+    fixture_dir: Path = field(default_factory=lambda: Path("test_workspace/tests/fixtures"))
 
 
 @dataclass
@@ -381,7 +382,7 @@ def render_file_from_ir(
 
     all_lines.append("")
     all_lines.append("")
-    fixture_path = Path("test_workspace/tests/fixtures") / f"{ctx.module}.py"
+    fixture_path = ctx.fixture_dir / f"{ctx.module}.py"
     if not fixture_path.exists():
         all_lines.append(
             f"# TODO: setup_{ctx.module} fixture 需要手写实现（→ tests/fixtures/{ctx.module}.py）"

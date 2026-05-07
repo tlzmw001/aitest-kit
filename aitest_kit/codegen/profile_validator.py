@@ -5,6 +5,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from functools import lru_cache
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,12 @@ _YAML_BLOCK_RE = re.compile(r"```ya?ml\s*\n(.*?)```", re.DOTALL)
 _CASE_ID_RE = re.compile(r"^TC-[A-Z0-9]+-\d+$")
 _PROFILE_SCHEMA_RELATIVE_PATH = Path("aitest_config/schemas/codegen_profile.schema.json")
 _REPO_PROFILE_SCHEMA_PATH = Path(__file__).resolve().parents[2] / _PROFILE_SCHEMA_RELATIVE_PATH
+_PACKAGE_PROFILE_SCHEMA_PARTS = (
+    "project_workspace",
+    "aitest_config",
+    "schemas",
+    "codegen_profile.schema.json",
+)
 _TOP_LEVEL_KEYS = {
     "module_type",
     "assertion_rules",
@@ -209,23 +216,32 @@ def _load_profile_yaml_strict(report: ProfileValidationReport) -> dict[str, Any]
     return data
 
 
-@lru_cache(maxsize=1)
-def _profile_schema_validator() -> Draft202012Validator:
-    schema = json.loads(_profile_schema_path().read_text(encoding="utf-8"))
+@lru_cache(maxsize=None)
+def _profile_schema_validator(schema_location: str, schema_text: str) -> Draft202012Validator:
+    schema = json.loads(schema_text)
     Draft202012Validator.check_schema(schema)
     return Draft202012Validator(schema)
 
 
-def _profile_schema_path() -> Path:
+def _profile_schema_source() -> tuple[str, str]:
     cwd_schema = _PROFILE_SCHEMA_RELATIVE_PATH
-    return cwd_schema if cwd_schema.exists() else _REPO_PROFILE_SCHEMA_PATH
+    if cwd_schema.exists():
+        path = cwd_schema.resolve()
+        return str(path), path.read_text(encoding="utf-8")
+    if _REPO_PROFILE_SCHEMA_PATH.exists():
+        path = _REPO_PROFILE_SCHEMA_PATH.resolve()
+        return str(path), path.read_text(encoding="utf-8")
+    resource = resources.files("aitest_kit.templates").joinpath(*_PACKAGE_PROFILE_SCHEMA_PARTS)
+    package_path = "/".join(_PACKAGE_PROFILE_SCHEMA_PARTS)
+    return f"package:aitest_kit.templates/{package_path}", resource.read_text(encoding="utf-8")
 
 
 def _validate_profile_schema(report: ProfileValidationReport, data: dict[str, Any]) -> None:
     try:
-        validator = _profile_schema_validator()
+        schema_location, schema_text = _profile_schema_source()
+        validator = _profile_schema_validator(schema_location, schema_text)
     except Exception as exc:
-        _error(report, "E501", f"profile JSON Schema is unavailable: {exc}", str(_profile_schema_path()))
+        _error(report, "E501", f"profile JSON Schema is unavailable: {exc}")
         return
 
     for error in sorted(validator.iter_errors(data), key=_schema_error_sort_key):

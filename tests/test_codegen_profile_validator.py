@@ -51,7 +51,7 @@ def test_validate_profile_module_accepts_current_repo_profiles():
     result = CliRunner().invoke(codegen, ["--all", "--validate-profile"])
 
     assert result.exit_code == 0
-    assert "Profile validation summary: modules=10, errors=0, warnings=0" in result.output
+    assert "Profile validation summary: modules=11, errors=0, warnings=0" in result.output
 
 
 def test_validate_profile_cli_writes_report_artifacts(tmp_path):
@@ -187,6 +187,92 @@ def test_profile_validator_rejects_schema_invalid_case_id_mapping_keys(tmp_path)
 
         assert "does not match any of the regexes" in messages
         assert section in sources
+
+
+def test_profile_validator_rejects_template_placeholders_in_http_json(tmp_path):
+    cases_dir = tmp_path / "cases"
+    profile_dir = tmp_path / "fixtures"
+    module_dir = cases_dir / "demo"
+    module_dir.mkdir(parents=True)
+    (module_dir / "business.md").write_text(
+        """# demo 业务测试用例
+
+## 共享配置
+
+**基础请求体（HTTP）**：
+
+```json
+{
+  "user_id": "{{user_id}}",
+  "items": [{"item_id": "{{item_id}}"}]
+}
+```
+
+---
+
+## 一、基础场景
+
+### TC-DEMO-001：demo case
+- **优先级**：P1
+- **断言**：`response.code == 0`
+""",
+        encoding="utf-8",
+    )
+    _write_profile(profile_dir, "demo", "extra_imports: []\n")
+
+    report = validate_profile_module(
+        "demo",
+        cases_dir=cases_dir,
+        profile_dir=profile_dir,
+        project=_project(),
+    )
+
+    messages = "\n".join(diag.message for diag in report.errors)
+    assert "JSON 中禁止模板占位符" in messages
+    assert "$.user_id={{user_id}}" in messages
+    assert "$.items[0].item_id={{item_id}}" in messages
+
+
+def test_profile_validator_rejects_template_placeholders_in_named_json_body(tmp_path):
+    cases_dir = tmp_path / "cases"
+    profile_dir = tmp_path / "fixtures"
+    module_dir = cases_dir / "demo"
+    module_dir.mkdir(parents=True)
+    (module_dir / "business.md").write_text(
+        """# demo 业务测试用例
+
+## 共享配置
+
+**基础请求体（Evaluate）**：
+
+```json
+{
+  "request_id": "{{request_id}}"
+}
+```
+
+---
+
+## 一、基础场景
+
+### TC-DEMO-001：demo case
+- **优先级**：P1
+- **断言**：`response.code == 0`
+""",
+        encoding="utf-8",
+    )
+    _write_profile(profile_dir, "demo", "extra_imports: []\n")
+
+    report = validate_profile_module(
+        "demo",
+        cases_dir=cases_dir,
+        profile_dir=profile_dir,
+        project=_project(),
+    )
+
+    messages = "\n".join(diag.message for diag in report.errors)
+    assert "基础请求体（Evaluate）不是合法 JSON" in messages
+    assert "$.request_id={{request_id}}" in messages
 
 
 def test_profile_validator_checks_module_type_requirements(tmp_path):
