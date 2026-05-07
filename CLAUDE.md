@@ -157,11 +157,17 @@ aitest codegen --all --health-report --write-report
 # 晋升分析
 aitest codegen ab_service --analyze-promotion --write-report
 aitest codegen ab_service --suggest-promotion-patch
+
+# 新项目初始化与外部工作区
+aitest init --target /path/to/project
+aitest codegen <module> --workspace /path/to/project --validate-profile
+aitest run <module> --workspace /path/to/project
+aitest report --workspace /path/to/project
 ```
 
 ### 使用指引
 
-- **首次接入新项目**：`/doc-review` → `/doc-gen`（按需）→ `/knowledge-build` → `/test-design`
+- **首次接入新项目**：`aitest init --target /path/to/project` → `/doc-review` → `/doc-gen`（按需）→ `/knowledge-build` → `/test-design`
 - **需求迭代**：新文档放入 `docs/` → `/knowledge-build`（增量更新）→ `/test-design`（增量生成）
 - **用例出错**：`/test-fix`（修用例 + 记 TEST_SPEC 陷阱 + 更新 skill）
 - **生成 pytest**：`/test-codegen <模块名>`

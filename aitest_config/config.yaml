@@ -28,6 +28,12 @@ paths:
   # codegen 生成的 pytest 目录（编译产物）
   generated_dir: test_workspace/tests/generated
 
+  # codegen 模块 fixture/profile 目录
+  fixtures_dir: test_workspace/tests/fixtures
+
+  # codegen 项目规则配置
+  project_config: aitest_config/project_config.yaml
+
   # pytest 执行报告输出目录（运行产物，不入库）
   reports_dir: test_workspace/reports
 

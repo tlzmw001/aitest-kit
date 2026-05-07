@@ -15,6 +15,40 @@
   -> 修正、报告、规则晋升
 ```
 
+## 零、先选择干净工作区
+
+当前 `AIAutoTest` 根目录是框架研发仓库，同时还包含 coupon/discount 等迁移演练资产。新项目不要直接复用根目录下已有的 `test_workspace/`、`aitest_config/` 和历史用例，否则知识库、模块 profile、generated pytest、结果记录会和示例项目混在一起。
+
+推荐从空白模板开始：
+
+```text
+templates/project_workspace/
+```
+
+将模板内容复制到新项目根目录后，再把该项目自己的开发文档放入 `docs/`，并从零构建知识库、Markdown 用例、fixture 和 profile。
+
+三层边界如下：
+
+| 层级 | 内容 | 换项目时怎么处理 |
+|---|---|---|
+| 框架层 | `aitest_kit/`、codegen、Case IR、profile gate、health/promotion、通用 workflow | 复用，不写项目业务规则 |
+| 项目工作区 | `aitest_config/`、`test_workspace/knowledge`、`cases`、`fixtures`、`generated`、`results` | 新项目从模板初始化 |
+| 示例层 | coupon、discount 等完整案例 | 只学习和对照，不作为默认工作区 |
+
+推荐使用初始化命令：
+
+```bash
+aitest init --target /path/to/new_project
+```
+
+如果正在 AIAutoTest 源码仓库里开发，也可以手动复制模板：
+
+```bash
+cp -R templates/project_workspace/. /path/to/new_project/
+```
+
+初始化后，进入项目目录执行后续命令；如果不想切换目录，可以使用 `--workspace /path/to/new_project`。
+
 ## 一、迁移原则
 
 新项目迁移时，先守住几条边界：
@@ -110,6 +144,19 @@ Markdown 用例需要满足 codegen 的基本输入要求：
 | `test_workspace/tests/fixtures/{module}.py` | 模块测试能力：构造条件、调用 helper、查询副作用、teardown |
 | `test_workspace/tests/fixtures/codegen_profile_{module}.md` | 模块生成规则：overrides、assertion_rules、case_bodies、case_flows |
 
+新项目 fixture 必须使用项目专属 base URL 环境变量，并在缺失时 fail fast，不能回退到旧项目的默认地址。例如：
+
+```python
+@pytest.fixture
+def setup_xxx():
+    base_url = os.environ.get("XXX_BASE_URL")
+    if not base_url:
+        pytest.fail("XXX_BASE_URL is required for xxx tests")
+    return XxxClient(base_url)
+```
+
+这样可以避免新项目测试在环境未配置时误打到 `HTTP_BASE_URL` 指向的老系统。
+
 首版 profile 不要追求完美。建议按这个顺序补：
 
 1. `module_type`：让 profile gate 知道模块类型。
@@ -145,7 +192,7 @@ python3 -m pytest test_workspace/tests/generated --collect-only -q
 
 | 命令 | 关注点 |
 |---|---|
-| `--validate-profile` | JSON Schema、case_id、case_flow、module_type 是否正确 |
+| `--validate-profile` | Markdown 基础 JSON、JSON Schema、case_id、case_flow、module_type 是否正确 |
 | `--dump-ir` | 每条用例的 strategy、protocol、fixture、assertion 来源 |
 | `--explain TC-XXX` | 单条用例为什么走 HTTP/gRPC/case_body/case_flow/manual/skip |
 | `--check` | generated 是否与当前 Markdown/profile 同步 |

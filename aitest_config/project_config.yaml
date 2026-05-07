@@ -42,6 +42,7 @@ module_abbrevs:
   scene_routing: route
   validation_ratelimit: val
   e2e: e2e
+  discount_policy: dp
 
 # ------------------------------------------------------------
 # 四、命名模板（Python 实现的复杂断言生成器）
@@ -103,6 +104,9 @@ modules:
   validation_ratelimit:
     module_type: isolated_service
     notes: "限流用例需要隔离服务 + 低 QPS 配置"
+  discount_policy:
+    module_type: multi_endpoint
+    notes: "discount_system HTTP 多端点：健康检查、策略评估、决策查询/删除"
 
 # ------------------------------------------------------------
 # 七、内置断言规则

@@ -19,6 +19,26 @@ AI 驱动的自动化测试工具，基于 Claude Code Skill 编排 **文档 →
 pip install -e ".[dev,server]"
 ```
 
+### 新项目接入
+
+当前仓库同时包含 AITest 框架代码、示例待测系统和本仓库自己的测试资产。给一个全新的项目设计测试时，不要直接复用根目录下已有的 `test_workspace/`。
+
+新项目应从干净模板开始：
+
+```bash
+aitest init --target /path/to/your_project
+```
+
+源码开发场景也可以手工复制 `templates/project_workspace/`。然后在新项目目录内放入开发文档，重建 `aitest_config/`、`test_workspace/knowledge/`、Markdown 用例、fixture 和 codegen profile。完整迁移步骤见 `docs/usebook/codegen_new_project_migration_playbook.md`。
+
+如果不想切换目录，核心命令支持 workspace 参数：
+
+```bash
+aitest codegen <module> --workspace /path/to/your_project --validate-profile
+aitest run <module> --workspace /path/to/your_project
+aitest report --workspace /path/to/your_project
+```
+
 ### 启动待测系统
 
 ```bash

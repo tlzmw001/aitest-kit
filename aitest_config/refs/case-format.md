@@ -25,7 +25,7 @@
 **接口**：`POST /api/v1/recommend` / `gRPC coupon.CouponService/Recommend`
 
 **基础请求体（HTTP）**：
-（完整 JSON，用 {{placeholder}} 标记每条用例会替换的字段）
+（完整、合法的 JSON。变化字段写合法默认值，不使用 `{{placeholder}}`；每条用例会替换的字段放到 profile 的 `request_overrides`）
 
 **基础请求体（gRPC）**：
 （完整 protobuf message 字段，如有两种接口）
@@ -72,7 +72,7 @@
 | 字段 | 必填 | 说明 |
 |------|------|------|
 | 接口 | 是 | 列出模块暴露的所有接口类型（HTTP endpoint + gRPC method） |
-| 基础请求体 | 是 | 完整的请求 JSON/protobuf，每种接口一份 |
+| 基础请求体 | 是 | 完整的请求 JSON/protobuf，每种接口一份；HTTP JSON 不允许 `{{var}}` 占位符 |
 | 标准前置 | 是 | 所有用例共用的环境准备（路由表、库存、基础配置等） |
 | 通用断言 | 是 | 每条用例都要检查的断言 |
 | 变量定义 | 按需 | 关系断言中的变量缩写，减少每条用例的重复 |

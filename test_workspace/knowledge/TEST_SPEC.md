@@ -119,6 +119,7 @@
 | SCHEMA | 请求 Schema | L1/validation_ratelimit |
 | GRPC | gRPC 协议 | L1/validation_ratelimit |
 | E2E | 端到端 Pipeline | L0 |
+| DP | discount_system 折扣策略 | L1/discount_policy |
 
 ### 编号原则
 - 序号在模块内连续递增，从 001 开始

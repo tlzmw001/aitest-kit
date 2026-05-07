@@ -18,6 +18,7 @@ pytest_plugins = [
     "test_workspace.tests.fixtures.rough_ranking",
     "test_workspace.tests.fixtures.scene_routing",
     "test_workspace.tests.fixtures.validation_ratelimit",
+    "test_workspace.tests.fixtures.discount_policy",
 ]
 
 # ── session fixtures ──

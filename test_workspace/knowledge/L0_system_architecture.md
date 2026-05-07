@@ -4,6 +4,8 @@
 
 智能优惠券推荐策略系统 v3：根据用户特征和场景，对候选优惠券进行打分排序，选择最优券发放给用户。支持 HTTP 和 gRPC 双协议。
 
+迁移演练新增 `discount_system`：根据购买请求评估折扣资格，返回确定性折扣决策，并支持按 `request_id` 查询和删除决策记录。
+
 ## 服务拓扑
 
 ```
@@ -26,6 +28,7 @@
 
 - 主服务接口（HTTP + gRPC）：[coupon_system/protos/coupon.proto](../../coupon_system/protos/coupon.proto)
 - 打分服务接口（gRPC）：[coupon_system/protos/scoring.proto](../../coupon_system/protos/scoring.proto)
+- discount_system 公开 API：[docs/discount_system/public_api_doc.md](../../docs/discount_system/public_api_doc.md)
 
 ## 模块索引
 
@@ -40,6 +43,7 @@
 | 发放 | 最优券选择与库存扣减 | [L1/issuance.md](L1/issuance.md) | [0402](L2/0402.md) |
 | AB实验服务 | 独立部署的实验管理与分流服务 | [L1/ab_service.md](L1/ab_service.md) | [0405](L2/0405.md) |
 | 日志 | 请求日志记录 | [L1/logging.md](L1/logging.md) | [0402](L2/0402.md) |
+| discount_policy | discount_system 折扣策略评估与决策记录生命周期 | [L1/discount_policy.md](L1/discount_policy.md) | [discount_system_initial_public_api](L2/discount_system_initial_public_api.md) |
 
 ## 已有测试覆盖
 

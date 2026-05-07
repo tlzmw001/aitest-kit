@@ -14,7 +14,7 @@ BASE_REQUEST = {
     "score_threshold": 0.0,
     "max_claim_per_request": 1,
     "context": {},
-    "items": [{"item_id": "{{item_id}}", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
+    "items": [{"item_id": "COUPON_FEAT_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}],
 }
 
 
