@@ -46,3 +46,13 @@ markers = [
 
 [tool.setuptools.packages.find]
 include = ["aitest_kit*", "coupon_system*", "ab_experiment_sdk*"]
+
+[tool.setuptools.package-data]
+"aitest_kit.templates" = [
+    "project_workspace/**/*",
+    "project_workspace/README.md",
+    "project_workspace/CLAUDE.md",
+    "project_workspace/.gitignore",
+    "project_workspace/.claude/skills/*/SKILL.md",
+    "project_workspace/.codex/skills/README.md",
+]
