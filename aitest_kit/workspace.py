@@ -1,102 +1,99 @@
-"""Workspace helpers for project-template initialization and scoped CLI runs."""
+"""Workspace initialization and execution helpers."""
 from __future__ import annotations
 
 import os
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
-from typing import Iterator, Protocol
+from typing import Iterator
 
 
-class _TemplateNode(Protocol):
-    name: str
-
-    def is_dir(self) -> bool: ...
-    def iterdir(self) -> Iterator["_TemplateNode"]: ...
-    def read_bytes(self) -> bytes: ...
+_TEMPLATE_PACKAGE = "aitest_kit.templates.project_workspace"
 
 
 @dataclass
 class InitWorkspaceResult:
     target: Path
-    copied_files: list[Path] = field(default_factory=list)
-    overwritten_files: list[Path] = field(default_factory=list)
+    created: int = 0
+    overwritten: int = 0
+    skipped: int = 0
 
 
 @contextmanager
 def push_workspace(workspace: str | Path | None) -> Iterator[Path]:
-    """Temporarily run relative-path CLI logic from a workspace root."""
+    """Temporarily run CLI logic from a workspace root."""
+    previous = Path.cwd()
     if workspace is None:
-        yield Path.cwd()
+        yield previous
         return
 
-    root = Path(workspace).expanduser().resolve()
-    if not root.exists():
-        raise FileNotFoundError(f"workspace does not exist: {root}")
-    if not root.is_dir():
-        raise NotADirectoryError(f"workspace is not a directory: {root}")
+    target = Path(workspace).expanduser().resolve()
+    if not target.exists():
+        raise FileNotFoundError(f"workspace does not exist: {target}")
+    if not target.is_dir():
+        raise NotADirectoryError(f"workspace is not a directory: {target}")
 
-    previous = Path.cwd()
-    os.chdir(root)
+    os.chdir(target)
     try:
-        yield root
+        yield target
     finally:
         os.chdir(previous)
 
 
-def init_workspace(
-    target: str | Path,
-    *,
-    force: bool = False,
-) -> InitWorkspaceResult:
+def init_workspace(target: str | Path, *, force: bool = False) -> InitWorkspaceResult:
     """Copy the packaged project workspace template into ``target``."""
-    target_root = Path(target).expanduser().resolve()
-    if target_root.exists() and not target_root.is_dir():
-        raise NotADirectoryError(f"target is not a directory: {target_root}")
-    target_root.mkdir(parents=True, exist_ok=True)
+    target_path = Path(target).expanduser().resolve()
+    template_root = resources.files(_TEMPLATE_PACKAGE)
+    result = InitWorkspaceResult(target=target_path)
 
-    template_root = _template_root()
-    template_files = list(_iter_template_files(template_root))
     conflicts = [
-        rel for rel, _ in template_files
-        if (target_root / rel).exists() and not force
+        relative
+        for relative in _template_files(template_root)
+        if (target_path / relative).exists()
     ]
-    if conflicts:
-        lines = [
-            "refusing to overwrite existing files:",
-            *[f"- {path.as_posix()}" for path in conflicts[:20]],
-        ]
-        if len(conflicts) > 20:
-            lines.append(f"- ... and {len(conflicts) - 20} more")
-        lines.append("rerun with --force to overwrite template-managed files")
-        raise FileExistsError("\n".join(lines))
+    if conflicts and not force:
+        names = ", ".join(str(item) for item in conflicts[:8])
+        if len(conflicts) > 8:
+            names += f", ... (+{len(conflicts) - 8} more)"
+        raise FileExistsError(
+            "target already contains template-managed file(s): "
+            f"{names}. Use --force to overwrite them."
+        )
 
-    result = InitWorkspaceResult(target=target_root)
-    for rel, src in template_files:
-        destination = target_root / rel
+    target_path.mkdir(parents=True, exist_ok=True)
+    for relative in _template_files(template_root):
+        source = template_root.joinpath(*relative.parts)
+        destination = target_path / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
-        if destination.exists():
-            result.overwritten_files.append(rel)
-        destination.write_bytes(src.read_bytes())
-        result.copied_files.append(rel)
+        existed = destination.exists()
+        destination.write_bytes(source.read_bytes())
+        if existed:
+            result.overwritten += 1
+        else:
+            result.created += 1
+
     return result
 
 
-def _template_root() -> _TemplateNode:
-    dev_template = Path(__file__).resolve().parents[1] / "templates" / "project_workspace"
-    if dev_template.exists():
-        return dev_template
-    return resources.files("aitest_kit.templates").joinpath("project_workspace")
+def _template_files(root) -> list[Path]:
+    files: list[Path] = []
+    _collect_template_files(root, Path(), files)
+    return sorted(files)
 
 
-def _iter_template_files(
-    root: _TemplateNode,
-    prefix: Path = Path(),
-) -> Iterator[tuple[Path, _TemplateNode]]:
-    for child in root.iterdir():
-        rel_path = prefix / child.name
+def _collect_template_files(node, relative: Path, files: list[Path]) -> None:
+    for child in node.iterdir():
+        child_relative = relative / child.name
         if child.is_dir():
-            yield from _iter_template_files(child, rel_path)
-        else:
-            yield rel_path, child
+            if child.name == "__pycache__":
+                continue
+            _collect_template_files(child, child_relative, files)
+            continue
+        if child_relative == Path("__init__.py"):
+            continue
+        if child.name == ".DS_Store":
+            continue
+        if child.name.endswith((".pyc", ".pyo")):
+            continue
+        files.append(child_relative)

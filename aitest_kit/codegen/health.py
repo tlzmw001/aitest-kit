@@ -72,7 +72,7 @@ def build_codegen_health_report(
     profile_dir: str | Path = "test_workspace/tests/fixtures",
     project: Any | None = None,
 ) -> CodegenHealthReport:
-    project_config = project or load_project_config()
+    project = project or load_project_config()
     profile_root = Path(profile_dir)
     items: list[ModuleHealth] = []
     for module in modules:
@@ -80,9 +80,9 @@ def build_codegen_health_report(
             module,
             cases_dir=cases_dir,
             profile_dir=profile_root,
-            project=project_config,
+            project=project,
         )
-        file_irs = _build_module_file_irs(module, cases_dir, profile_root, project_config)
+        file_irs = _build_module_file_irs(module, cases_dir, profile_root, project)
         items.append(_module_health(module, validation, file_irs))
     return CodegenHealthReport(items)
 

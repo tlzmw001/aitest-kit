@@ -1,1 +1,2 @@
-from __future__ import annotations
+"""Module fixtures live here."""
+

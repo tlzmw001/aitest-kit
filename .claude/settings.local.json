@@ -19,7 +19,19 @@
       "Bash(git stash *)",
       "Bash(cp test_workspace/tests/generated/test_calibration_business.py /tmp/emitter_business.py)",
       "Bash(cp test_workspace/tests/generated/test_calibration_boundary.py /tmp/emitter_boundary.py)",
-      "Bash(echo \"EXIT: $?\")"
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(git merge *)",
+      "Bash(cp /Users/zmw/AIAutoTest/.claude/skills/emitter-build/SKILL.md /Users/zmw/AIAutoTest/.codex/skills/emitter-build/SKILL.md)",
+      "Bash(cp /Users/zmw/AIAutoTest/.claude/skills/emitter-build/SKILL.md /Users/zmw/AIAutoTest/.agents/skills/emitter-build/SKILL.md)",
+      "Bash(cp .claude/skills/test-codegen/SKILL.md .agents/skills/test-codegen/SKILL.md)",
+      "Bash(cp .claude/skills/emitter-build/SKILL.md .agents/skills/emitter-build/SKILL.md)",
+      "Bash(rm -rf aitest_kit/templates/project_workspace/.claude aitest_kit/templates/project_workspace/CLAUDE.md)",
+      "Bash(aitest --help)",
+      "Bash(pip install *)",
+      "Bash(pip3 install *)",
+      "Bash(/Users/zmw/Library/Python/3.9/bin/aitest --help)",
+      "Bash(/Users/zmw/Library/Python/3.9/bin/aitest init *)",
+      "Bash(git status *)"
     ]
   }
 }

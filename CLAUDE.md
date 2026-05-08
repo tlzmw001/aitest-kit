@@ -19,6 +19,7 @@ test_workspace/         # AI 生成内容的工作目录
   results/              #   待测系统 bug 记录
   plans/                #   方案文档
 aitest_kit/             # Python 测试工具库
+  templates/            #   包内唯一 project_workspace 模板
   codegen/              #   codegen 引擎
     parser.py           #     Markdown → ParseResult
     planner.py          #     ParseResult → Case IR（策略规划）
@@ -62,6 +63,11 @@ pytest tests/
 # 执行 generated 测试并生成结构化报告
 aitest run calibration
 aitest report
+
+# 初始化并操作独立新项目 workspace
+aitest init --target /path/to/your_project
+aitest codegen --workspace /path/to/your_project --all --validate-profile
+aitest run --workspace /path/to/your_project <module>
 ```
 
 ## 技术栈
@@ -157,17 +163,11 @@ aitest codegen --all --health-report --write-report
 # 晋升分析
 aitest codegen ab_service --analyze-promotion --write-report
 aitest codegen ab_service --suggest-promotion-patch
-
-# 新项目初始化与外部工作区
-aitest init --target /path/to/project
-aitest codegen <module> --workspace /path/to/project --validate-profile
-aitest run <module> --workspace /path/to/project
-aitest report --workspace /path/to/project
 ```
 
 ### 使用指引
 
-- **首次接入新项目**：`aitest init --target /path/to/project` → `/doc-review` → `/doc-gen`（按需）→ `/knowledge-build` → `/test-design`
+- **首次接入新项目**：`aitest init --target <project_dir>` → `/doc-review` → `/doc-gen`（按需）→ `/knowledge-build` → `/test-design`
 - **需求迭代**：新文档放入 `docs/` → `/knowledge-build`（增量更新）→ `/test-design`（增量生成）
 - **用例出错**：`/test-fix`（修用例 + 记 TEST_SPEC 陷阱 + 更新 skill）
 - **生成 pytest**：`/test-codegen <模块名>`
@@ -213,7 +213,7 @@ httpx.Client(transport=httpx.HTTPTransport())
 
 AI 的角色是测试工程师，不是被测系统的开发者：
 - `coupon_system/`、`ab_experiment_sdk/` 下的源码和配置文件不得修改
-- 只改测试代码：`test_workspace/`、`aitest_kit/`、`.claude/skills/`
+- 只改测试资产、测试工具和协作流程：`test_workspace/`、`aitest_kit/`、`aitest_config/`、`.claude/skills/`、`.codex/skills/`、`.agents/skills/`
 - 通过被测系统已有的 API、环境变量、磁盘数据文件来构造测试条件
 - 现有接口无法满足测试需求时，记录为"测试基础设施需求"让用户决定
 
@@ -249,10 +249,13 @@ codegen 管线分三层，换项目时只改配置层，不改框架层：
 
 ### 首次接入新项目的 codegen 配置
 
-1. 创建 `aitest_config/config.yaml`：声明路径映射、服务地址、协议偏好、已知限制
-2. 创建 `aitest_config/project_config.yaml`：声明 helper import 路径、API 路径、变量映射、模块缩写、内置断言规则、模块映射
-3. 每个模块创建 `codegen_profile_{module}.md`：声明 module_type、assertion_rules、request_overrides 等
-4. 每个模块创建 `fixtures/{module}.py`：实现 setup/teardown 逻辑
+1. 先执行 `aitest init --target <project_dir>` 创建独立 workspace，不直接复用本仓 `test_workspace/`
+2. 修改 `<project_dir>/aitest_config/config.yaml`：声明路径映射、服务地址、协议偏好、已知限制
+3. 修改 `<project_dir>/aitest_config/project_config.yaml`：声明 helper import 路径、API 路径、变量映射、模块缩写、内置断言规则、模块映射
+4. 每个模块创建 `codegen_profile_{module}.md`：声明 module_type、assertion_rules、request_overrides 等
+5. 每个模块创建 `fixtures/{module}.py`：实现 setup/teardown 逻辑
+
+workspace 模板只有一个来源：`aitest_kit/templates/project_workspace/`。模板同时初始化 `AGENTS.md`、`CLAUDE.md` 和 `.codex/.claude/.agents` 三套 skills；不要维护顶层 `templates/project_workspace/` 镜像。
 
 ### module_type 分类
 

@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.11"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package and test tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build
+          python -m pip install -e ".[dev]"
+
+      - name: Compile package
+        run: python -m compileall aitest_kit
+
+      - name: Run unit tests
+        run: python -m pytest tests -q
+
+      - name: Validate codegen profiles
+        run: python -m aitest_kit.cli codegen --all --validate-profile
+
+      - name: Check generated pytest freshness
+        run: python -m aitest_kit.cli codegen --all --check
+
+      - name: Collect generated pytest
+        run: python -m pytest test_workspace/tests/generated --collect-only -q
+
+      - name: Initialize empty workspace
+        run: |
+          python -m aitest_kit.cli init --target /tmp/aitest_ci_project
+          python -m aitest_kit.cli codegen --workspace /tmp/aitest_ci_project --all --validate-profile
+
+      - name: Build wheel and sdist
+        run: python -m build --no-isolation
+
+      - name: Inspect release artifacts
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import tarfile
+          import zipfile
+
+          wheel = next(Path("dist").glob("aitest_kit-*.whl"))
+          sdist = next(Path("dist").glob("aitest_kit-*.tar.gz"))
+          forbidden = ("coupon_system", "ab_experiment_sdk", "discount_system")
+          required = (
+              "aitest_kit/templates/project_workspace/README.md",
+              "aitest_kit/templates/project_workspace/AGENTS.md",
+              "aitest_kit/templates/project_workspace/CLAUDE.md",
+              "aitest_kit/templates/project_workspace/.codex/skills/test-codegen/SKILL.md",
+          )
+
+          with zipfile.ZipFile(wheel) as zf:
+              wheel_names = zf.namelist()
+          missing = [name for name in required if name not in wheel_names]
+          if missing:
+              raise SystemExit(f"wheel missing template files: {missing}")
+          leaked = [name for name in wheel_names if any(item in name for item in forbidden)]
+          if leaked:
+              raise SystemExit(f"wheel includes forbidden target assets: {leaked[:10]}")
+
+          with tarfile.open(sdist) as tf:
+              sdist_names = tf.getnames()
+          leaked = [name for name in sdist_names if any(item in name for item in forbidden)]
+          if leaked:
+              raise SystemExit(f"sdist includes forbidden target assets: {leaked[:10]}")
+          PY

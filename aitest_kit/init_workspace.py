@@ -1,4 +1,4 @@
-"""CLI command for initializing a clean AITest project workspace."""
+"""CLI command for creating a clean AITest workspace."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -12,30 +12,21 @@ from aitest_kit.workspace import init_workspace
 @click.option(
     "--target",
     default=".",
-    show_default=True,
     type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
-    help="Project directory where the AITest workspace template will be copied.",
+    show_default=True,
+    help="Directory where the AITest workspace skeleton will be created.",
 )
-@click.option(
-    "--force",
-    is_flag=True,
-    help="Overwrite existing template-managed files in the target directory.",
-)
+@click.option("--force", is_flag=True, help="Overwrite template-managed workspace files if they already exist.")
 def init_command(target: Path, force: bool) -> None:
-    """Initialize a clean project workspace from the packaged template."""
+    """Initialize a clean AITest workspace for one target system."""
     try:
         result = init_workspace(target, force=force)
-    except (FileExistsError, FileNotFoundError, NotADirectoryError) as exc:
+    except FileExistsError as exc:
         raise click.ClickException(str(exc)) from exc
 
-    click.echo(f"AITest workspace initialized: {result.target}")
-    click.echo(f"Copied files: {len(result.copied_files)}")
-    if result.overwritten_files:
-        click.echo(f"Overwritten files: {len(result.overwritten_files)}")
+    click.echo(f"Workspace initialized: {result.target}")
+    click.echo(f"Created: {result.created}, overwritten: {result.overwritten}")
     click.echo("")
     click.echo("Next steps:")
-    click.echo(f"1. cd {result.target}")
-    click.echo("2. Put public docs and API specs under docs/")
-    click.echo("3. Edit aitest_config/config.yaml and aitest_config/project_config.yaml")
-    click.echo("4. Build knowledge, write Markdown cases, then run:")
-    click.echo("   python3 -m aitest_kit.cli codegen <module> --validate-profile")
+    click.echo(f"  cd {result.target}")
+    click.echo("  aitest codegen --all --validate-profile")

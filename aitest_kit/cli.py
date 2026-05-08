@@ -10,7 +10,7 @@ from aitest_kit.report.cli import report_command, run_command
 
 @click.group()
 def main():
-    """AI-driven automated testing toolkit."""
+    """AI-driven testing toolkit for Markdown cases, codegen, and pytest reports."""
 
 
 main.add_command(codegen)

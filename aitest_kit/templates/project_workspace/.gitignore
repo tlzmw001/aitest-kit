@@ -1,10 +1,14 @@
+# Runtime reports
+test_workspace/reports/**
+!test_workspace/reports/.gitkeep
+
+# Python cache
 __pycache__/
 *.py[cod]
 .pytest_cache/
-.mypy_cache/
-.ruff_cache/
 
-test_workspace/reports/
-test_workspace/tests/generated/*
-!test_workspace/tests/generated/__init__.py
-!test_workspace/tests/generated/.gitkeep
+# Local environment
+.env
+.venv/
+venv/
+

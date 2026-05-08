@@ -1,58 +1,66 @@
 # AIAutoTest
 
-AI 驱动的自动化测试工具，基于 Claude Code Skill 编排 **文档 → 知识库 → 用例 → 代码 → 执行** 全流程。
+AIAutoTest 是一个 AI 驱动的自动化测试工具包，围绕 **文档 → 知识库 → Markdown 用例 → codegen → pytest 执行 → 报告反哺** 构建测试生产流程。
 
-本项目探索一种新的测试生产模式：用 AI Skill 流水线将开发文档转化为可执行的 pytest 测试代码，做到"测试用例即编译产物"——Markdown 是唯一数据源，pytest 代码由 codegen 管线确定性生成。
+CLI 与 workspace 模板负责稳定、可重复的生成和执行；本地 AI skills 负责文档理解、用例设计、问题修正和规则沉淀。项目目标是让 AI 先探索未知，再把稳定模式沉淀为可验证、可复用的配置和代码生成规则。
 
 ## 快速开始
 
 ### 环境要求
 
 - Python 3.9+
-- Redis（待测系统的数据层）
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI（运行 Skill 流水线）
+- pytest
+- 目标系统所需的本地依赖或外部服务，例如 HTTP 服务、gRPC 服务、Redis、数据库等
+- 可选：[Claude Code](https://docs.anthropic.com/en/docs/claude-code)、Codex 或其他 AI 编程环境，用于运行本地 skills 工作流
 
 ### 安装
 
 ```bash
-# 安装项目及依赖
+# 从发布包或内部制品安装
+pip install aitest-kit
+
+# 本仓开发和回归验证
 pip install -e ".[dev,server]"
 ```
 
-### 新项目接入
+### 接入新项目
 
-当前仓库同时包含 AITest 框架代码、示例待测系统和本仓库自己的测试资产。给一个全新的项目设计测试时，不要直接复用根目录下已有的 `test_workspace/`。
-
-新项目应从干净模板开始：
+本仓保持单仓架构：`aitest_kit`、schema、workspace 模板和本仓回归资产同仓维护，但真实用户项目使用独立 workspace。不要直接复用本仓的 `test_workspace/` 作为新项目工作区。
 
 ```bash
+# 在目标目录创建干净 workspace
 aitest init --target /path/to/your_project
-```
 
-源码开发场景也可以手工复制 `templates/project_workspace/`。然后在新项目目录内放入开发文档，重建 `aitest_config/`、`test_workspace/knowledge/`、Markdown 用例、fixture 和 codegen profile。完整迁移步骤见 `docs/usebook/codegen_new_project_migration_playbook.md`。
-
-如果不想切换目录，核心命令支持 workspace 参数：
-
-```bash
-aitest codegen <module> --workspace /path/to/your_project --validate-profile
-aitest run <module> --workspace /path/to/your_project
+# 从任意目录操作该 workspace
+aitest codegen --workspace /path/to/your_project --all --validate-profile
+aitest codegen --workspace /path/to/your_project --all
+aitest run --workspace /path/to/your_project <module>
 aitest report --workspace /path/to/your_project
 ```
 
-### 启动待测系统
+workspace 模板只有一个来源：`aitest_kit/templates/project_workspace/`。项目根目录不再维护第二份 `templates/project_workspace/`。
+模板会同时初始化 `AGENTS.md`、`CLAUDE.md` 和 `.codex/.claude/.agents` 三套 skills；这些是新项目 AI 协作流程的一部分，不需要用户手工从本仓复制。
+
+新项目从零接入建议先读：
+
+- [AITest Quickstart](docs/usebook/aitest_quickstart.md)：跑通 `init -> codegen -> pytest collect` 最小闭环
+- [Codegen Profile Guide](docs/usebook/codegen_profile_guide.md)：编写 `codegen_profile_{module}.md`
+- [Codegen Troubleshooting](docs/usebook/codegen_troubleshooting.md)：排查 profile gate、stale generated、fixture 等常见问题
+- [Codegen 新项目迁移 Playbook](docs/usebook/codegen_new_project_migration_playbook.md)：完整迁移 SOP
+- [CHANGELOG](CHANGELOG.md)：当前 release 支持范围、实验能力和不支持项
+
+### 本仓开发与示例回归
+
+本仓内置 `coupon_system/` 和 `ab_experiment_sdk/` 作为回归资产，用于验证 AIAutoTest 自身的 codegen、报告和迁移能力。它们不是新项目接入时必须复制的模板。
 
 ```bash
-# 启动智能优惠券推荐服务（FastAPI + gRPC）
+# 启动本仓示例待测系统（FastAPI + gRPC）
 python -m coupon_system.main
-```
 
-### 运行测试
-
-```bash
-# 运行单元测试
+# 运行本仓单元测试
 pytest tests/
 
-# 运行 codegen 生成的集成测试
+# 运行本仓 generated 集成测试
 pytest test_workspace/tests/generated/ -v
 
 # 执行 generated 测试并生成结构化报告
@@ -67,6 +75,20 @@ aitest codegen --all                # 生成全部模块
 aitest codegen --all --check        # 校验模式：检查生成结果是否一致
 aitest codegen --all --health-report --write-report
 ```
+
+### 发布状态与稳定性
+
+v0.1 的稳定边界是本地 CLI、workspace layout、Markdown 用例格式、profile JSON Schema、profile gate、Case IR 到 generated pytest 的主链路，以及 `aitest run/report` 的报告格式。
+
+仍处于演进状态的能力包括：health/promotion report 的成熟度口径、promotion patch 的人工应用流程、`case_flows` 的 step 词汇表，以及 `aitest_kit.codegen` 下的内部 Python API。新项目迁移仍需要人工 review 文档、用例、profile 和 fixture；工具不会自动修改待测系统业务代码。
+
+### 安全与隐私
+
+- 不要把 `.env`、服务凭证、访问 token、生产数据库地址或真实用户数据提交到 AITest workspace。
+- fixture 需要外部服务地址时，优先从环境变量读取；缺失时应明确失败，不要写死 URL 或静默跳过。
+- `test_workspace/reports/` 可能包含请求 ID、响应体、断言错误、服务错误详情和 JUnit XML；对外共享前需要按项目规则脱敏。
+- `test_workspace/results/` 用于记录确认过的待测系统 bug，也可能包含复现数据；同样按测试证据管理。
+- v0.1 不会自动清洗待测系统响应，敏感字段需要在 fixture、helper 或报告发布流程中自行控制。
 
 ## 项目结构
 
@@ -97,6 +119,7 @@ AIAutoTest/
 │
 ├── aitest_kit/                 # Python 工具库
 │   ├── cli.py                  #   命令行入口（aitest 命令）
+│   ├── templates/              #   包内唯一 project_workspace 模板
 │   ├── codegen/                #   代码生成引擎
 │   │   ├── parser.py           #     Markdown → 结构化数据
 │   │   ├── planner.py          #     ParseResult → Case IR
@@ -118,8 +141,11 @@ AIAutoTest/
 │   └── refs/                   #   共享引用文档（断言策略、用例格式模板等）
 │
 ├── .claude/skills/             # Claude Code Skill 定义（详见下方"Skill 流水线"章节）
+├── .codex/skills/              # Codex Skill 定义
+├── .agents/skills/             # agents 工作流 Skill 定义
 ├── docs/                       # 开发文档输入（Skill 的原始输入源）
 ├── pyproject.toml              # 项目元数据 + 依赖声明
+├── AGENTS.md                   # AI 协作总入口
 └── CLAUDE.md                   # Claude Code 项目指令
 ```
 

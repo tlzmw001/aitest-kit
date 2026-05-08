@@ -1,297 +1,103 @@
-# AITest Project Workspace
+# CLAUDE.md
 
-AI 驱动的自动化测试工具，基于 Claude Code Skill 编排"文档 → 知识库 → 用例 → 执行"全流程。
+本文件为 `aitest init` 初始化的 AITest 工作区提供 Claude Code 项目指引。
 
-## 项目结构
+## 角色
 
+你的角色是目标系统的测试工程师，负责构建和维护本测试工作区：
+
+`文档 -> 知识库 -> Markdown 用例 -> codegen -> pytest -> 报告 -> 反馈`
+
+除非用户明确要求，不要修改目标系统的业务代码。如果公开 API 或测试钩子不足以支撑测试，记录为可测试性需求或待测系统 bug。
+
+## 信息源边界
+
+新项目迁移默认按黑盒测试工作流执行。以公开设计文档、API 定义、配置 schema、示例请求/响应和可执行的 API 行为作为规则来源。
+
+不要从目标系统源码、已有测试或内部实现文档推断业务规则，除非用户明确切换到已文档化的灰盒阶段，并指定了可以读取的文件或目录。
+
+## 工作区结构
+
+```text
+aitest_config/
+  config.yaml
+  project_config.yaml
+  refs/
+  schemas/
+test_workspace/
+  knowledge/
+  cases/
+  tests/
+    fixtures/
+    generated/
+    helpers/
+  reports/
+  results/
+.claude/skills/
+.codex/skills/
+.agents/skills/
 ```
-docs/                   # 开发文档输入目录（skill 的输入源）
-test_workspace/         # AI 生成内容的工作目录
-  knowledge/            #   测试知识库（L0/L1/L2 + TEST_SPEC）
-  cases/                #   测试用例（Markdown，按模块分目录）
-  tests/                #   pytest 测试代码
-    conftest.py         #     全局 session fixtures
-    fixtures/           #     模块 fixture（每模块一个 .py + codegen_profile.md）
-    helpers/            #     HTTP/Redis 等测试工具函数
-    generated/          #     codegen 生成的 pytest 文件（编译产物）
-  reports/              #   测试执行报告（运行产物，不入库）
-  results/              #   待测系统 bug 记录
-  plans/                #   方案文档
-aitest_config/          # 项目级配置
-  config.yaml           #   skill 路径配置
-  project_config.yaml   #   codegen 项目配置（import 路径、断言规则、模块缩写等）
-  schemas/              #   JSON Schema
-    codegen_profile.schema.json  # profile 结构契约
-.claude/skills/         # Claude Code Skill 定义
-  doc-gen/              #   设计文档生成（从源码）
-  doc-review/           #   设计文档审查
-  knowledge-build/      #   测试知识库构建/更新
-  test-design/          #   测试用例设计
-  test-codegen/         #   Markdown → pytest 代码生成（emitter + AI 补全）
-  test-fix/             #   用例修正 + 经验沉淀
-  emitter-build/        #   从已验证 .py 提取确定性模板
-```
+
+关键约定：
+
+- `test_workspace/cases/` 存放 Markdown 源用例。
+- `test_workspace/tests/generated/` 存放 codegen 生成的 pytest 文件，视为编译产物。
+- `test_workspace/tests/fixtures/` 存放模块 fixture 和 `codegen_profile_{module}.md`。
+- `test_workspace/results/` 记录已确认的待测系统 bug 或重要发现。
+- `test_workspace/reports/` 存放测试执行报告。
 
 ## 常用命令
 
-```bash
-# 安装 aitest-kit（从 AIAutoTest 仓库）
-pip install aitest-kit
-
-# 启动被测系统（按你的项目实际方式）
-# python -m <your_service>.main
-
-# 运行单测
-pytest tests/
-
-# 执行 generated 测试并生成结构化报告
-aitest run <module>
-aitest report
-```
-
-## 测试飞轮工作流
-
-七个 skill 构成一条闭环流水线，分为**设计阶段**和**执行阶段**：
-
-```
-── 设计阶段 ──
-
-docs/（开发文档）
-  ↓
-doc-review  ── 审查文档完整性，输出缺口清单
-  ↓
-doc-gen     ── 从源码补全缺失的设计文档（可选，文档不足时用）
-  ↓
-knowledge-build ── 从文档构建/更新测试知识库（L0/L1/L2）
-  ↓
-test-design ── 基于知识库 + TEST_SPEC 生成测试用例（Markdown）
-  ↓
-人工评审用例
-  ↓
-test-fix    ── 修正用例错误，沉淀经验到 TEST_SPEC 和相关 skill
-
-── 执行阶段 ──
-
-test-codegen ── Markdown 用例 → pytest 代码
-  ↓
-aitest run / pytest 执行
-  ↓
-result.json + report.md
-  ↓
-失败时分流：
-  ├─ 用例问题 → test-fix → 重新 codegen
-  └─ fixture/codegen 问题 → 更新 codegen_profile + fixture → 重新 codegen
-  ↓
-测试全部通过
-  ↓
-emitter-build ── 从已验证的 .py 提取确定性模板到 emitter
-```
-
-### test-codegen 流程细节
-
-生成链路：`parser → Case IR planner → emitter/IR renderer → pytest`
-
-1. **parser 解析** — `python3 -m aitest_kit.codegen.parser` 确定性提取 Markdown 结构
-   - 如果 JSON 块解析失败，parser 输出诊断信息（E001），不静默返回 None
-2. **profile 硬门禁** — 普通生成、`--check`、`--dump-ir`、`--explain`、promotion 分析都先通过 profile gate；有 ERROR 直接阻断
-3. **Case IR planner** — 结合 ParseResult + project_config + codegen_profile 生成可解释的生成计划
-   - 策略优先级：`skipped > custom_case_body > structured_case_flow > manual > default_grpc > default_http`
-   - 每个决策记录 source_trace（来自 Markdown / project_config / codegen_profile 的哪个字段）
-4. **emitter/IR renderer 生成** — 确定性生成 .py
-   - 断言匹配优先级：profile assertion_rules > project_config builtin_assertion_rules > named_templates
-   - module_type 校验：profile 声明的模块类型必须满足 project_config 中该类型的 requires 字段
-5. **生成后验证** — `ast.parse` + `pytest --collect-only`
-6. **AI 补写 UNPARSED** — emitter 输出的 `# UNPARSED ASSERTION:` 由 AI 翻译为可执行断言（UNPARSED 为 0 时跳过）
-7. **端到端验证** — `pytest test_workspace/tests/generated/ -v`
-8. **经验沉淀** — 调试经验写入 `codegen_profile_{module}.md`，调用 `/emitter-build` 提取新规则
-
-### codegen CLI 常用命令
+在工作区根目录下执行：
 
 ```bash
-# 日常收口顺序
 aitest codegen --all --validate-profile
 aitest codegen --all --dump-ir
 aitest codegen --all --check
 aitest codegen --all
+aitest run <module>
+aitest report
 python3 -m pytest test_workspace/tests/generated --collect-only -q
+```
 
-# 生成（含 profile 硬门禁）
-aitest codegen <module>
-aitest codegen --all
+从其他目录执行时，追加 `--workspace /path/to/workspace`。
 
-# 一致性校验（generated 是否与 Markdown/profile 同步）
+## Codegen 规则
+
+1. Profile 校验是普通生成、`--check`、`--dump-ir`、`--explain` 和晋升分析的硬门禁。
+2. Parser 诊断报错时必须阻断生成。
+3. Case IR 解释策略选择的原因，不应发明业务事实。
+4. 断言匹配优先级：profile 规则 > project_config 内置规则 > 命名模板。
+5. 生成的 pytest 应通过修改 Markdown/profile/config/fixture/helper 输入来刷新，而非长期手动编辑。
+
+## Skill 路由
+
+任务匹配时使用本地 skill：
+
+- `.claude/skills/doc-review/SKILL.md`
+- `.claude/skills/doc-gen/SKILL.md`
+- `.claude/skills/knowledge-build/SKILL.md`
+- `.claude/skills/test-design/SKILL.md`
+- `.claude/skills/test-codegen/SKILL.md`
+- `.claude/skills/test-fix/SKILL.md`
+- `.claude/skills/emitter-build/SKILL.md`
+
+如果同时维护 Codex 或 agents 工作流，保持 `.claude/skills/`、`.codex/skills/` 和 `.agents/skills/` 语义一致。
+
+## 安全规则
+
+- 不要硬编码端口、URL、凭证或 token。
+- 未经用户明确同意，不要修改 `.env` 文件。
+- 不要放宽断言或跳过失败来让测试通过。
+- 不要在测试基础设施中静默吞掉 IO 或网络错误。
+- 不要把执行报告和已确认的 bug 记录混在一起。
+
+## 完成标准
+
+声称工作完成前，运行相关验证命令并报告结果。codegen 相关的修改，优先运行：
+
+```bash
+aitest codegen --all --validate-profile
 aitest codegen --all --check
-
-# Case IR 观测
-aitest codegen <module> --dump-ir
-aitest codegen <module> --explain TC-XXX-001
-
-# profile 体检
-aitest codegen --all --validate-profile --write-report
-
-# 健康报告（成熟度、strategy/assertion 统计）
-aitest codegen --all --health-report --write-report
-
-# 晋升分析
-aitest codegen <module> --analyze-promotion --write-report
-aitest codegen <module> --suggest-promotion-patch
-
-# 外部工作区（不切目录时使用）
-aitest codegen <module> --workspace /path/to/project --validate-profile
-aitest run <module> --workspace /path/to/project
-aitest report --workspace /path/to/project
+python3 -m pytest test_workspace/tests/generated --collect-only -q
 ```
-
-### 使用指引
-
-- **首次接入新项目**：`aitest init --target /path/to/project` → `/doc-review` → `/doc-gen`（按需）→ `/knowledge-build` → `/test-design`
-- **需求迭代**：新文档放入 `docs/` → `/knowledge-build`（增量更新）→ `/test-design`（增量生成）
-- **用例出错**：`/test-fix`（修用例 + 记 TEST_SPEC 陷阱 + 更新 skill）
-- **生成 pytest**：`/test-codegen <模块名>`
-- **执行并报告**：`aitest run <模块名>`，默认排除 manual；需要时加 `--include-manual`
-- **只想看文档质量**：`/doc-review`
-
-### 关键约定
-
-- 测试知识库是用例设计的唯一输入源，不绕过知识库直接写用例
-- Markdown 用例是唯一数据源，test-codegen 生成 pytest 代码执行
-- TEST_SPEC 是所有 skill 的行为准则，经验教训统一沉淀在此
-- 用例存放在 `test_workspace/cases/{模块名}/` 下，未指定时先询问用户
-- 模块 fixture 按模块拆分到 `test_workspace/tests/fixtures/{module}.py`，conftest.py 只放全局 fixture
-- codegen_profile 存放在 `test_workspace/tests/fixtures/codegen_profile_{module}.md`，与 fixture 文件同目录
-- 测试执行报告写入 `test_workspace/reports/`，属于运行产物，不提交；待测系统 bug 仍记录到 `test_workspace/results/`
-- 项目结构或流程发生变更时，检查是否需要同步更新 `CLAUDE.md`
-
-### test-report 流程细节
-
-1. **freshness check** — `aitest run` 默认先检查 generated pytest 是否与 Markdown/profile 一致；失败时生成 `BLOCKED_RUN` 报告并停止。
-2. **pytest 执行** — 默认追加 `-m "not manual"`；`--include-manual` 才执行 manual 用例。
-3. **metadata join** — generated pytest 中的 `__tc_meta__` 连接 JUnit XML 结果；`__codegen_skipped__` 记录未生成 pytest 函数的可行性存疑用例。
-4. **结果落盘** — 输出 `junit.xml`、`result.json`、`report.md` 到 `test_workspace/reports/runs/{run_id}/`，并同步到 `latest/`。
-5. **反哺清单** — 报告按环境、fixture/codegen、断言失败、未知问题生成下一步处理建议。
-
-## 测试执行注意事项
-
-### 部署拓扑先行
-
-设计 fixture 前必须确认服务的实际部署模式：
-- 确认服务端点环境变量的实际值（如 HTTP base URL、gRPC target、Redis URL 等）
-- 确认服务间调用关系（本地 SDK vs 远程服务）
-- 优先用运行时 API 操作（如管理接口 CRUD），而非启动时环境变量注入
-
-### httpx 系统代理
-
-httpx 0.28+ 会自动读取 macOS 系统代理，`proxy=None` 无效。测试 helper 中必须用显式 transport：
-```python
-httpx.Client(transport=httpx.HTTPTransport())
-```
-
-### 测试角色边界
-
-AI 的角色是测试工程师，不是被测系统的开发者：
-- 被测系统的源码和配置文件不得修改
-- 只改测试代码：`test_workspace/`、`.claude/skills/`
-- 通过被测系统已有的 API、环境变量、磁盘数据文件来构造测试条件
-- 现有接口无法满足测试需求时，记录为"测试基础设施需求"让用户决定
-
-## codegen 可移植架构
-
-codegen 管线分三层，换项目时只改配置层，不改框架层：
-
-```
-┌─────────────────────────────────────────────────────┐
-│  框架层（换项目不改）                                  │
-│  - parser engine (parser.py)                        │
-│  - Case IR planner (planner.py, ir.py)              │
-│  - IR renderer (ir_renderer.py)                     │
-│  - emitter orchestrator (emitter.py)                │
-│  - CLI (cli.py)                                     │
-│  - profile validator (profile_validator.py)         │
-│  - promotion analyzer (promotion.py)               │
-│  - health reporter (health.py)                     │
-│  - 通用 helpers (http.py, redis_ops.py)              │
-│  - skill 框架模板 (SKILL.md)                         │
-│  - JSON Schema (codegen_profile.schema.json)        │
-├─────────────────────────────────────────────────────┤
-│  项目配置层（换项目重写，YAML 格式）                    │
-│  - aitest_config/config.yaml                        │
-│  - aitest_config/project_config.yaml                │
-│  - grpc_ops.py（项目专属 protobuf 封装）              │
-├─────────────────────────────────────────────────────┤
-│  模块配置层（每模块一份）                              │
-│  - codegen_profile_{module}.md                      │
-│  - fixtures/{module}.py                             │
-└─────────────────────────────────────────────────────┘
-```
-
-### 首次接入新项目的 codegen 配置
-
-1. 创建 `aitest_config/config.yaml`：声明路径映射、服务地址、协议偏好、已知限制
-2. 创建 `aitest_config/project_config.yaml`：声明 helper import 路径、API 路径、变量映射、模块缩写、内置断言规则、模块映射
-3. 每个模块创建 `codegen_profile_{module}.md`：声明 module_type、assertion_rules、request_overrides 等
-4. 每个模块创建 `fixtures/{module}.py`：实现 setup/teardown 逻辑
-
-### module_type 分类
-
-codegen_profile 头部必须声明 module_type，emitter 根据类型校验必需字段：
-
-| module_type | 适用场景 | 必需字段 |
-|-------------|---------|---------|
-| `standard_recommend` | 标准推荐接口模块 | 无额外要求 |
-| `standard_http` | 标准 HTTP 单接口模块 | 无额外要求 |
-| `multi_endpoint` | 多端点服务模块 | case_bodies 或 case_flows |
-| `subprocess_capture` | 需要隔离进程捕获输出 | case_bodies 或 case_flows |
-| `isolated_service` | 需要隔离服务实例 | case_bodies 或 case_flows |
-
-### 四条生成路线
-
-| 路线 | profile 配置 | 适用场景 |
-|------|-------------|---------|
-| 默认模板 | `request_overrides` | 标准推荐接口，只需覆盖请求字段 |
-| 断言规则 | `assertion_rules` | 标准接口但断言需要模板化 |
-| `case_flows` | `case_flows` YAML | 稳定多步骤流程（调用 → 保存 → 断言） |
-| `case_bodies` | `case_bodies` 原始代码 | 复杂场景逃生通道（并发、进程、mock、文件） |
-
-晋升方向：case_bodies → case_flows → assertion_rules / 默认模板。同一 case_id 不允许同时出现在 `case_bodies` 和 `case_flows`。
-
-### 诊断分层
-
-| 代码 | 层 | 含义 |
-|------|----|------|
-| E001 | parser | Markdown JSON 解析失败 |
-| E002 | emitter | 缺少基础请求体且未被 profile 覆盖 |
-| E003-E004 | emitter | module_type 校验失败 |
-| E201-E203 | planner | 策略/请求体/断言解析问题 |
-| E301 | renderer | IR 渲染不支持 |
-| E501-E511 | profile validator | profile 结构/引用/格式问题 |
-
-### Markdown 用例格式规范
-
-Markdown 用例的共享配置格式是框架标准，所有项目统一使用以下 section 名（不可自定义）：
-
-```markdown
-## 共享配置
-**接口**：`POST /api/v1/xxx`
-**基础请求体（HTTP）**：
-```json
-{合法 JSON，不允许 {{var}} 占位符}
-```
-**基础请求体（gRPC）**：
-```text
-{protobuf 文本格式}
-```
-**标准前置**：
-- 前置条件列表
-**通用断言**：`response.code == 0`
-**变量定义**：
-- `var_name` = 定义
-```
-
-**关键规则**：
-- `json` 代码块必须是严格合法 JSON，`json.loads` 必须能解析
-- 变化字段用合法默认值填充（如 `"external": 0`），case 级差异通过 codegen_profile 的 request_overrides 声明
-- 禁止 `{{var}}` 模板占位符出现在 JSON 块中
-
-### 待测系统 bug 记录
-
-测试发现的待测系统 bug 记录到 `test_workspace/results/`，不跳过、不放宽断言、不伪造成功响应。等待系统修复后重新执行验证。

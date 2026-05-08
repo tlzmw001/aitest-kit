@@ -1,1 +1,2 @@
-"""Packaged templates shipped with aitest-kit."""
+"""Packaged resource templates for aitest-kit."""
+

@@ -1,8 +1,5 @@
-# ============================================================
-# AITest project workspace config
-# ============================================================
-# Paths are relative to this project root.
-# Replace project metadata and environment variable names before generating tests.
+# AITest 工作区配置
+# 所有路径相对于工作区根目录
 
 paths:
   knowledge_dir: test_workspace/knowledge
@@ -11,26 +8,22 @@ paths:
   cases_dir: test_workspace/cases
   generated_dir: test_workspace/tests/generated
   fixtures_dir: test_workspace/tests/fixtures
-  project_config: aitest_config/project_config.yaml
   reports_dir: test_workspace/reports
+  results_dir: test_workspace/results
   docs_dir: docs
   refs_dir: aitest_config/refs
+  project_config: aitest_config/project_config.yaml
 
 service:
   language: python
   frameworks: []
   endpoints:
-    http_base_url_env: AITEST_HTTP_BASE_URL
-    grpc_target_env: AITEST_GRPC_TARGET
-  route_patterns: []
-  schema_patterns: []
-
-data:
-  stores: []
+    http_base_url: ${HTTP_BASE_URL}
+    grpc_target: ${GRPC_TARGET}
 
 protocols:
   primary: http
-  secondary: null
+  secondary: grpc
   grpc_identifier: "协议：gRPC"
 
 known_limitations: []

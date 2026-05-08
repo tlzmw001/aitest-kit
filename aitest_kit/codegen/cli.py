@@ -40,24 +40,32 @@ from aitest_kit.workspace import push_workspace
 class CodegenPaths:
     cases_dir: Path
     generated_dir: Path
-    fixtures_dir: Path
+    profile_dir: Path
     reports_dir: Path
     project_config: Path
 
 
 def _load_codegen_paths() -> CodegenPaths:
+    defaults = {
+        "cases_dir": "test_workspace/cases",
+        "generated_dir": "test_workspace/tests/generated",
+        "fixtures_dir": "test_workspace/tests/fixtures",
+        "reports_dir": "test_workspace/reports",
+        "project_config": "aitest_config/project_config.yaml",
+    }
     config_path = Path("aitest_config/config.yaml")
-    paths = {}
     if config_path.exists():
         cfg = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-        if isinstance(cfg, dict) and isinstance(cfg.get("paths"), dict):
-            paths = cfg["paths"]
+        configured = cfg.get("paths", {}) if isinstance(cfg, dict) else {}
+    else:
+        configured = {}
+    paths = {**defaults, **configured}
     return CodegenPaths(
-        cases_dir=Path(paths.get("cases_dir", "test_workspace/cases")),
-        generated_dir=Path(paths.get("generated_dir", "test_workspace/tests/generated")),
-        fixtures_dir=Path(paths.get("fixtures_dir", "test_workspace/tests/fixtures")),
-        reports_dir=Path(paths.get("reports_dir", "test_workspace/reports")),
-        project_config=Path(paths.get("project_config", "aitest_config/project_config.yaml")),
+        cases_dir=Path(paths["cases_dir"]),
+        generated_dir=Path(paths["generated_dir"]),
+        profile_dir=Path(paths["fixtures_dir"]),
+        reports_dir=Path(paths["reports_dir"]),
+        project_config=Path(paths["project_config"]),
     )
 
 
@@ -78,15 +86,15 @@ def _ast_error(path: Path) -> str | None:
     return None
 
 
-def _profile_path(module: str, profile_dir: Path) -> Path | None:
-    path = profile_dir / f"codegen_profile_{module}.md"
+def _profile_path(module: str, paths: CodegenPaths) -> Path | None:
+    path = paths.profile_dir / f"codegen_profile_{module}.md"
     return path if path.exists() else None
 
 
 def _build_module_ir(module: str, paths: CodegenPaths) -> list[FileIR]:
     project = load_project_config(paths.project_config)
     module_dir = paths.cases_dir / module
-    profile_path = _profile_path(module, paths.fixtures_dir)
+    profile_path = _profile_path(module, paths)
     files: list[FileIR] = []
     for file_type in ("business", "boundary"):
         md_path = module_dir / f"{file_type}.md"
@@ -147,7 +155,7 @@ def _analyze_promotion(
     reports = []
     written: list[Path] = []
     for module in modules:
-        profile_path = _profile_path(module, paths.fixtures_dir)
+        profile_path = _profile_path(module, paths)
         if profile_path is None:
             report = PromotionReport(module=module, total_case_bodies=0)
             item = promotion_to_dict(report)
@@ -194,11 +202,18 @@ def _validate_profiles(
     error_count = 0
     warning_count = 0
     written: list[Path] = []
+    if not modules:
+        click.echo("No modules found under the configured cases directory.")
+        click.echo(
+            "Next step: create "
+            f"{paths.cases_dir}/<module>/business.md and a matching codegen profile "
+            f"under {paths.profile_dir}."
+        )
     for module in modules:
         report = validate_profile_module(
             module,
             cases_dir=paths.cases_dir,
-            profile_dir=paths.fixtures_dir,
+            profile_dir=paths.profile_dir,
             project=project,
         )
         error_count += len(report.errors)
@@ -233,7 +248,7 @@ def _profile_gate(modules: list[str], paths: CodegenPaths) -> int:
         validate_profile_module(
             module,
             cases_dir=paths.cases_dir,
-            profile_dir=paths.fixtures_dir,
+            profile_dir=paths.profile_dir,
             project=project,
         )
         for module in modules
@@ -254,7 +269,7 @@ def _profile_gate(modules: list[str], paths: CodegenPaths) -> int:
         click.echo(f"\nModule: {report.module}")
         for diag in report.errors:
             click.echo(f"  {diag.format()}")
-    click.echo("\nRun `python3 -m aitest_kit.cli codegen --all --validate-profile --write-report` for artifacts.")
+    click.echo("\nRun `aitest codegen --all --validate-profile --write-report` for artifacts.")
     return 1
 
 
@@ -269,7 +284,7 @@ def _health_report(
     report = build_codegen_health_report(
         modules,
         paths.cases_dir,
-        profile_dir=paths.fixtures_dir,
+        profile_dir=paths.profile_dir,
         project=project,
     )
     click.echo(yaml.safe_dump(
@@ -290,8 +305,10 @@ def _check_consistency(
     modules: list[str],
     paths: CodegenPaths,
     include_all_generated: bool = False,
+    *,
+    project=None,
 ) -> int:
-    project = load_project_config(paths.project_config)
+    generated_dir = paths.generated_dir
     stale_count = 0
     blocked_count = 0
     target_files: set[str] = set()
@@ -310,7 +327,7 @@ def _check_consistency(
                 mod,
                 cases_dir=paths.cases_dir,
                 output_dir=tmpdir,
-                profile_dir=paths.fixtures_dir,
+                profile_dir=paths.profile_dir,
                 project=project,
             )
             for r in results:
@@ -330,13 +347,13 @@ def _check_consistency(
                 click.echo(f"[SYNTAX] {f.name}")
                 click.echo(f"  {syntax_error}")
                 stale_count += 1
-        for f in paths.generated_dir.glob("test_*.py"):
+        for f in generated_dir.glob("test_*.py"):
             if include_all_generated or f.name in target_files:
                 all_files.add(f.name)
 
         for fname in sorted(all_files):
             new_file = tmp_path / fname
-            old_file = paths.generated_dir / fname
+            old_file = generated_dir / fname
 
             if not old_file.exists():
                 click.echo(f"[NEW] {fname} — not yet in generated/")
@@ -371,18 +388,18 @@ def _check_consistency(
 
 @click.command()
 @click.argument("module", required=False)
-@click.option("--all", "all_modules", is_flag=True, help="Generate for all modules")
-@click.option("--dry-run", is_flag=True, help="Parse only, show what would be generated")
-@click.option("--check", is_flag=True, help="Verify generated files are up to date")
+@click.option("--all", "all_modules", is_flag=True, help="Operate on all modules under test_workspace/cases")
+@click.option("--dry-run", is_flag=True, help="Parse Markdown only; do not write generated files")
+@click.option("--check", is_flag=True, help="Verify generated pytest matches Markdown/profile/config")
 @click.option("--dump-ir", is_flag=True, help="Print Case IR as JSON without generating files")
 @click.option("--explain", metavar="TC_ID", help="Print Case IR explanation for one case")
 @click.option("--analyze-promotion", is_flag=True, help="Analyze profile case_bodies promotion candidates")
-@click.option("--write-report", is_flag=True, help="Write promotion report artifacts under reports/codegen")
+@click.option("--write-report", is_flag=True, help="Write profile/health/promotion artifacts under reports/codegen")
 @click.option("--suggest-promotion-patch", is_flag=True, help="Write review-only promotion patch artifacts")
 @click.option("--report-dir", type=click.Path(file_okay=False, dir_okay=True), help="Codegen report output directory")
-@click.option("--validate-profile", is_flag=True, help="Validate codegen_profile before generating files")
+@click.option("--validate-profile", is_flag=True, help="Validate codegen_profile JSON Schema and semantics")
 @click.option("--health-report", is_flag=True, help="Report codegen module health and maturity")
-@click.option("--workspace", type=click.Path(file_okay=False, dir_okay=True), help="Run codegen from this project workspace")
+@click.option("--workspace", type=click.Path(file_okay=False, dir_okay=True), help="Run from another AITest workspace root")
 def codegen(
     module: str | None,
     all_modules: bool,
@@ -398,29 +415,28 @@ def codegen(
     health_report: bool,
     workspace: str | None,
 ):
-    """Generate pytest from Markdown test cases."""
+    """Compile Markdown test cases into generated pytest files."""
     try:
         with push_workspace(workspace):
             _codegen_impl(
-                module=module,
-                all_modules=all_modules,
-                dry_run=dry_run,
-                check=check,
-                dump_ir=dump_ir,
-                explain=explain,
-                analyze_promotion=analyze_promotion,
-                write_report=write_report,
-                suggest_promotion_patch=suggest_promotion_patch,
-                report_dir=report_dir,
-                validate_profile=validate_profile,
-                health_report=health_report,
+                module,
+                all_modules,
+                dry_run,
+                check,
+                dump_ir,
+                explain,
+                analyze_promotion,
+                write_report,
+                suggest_promotion_patch,
+                report_dir,
+                validate_profile,
+                health_report,
             )
     except (FileNotFoundError, NotADirectoryError) as exc:
         raise click.ClickException(str(exc)) from exc
 
 
 def _codegen_impl(
-    *,
     module: str | None,
     all_modules: bool,
     dry_run: bool,
@@ -456,6 +472,7 @@ def _codegen_impl(
         sys.exit(2)
 
     paths = _load_codegen_paths()
+    project = load_project_config(paths.project_config)
 
     if all_modules:
         modules = _list_modules(paths.cases_dir)
@@ -469,7 +486,12 @@ def _codegen_impl(
         gate_result = _profile_gate(modules, paths)
         if gate_result:
             sys.exit(gate_result)
-        sys.exit(_check_consistency(modules, paths, include_all_generated=all_modules))
+        sys.exit(_check_consistency(
+            modules,
+            paths,
+            include_all_generated=all_modules,
+            project=project,
+        ))
     if validate_profile:
         sys.exit(_validate_profiles(
             modules,
@@ -508,7 +530,6 @@ def _codegen_impl(
     total_generated = 0
     total_blocked = 0
     total_syntax_errors = 0
-    project = load_project_config(paths.project_config)
 
     for mod in modules:
         mod_dir = paths.cases_dir / mod
@@ -546,7 +567,7 @@ def _codegen_impl(
             mod,
             cases_dir=paths.cases_dir,
             output_dir=paths.generated_dir,
-            profile_dir=paths.fixtures_dir,
+            profile_dir=paths.profile_dir,
             project=project,
         )
         blocked = 0
