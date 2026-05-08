@@ -1,0 +1,46 @@
+# 项目级 codegen 配置
+# 接入新的目标系统时重写此文件
+
+helper_import: "from test_workspace.tests.helpers import http as http_helper"
+grpc_helper_import: "from test_workspace.tests.helpers import grpc_ops"
+
+api_path: "/api/v1/replace-me"
+helper_call: "http_helper.post"
+grpc_helper_call: "grpc_ops.call"
+
+var_map: {}
+module_abbrevs: {}
+
+named_templates: []
+
+module_types:
+  standard_http:
+    description: "默认单接口 HTTP 模块"
+  multi_endpoint:
+    description: "多端点或自定义流程模块"
+    requires: [case_bodies]
+  isolated_service:
+    description: "需要隔离服务/运行时控制的模块"
+    requires: [case_bodies]
+
+modules: {}
+
+builtin_assertion_rules:
+  - name: status_code
+    regex: '^response\.(?:body\.)?code\s*==\s*(?P<value>\d+)'
+    template: 'assert resp["code"] == {value}'
+  - name: http_status_code
+    regex: '^response\.status_code\s*==\s*(?P<value>\d+)'
+    template: "assert resp.status_code == {value}"
+  - name: http_status_code_short
+    regex: '^status_code\s*==\s*(?P<value>\d+)'
+    template: "assert resp.status_code == {value}"
+  - name: full_body
+    regex: '^response\.body\s*==\s*(?P<value>.+)'
+    template: "assert resp == {value}"
+  - name: comparison
+    regex: '^response\.(?:body\.)?(?P<path>\S+)\s*(?P<op>>=|<=|>|<)\s*(?P<value>.+)$'
+    template: 'assert {response_path:path} {op} {value}'
+  - name: field_equality
+    regex: '^response\.(?:body\.)?(?P<path>\S+)\s*==\s*(?P<value>.+)$'
+    template: 'assert {response_path:path} == {value}'

@@ -1,0 +1,14 @@
+# Runtime reports
+test_workspace/reports/**
+!test_workspace/reports/.gitkeep
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local environment
+.env
+.venv/
+venv/
+
