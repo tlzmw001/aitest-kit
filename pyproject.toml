@@ -18,11 +18,11 @@ dependencies = [
     "jsonschema>=4.20",
     "jsonpath-ng>=1.6",
     "click>=8.1",
+    "pytest>=8.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0",
     "fakeredis>=2.21",
     "pytest-asyncio>=0.23",
 ]
@@ -45,4 +45,30 @@ markers = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["aitest_kit*", "coupon_system*", "ab_experiment_sdk*"]
+include = ["aitest_kit*"]
+
+[tool.setuptools.package-data]
+"aitest_kit.templates.project_workspace" = [
+    ".gitignore",
+    "README.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    ".agents/skills/*/SKILL.md",
+    ".claude/skills/*/SKILL.md",
+    ".codex/skills/*/SKILL.md",
+    "docs/.gitkeep",
+    "aitest_config/*.yaml",
+    "aitest_config/refs/*.md",
+    "aitest_config/schemas/*.json",
+    "test_workspace/cases/.gitkeep",
+    "test_workspace/knowledge/*.md",
+    "test_workspace/knowledge/L1/.gitkeep",
+    "test_workspace/knowledge/L2/.gitkeep",
+    "test_workspace/plans/.gitkeep",
+    "test_workspace/reports/.gitkeep",
+    "test_workspace/results/.gitkeep",
+    "test_workspace/tests/*.py",
+    "test_workspace/tests/fixtures/*.py",
+    "test_workspace/tests/generated/*.py",
+    "test_workspace/tests/helpers/*.py",
+]
