@@ -69,6 +69,9 @@
 - `aitest_kit/`
   Python 测试工具库，包含 parser、emitter、CLI、HTTP/gRPC 客户端与断言能力。
 
+- `aitest_kit/templates/project_workspace/`
+  新项目 workspace 的包内唯一模板源。包含干净 `aitest_config/`、`test_workspace/`、`AGENTS.md`、`CLAUDE.md` 和 `.codex/.claude/.agents` 三套 skills。不要再新增顶层 `templates/project_workspace/` 镜像。
+
 - `aitest_config/`
   项目级配置目录。
 
@@ -94,6 +97,7 @@
 ```bash
 pip install -e ".[dev,server]"
 python -m coupon_system.main
+python3 -m aitest_kit.cli init --target /path/to/your_project
 python3 -m aitest_kit.cli codegen --all --validate-profile
 python3 -m aitest_kit.cli codegen --all --check
 python3 -m aitest_kit.cli codegen --all --health-report --write-report
@@ -144,7 +148,7 @@ test-codegen
 ## 推荐使用路径
 
 - 首次接入新项目或新模块：
-  先做文档审查，再按需补文档，然后构建知识库，最后设计 Markdown 测试用例。
+  对新项目先用 `aitest init --target <project_dir>` 创建独立 workspace；从本仓外执行时使用 `--workspace <project_dir>` 运行 `codegen`、`run`、`report`。然后做文档审查，按需补文档，构建知识库，最后设计 Markdown 测试用例。
 
 - 需求迭代：
   将新文档放入 `docs/`，先增量更新知识库，再增量生成或修订 Markdown 用例。
@@ -174,6 +178,9 @@ test-codegen
 
 - `TEST_SPEC` 是共享行为准则。
   重复踩到的坑、边界条件和经验，应统一沉淀到这里，而不是每次重新摸索。
+
+- workspace 模板只有一个来源。
+  `aitest_kit/templates/project_workspace/` 是 `aitest init` 使用的唯一模板源；不要维护第二份顶层模板副本。
 
 - 测试用例按模块组织。
   默认输出到 `test_workspace/cases/{模块名}/`。若模块不明确，在批量生成前先确认目标模块。
