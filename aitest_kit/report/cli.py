@@ -14,6 +14,7 @@ import yaml
 
 from aitest_kit.report.collector import blocked_result, collect_result
 from aitest_kit.report.renderer import render_markdown
+from aitest_kit.workspace import push_workspace
 
 
 def _load_paths() -> tuple[Path, Path]:
@@ -31,11 +32,32 @@ def _load_paths() -> tuple[Path, Path]:
     name="run",
     context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
 )
-@click.option("--include-manual", is_flag=True, help="Run tests marked manual")
-@click.option("--skip-codegen-check", is_flag=True, help="Skip generated freshness check")
-@click.argument("args", nargs=-1, type=click.UNPROCESSED)
-def run_command(include_manual: bool, skip_codegen_check: bool, args: tuple[str, ...]):
-    """Run generated pytest tests and write structured reports."""
+@click.option("--include-manual", is_flag=True, help="Include tests marked manual; excluded by default")
+@click.option("--skip-codegen-check", is_flag=True, help="Skip generated freshness check before pytest")
+@click.option("--workspace", type=click.Path(file_okay=False, dir_okay=True), help="Run from another AITest workspace root")
+@click.argument("args", nargs=-1, type=click.UNPROCESSED, metavar="[MODULE]... [PYTEST_ARGS]...")
+def run_command(
+    include_manual: bool,
+    skip_codegen_check: bool,
+    workspace: str | None,
+    args: tuple[str, ...],
+):
+    """Run generated pytest after freshness check and write structured reports.
+
+    Examples:
+
+      aitest run calibration
+
+      aitest run calibration -- -k boundary
+    """
+    try:
+        with push_workspace(workspace):
+            _run_command_impl(include_manual, skip_codegen_check, args)
+    except (FileNotFoundError, NotADirectoryError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+def _run_command_impl(include_manual: bool, skip_codegen_check: bool, args: tuple[str, ...]) -> None:
     modules, extra_args = _split_args(args)
     generated_dir, reports_dir = _load_paths()
     files = _target_files(generated_dir, modules)
@@ -110,9 +132,18 @@ def run_command(include_manual: bool, skip_codegen_check: bool, args: tuple[str,
 
 
 @click.command(name="report")
+@click.option("--workspace", type=click.Path(file_okay=False, dir_okay=True), help="Read reports from another AITest workspace root")
 @click.argument("run_id", required=False)
-def report_command(run_id: str | None):
+def report_command(workspace: str | None, run_id: str | None):
     """Re-render report.md from an existing result.json."""
+    try:
+        with push_workspace(workspace):
+            _report_command_impl(run_id)
+    except (FileNotFoundError, NotADirectoryError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+def _report_command_impl(run_id: str | None) -> None:
     _, reports_dir = _load_paths()
     result_path = (
         reports_dir / "runs" / run_id / "result.json"
@@ -193,4 +224,3 @@ def _write_result(run_dir: Path, reports_dir: Path, result: dict) -> None:
     if latest_dir.exists():
         shutil.rmtree(latest_dir)
     shutil.copytree(run_dir, latest_dir)
-

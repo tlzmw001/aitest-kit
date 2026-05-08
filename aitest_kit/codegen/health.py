@@ -65,12 +65,24 @@ class CodegenHealthReport:
         return sum(module.profile_warnings for module in self.modules)
 
 
-def build_codegen_health_report(modules: list[str], cases_dir: Path) -> CodegenHealthReport:
-    project = load_project_config()
+def build_codegen_health_report(
+    modules: list[str],
+    cases_dir: Path,
+    *,
+    profile_dir: str | Path = "test_workspace/tests/fixtures",
+    project: Any | None = None,
+) -> CodegenHealthReport:
+    project = project or load_project_config()
+    profile_root = Path(profile_dir)
     items: list[ModuleHealth] = []
     for module in modules:
-        validation = validate_profile_module(module, cases_dir=cases_dir, project=project)
-        file_irs = _build_module_file_irs(module, cases_dir, project)
+        validation = validate_profile_module(
+            module,
+            cases_dir=cases_dir,
+            profile_dir=profile_root,
+            project=project,
+        )
+        file_irs = _build_module_file_irs(module, cases_dir, profile_root, project)
         items.append(_module_health(module, validation, file_irs))
     return CodegenHealthReport(items)
 
@@ -135,8 +147,13 @@ def write_codegen_health_report(
     return {"markdown": md_path, "json": json_path}
 
 
-def _build_module_file_irs(module: str, cases_dir: Path, project: Any) -> list[FileIR]:
-    profile_path = Path("test_workspace/tests/fixtures") / f"codegen_profile_{module}.md"
+def _build_module_file_irs(
+    module: str,
+    cases_dir: Path,
+    profile_dir: Path,
+    project: Any,
+) -> list[FileIR]:
+    profile_path = profile_dir / f"codegen_profile_{module}.md"
     if not profile_path.exists():
         profile_path = None
     file_irs: list[FileIR] = []
