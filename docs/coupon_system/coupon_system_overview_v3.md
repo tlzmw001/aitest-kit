@@ -647,6 +647,6 @@ AB 服务本身在 [service.py](/Users/zmw/AIAutoTest/ab_experiment_sdk/service.
 
 看完这份文档后，最适合继续读的是：
 
-- [coupon_system_dataflow_v3.md](/Users/zmw/AIAutoTest/docs/coupon_system_dataflow_v3.md)
+- [coupon_system_dataflow_v3.md](/Users/zmw/AIAutoTest/docs/coupon_system/coupon_system_dataflow_v3.md)
 
 因为它会用一条真实请求，把上面这些概念串起来。你会更容易把“模块是什么”和“代码怎么跑”对应起来。

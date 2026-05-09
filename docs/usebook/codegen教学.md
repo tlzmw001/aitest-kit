@@ -242,7 +242,7 @@ pytest 执行 generated 文件时，先加载 [conftest.py](/Users/zmw/AIAutoTes
 gRPC 请求走 [grpc_ops.py](/Users/zmw/AIAutoTest/test_workspace/tests/helpers/grpc_ops.py:28)，它把 dict 请求转成 protobuf request，再把响应转回 dict。issuance 这种模块则通过 fixture 返回领域操作对象，例如 `IssuanceCase.post_recommend()`、`grpc_recommend()`、`query_coupons()`，见 [issuance.py](/Users/zmw/AIAutoTest/test_workspace/tests/fixtures/issuance.py:121)。rough_ranking 更复杂，会启动 recording scoring server 和隔离主服务，见 [rough_ranking.py](/Users/zmw/AIAutoTest/test_workspace/tests/fixtures/rough_ranking.py:221)。
 
 **十一、执行命令**
-完整跑测试前要先启动 Redis、AB 服务、打分 mock、主服务；这个流程在 [test_execution_guide.md](/Users/zmw/AIAutoTest/docs/usebook/test_execution_guide.md:103)。真正跑 pytest 的命令在 [test_execution_guide.md](/Users/zmw/AIAutoTest/docs/usebook/test_execution_guide.md:141)：
+完整跑测试前要先启动 Redis、AB 服务、打分 mock、主服务；这个流程在 [service_startup.md](/Users/zmw/AIAutoTest/docs/usebook/service_startup.md:20)。真正跑 pytest 的命令如下：
 
 ```bash
 python3 -m pytest test_workspace/tests/generated/ -v
