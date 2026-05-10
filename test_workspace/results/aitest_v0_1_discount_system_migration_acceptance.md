@@ -354,7 +354,7 @@ test_workspace/knowledge/
 
 本轮迁移验收时，`pip install aitest-kit` 在本机默认 pip 源不可用。v0.1 当时通过本地 release wheel 验证通过。
 
-2026-05-10 已完成 PyPI 发布前准备：补齐包元数据、重新构建 wheel/sdist、通过 `twine check`，并用本地 wheel 在干净 venv 中验证 `aitest --help`、`aitest init` 和空 workspace profile gate。正式 PyPI 上传仍需发布前确认。
+2026-05-10 已完成 PyPI 发布：`aitest-kit==0.1.1` 已发布到 TestPyPI 和正式 PyPI，并分别通过干净 venv 安装验证、`aitest --help`、`aitest init` 和空 workspace profile gate。
 
 ### P1：test-codegen skill 需要强调探索回灌
 
@@ -470,8 +470,58 @@ aitest codegen --workspace /private/tmp/aitest_release_pypi_verify_project --all
 结果：modules=0, errors=0, warnings=0，并输出下一步创建 cases/profile 的提示
 ```
 
-发布前剩余确认：
+TestPyPI 发布验证：
 
-- 是否以 `aitest-kit==0.1.1` 作为首次 PyPI 正式版本。
-- 是否先上传 TestPyPI 并做一次 TestPyPI 安装验证。
-- 正式上传前确认只上传 `dist/aitest_kit-0.1.1*` 两个文件。
+```text
+twine upload --repository testpypi dist/aitest_kit-0.1.1*
+结果：上传成功
+View at: https://test.pypi.org/project/aitest-kit/0.1.1/
+
+python3 -m pip index versions aitest-kit --index-url https://test.pypi.org/simple/
+结果：aitest-kit (0.1.1), Available versions: 0.1.1
+
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ aitest-kit==0.1.1
+结果：Successfully installed aitest-kit-0.1.1
+
+aitest --help
+结果：CLI 可用，展示 init/codegen/run/report
+
+aitest init --target /private/tmp/aitest_testpypi_project_011 --force
+结果：Created: 50, overwritten: 0
+
+aitest codegen --workspace /private/tmp/aitest_testpypi_project_011 --all --validate-profile
+结果：modules=0, errors=0, warnings=0，并输出下一步创建 cases/profile 的提示
+```
+
+正式 PyPI 发布验证：
+
+```text
+twine upload dist/aitest_kit-0.1.1*
+结果：上传成功
+View at: https://pypi.org/project/aitest-kit/0.1.1/
+
+python3 -m pip index versions aitest-kit
+结果：aitest-kit (0.1.1), Available versions: 0.1.1
+
+pip install aitest-kit==0.1.1
+结果：Successfully installed aitest-kit-0.1.1
+
+pip show aitest-kit
+结果：Name: aitest-kit, Version: 0.1.1
+
+aitest --help
+结果：CLI 可用，展示 init/codegen/run/report
+
+aitest init --target /private/tmp/aitest_pypi_project_011 --force
+结果：Created: 50, overwritten: 0
+
+aitest codegen --workspace /private/tmp/aitest_pypi_project_011 --all --validate-profile
+结果：modules=0, errors=0, warnings=0，并输出下一步创建 cases/profile 的提示
+```
+
+最终发布结论：
+
+- PyPI 页面：https://pypi.org/project/aitest-kit/0.1.1/
+- TestPyPI 页面：https://test.pypi.org/project/aitest-kit/0.1.1/
+- 新用户安装命令：`pip install aitest-kit==0.1.1`
+- release 版本与 GitHub tag `v0.1.1` 一致。
