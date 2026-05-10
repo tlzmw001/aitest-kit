@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.1 - 2026-05-10
+
+### Added
+
+- Added PyPI-ready package metadata, including README long description, MIT SPDX license, license file, classifiers, keywords, and project links.
+- Added a full `discount_system` external-project migration acceptance record, covering init, knowledge build, test design, codegen, real pytest execution, and emitter-build smoke analysis.
+- Added PyPI/TestPyPI release commands and irreversible-upload notes to the v0.1 release spec.
+
+### Changed
+
+- Updated install documentation to use the PyPI package path while keeping local wheel installation instructions for release validation.
+- Clarified the `test-codegen` skill workflow so first-pass AI exploration must be回灌 into fixture/profile/case_flow before final delivery.
+
 ## 0.1.0 - 2026-05-08
 
 ### Added

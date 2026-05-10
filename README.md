@@ -16,8 +16,11 @@ CLI 与 workspace 模板负责稳定、可重复的生成和执行；本地 AI s
 ### 安装
 
 ```bash
-# 从发布包或内部制品安装
+# 从 PyPI 安装
 pip install aitest-kit
+
+# 从本地 release wheel 安装（用于发布前验收或内部分发）
+pip install dist/aitest_kit-0.1.1-py3-none-any.whl
 
 # 本仓开发和回归验证
 pip install -e ".[dev,server]"

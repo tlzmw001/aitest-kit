@@ -129,6 +129,48 @@ cd /private/tmp/aitest_release_project
 /private/tmp/aitest_release_venv/bin/python -m pytest test_workspace/tests/generated --collect-only -q
 ```
 
+PyPI 发布前检查：
+
+```bash
+python3 -m pip index versions aitest-kit
+python3 -m build
+python3 -m twine check dist/*
+```
+
+期望：
+
+- `pip index versions aitest-kit` 在首次发布前返回 `No matching distribution found for aitest-kit`，表示当前包名未被公开占用。
+- `twine check dist/*` 返回 `PASSED`，表示 README 长描述和包元数据可被 PyPI 接受。
+- `dist/` 中只上传本次要发布的 `aitest_kit-0.1.1.tar.gz` 和 `aitest_kit-0.1.1-py3-none-any.whl`。
+
+TestPyPI 试发布：
+
+```bash
+python3 -m twine upload --repository testpypi dist/aitest_kit-0.1.1*
+python3 -m venv /private/tmp/aitest_testpypi_install_venv
+/private/tmp/aitest_testpypi_install_venv/bin/python -m pip install \
+  --index-url https://test.pypi.org/simple/ \
+  --extra-index-url https://pypi.org/simple/ \
+  aitest-kit==0.1.1
+/private/tmp/aitest_testpypi_install_venv/bin/aitest --help
+```
+
+正式 PyPI 发布：
+
+```bash
+python3 -m twine upload dist/aitest_kit-0.1.1*
+python3 -m venv /private/tmp/aitest_pypi_install_venv
+/private/tmp/aitest_pypi_install_venv/bin/python -m pip install aitest-kit==0.1.1
+/private/tmp/aitest_pypi_install_venv/bin/aitest --help
+```
+
+发布约束：
+
+- 上传 PyPI 属于不可逆发布动作，必须先确认版本号、dist 文件清单和目标仓库。
+- 同一版本号在 PyPI/TestPyPI 上传后不能覆盖；如果上传后发现问题，只能发布新版本。
+- 不在 `twine upload` 命令中写入 token；使用环境变量、keyring 或交互式输入。
+- 发布成功后，再更新验收记录中“PyPI 不可用”的历史说明，并用真实 `pip install aitest-kit==0.1.1` 结果补充最终验证。
+
 ## 当前验证记录
 
 2026-05-08 已完成 P0 安装态主链路验证：
