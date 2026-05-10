@@ -25,6 +25,34 @@ effort: high
 
 如果迁移到其他仓库时尚未实现 Case IR CLI，仍按现有 parser/emitter 流程执行；不要因为缺少 dump/explain 命令阻断 codegen。
 
+## 新项目迁移：探索与回灌
+
+新项目首个模块允许 AI 先手写 pytest 探索公开 API 行为，但这只是探索态，不是最终交付态。最终必须回到可重复的 codegen 链路：
+
+```text
+Markdown 用例
+  -> AI 手写/半手写探索（可选）
+  -> 已验证测试逻辑回灌到 fixture + codegen_profile
+  -> case_bodies 或 case_flows
+  -> aitest codegen 重新生成 generated pytest
+  -> aitest codegen --check 通过
+```
+
+交付前必须满足：
+
+1. `test_workspace/tests/fixtures/{module}.py` 存在，且只通过公开 API/公开依赖准备测试条件。
+2. `test_workspace/tests/fixtures/codegen_profile_{module}.md` 存在，`--validate-profile` 无 ERROR，且不应出现 `profile not found`。
+3. 手写探索出的流程必须迁入 `case_flows` 或 `case_bodies`；`test_workspace/tests/generated/` 不能作为唯一源头。
+4. `--dump-ir` 不得出现模板占位路径（如 `/api/v1/replace-me`）或明显错误的默认 helper/fixture。
+5. `aitest codegen {module}` 后，`aitest codegen {module} --check` 必须通过。
+
+路线选择：
+
+- 稳定的"调用 helper -> 保存响应 -> 派生变量 -> 断言"流程，优先写成 `case_flows`。
+- 包含复杂控制流、线程/进程、mock、文件生命周期或难以结构化的 Python 逻辑，先收纳到 `case_bodies`。
+- 同类 `case_bodies` 通过真实测试验证并重复出现后，再用 `emitter-build` / promotion 报告评估是否晋升为 `case_flows`、`assertion_rules` 或项目配置规则。
+- 如果用户贴出失败现象（profile 缺失、`--check` stale、IR 路径错误），先修回灌链路，不要继续堆叠手写 generated。
+
 ## 前置：新项目首次使用检查
 
 如果这是一个新项目（没有任何 codegen_profile 存在），执行以下检查：
@@ -34,6 +62,22 @@ effort: high
 3. **项目配置** — 读取 `aitest_config/config.yaml`（路径、协议偏好、已知限制）和 `aitest_config/project_config.yaml`（断言规则、模块分类）
 4. **profile 格式** — profile 继续使用 Markdown 内 YAML；结构契约由 `aitest_config/schemas/codegen_profile.schema.json` 校验，再叠加 case_id/module_type/case_flow 语义校验
 5. **提醒用户**：首个模块的 UNPARSED / case_body 比例可能较高，建议选断言模式最典型的模块作为第一个
+6. **占位配置检查** — 若 IR 或 generated 中出现 `/api/v1/replace-me`、示例 helper、示例模块缩写，说明项目配置/profile 尚未适配，不能进入真实 pytest
+
+> 首个模块的 profile 交付要求见上方「新项目迁移：探索与回灌」章节。
+
+## 前置：读取 codegen profile
+
+检查 `test_workspace/tests/fixtures/codegen_profile_$target_module.md` 是否存在。
+
+**如果存在**，emitter 会自动加载其中的 YAML 规则段。AI 补写时也应参考 profile 中的断言模式、请求模板、setup 映射。
+
+**如果不存在**：
+
+1. 读取其他模块已有的 profile 作为参考（结构模板 + 通用模式），但不复制模块特有的断言逻辑
+2. 新项目首个模块必须创建最小 profile，至少声明 `module_type`、fixture 引用，以及能覆盖非默认接口/多步骤流程的 `case_flows` 或 `case_bodies`
+3. 如果先产生了探索用 generated pytest，应把其中已验证的执行流程迁入 profile，再删除对手写 generated 的依赖
+4. 生成完毕后在摘要中提示 profile 的成熟度：探索态 `case_bodies`、结构化 `case_flows`，还是规则化 `assertion_rules`
 
 ## 前置：运行 parser
 
@@ -51,8 +95,8 @@ Case IR 第一版应覆盖以下 strategy：
 
 | strategy | 含义 |
 |----------|------|
-| `default_http` | 标准 HTTP 推荐接口 |
-| `default_grpc` | 场景变量标注 gRPC 的标准推荐接口 |
+| `default_http` | 标准 HTTP 单接口 |
+| `default_grpc` | 场景变量标注 gRPC 的标准单接口 |
 | `custom_case_body` | profile 中存在 `case_bodies[case_id]` |
 | `manual` | marker 包含 manual |
 | `skipped` | marker 包含可行性存疑 |
@@ -78,7 +122,7 @@ python3 -m aitest_kit.cli codegen --all --health-report --write-report
 
 - 全局 conftest.py
 - 模块 fixture（如果已存在）
-- HTTP/gRPC/Redis helpers
+- HTTP/gRPC/外部依赖 helpers
 
 ## 第一步：codegen 生成
 
@@ -89,6 +133,17 @@ python3 -m aitest_kit.cli codegen $target_module
 ```
 
 检查输出摘要中的 UNPARSED 数量。若 Case IR 已接入，先确认每条用例的 strategy/protocol/fixtures 与预期一致，再分析 generated pytest。
+
+新模块推荐顺序：
+
+```bash
+python3 -m aitest_kit.cli codegen $target_module --validate-profile
+python3 -m aitest_kit.cli codegen $target_module --dump-ir
+python3 -m aitest_kit.cli codegen $target_module
+python3 -m aitest_kit.cli codegen $target_module --check
+```
+
+`--validate-profile` 有 `profile not found`、`--dump-ir` 走错接口/fixture、或 `--check` stale 时，说明还没有完成回灌；先补 fixture/profile/case_flow/case_body，再重新生成。
 
 ## 第二步：AI 补写 UNPARSED
 
@@ -106,20 +161,13 @@ python3 -m aitest_kit.cli codegen $target_module
 
 ## 第三步：验证
 
-1. `python3 -c "import ast; ast.parse(open('file').read())"` — 语法检查
-2. `pytest --collect-only test_workspace/tests/generated/test_{module}_*.py` — 收集检查
-3. 如果模块 fixture 和服务已就绪：`pytest test_workspace/tests/generated/test_{module}_*.py -v`
-
-## 前置：读取 codegen profile
-
-检查 `test_workspace/tests/fixtures/codegen_profile_$target_module.md` 是否存在。
-
-**如果存在**，emitter 会自动加载其中的 YAML 规则段。AI 补写时也应参考 profile 中的断言模式、请求模板、setup 映射。
-
-**如果不存在**：
-
-1. 读取其他模块已有的 profile 作为参考（结构模板 + 通用模式），但不复制模块特有的断言逻辑
-2. 生成完毕后在摘要中提示"建议跑通测试后编写 codegen_profile.md"
+1. `python3 -m aitest_kit.cli codegen $target_module --validate-profile` — profile/schema/语义校验
+2. `python3 -m aitest_kit.cli codegen $target_module --dump-ir` — 检查 strategy、fixtures、接口路径和 source_trace
+3. `python3 -m aitest_kit.cli codegen $target_module` — 重新生成 pytest
+4. `python3 -m aitest_kit.cli codegen $target_module --check` — 确认 generated 可由当前 Markdown/profile/config 复现
+5. `python3 -m compileall test_workspace/tests/fixtures/{module}.py test_workspace/tests/generated` — 语法检查
+6. `python3 -m pytest test_workspace/tests/generated/test_{module}_*.py --collect-only -q` — 收集检查
+7. 如果模块 fixture 和服务已就绪：`python3 -m pytest test_workspace/tests/generated/test_{module}_*.py -q`
 
 ## emitter 生成规则参考
 
@@ -132,29 +180,33 @@ python3 -m aitest_kit.cli codegen $target_module
 
 ### 类和函数命名
 
-- 类名：`TestCalibrationBusiness`（模块名首字母大写 + Business/Boundary）
-- 函数名：`test_tc_cal_001`（TC ID 小写，连字符转下划线）
-- docstring：`"""TC-CAL-001：{title}"""`
+- 类名：`Test{Module}Business`（模块名首字母大写 + Business/Boundary）
+- 函数名：`test_tc_mod_001`（TC ID 小写，连字符转下划线）
+- docstring：`"""TC-MOD-001：{title}"""`
 
 ### setup 处理
 
 场景变量 -> `# SETUP:` 注释 + `setup_{module}(case_id="TC-XXX")` 调用。
 
-fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供，通过 conftest.py 的 `pytest_plugins` 注册。
+fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供。按当前项目的 generated import/profile 机制接线；只有项目采用 `pytest_plugins` 注册时，才需要维护 `conftest.py` 中的 `pytest_plugins` 列表。
 
 新增模块时需要：
 1. 创建 `test_workspace/tests/fixtures/{module}.py`
-2. 在 `conftest.py` 的 `pytest_plugins` 列表中添加
+2. 确认 `codegen_profile_{module}.md` 或 generated pytest 能引用到对应 fixture；如果项目使用 `pytest_plugins`，同步添加插件注册
 
 ### fixture 编写检查清单
 
 编写新模块的 `setup_{module}` fixture 前，确认：
 
-1. **部署拓扑** — 服务间调用关系，确认环境变量（AB_SERVICE_URL、REDIS_URL 等）
-2. **可用 API** — fixture 需要调用的管理接口（白名单 CRUD、库存初始化等）
+1. **部署拓扑** — 服务间调用关系，确认环境变量（服务 URL、外部依赖地址等）
+2. **可用 API** — fixture 需要调用的管理接口或数据准备接口
 3. **隔离策略** — 每条用例的数据如何隔离（tmp_path、唯一 user_id、teardown 恢复）
-4. **teardown** — 所有副作用都能恢复（实验配置、白名单、Redis key）
+4. **teardown** — 所有副作用都能恢复（配置、测试数据、外部依赖状态）
 5. **`_CASE_CONFIGS` 结构** — 参考 codegen_profile 的 setup 映射章节
+6. **服务地址** — 从项目专属环境变量读取（如 `DISCOUNT_SYSTEM_BASE_URL`），可兼容 `HTTP_BASE_URL`；不要硬编码端口或 URL
+7. **环境缺失** — 可执行 API 测试缺少服务地址时用 `pytest.fail`，不要用 `pytest.skip` 掩盖环境未配置
+8. **HTTP 客户端** — 使用 `httpx` 时显式指定 `httpx.HTTPTransport()`，避免 macOS/CI 系统代理影响本地 HTTP 测试
+9. **黑盒边界** — fixture 不 import 待测系统内部模块，不读取目标项目源码/内部测试来推断业务规则
 
 ### 断言生成
 
@@ -179,7 +231,7 @@ fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供，通过 conftest
 
 1. 从共享配置取基础请求体，场景变量 `请求覆盖` 合并
 2. gRPC 用例通过场景变量中的 `协议：gRPC` 标识，Case IR 应记录该判断来源
-3. `{{user_id}}` -> `u_{module}_{tc_number}`，`{{req_id}}` -> `req_{module}_{tc_number}`
+3. 共享配置中的 HTTP 基础请求体必须是合法 JSON，不使用 `{{placeholder}}`；case 级差异通过场景变量或 profile `request_overrides` 合并
 
 ### case_body 与 case_flow
 
@@ -206,6 +258,9 @@ fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供，通过 conftest
 4. 不硬编码端口，通过 fixture 获取 base_url
 5. 不发明用例中没有的断言
 6. parser、Case IR、emitter 的错误边界清晰：Markdown 结构问题归 parser，策略/配置问题归 IR planner，渲染问题归 emitter
+7. 新模块交付态不得停留在手写 generated；必须有 profile 回灌并通过 `--check`
+8. `profile not found`、`/api/v1/replace-me`、`--check stale` 都是迁移未完成信号
+9. 可执行 API 测试的服务地址缺失应失败暴露环境问题，不能悄悄 skip
 
 ## 输出
 
@@ -224,9 +279,10 @@ fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供，通过 conftest
 - TC-XXX：断言原文
 
 TODO：
-- （fixture 不存在时）setup_{module} fixture 需要手写
+- （fixture 不存在时）setup_{module} fixture 需要补齐，并从环境变量读取服务地址
 - （有 gRPC 用例时）gRPC helper 需要补充
-- （无 codegen_profile 时）建议跑通测试后编写 codegen_profile
+- （无 codegen_profile 时）需要补齐 profile，并将探索逻辑迁入 case_bodies/case_flows
+- （generated stale 时）先回灌 profile/config，再重新 `aitest codegen`，不要长期保留手写 generated
 - （测试全部通过后）调用 /emitter-build 提取确定性模板
 ```
 
@@ -247,7 +303,7 @@ TODO：
 | **调试经验** | 模块特有排错经验 |
 | **emitter 规则** | YAML code block，模块特有断言规则 |
 
-参考：`test_workspace/tests/fixtures/codegen_profile_calibration.md`
+参考已有模块的 codegen_profile 作为结构模板。
 
 ## 后续：emitter-build
 
