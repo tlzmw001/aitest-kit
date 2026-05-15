@@ -2,7 +2,7 @@
 
 ## 目标
 
-交付一个可以给新项目试用的 v0.1 版本。用户不需要理解 AIAutoTest 示例仓库历史，只需要安装 `aitest-kit`、执行 `aitest init`、放入公开文档、按文档完成最小模块迁移，就能跑通：
+交付一个可以给新项目试用的 v0.1 版本。用户不需要理解 aitest-kit 示例仓库历史，只需要安装 `aitest-kit`、执行 `aitest init`、放入公开文档、按文档完成最小模块迁移，就能跑通：
 
 ```text
 公开文档 -> 知识库 -> Markdown 用例 -> profile/fixture -> codegen -> pytest collect/run -> report
@@ -34,7 +34,7 @@
 
 ### 1. 纯安装态临时项目
 
-使用 `/private/tmp` 下的临时目录验证“用户从零安装后是否能初始化和生成”。该验证不依赖 AIAutoTest 当前工作目录，也不依赖 coupon/AB 示例资产。
+使用 `/private/tmp` 下的临时目录验证“用户从零安装后是否能初始化和生成”。该验证不依赖 aitest-kit 当前工作目录，也不依赖 coupon/AB 示例资产。
 
 验收点：
 
@@ -45,19 +45,19 @@
 
 ### 2. `discount_system` 外部真实项目
 
-`/Users/zmw/discount_system` 是外部待测系统，可作为真实项目迁移回归目标。它不在 AIAutoTest 仓库内，适合检查模板和 playbook 是否会被本仓上下文污染。
+`/Users/zmw/discount_system` 是外部待测系统，可作为真实项目迁移回归目标。它不在 aitest-kit 仓库内，适合检查模板和 playbook 是否会被本仓上下文污染。
 
 使用约束：
 
 - 默认只读取 `/Users/zmw/discount_system/specs/public_api_doc.md` 作为公开行为来源。
 - 不读取 `src/`、`tests/` 或非公开 specs，除非用户明确要求做灰盒验证。
 - 不直接写入 `/Users/zmw/discount_system`，除非用户明确批准。发布验证优先在 `/private/tmp` 创建独立 workspace，并复制公开文档进入 `docs/`。
-- 不复用当前 AIAutoTest 的历史迁移产物作为结论；需要从 init 后的干净 workspace 重新验证。
+- 不复用当前 aitest-kit 的历史迁移产物作为结论；需要从 init 后的干净 workspace 重新验证。
 
 验收点：
 
 - 从公开 API 文档出发，能按新模板建立独立 workspace。
-- codegen 产物不依赖 AIAutoTest 的 coupon/AB 示例资产。
+- codegen 产物不依赖 aitest-kit 的 coupon/AB 示例资产。
 - 真实服务启动后，generated pytest 可 collect；具备环境时可运行通过。
 
 ## P0 任务
@@ -214,7 +214,7 @@ v0.1 release 可以发布的最低标准：
 
 1. P0 全部完成。
 2. P1 全部完成。
-3. 安装态验证不依赖 AIAutoTest cwd。
+3. 安装态验证不依赖 aitest-kit cwd。
 4. 新 workspace 不包含 coupon/AB/discount 历史资产。
 5. Quickstart、Profile Guide、Troubleshooting、Playbook、CHANGELOG 存在且互相引用。
 6. `discount_system` 外部真实项目演练有明确结论：通过、阻塞项或待补测试基础设施。

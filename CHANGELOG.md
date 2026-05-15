@@ -11,7 +11,7 @@
 ### Changed
 
 - Updated install documentation to use the PyPI package path while keeping local wheel installation instructions for release validation.
-- Clarified the `test-codegen` skill workflow so first-pass AI exploration must be回灌 into fixture/profile/case_flow before final delivery.
+- Clarified the `test-codegen` skill workflow so first-pass AI exploration must be fed back into fixture/profile/case_flow before final delivery.
 
 ## 0.1.0 - 2026-05-08
 

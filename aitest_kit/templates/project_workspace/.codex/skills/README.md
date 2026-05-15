@@ -10,4 +10,4 @@
 - `codegen_profile_{module}.md`：描述模块级生成规则。
 - fixture/helper：描述项目级测试能力和环境编排。
 
-如果当前项目直接使用 AIAutoTest 仓库中的 skills，可以从 `.codex/skills/` 同步一份到这里，并在 review 时保持语义一致。
+如果当前项目直接使用 aitest-kit 仓库中的 skills，可以从 `.codex/skills/` 同步一份到这里，并在 review 时保持语义一致。
