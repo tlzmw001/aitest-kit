@@ -72,7 +72,7 @@
 | P0-6 | Quickstart | `docs/usebook/aitest_quickstart.md` | 新用户按文档能跑通最小模块 |
 | P0-7 | Profile Guide | `docs/usebook/codegen_profile_guide.md` | 说明 assertion_rules、case_flows、case_bodies 的使用边界 |
 | P0-8 | 常见错误排查 | `docs/usebook/codegen_troubleshooting.md` | 覆盖 E001、profile schema、unknown module_type、stale generated、fixture env |
-| P0-9 | 迁移 Playbook 定稿 | `docs/usebook/codegen_new_project_migration_playbook.md` | 与模板、Quickstart、Profile Guide 口径一致 |
+| P0-9 | 迁移 Guide 定稿 | `docs/usebook/aitest_migration_guide.md` | 与模板、Quickstart、Profile Guide 口径一致 |
 | P0-10 | 全量回归 | 命令输出 | compileall、pytest tests、profile gate、codegen check、generated collect 通过 |
 
 ## P1 任务
@@ -204,7 +204,7 @@ python3 -m venv /private/tmp/aitest_pypi_install_venv
 2026-05-08 已完成人工 release review 收口：
 
 - README 第一主路径调整为新项目 `aitest init` 接入，本仓 `coupon_system`/`ab_experiment_sdk` 明确作为示例回归资产。
-- 新项目迁移 Playbook 和 workspace 模板补充黑盒首轮信息边界，避免从目标系统源码或已有测试推断业务规则。
+- 新项目迁移 Guide 和 workspace 模板补充黑盒首轮信息边界，避免从目标系统源码或已有测试推断业务规则。
 - `aitest run --help` 补充 `MODULE`/`PYTEST_ARGS` 参数展示和示例。
 - CI package build 后增加 artifact inspection，检查 wheel 包含 workspace 模板关键文件，且 wheel/sdist 不包含 `coupon_system`、`ab_experiment_sdk`、`discount_system`。
 

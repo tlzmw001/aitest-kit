@@ -264,7 +264,7 @@ aitest codegen --all --check
 - [Quickstart](docs/usebook/aitest_quickstart.md) — 跑通最小闭环
 - [Profile Guide](docs/usebook/codegen_profile_guide.md) — 编写 codegen profile
 - [Troubleshooting](docs/usebook/codegen_troubleshooting.md) — 常见问题排查
-- [Migration Playbook](docs/usebook/codegen_new_project_migration_playbook.md) — 新项目迁移 SOP
+- [Migration Guide](docs/usebook/aitest_migration_guide.md) — 新项目迁移指南
 - [CHANGELOG](CHANGELOG.md) — 版本变更记录
 
 ## License

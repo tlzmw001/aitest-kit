@@ -193,4 +193,4 @@ aitest codegen --workspace /path/to/your_project --all
 python -m pytest /path/to/your_project/test_workspace/tests/generated --collect-only -q
 ```
 
-更完整的新项目迁移流程见 [codegen_new_project_migration_playbook.md](./codegen_new_project_migration_playbook.md)。
+更完整的新项目迁移流程见 [AITest 新项目迁移指南](./aitest_migration_guide.md)。
