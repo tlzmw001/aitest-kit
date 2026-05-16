@@ -157,6 +157,10 @@ def test_cli_help_matches_workspace_product_flow():
     assert "codegen_profile JSON Schema and semantics" in codegen_help.output
     assert "another AITest workspace root" in codegen_help.output
 
+    doctor_help = runner.invoke(main, ["doctor", "--help"])
+    assert doctor_help.exit_code == 0
+    assert "Diagnose workspace layout" in doctor_help.output
+
     run_help = runner.invoke(main, ["run", "--help"])
     assert run_help.exit_code == 0
     assert "freshness check" in run_help.output

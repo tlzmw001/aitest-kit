@@ -1,0 +1,60 @@
+name: Bug report
+description: Report a reproducible problem in aitest-kit
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please include enough detail to reproduce the failure.
+  - type: input
+    id: version
+    attributes:
+      label: aitest-kit version
+      description: Run `aitest --version` if available, or include the installed package version.
+      placeholder: "0.1.1"
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: "Python 3.11"
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "macOS / Linux / Windows"
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: Paste the exact command that failed.
+      render: bash
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Paste relevant output, traceback, or report snippets.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include relevant Markdown case, profile, config, or fixture snippets. Do not include secrets.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I did not hand-edit generated pytest under `test_workspace/tests/generated/`.
+        - label: I ran `aitest codegen --all --validate-profile` or equivalent module-level validation.
+        - label: I removed secrets, tokens, and private data from this report.

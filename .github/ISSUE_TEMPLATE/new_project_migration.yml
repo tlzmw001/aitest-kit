@@ -1,0 +1,58 @@
+name: New project migration
+description: Ask for help onboarding a target system into an AITest workspace
+title: "[Migration]: "
+labels: ["migration"]
+body:
+  - type: dropdown
+    id: protocol
+    attributes:
+      label: Target system protocol
+      options:
+        - HTTP API
+        - gRPC API
+        - HTTP + gRPC
+        - other / unknown
+    validations:
+      required: true
+  - type: checkboxes
+    id: docs
+    attributes:
+      label: Available public contract
+      options:
+        - label: Markdown / design docs
+        - label: OpenAPI / Swagger
+        - label: proto files
+        - label: JSON Schema / config schema
+        - label: example requests and responses
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Current migration stage
+      options:
+        - workspace init
+        - documentation review
+        - knowledge build
+        - Markdown cases
+        - fixture/profile
+        - codegen
+        - pytest collect/run
+        - report analysis
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and output
+      description: Paste the command and relevant output.
+      render: text
+  - type: textarea
+    id: files
+    attributes:
+      label: Relevant files
+      description: Include small snippets from docs, cases, profile, fixture, or config. Do not include secrets.
+  - type: textarea
+    id: question
+    attributes:
+      label: What are you blocked on?
+    validations:
+      required: true
