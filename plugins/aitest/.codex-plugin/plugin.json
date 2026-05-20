@@ -1,0 +1,42 @@
+{
+  "name": "aitest",
+  "version": "0.1.0",
+  "description": "Codex workflows for AITest Kit: initialize workspaces, generate tests, run reports, and explain failures without duplicating the CLI core.",
+  "author": {
+    "name": "AITest Kit"
+  },
+  "homepage": "https://github.com/tlzmw001/aitest-kit",
+  "repository": "https://github.com/tlzmw001/aitest-kit",
+  "license": "MIT",
+  "keywords": [
+    "testing",
+    "pytest",
+    "codegen",
+    "qa",
+    "automation",
+    "codex"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "AITest",
+    "shortDescription": "Generate and run maintainable tests from docs",
+    "longDescription": "AITest guides Codex users from project or API documents to test knowledge, Markdown cases, generated pytest, structured reports, failure triage, and rule promotion review. The plugin is a thin workflow layer over the aitest-kit CLI.",
+    "developerName": "AITest Kit",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/tlzmw001/aitest-kit",
+    "privacyPolicyURL": "https://github.com/tlzmw001/aitest-kit",
+    "termsOfServiceURL": "https://github.com/tlzmw001/aitest-kit",
+    "defaultPrompt": [
+      "Initialize AITest for this project",
+      "Generate pytest from my AITest Markdown cases",
+      "Run AITest and explain failures"
+    ],
+    "brandColor": "#2563EB",
+    "screenshots": []
+  }
+}
