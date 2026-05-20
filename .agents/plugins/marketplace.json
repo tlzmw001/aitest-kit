@@ -1,0 +1,20 @@
+{
+  "name": "aitest-kit-local",
+  "interface": {
+    "displayName": "AITest Kit Local"
+  },
+  "plugins": [
+    {
+      "name": "aitest-kit",
+      "source": {
+        "source": "local",
+        "path": "./plugins/aitest-kit"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Coding"
+    }
+  ]
+}

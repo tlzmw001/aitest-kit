@@ -196,27 +196,27 @@ Codex plugin
 概念结构：
 
 ```text
-aitest/
+aitest-kit/
 ├── .codex-plugin/
 │   └── plugin.json
 ├── skills/
-│   ├── aitest-onboard/
+│   ├── onboard/
 │   │   └── SKILL.md
-│   ├── aitest-review-docs/
+│   ├── review-docs/
 │   │   └── SKILL.md
-│   ├── aitest-build-knowledge/
+│   ├── build-knowledge/
 │   │   └── SKILL.md
-│   ├── aitest-design-cases/
+│   ├── design-cases/
 │   │   └── SKILL.md
-│   ├── aitest-generate-tests/
+│   ├── generate-tests/
 │   │   └── SKILL.md
-│   ├── aitest-run-tests/
+│   ├── run-tests/
 │   │   └── SKILL.md
-│   ├── aitest-fix-failures/
+│   ├── fix-failures/
 │   │   └── SKILL.md
-│   ├── aitest-promote-rules/
+│   ├── promote-rules/
 │   │   └── SKILL.md
-│   └── aitest-learn-project/
+│   └── learn-project/
 │       └── SKILL.md
 └── assets/
     ├── logo.png
@@ -227,19 +227,19 @@ aitest/
 
 ```json
 {
-  "name": "aitest",
+  "name": "aitest-kit",
   "version": "0.1.0",
   "description": "AI-assisted test design, codegen, execution, and reporting workflow.",
   "skills": "./skills/",
   "interface": {
-    "displayName": "AITest",
+    "displayName": "AITest Kit",
     "shortDescription": "Generate and run maintainable tests from docs",
     "longDescription": "AITest guides Codex users from project/API docs to test knowledge, Markdown cases, generated pytest, structured reports, and rule promotion review.",
     "developerName": "AITest Kit",
     "category": "Coding",
     "capabilities": ["Interactive", "Read", "Write"],
     "defaultPrompt": [
-      "Initialize AITest for this project",
+      "Initialize AITest Kit for this project",
       "Generate tests from my API docs",
       "Run AITest and explain failures"
     ]
@@ -251,7 +251,7 @@ aitest/
 
 ## v0 Skills
 
-### aitest-onboard
+### onboard
 
 用户意图示例：
 
@@ -274,7 +274,7 @@ aitest/
 - 不生成测试用例。
 - 不修改待测系统源码。
 
-### aitest-review-docs
+### review-docs
 
 用户意图示例：
 
@@ -293,7 +293,7 @@ aitest/
 - 不直接生成 pytest。
 - 不从源码猜测文档缺失行为，除非用户明确进入灰盒补文档模式。
 
-### aitest-build-knowledge
+### build-knowledge
 
 用户意图示例：
 
@@ -312,7 +312,7 @@ aitest/
 
 - 不绕过知识库直接写 pytest。
 
-### aitest-design-cases
+### design-cases
 
 用户意图示例：
 
@@ -330,7 +330,7 @@ aitest/
 
 - 不因为文档未定义而脑补稳定断言。
 
-### aitest-generate-tests
+### generate-tests
 
 用户意图示例：
 
@@ -358,7 +358,7 @@ python -m pytest test_workspace/tests/generated --collect-only -q
 - 不手改 generated pytest。
 - 不绕过 profile gate。
 
-### aitest-run-tests
+### run-tests
 
 用户意图示例：
 
@@ -377,7 +377,7 @@ python -m pytest test_workspace/tests/generated --collect-only -q
 
 - 不自动把断言失败判定为待测系统 bug。
 
-### aitest-fix-failures
+### fix-failures
 
 用户意图示例：
 
@@ -404,7 +404,7 @@ python -m pytest test_workspace/tests/generated --collect-only -q
 - 不 skip 失败用例来制造通过。
 - 不默认修改待测系统。
 
-### aitest-promote-rules
+### promote-rules
 
 用户意图示例：
 
@@ -428,7 +428,7 @@ python -m pytest test_workspace/tests/generated --collect-only -q
 - 不自动应用 patch。
 - 不自动修改 profile/fixture/project_config。
 
-### aitest-learn-project
+### learn-project
 
 用户意图示例：
 
@@ -632,9 +632,9 @@ plugin 也会携带 skills；
 
 - 使用 Codex plugin scaffold 创建本地插件。
 - 只包含 `plugin.json` 和 2 到 3 个入口 skill：
-  - `aitest-onboard`
-  - `aitest-generate-tests`
-  - `aitest-run-tests`
+  - `onboard`
+  - `generate-tests`
+  - `run-tests`
 - 在本地 workspace 验证。
 
 ### v0.3 workflow complete

@@ -1,5 +1,5 @@
 ---
-name: aitest-run-tests
+name: run-tests
 description: Run generated AITest pytest through aitest run, read the structured report, and classify failures without automatically blaming the system under test.
 ---
 

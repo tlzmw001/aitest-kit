@@ -1,5 +1,5 @@
 ---
-name: aitest-onboard
+name: onboard
 description: Initialize or inspect an AITest workspace for a target project using aitest-kit CLI commands and explain the next testing workflow step.
 ---
 

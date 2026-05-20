@@ -1,5 +1,5 @@
 ---
-name: aitest-generate-tests
+name: generate-tests
 description: Generate pytest from existing AITest Markdown cases and module profile using the standard profile gate, IR dump, freshness check, codegen, and collect sequence.
 ---
 
