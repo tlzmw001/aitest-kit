@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aitest-kit"
-version = "0.1.1"
+version = "0.1.2"
 description = "AI-assisted testing toolchain: docs → knowledge base → Markdown cases → pytest code → structured reports"
 readme = "README.md"
 requires-python = ">=3.9"

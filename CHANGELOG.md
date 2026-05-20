@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.2 - 2026-05-20
+
+### Added
+
+- Added `aitest doctor` for lightweight workspace diagnostics, including profile validation and generated pytest freshness checks.
+- Added open-source onboarding assets: issue templates, pull request template, contributing guide, English README, roadmap, and full `coupon_system` example guide.
+- Added a formal migration guide and project code-reading guide, replacing older informal codegen teaching notes.
+- Added project-learning skill notes and a P2 codegen target extension spec for future API/UI/E2E/Contract boundaries.
+
+### Changed
+
+- Renamed public project branding from `openTester` to `aitest-kit` across package metadata and documentation.
+- Reworked README positioning and quickstart content for PyPI-first installation and new-project workspace usage.
+- Updated CI generated-test collection dependencies to include server extras.
+
 ## 0.1.1 - 2026-05-10
 
 ### Added
