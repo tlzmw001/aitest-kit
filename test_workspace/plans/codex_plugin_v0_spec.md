@@ -228,7 +228,7 @@ aitest-kit/
 ```json
 {
   "name": "aitest-kit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "AI-assisted test design, codegen, execution, and reporting workflow.",
   "skills": "./skills/",
   "interface": {
@@ -630,18 +630,27 @@ plugin 也会携带 skills；
 
 ### v0.2 local plugin prototype
 
-- 使用 Codex plugin scaffold 创建本地插件。
-- 只包含 `plugin.json` 和 2 到 3 个入口 skill：
+- 已使用 Codex plugin scaffold 创建本地插件。
+- v0.2 阶段只包含 `plugin.json` 和 3 个入口 skill：
   - `onboard`
   - `generate-tests`
   - `run-tests`
-- 在本地 workspace 验证。
+- 已在本地 Codex 中完成 discovery / install / skill loading smoke test：
+  - 输入 `@AITest Kit` 后能触发安装提示。
+  - 安装后能选择并调用插件入口 skill。
+  - 本阶段只验证插件接入，不替代 CLI 级 `validate-profile`、`codegen`、`run` 验证。
 
 ### v0.3 workflow complete
 
-- 补齐全部 v0 skills。
-- 用一个外部项目完成端到端接入验证。
-- 明确 plugin skill 与 workspace skill 的同步策略。
+- 已补齐全部 v0 skill 入口：
+  - `review-docs`
+  - `build-knowledge`
+  - `design-cases`
+  - `fix-failures`
+  - `promote-rules`
+  - `learn-project`
+- 外部项目端到端接入验证仍沿用 CLI/workspace 验证路径；plugin v0.3 当前只完成 skill 覆盖，不声明公开发布就绪。
+- plugin skill 与 workspace skill 的同步策略：plugin skill 只做通用入口和编排；workspace skill 保留项目内细节、模板和约束。
 
 ### v1.0 publish candidate
 

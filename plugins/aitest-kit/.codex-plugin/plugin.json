@@ -1,6 +1,6 @@
 {
   "name": "aitest-kit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Codex workflows for AITest Kit: initialize workspaces, generate tests, run reports, and explain failures without duplicating the CLI core.",
   "author": {
     "name": "AITest Kit"
@@ -33,8 +33,13 @@
     "termsOfServiceURL": "https://github.com/tlzmw001/aitest-kit",
     "defaultPrompt": [
       "Initialize AITest Kit for this project",
+      "Review my API docs for test readiness",
+      "Build AITest knowledge from my docs",
+      "Design AITest Markdown cases for a module",
       "Generate pytest from my AITest Markdown cases",
-      "Run AITest and explain failures"
+      "Run AITest and explain failures",
+      "Analyze passing tests for rule promotion",
+      "Teach me this project with lesson notes"
     ],
     "brandColor": "#2563EB",
     "screenshots": []
