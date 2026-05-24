@@ -46,7 +46,7 @@ The workspace contains:
 - `test_workspace/cases/` for Markdown test cases
 - `test_workspace/tests/fixtures/` for module fixtures and profiles
 - `test_workspace/tests/generated/` for generated pytest
-- `.codex/`, `.claude/`, and `.agents/` skills for AI-assisted workflows
+- `.codex/`, `.claude/`, and `.agents/` skills for AI-assisted workflows (8 skills: doc-review, doc-gen, knowledge-build, test-design, test-scaffold, test-codegen, test-fix, emitter-build)
 
 ## Codegen Workflow
 

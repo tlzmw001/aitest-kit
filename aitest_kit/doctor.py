@@ -1,6 +1,7 @@
 """Workspace diagnostics for aitest-kit."""
 from __future__ import annotations
 
+import ast
 import os
 import re
 import subprocess
@@ -52,7 +53,9 @@ def _doctor_impl(module_name: str | None) -> int:
     _check_project_config(results)
     modules = _discover_modules(Path("test_workspace/cases"))
     selected_modules = _select_modules(modules, module_name, results)
-    env_vars = _scan_env_vars(Path("test_workspace/tests/fixtures"))
+    fixture_dir = Path("test_workspace/tests/fixtures")
+    env_vars = _scan_env_vars(fixture_dir)
+    _check_fixture_registration(results, fixture_dir, Path("test_workspace/tests/conftest.py"))
 
     if selected_modules:
         _run_command_check(
@@ -202,7 +205,14 @@ def _run_command_check(
     name: str,
     command: list[str],
 ) -> None:
-    completed = subprocess.run(command, text=True, capture_output=True)
+    env = dict(os.environ)
+    package_root = str(Path(__file__).resolve().parents[1])
+    existing_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = (
+        package_root if not existing_pythonpath
+        else package_root + os.pathsep + existing_pythonpath
+    )
+    completed = subprocess.run(command, text=True, capture_output=True, env=env)
     if completed.returncode == 0:
         results.append(CheckResult("OK", name, "passed"))
         return
@@ -240,3 +250,93 @@ def _scan_env_vars(fixture_dir: Path) -> set[str]:
         for pattern in _ENV_PATTERNS:
             env_vars.update(pattern.findall(text))
     return env_vars
+
+
+def _check_fixture_registration(
+    results: list[CheckResult],
+    fixture_dir: Path,
+    conftest_path: Path,
+) -> None:
+    fixture_modules = _discover_fixture_modules(fixture_dir)
+    if not fixture_modules:
+        results.append(CheckResult(
+            "INFO",
+            "fixture registration",
+            "no module fixture files detected",
+        ))
+        return
+
+    if not conftest_path.exists():
+        results.append(CheckResult(
+            "WARN",
+            "fixture registration",
+            f"{conftest_path} not found; expected pytest_plugins registration for "
+            + ", ".join(f"test_workspace.tests.fixtures.{module}" for module in fixture_modules),
+        ))
+        return
+
+    registered = _load_pytest_plugins(conftest_path)
+    expected = {f"test_workspace.tests.fixtures.{module}" for module in fixture_modules}
+    missing = sorted(expected - registered)
+    if missing:
+        results.append(CheckResult(
+            "WARN",
+            "fixture registration",
+            "missing pytest_plugins entries: " + ", ".join(missing),
+        ))
+        return
+
+    results.append(CheckResult(
+        "OK",
+        "fixture registration",
+        f"{len(fixture_modules)} fixture module(s) registered",
+    ))
+
+
+def _discover_fixture_modules(fixture_dir: Path) -> list[str]:
+    if not fixture_dir.exists():
+        return []
+    modules: list[str] = []
+    for path in sorted(fixture_dir.glob("*.py")):
+        if path.name == "__init__.py":
+            continue
+        module = path.stem
+        text = path.read_text(encoding="utf-8")
+        if re.search(
+            rf"^\s*def\s+setup_{re.escape(module)}\s*\(",
+            text,
+            re.MULTILINE,
+        ):
+            modules.append(module)
+    return modules
+
+
+def _load_pytest_plugins(conftest_path: Path) -> set[str]:
+    try:
+        tree = ast.parse(conftest_path.read_text(encoding="utf-8"))
+    except SyntaxError:
+        return set()
+
+    plugins: set[str] = set()
+    for node in tree.body:
+        value: ast.AST | None = None
+        if isinstance(node, ast.Assign):
+            if any(
+                isinstance(target, ast.Name) and target.id == "pytest_plugins"
+                for target in node.targets
+            ):
+                value = node.value
+        elif isinstance(node, ast.AnnAssign):
+            if isinstance(node.target, ast.Name) and node.target.id == "pytest_plugins":
+                value = node.value
+        if value is None:
+            continue
+        try:
+            parsed = ast.literal_eval(value)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(parsed, str):
+            plugins.add(parsed)
+        elif isinstance(parsed, (list, tuple, set)):
+            plugins.update(item for item in parsed if isinstance(item, str))
+    return plugins

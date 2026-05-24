@@ -19,8 +19,8 @@ BASE_REQUEST = {
 }
 
 
-def _req(user_id: str, req_id: str, **overrides) -> dict:
-    body = {**BASE_REQUEST, "user_id": user_id, "reqId": req_id}
+def _req(**overrides) -> dict:
+    body = {**BASE_REQUEST}
     body.update(overrides)
     return body
 

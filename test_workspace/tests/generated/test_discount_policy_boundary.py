@@ -12,12 +12,11 @@ BASE_REQUEST = {
     "scene": "checkout",
     "stock": 5,
     "request_id": "req_dp_default",
-    "reqId": None,
 }
 
 
-def _req(user_id: str, req_id: str, **overrides) -> dict:
-    body = {**BASE_REQUEST, "user_id": user_id, "reqId": req_id}
+def _req(**overrides) -> dict:
+    body = {**BASE_REQUEST}
     body.update(overrides)
     return body
 

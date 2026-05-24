@@ -109,7 +109,21 @@ modules:
     notes: "discount_system HTTP 多端点：健康检查、策略评估、决策查询/删除"
 
 # ------------------------------------------------------------
-# 七、内置断言规则
+# 七、默认请求自动字段
+# ------------------------------------------------------------
+# default_http/default_grpc 请求体 = Markdown 共享基础请求体
+#   + default_request.auto_fields
+#   + codegen_profile.request_overrides[case_id]
+#
+# 这里显式保留 coupon_system 历史行为。新项目模板默认 auto_fields: {}，
+# 避免把 user_id/reqId 假设带到不相关项目。
+default_request:
+  auto_fields:
+    user_id: "u_{module_abbrev}_{case_number}"
+    reqId: "req_{module_abbrev}_{case_number}"
+
+# ------------------------------------------------------------
+# 八、内置断言规则
 # ------------------------------------------------------------
 # emitter 用正则匹配 Markdown 断言文本，套用模板生成 pytest assert 语句。
 # 匹配优先级：codegen_profile assertion_rules > 本表 > named_templates。

@@ -43,6 +43,7 @@ aitest_config/          # 项目级配置
   doc-review/           #   设计文档审查
   knowledge-build/      #   测试知识库构建/更新
   test-design/          #   测试用例设计
+  test-scaffold/        #   构建模块 fixture + codegen profile（test-design → test-codegen 桥梁）
   test-codegen/         #   Markdown → pytest 代码生成（emitter + AI 补全）
   test-fix/             #   用例修正 + 经验沉淀
   emitter-build/        #   从已验证 .py 提取确定性模板
@@ -79,7 +80,7 @@ aitest run --workspace /path/to/your_project <module>
 
 ## 测试飞轮工作流
 
-七个 skill 构成一条闭环流水线，分为**设计阶段**和**执行阶段**：
+八个 skill 构成一条闭环流水线，分为**设计阶段**和**执行阶段**：
 
 ```
 ── 设计阶段 ──
@@ -97,6 +98,12 @@ test-design ── 基于知识库 + TEST_SPEC 生成测试用例（Markdown）
 人工评审用例
   ↓
 test-fix    ── 修正用例错误，沉淀经验到 TEST_SPEC 和相关 skill
+
+── 脚手架阶段 ──
+
+test-scaffold ── 从用例 + API 文档构建 fixture + codegen profile
+  ↓
+验证：validate-profile / dump-ir / codegen --check / collect
 
 ── 执行阶段 ──
 
@@ -167,8 +174,9 @@ aitest codegen ab_service --suggest-promotion-patch
 
 ### 使用指引
 
-- **首次接入新项目**：`aitest init --target <project_dir>` → `/doc-review` → `/doc-gen`（按需）→ `/knowledge-build` → `/test-design`
+- **首次接入新项目**：`aitest init --target <project_dir>` → `/doc-review` → `/doc-gen`（按需）→ `/knowledge-build` → `/test-design` → `/test-scaffold` → `/test-codegen`
 - **需求迭代**：新文档放入 `docs/` → `/knowledge-build`（增量更新）→ `/test-design`（增量生成）
+- **新模块缺 fixture/profile**：`/test-scaffold <模块名>`（构建 fixture + profile → 验证闭环）
 - **用例出错**：`/test-fix`（修用例 + 记 TEST_SPEC 陷阱 + 更新 skill）
 - **生成 pytest**：`/test-codegen <模块名>`
 - **执行并报告**：`aitest run <模块名>`，默认排除 manual；需要时加 `--include-manual`

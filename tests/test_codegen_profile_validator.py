@@ -29,6 +29,29 @@ def _write_case_file(cases_dir: Path, module: str, case_id: str = "TC-DEMO-001")
     )
 
 
+def _write_feasibility_case_file(cases_dir: Path, module: str, case_id: str = "TC-DEMO-001") -> None:
+    module_dir = cases_dir / module
+    module_dir.mkdir(parents=True)
+    (module_dir / "business.md").write_text(
+        f"""# {module} 业务测试用例
+
+## 共享配置
+
+**通用断言**：`response.code == 0`
+
+---
+
+## 一、基础场景
+
+### {case_id}：demo case
+- **优先级**：P2
+- **标记**：`[!可行性存疑: 需要可控外部服务]`
+- **断言**：`response.code == 0`
+""",
+        encoding="utf-8",
+    )
+
+
 def _write_profile(profile_dir: Path, module: str, yaml_body: str) -> None:
     profile_dir.mkdir(parents=True, exist_ok=True)
     (profile_dir / f"codegen_profile_{module}.md").write_text(
@@ -51,7 +74,7 @@ def test_validate_profile_module_accepts_current_repo_profiles():
     result = CliRunner().invoke(codegen, ["--all", "--validate-profile"])
 
     assert result.exit_code == 0
-    assert "Profile validation summary: modules=11, errors=0, warnings=0" in result.output
+    assert "Profile validation summary: modules=11, errors=0" in result.output
 
 
 def test_validate_profile_cli_writes_report_artifacts(tmp_path):
@@ -134,6 +157,89 @@ def test_profile_validator_rejects_unknown_case_reference(tmp_path):
 
     assert any(diag.code == "E505" for diag in report.errors)
     assert any("does not exist" in diag.message for diag in report.errors)
+
+
+def test_profile_validator_warns_when_feasibility_suspect_case_has_flow(tmp_path):
+    cases_dir = tmp_path / "cases"
+    profile_dir = tmp_path / "fixtures"
+    _write_feasibility_case_file(cases_dir, "demo")
+    _write_profile(
+        profile_dir,
+        "demo",
+        """case_flows:
+  TC-DEMO-001:
+    fixture: setup_demo
+    steps:
+      - call: client.health
+        save_as: resp
+      - assert: 'assert resp["code"] == 0'
+""",
+    )
+
+    report = validate_profile_module(
+        "demo",
+        cases_dir=cases_dir,
+        profile_dir=profile_dir,
+        project=_project(),
+    )
+
+    assert any(diag.code == "W503" for diag in report.warnings)
+    assert any("可行性存疑" in diag.message for diag in report.warnings)
+
+
+def test_profile_validator_warns_when_feasibility_suspect_case_has_body(tmp_path):
+    cases_dir = tmp_path / "cases"
+    profile_dir = tmp_path / "fixtures"
+    _write_feasibility_case_file(cases_dir, "demo")
+    _write_profile(
+        profile_dir,
+        "demo",
+        """case_bodies:
+  TC-DEMO-001: |
+    assert True
+""",
+    )
+
+    report = validate_profile_module(
+        "demo",
+        cases_dir=cases_dir,
+        profile_dir=profile_dir,
+        project=_project(),
+    )
+
+    assert any(diag.code == "W503" for diag in report.warnings)
+    assert any("case_bodies" in diag.source for diag in report.warnings)
+
+
+def test_profile_validator_warns_when_flow_reinvokes_declared_fixture(tmp_path):
+    cases_dir = tmp_path / "cases"
+    profile_dir = tmp_path / "fixtures"
+    _write_case_file(cases_dir, "demo")
+    _write_profile(
+        profile_dir,
+        "demo",
+        """case_flows:
+  TC-DEMO-001:
+    fixture: setup_demo
+    object: client
+    steps:
+      - call: setup_demo
+        kwargs:
+          case_id: TC-DEMO-001
+        save_as: client
+      - assert: 'assert client is not None'
+""",
+    )
+
+    report = validate_profile_module(
+        "demo",
+        cases_dir=cases_dir,
+        profile_dir=profile_dir,
+        project=_project(),
+    )
+
+    assert any(diag.code == "W504" for diag in report.warnings)
+    assert any("first step calls the declared fixture" in diag.message for diag in report.warnings)
 
 
 def test_profile_validator_rejects_schema_unknown_nested_field(tmp_path):

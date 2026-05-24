@@ -32,8 +32,6 @@ class SetupCallIR:
 @dataclass
 class RequestIR:
     source: str
-    user_id: str
-    req_id: str
     overrides: dict[str, Any] = field(default_factory=dict)
 
 

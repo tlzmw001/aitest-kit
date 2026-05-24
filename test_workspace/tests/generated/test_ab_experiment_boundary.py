@@ -18,8 +18,8 @@ BASE_REQUEST = {
 }
 
 
-def _req(user_id: str, req_id: str, **overrides) -> dict:
-    body = {**BASE_REQUEST, "user_id": user_id, "reqId": req_id}
+def _req(**overrides) -> dict:
+    body = {**BASE_REQUEST}
     body.update(overrides)
     return body
 
@@ -45,7 +45,7 @@ class TestAbExperimentBoundary:
         # SETUP: 前置操作_3：将 scene_id=1001 映射到该实验
         setup_ab_experiment(case_id="TC-AB-011")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_ab_011", "req_ab_011"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_ab_011", "reqId": "req_ab_011"}))
         assert resp["code"] == 0
         assert "ab_boundary_right" not in resp["experiment_info"]
 
@@ -68,7 +68,7 @@ class TestAbExperimentBoundary:
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_ab_invalid_white"、reqId="req-ab-012"
         setup_ab_experiment(case_id="TC-AB-012")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_ab_012", "req_ab_012"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_ab_012", "reqId": "req_ab_012"}))
         # MANUAL CHECK: exp["coarse_rank_exp_game"] != "not_exists_strategy"
         # MANUAL CHECK: AB 服务日志包含 ab_sdk whitelist invalid
 

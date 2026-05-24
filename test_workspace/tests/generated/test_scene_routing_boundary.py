@@ -19,8 +19,8 @@ BASE_REQUEST = {
 }
 
 
-def _req(user_id: str, req_id: str, **overrides) -> dict:
-    body = {**BASE_REQUEST, "user_id": user_id, "reqId": req_id}
+def _req(**overrides) -> dict:
+    body = {**BASE_REQUEST}
     body.update(overrides)
     return body
 
@@ -46,7 +46,7 @@ class TestSceneRoutingBoundary:
         # SETUP: 请求覆盖：HTTP 请求命中 policy_fallback_001
         setup_scene_routing(case_id="TC-ROUTE-011")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_route_011", "req_route_011", **{"scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_route_011", "reqId": "req_route_011", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0}))
         assert resp["code"] == 0
         assert resp["scene_id"] == 3001
         assert resp["results"][0]["score"] == 0.5
@@ -68,7 +68,7 @@ class TestSceneRoutingBoundary:
         # SETUP: 请求覆盖：HTTP 请求 scene_name="game"、device="mobile"、policy_id=""
         setup_scene_routing(case_id="TC-ROUTE-013")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_route_013", "req_route_013", **{"scene_name": "game", "device": "mobile", "policy_id": "", "external": 0}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_route_013", "reqId": "req_route_013", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 0}))
         assert resp["code"] == 0
         assert resp["scene_id"] == 1001
 
@@ -87,7 +87,7 @@ class TestSceneRoutingBoundary:
         # SETUP: 请求覆盖：gRPC 请求 scene_name="Game"、device="mobile"、policy_id=""
         setup_scene_routing(case_id="TC-ROUTE-014")
 
-        resp = grpc_ops.recommend(grpc_target, _req("u_route_014", "req_route_014", **{"scene_name": "Game", "device": "mobile", "policy_id": "", "external": 0}))
+        resp = grpc_ops.recommend(grpc_target, _req(**{"user_id": "u_route_014", "reqId": "req_route_014", "scene_name": "Game", "device": "mobile", "policy_id": "", "external": 0}))
         assert resp["code"] == 0
         assert resp["scene_id"] == 3001
         assert resp["experiment_info"] == {}
@@ -109,7 +109,7 @@ class TestSceneRoutingBoundary:
         # SETUP: 请求覆盖：gRPC 请求 scene_name="game"、device="mobile"、policy_id=""
         setup_scene_routing(case_id="TC-ROUTE-018")
 
-        resp = grpc_ops.recommend(grpc_target, _req("u_route_018", "req_route_018", **{"scene_name": "game", "device": "mobile", "policy_id": "", "external": 0}))
+        resp = grpc_ops.recommend(grpc_target, _req(**{"user_id": "u_route_018", "reqId": "req_route_018", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 0}))
         assert resp["code"] == 0
         assert resp["scene_id"] == 1001
 

@@ -19,8 +19,8 @@ BASE_REQUEST = {
 }
 
 
-def _req(user_id: str, req_id: str, **overrides) -> dict:
-    body = {**BASE_REQUEST, "user_id": user_id, "reqId": req_id}
+def _req(**overrides) -> dict:
+    body = {**BASE_REQUEST}
     body.update(overrides)
     return body
 
@@ -46,7 +46,7 @@ class TestAbExperimentBusiness:
         # SETUP: 前置操作：不设置该用户白名单
         setup_ab_experiment(case_id="TC-AB-001")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_ab_hash_http", "req-ab-001", **{"scene_name": "game", "device": "mobile", "external": 0}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_ab_hash_http", "reqId": "req-ab-001", "scene_name": "game", "device": "mobile", "external": 0}))
         assert resp["code"] == 0
         assert set(resp["experiment_info"].keys()) <= {"coarse_rank_exp_game", "calibration_exp_game"}
         assert "coarse_rank_exp_ad" not in resp["experiment_info"] and "calibration_exp_ad" not in resp["experiment_info"]
@@ -67,7 +67,7 @@ class TestAbExperimentBusiness:
         # SETUP: 前置操作：不设置该用户白名单
         setup_ab_experiment(case_id="TC-AB-002")
 
-        resp = grpc_ops.recommend(grpc_target, _req("u_ab_hash_grpc", "req-ab-002", **{"scene_name": "ad", "device": "pc", "external": 0}))
+        resp = grpc_ops.recommend(grpc_target, _req(**{"user_id": "u_ab_hash_grpc", "reqId": "req_ab_002", "req_id": "req-ab-002", "scene_name": "ad", "device": "pc", "external": 0}))
         assert resp["code"] == 0
         assert set(resp["experiment_info"].keys()) <= {"coarse_rank_exp_ad", "calibration_exp_ad"}
         assert "coarse_rank_exp_game" not in resp["experiment_info"] and "calibration_exp_game" not in resp["experiment_info"]
@@ -88,7 +88,7 @@ class TestAbExperimentBusiness:
         # SETUP: 请求覆盖_2：HTTP 请求 user_id="u_ab_white"、scene_name="game"、device="mobile"、external=0、reqId="req-ab-003"
         setup_ab_experiment(case_id="TC-AB-003")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_ab_white", "req-ab-003", **{"scene_name": "game", "device": "mobile", "external": 0}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_ab_white", "reqId": "req-ab-003", "scene_name": "game", "device": "mobile", "external": 0}))
         assert resp["code"] == 0
         assert resp["experiment_info"].get("coarse_rank_exp_game") == "cr_off"
         assert resp["experiment_info"].get("calibration_exp_game") == "cal_off"
@@ -111,7 +111,7 @@ class TestAbExperimentBusiness:
         # SETUP: 请求覆盖_2：AB 服务中同时存在 game/ad 两组实验
         setup_ab_experiment(case_id="TC-AB-004")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_ab_scene_game", "req-ab-004", **{"scene_name": "game", "device": "mobile", "external": 0}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_ab_scene_game", "reqId": "req-ab-004", "scene_name": "game", "device": "mobile", "external": 0}))
         assert resp["code"] == 0
         assert set(resp["experiment_info"].keys()) <= {"coarse_rank_exp_game", "calibration_exp_game"}
         assert not any(k.endswith("_ad") for k in resp["experiment_info"])
@@ -134,7 +134,7 @@ class TestAbExperimentBusiness:
         # SETUP: 请求覆盖_2：AB 服务可用且存在可命中实验
         setup_ab_experiment(case_id="TC-AB-006")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_ab_external_http", "req-ab-006", **{"scene_name": "game", "device": "mobile", "external": 1}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_ab_external_http", "reqId": "req-ab-006", "scene_name": "game", "device": "mobile", "external": 1}))
         assert resp["code"] == 0
         assert resp["experiment_info"] == {}
 
@@ -154,7 +154,7 @@ class TestAbExperimentBusiness:
         # SETUP: 请求覆盖_2：AB 服务可用且存在可命中实验
         setup_ab_experiment(case_id="TC-AB-007")
 
-        resp = grpc_ops.recommend(grpc_target, _req("u_ab_external_grpc", "req-ab-007", **{"scene_name": "game", "device": "mobile", "external": 1}))
+        resp = grpc_ops.recommend(grpc_target, _req(**{"user_id": "u_ab_external_grpc", "reqId": "req_ab_007", "req_id": "req-ab-007", "scene_name": "game", "device": "mobile", "external": 1}))
         assert resp["code"] == 0
         assert resp["experiment_info"] == {}
 
@@ -177,7 +177,7 @@ class TestAbExperimentBusiness:
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_ab_unknown_exp"、scene_name="game"、device="mobile"、external=0
         setup_ab_experiment(case_id="TC-AB-009")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_ab_unknown_exp", "req-ab-009", **{"scene_name": "game", "device": "mobile", "external": 0}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_ab_unknown_exp", "reqId": "req-ab-009", "scene_name": "game", "device": "mobile", "external": 0}))
         # MANUAL CHECK: response.body.code == 0
         # MANUAL CHECK: exp 不包含 not_exists_exp
         # MANUAL CHECK: 应用日志包含 ab_sdk unknown experiment: not_exists_exp

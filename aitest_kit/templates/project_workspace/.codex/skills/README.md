@@ -4,7 +4,7 @@
 
 推荐分工：
 
-- skill：描述通用流程，例如 knowledge-build、test-design、test-codegen、test-fix、emitter-build。
+- skill：描述通用流程，例如 knowledge-build、test-design、test-scaffold、test-codegen、test-fix、emitter-build。
 - `aitest_config/project_config.yaml`：描述项目级 codegen 配置。
 - `test_workspace/knowledge/TEST_SPEC.md`：描述项目级测试规则和踩坑记录。
 - `codegen_profile_{module}.md`：描述模块级生成规则。

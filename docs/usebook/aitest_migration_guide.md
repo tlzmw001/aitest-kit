@@ -167,6 +167,7 @@ aitest_config/project_config.yaml
 - HTTP/gRPC 调用函数。
 - 断言变量映射。
 - 模块缩写。
+- `default_request.auto_fields`：default_http/default_grpc 自动注入的请求字段。新项目默认应保持为空，只有项目确有稳定唯一字段时才显式配置。
 - `module_type`。
 - 内置断言规则。
 

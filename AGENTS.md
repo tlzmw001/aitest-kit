@@ -119,7 +119,7 @@ python3 -m pytest test_workspace/tests/generated
 
 ## 测试飞轮工作流
 
-七个本地 skill 构成一条闭环流水线，分为设计阶段和执行阶段：
+八个本地 skill 构成一条闭环流水线，分为设计阶段、脚手架阶段和执行阶段：
 
 ```text
 设计阶段：
@@ -130,6 +130,11 @@ docs/
   -> test-design
   -> 人工评审
   -> test-fix（修正用例并沉淀经验）
+
+脚手架阶段：
+test-scaffold
+  -> 从用例 + API 文档构建 fixture + codegen profile
+  -> 验证：validate-profile / dump-ir / codegen --check / collect
 
 执行阶段：
 test-codegen
@@ -148,7 +153,10 @@ test-codegen
 ## 推荐使用路径
 
 - 首次接入新项目或新模块：
-  对新项目先用 `aitest init --target <project_dir>` 创建独立 workspace；从本仓外执行时使用 `--workspace <project_dir>` 运行 `codegen`、`run`、`report`。然后做文档审查，按需补文档，构建知识库，最后设计 Markdown 测试用例。
+  对新项目先用 `aitest init --target <project_dir>` 创建独立 workspace；从本仓外执行时使用 `--workspace <project_dir>` 运行 `codegen`、`run`、`report`。然后做文档审查，按需补文档，构建知识库，设计 Markdown 测试用例，最后用 `test-scaffold` 构建 fixture 和 profile。
+
+- 新模块缺 fixture/profile：
+  使用 `test-scaffold` 构建模块的 fixture + codegen profile，验证通过后再进入 `test-codegen`。
 
 - 需求迭代：
   将新文档放入 `docs/`，先增量更新知识库，再增量生成或修订 Markdown 用例。

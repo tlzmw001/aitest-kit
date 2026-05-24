@@ -115,6 +115,26 @@ def test_doctor_passes_generated_flow_module(tmp_path):
     assert "fail=0" in result.output
 
 
+def test_doctor_warns_when_fixture_module_is_not_registered(tmp_path):
+    target = tmp_path / "project"
+    runner = CliRunner()
+    init_result = runner.invoke(main, ["init", "--target", str(target)])
+    assert init_result.exit_code == 0
+    _write_flow_module(target)
+    generate = runner.invoke(main, ["codegen", "demo", "--workspace", str(target)])
+    assert generate.exit_code == 0, generate.output
+
+    conftest = target / "test_workspace" / "tests" / "conftest.py"
+    conftest.write_text('"""No fixture plugin registration."""\n', encoding="utf-8")
+
+    result = runner.invoke(main, ["doctor", "--workspace", str(target)])
+
+    assert result.exit_code == 0, result.output
+    assert "[WARN] fixture registration" in result.output
+    assert "test_workspace.tests.fixtures.demo" in result.output
+    assert "fail=0" in result.output
+
+
 def test_doctor_fails_unknown_module(tmp_path):
     target = tmp_path / "project"
     runner = CliRunner()

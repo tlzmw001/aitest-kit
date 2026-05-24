@@ -54,6 +54,7 @@ class ProfileValidationReport:
     profile_path: Path
     case_files: list[Path] = field(default_factory=list)
     case_ids: set[str] = field(default_factory=set)
+    case_markers: dict[str, list[str]] = field(default_factory=dict)
     diagnostics: list[ProfileValidationDiagnostic] = field(default_factory=list)
 
     @property
@@ -166,6 +167,8 @@ def validate_profile_module(
     _validate_case_references(report, "case_flows", case_flows)
     _validate_case_references(report, "case_fixtures", case_fixtures)
     _validate_case_references(report, "request_overrides", request_overrides)
+    _warn_feasibility_suspect_strategies(report, case_bodies, case_flows)
+    _warn_fixture_reinvocation(report, case_flows)
     _validate_module_type(report, data, project_config, case_bodies, case_flows)
     return report
 
@@ -183,7 +186,9 @@ def _collect_markdown_cases(report: ProfileValidationReport, module_dir: Path) -
         parse_result = parse_case_file(md_path)
         for parser_error in parse_result.errors:
             _error(report, "E001", parser_error, str(md_path))
-        report.case_ids.update(tc.id for tc in parse_result.cases)
+        for tc in parse_result.cases:
+            report.case_ids.add(tc.id)
+            report.case_markers[tc.id] = list(tc.markers)
 
     if not report.case_files:
         _error(report, "E511", "module has no business.md or boundary.md", str(module_dir))
@@ -356,6 +361,52 @@ def _validate_case_references(
             continue
         if case_id not in report.case_ids:
             _error(report, "E505", "case id does not exist in module markdown cases", source)
+
+
+def _warn_feasibility_suspect_strategies(
+    report: ProfileValidationReport,
+    case_bodies: dict[str, Any],
+    case_flows: dict[str, Any],
+) -> None:
+    executable_cases = set(case_bodies) | set(case_flows)
+    for case_id in sorted(executable_cases):
+        markers = report.case_markers.get(case_id, [])
+        if not any("可行性存疑" in marker for marker in markers):
+            continue
+        strategy = "case_bodies" if case_id in case_bodies else "case_flows"
+        _warn(
+            report,
+            "W503",
+            "case is marked [!可行性存疑] in Markdown but profile maps it to executable "
+            f"{strategy}; prefer leaving it skipped until feasibility is confirmed",
+            f"{strategy}.{case_id}",
+        )
+
+
+def _warn_fixture_reinvocation(
+    report: ProfileValidationReport,
+    case_flows: dict[str, Any],
+) -> None:
+    for case_id, flow in case_flows.items():
+        if not isinstance(flow, dict):
+            continue
+        fixture = flow.get("fixture")
+        steps = flow.get("steps")
+        if not isinstance(fixture, str) or not isinstance(steps, list) or not steps:
+            continue
+        first_step = steps[0]
+        if not isinstance(first_step, dict):
+            continue
+        first_call = first_step.get("call")
+        if first_call != fixture:
+            continue
+        _warn(
+            report,
+            "W504",
+            "case_flow first step calls the declared fixture again; use the injected object "
+            "directly, or declare the fixture object as a factory explicitly",
+            f"case_flows.{case_id}.steps[0].call",
+        )
 
 
 def _validate_module_type(

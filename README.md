@@ -77,7 +77,7 @@ aitest doctor --module <module>                      # 诊断单个模块
 
 ## 给 AI Agent
 
-AITest Kit 内置 7 个本地 skills，安装到 [Claude Code](https://docs.anthropic.com/en/docs/claude-code)、Codex 或其他 AI 编程环境后，形成闭环测试流水线：
+AITest Kit 内置 8 个本地 skills，安装到 [Claude Code](https://docs.anthropic.com/en/docs/claude-code)、Codex 或其他 AI 编程环境后，形成闭环测试流水线：
 
 ```
 ── 设计阶段 ──
@@ -89,6 +89,11 @@ docs/（开发文档）
   ↓  /test-design      基于知识库 + TEST_SPEC 设计测试用例
   ↓  人工评审
   ↓  /test-fix         修正用例 + 沉淀经验到 TEST_SPEC
+
+── 脚手架阶段 ──
+
+  ↓  /test-scaffold    从用例 + API 文档构建 fixture + codegen profile
+  ↓  验证：validate-profile / dump-ir / codegen --check / collect
 
 ── 执行阶段 ──
 
@@ -109,6 +114,7 @@ docs/（开发文档）
 | `/knowledge-build` | 构建/更新测试知识库 | `/knowledge-build docs/` |
 | `/test-design` | 设计测试用例（Markdown） | `/test-design <module>` |
 | `/test-fix` | 修正用例 + 沉淀经验 | `/test-fix TC-XXX "error desc"` |
+| `/test-scaffold` | 构建模块 fixture + profile | `/test-scaffold <module>` |
 | `/test-codegen` | Markdown → pytest 代码 | `/test-codegen <module>` |
 | `/emitter-build` | 提取确定性生成模板 | `/emitter-build <module>` |
 
@@ -116,8 +122,9 @@ docs/（开发文档）
 
 | 场景 | 路径 |
 |------|------|
-| 首次接入新项目 | `/doc-review` → `/doc-gen`（按需）→ `/knowledge-build` → `/test-design` |
+| 首次接入新项目 | `/doc-review` → `/doc-gen`（按需）→ `/knowledge-build` → `/test-design` → `/test-scaffold` → `/test-codegen` |
 | 需求迭代 | 新文档 → `/knowledge-build`（增量）→ `/test-design`（增量） |
+| 新模块缺 fixture | `/test-scaffold <module>`（构建 fixture + profile） |
 | 用例出错 | `/test-fix`（修用例 + 更新 TEST_SPEC 陷阱） |
 | 生成 pytest | `/test-codegen <module>` |
 | 模板固化 | 测试全部通过后 `/emitter-build <module>` |
@@ -208,6 +215,7 @@ your_project/
 | `api_path` | 默认 API 路径 |
 | `var_map` | 断言变量简写映射 |
 | `module_abbrevs` | 模块名 → TC ID 缩写 |
+| `default_request.auto_fields` | default_http/default_grpc 自动注入的请求字段；新项目默认空 |
 | `builtin_assertion_rules` | 内置断言规则（正则 → 模板） |
 | `module_types` | 模块类型定义及必需字段 |
 

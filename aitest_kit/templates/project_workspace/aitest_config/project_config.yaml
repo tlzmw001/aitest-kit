@@ -25,6 +25,13 @@ module_types:
 
 modules: {}
 
+default_request:
+  # 新项目默认不自动注入 user_id/reqId 等业务字段。
+  # 如果某个项目确有稳定的请求唯一字段，可显式配置：
+  # auto_fields:
+  #   request_id: "req_{module_abbrev}_{case_number}"
+  auto_fields: {}
+
 builtin_assertion_rules:
   - name: status_code
     regex: '^response\.(?:body\.)?code\s*==\s*(?P<value>\d+)'

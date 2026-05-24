@@ -19,8 +19,8 @@ BASE_REQUEST = {
 }
 
 
-def _req(user_id: str, req_id: str, **overrides) -> dict:
-    body = {**BASE_REQUEST, "user_id": user_id, "reqId": req_id}
+def _req(**overrides) -> dict:
+    body = {**BASE_REQUEST}
     body.update(overrides)
     return body
 
@@ -44,7 +44,7 @@ class TestCalibrationBoundary:
         # SETUP: 环境覆盖：calibration_dir.linear="/tmp/not_exists_cal_linear_011"，目录不存在
         setup_calibration(case_id="TC-CAL-015")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_015", "req_cal_015"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_015", "reqId": "req_cal_015"}))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
@@ -65,7 +65,7 @@ class TestCalibrationBoundary:
         # SETUP: 前置操作：执行 mkdir -p /tmp/cal_empty_012/linear，目录存在但没有 *.json
         setup_calibration(case_id="TC-CAL-016")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_016", "req_cal_016"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_016", "reqId": "req_cal_016"}))
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
         # MANUAL CHECK: cal == s
@@ -86,7 +86,7 @@ class TestCalibrationBoundary:
         # SETUP: 前置操作：线性目录 1.json 内容为 {bad json
         setup_calibration(case_id="TC-CAL-017")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_017", "req_cal_017"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_017", "reqId": "req_cal_017"}))
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
         # MANUAL CHECK: cal == s
@@ -107,7 +107,7 @@ class TestCalibrationBoundary:
         # SETUP: 前置操作：线性目录 1.json 内容为 {"conditions":{"device":"mobile"},"k":2,"b":0}
         setup_calibration(case_id="TC-CAL-018")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_018", "req_cal_018"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_018", "reqId": "req_cal_018"}))
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
         # MANUAL CHECK: cal == s
@@ -127,7 +127,7 @@ class TestCalibrationBoundary:
         # SETUP: 环境覆盖：实验参数 {"calibration_dir":{"linear":"","piecewise":""}}
         setup_calibration(case_id="TC-CAL-019")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_019", "req_cal_019"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_019", "reqId": "req_cal_019"}))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
@@ -150,7 +150,7 @@ class TestCalibrationBoundary:
         # SETUP: 请求覆盖_2：请求命中条件
         setup_calibration(case_id="TC-CAL-022")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_022", "req_cal_022"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_022", "reqId": "req_cal_022"}))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
@@ -173,7 +173,7 @@ class TestCalibrationBoundary:
         # SETUP: 请求覆盖：请求 external=0
         setup_calibration(case_id="TC-CAL-023")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_023", "req_cal_023"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_023", "reqId": "req_cal_023"}))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
@@ -195,7 +195,7 @@ class TestCalibrationBoundary:
         # SETUP: 请求覆盖：发送 gRPC 推荐请求
         setup_calibration(case_id="TC-CAL-025")
 
-        resp = grpc_ops.recommend(grpc_target, _req("u_cal_025", "req_cal_025"))
+        resp = grpc_ops.recommend(grpc_target, _req(**{"user_id": "u_cal_025", "reqId": "req_cal_025"}))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
@@ -219,7 +219,7 @@ class TestCalibrationBoundary:
         # SETUP: 请求覆盖：发送 gRPC 推荐请求
         setup_calibration(case_id="TC-CAL-026")
 
-        resp = grpc_ops.recommend(grpc_target, _req("u_cal_026", "req_cal_026"))
+        resp = grpc_ops.recommend(grpc_target, _req(**{"user_id": "u_cal_026", "reqId": "req_cal_026"}))
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
         # MANUAL CHECK: response.code == 0
@@ -242,7 +242,7 @@ class TestCalibrationBoundary:
         # SETUP: 请求覆盖：gRPC 请求 external=0
         setup_calibration(case_id="TC-CAL-027")
 
-        resp = grpc_ops.recommend(grpc_target, _req("u_cal_027", "req_cal_027"))
+        resp = grpc_ops.recommend(grpc_target, _req(**{"user_id": "u_cal_027", "reqId": "req_cal_027"}))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]

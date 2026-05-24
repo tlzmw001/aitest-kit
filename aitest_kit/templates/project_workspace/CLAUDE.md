@@ -78,6 +78,7 @@ python3 -m pytest test_workspace/tests/generated --collect-only -q
 - `.claude/skills/doc-gen/SKILL.md`
 - `.claude/skills/knowledge-build/SKILL.md`
 - `.claude/skills/test-design/SKILL.md`
+- `.claude/skills/test-scaffold/SKILL.md`
 - `.claude/skills/test-codegen/SKILL.md`
 - `.claude/skills/test-fix/SKILL.md`
 - `.claude/skills/emitter-build/SKILL.md`

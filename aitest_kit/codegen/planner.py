@@ -106,8 +106,42 @@ def _fixtures_for(
     return ["http_base_url", f"setup_{module}"], "default HTTP fixtures"
 
 
+class _SafeFormatDict(dict[str, Any]):
+    def __missing__(self, key: str) -> str:
+        return "{" + key + "}"
+
+
+def _format_auto_field(value: Any, context: dict[str, Any]) -> Any:
+    if isinstance(value, str):
+        return value.format_map(_SafeFormatDict(context))
+    return value
+
+
+def _auto_fields_for(
+    module: str,
+    category: str,
+    tc: TestCase,
+    project: ProjectConfig,
+) -> dict[str, Any]:
+    auto_fields = project.default_request.auto_fields
+    if not auto_fields:
+        return {}
+    context = {
+        "module": module,
+        "module_abbrev": module_abbrev(module, project),
+        "case_id": tc.id,
+        "case_number": tc_number(tc.id),
+        "category": category,
+    }
+    return {
+        key: _format_auto_field(value, context)
+        for key, value in auto_fields.items()
+    }
+
+
 def _request_for(
     module: str,
+    category: str,
     tc: TestCase,
     strategy: str,
     project: ProjectConfig,
@@ -116,18 +150,17 @@ def _request_for(
     if strategy in {"skipped", "custom_case_body", "structured_case_flow"}:
         return None
 
-    abbrev = module_abbrev(module, project)
-    num = tc_number(tc.id)
-    default_user_id = f"u_{abbrev}_{num}"
-    default_req_id = f"req_{abbrev}_{num}"
-    configured = dict(request_overrides.get(tc.id, {}))
-    user_id = configured.pop("user_id", default_user_id)
-    req_id = configured.pop("reqId", configured.pop("req_id", default_req_id))
+    overrides = {
+        **_auto_fields_for(module, category, tc, project),
+        **dict(request_overrides.get(tc.id, {})),
+    }
     return RequestIR(
-        source="shared_config.base_request_http",
-        user_id=user_id,
-        req_id=req_id,
-        overrides=configured,
+        source=(
+            "shared_config.base_request_http"
+            " + project_config.default_request.auto_fields"
+            " + profile.request_overrides"
+        ),
+        overrides=overrides,
     )
 
 
@@ -387,7 +420,7 @@ def build_file_ir(
             case_fixtures,
             case_flows,
         )
-        request = _request_for(parse_result.module, tc, strategy, proj, request_overrides)
+        request = _request_for(parse_result.module, category, tc, strategy, proj, request_overrides)
         call = _call_for(strategy, protocol, proj)
         needed = _needed_variables(tc.assertions, parse_result.shared_config.variables)
         variables = [
@@ -429,6 +462,11 @@ def build_file_ir(
             source_trace["request_overrides"] = SourceTraceIR(
                 request_overrides[tc.id],
                 f"profile.request_overrides.{tc.id}",
+            )
+        if request is not None and proj.default_request.auto_fields:
+            source_trace["default_request.auto_fields"] = SourceTraceIR(
+                proj.default_request.auto_fields,
+                "project_config.default_request.auto_fields",
             )
 
         case_ir = CaseIR(

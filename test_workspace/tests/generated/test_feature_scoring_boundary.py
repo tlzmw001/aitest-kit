@@ -18,8 +18,8 @@ BASE_REQUEST = {
 }
 
 
-def _req(user_id: str, req_id: str, **overrides) -> dict:
-    body = {**BASE_REQUEST, "user_id": user_id, "reqId": req_id}
+def _req(**overrides) -> dict:
+    body = {**BASE_REQUEST}
     body.update(overrides)
     return body
 
@@ -46,7 +46,7 @@ class TestFeatureScoringBoundary:
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_feat_missing"、item_id="COUPON_FEAT_MISSING"
         setup_feature_scoring(case_id="TC-FEAT-004")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_feat_missing", "req_feat_004", **{"items": [{"item_id": "COUPON_FEAT_MISSING", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_feat_missing", "reqId": "req_feat_004", "items": [{"item_id": "COUPON_FEAT_MISSING", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]}))
         # MANUAL CHECK: response.body.code == 0
         # MANUAL CHECK: 打分服务收到的 user_features == {}
 
@@ -69,7 +69,7 @@ class TestFeatureScoringBoundary:
         # SETUP: 请求覆盖：HTTP 请求 item_id="COUPON_FEAT_NO_FILE"
         setup_feature_scoring(case_id="TC-FEAT-006")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_feat_no_file", "req_feat_006", **{"items": [{"item_id": "COUPON_FEAT_NO_FILE", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_feat_no_file", "reqId": "req_feat_006", "items": [{"item_id": "COUPON_FEAT_NO_FILE", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]}))
         # MANUAL CHECK: response.body.code == 0
         # MANUAL CHECK: 应用日志包含 item 特征文件不存在
 
@@ -90,7 +90,7 @@ class TestFeatureScoringBoundary:
         # SETUP: 请求覆盖：HTTP 请求 item_id="COUPON_FEAT_OK"
         setup_feature_scoring(case_id="TC-FEAT-007")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_feat_ok", "req_feat_007", **{"items": [{"item_id": "COUPON_FEAT_OK", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_feat_ok", "reqId": "req_feat_007", "items": [{"item_id": "COUPON_FEAT_OK", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]}))
         # MANUAL CHECK: response.body.code == 0
         # MANUAL CHECK: 日志包含 item 特征文件第 1 行格式错误
 
@@ -111,7 +111,7 @@ class TestFeatureScoringBoundary:
         # SETUP: 请求覆盖：HTTP 请求 item_id="COUPON_FEAT_BAD"
         setup_feature_scoring(case_id="TC-FEAT-008")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_feat_bad", "req_feat_008", **{"items": [{"item_id": "COUPON_FEAT_BAD", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_feat_bad", "reqId": "req_feat_008", "items": [{"item_id": "COUPON_FEAT_BAD", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]}))
         # MANUAL CHECK: response.body.code == 0
         # MANUAL CHECK: 日志包含 JSON 解析失败
 
@@ -130,7 +130,7 @@ class TestFeatureScoringBoundary:
         # SETUP: 前置操作：HTTP 请求 item_id="COUPON_FEAT_NOT_IN_TSV"，该 item 不在 TSV 中
         setup_feature_scoring(case_id="TC-FEAT-009")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_feat_not_in_tsv", "req_feat_009", **{"items": [{"item_id": "COUPON_FEAT_NOT_IN_TSV", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_feat_not_in_tsv", "reqId": "req_feat_009", "items": [{"item_id": "COUPON_FEAT_NOT_IN_TSV", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]}))
         assert resp["code"] == 0
         assert resp["code"] == 0
         assert resp["results"][0]["item_id"] == "COUPON_FEAT_NOT_IN_TSV"

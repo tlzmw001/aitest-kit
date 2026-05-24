@@ -25,6 +25,11 @@ class AssertionRule:
 
 
 @dataclass
+class DefaultRequestConfig:
+    auto_fields: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class ProjectConfig:
     helper_import: str = "from test_workspace.tests.helpers import http as http_helper"
     api_path: str = "/api/v1/recommend"
@@ -37,6 +42,7 @@ class ProjectConfig:
     named_templates: set[str] = field(default_factory=set)
     module_types: dict[str, dict[str, Any]] = field(default_factory=dict)
     modules: dict[str, dict[str, Any]] = field(default_factory=dict)
+    default_request: DefaultRequestConfig = field(default_factory=DefaultRequestConfig)
 
 
 FALLBACK_PROJECT_CONFIG_DATA: dict[str, Any] = {
@@ -69,6 +75,9 @@ FALLBACK_PROJECT_CONFIG_DATA: dict[str, Any] = {
         "isolated_service": {"description": "需要隔离服务实例", "requires": ["case_bodies"]},
     },
     "modules": {},
+    "default_request": {
+        "auto_fields": {},
+    },
     "builtin_assertion_rules": [
         {
             "name": "status_code",
@@ -162,6 +171,15 @@ def _rules_from(raw_rules: Any) -> list[AssertionRule]:
     return rules
 
 
+def _default_request_from(raw: Any) -> DefaultRequestConfig:
+    if not isinstance(raw, dict):
+        return DefaultRequestConfig()
+    auto_fields = raw.get("auto_fields", {})
+    if not isinstance(auto_fields, dict):
+        auto_fields = {}
+    return DefaultRequestConfig(auto_fields=dict(auto_fields))
+
+
 def _project_from(data: dict[str, Any]) -> ProjectConfig:
     return ProjectConfig(
         helper_import=data.get("helper_import", FALLBACK_PROJECT_CONFIG_DATA["helper_import"]),
@@ -175,6 +193,7 @@ def _project_from(data: dict[str, Any]) -> ProjectConfig:
         named_templates=set(data.get("named_templates") or FALLBACK_PROJECT_CONFIG_DATA["named_templates"]),
         module_types=dict(data.get("module_types") or FALLBACK_PROJECT_CONFIG_DATA["module_types"]),
         modules=dict(data.get("modules") or FALLBACK_PROJECT_CONFIG_DATA["modules"]),
+        default_request=_default_request_from(data.get("default_request")),
     )
 
 

@@ -18,8 +18,8 @@ BASE_REQUEST = {
 }
 
 
-def _req(user_id: str, req_id: str, **overrides) -> dict:
-    body = {**BASE_REQUEST, "user_id": user_id, "reqId": req_id}
+def _req(**overrides) -> dict:
+    body = {**BASE_REQUEST}
     body.update(overrides)
     return body
 
@@ -43,7 +43,7 @@ class TestCalibrationBusiness:
         # SETUP: 前置操作：线性校准文件规则 conditions={"device":"mobile"}、k=1.2、b=0.1
         setup_calibration(case_id="TC-CAL-001")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_001", "req_cal_001"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_001", "reqId": "req_cal_001"}))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
@@ -64,7 +64,7 @@ class TestCalibrationBusiness:
         # SETUP: 前置操作_2：线性规则 k=1.2,b=0.05
         setup_calibration(case_id="TC-CAL-002")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_002", "req_cal_002"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_002", "reqId": "req_cal_002"}))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
@@ -91,7 +91,7 @@ class TestCalibrationBusiness:
         # SETUP: 前置操作：线性目录同时存在 1.json 规则 k=0.8,b=0 和 3.json 规则 k=1.3,b=0，二者均匹配
         setup_calibration(case_id="TC-CAL-003")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_003", "req_cal_003"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_003", "reqId": "req_cal_003"}))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
@@ -111,7 +111,7 @@ class TestCalibrationBusiness:
         # SETUP: 前置操作：线性规则 conditions={"unknown":"x"}、k=2.0,b=0.0
         setup_calibration(case_id="TC-CAL-004")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_004", "req_cal_004"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_004", "reqId": "req_cal_004"}))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
@@ -133,7 +133,7 @@ class TestCalibrationBusiness:
         # SETUP: 环境覆盖：校准实验参数 {"enable_calibration":false,"calibration_dir":{"linear":"/tmp/cal_linear_001"}}，线性文件存在且匹配 device=mobile
         setup_calibration(case_id="TC-CAL-005")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_005", "req_cal_005"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_005", "reqId": "req_cal_005"}))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
@@ -154,7 +154,7 @@ class TestCalibrationBusiness:
         # SETUP: 请求覆盖：ad 校准实验配置不同参数
         setup_calibration(case_id="TC-CAL-006")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_006", "req_cal_006"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_006", "reqId": "req_cal_006"}))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
@@ -176,7 +176,7 @@ class TestCalibrationBusiness:
         # SETUP: 前置操作：线性文件两条规则都匹配：第 1 条 k=1.2,b=0.0，第 2 条 k=2.0,b=0.0
         setup_calibration(case_id="TC-CAL-007")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_007", "req_cal_007"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_007", "reqId": "req_cal_007"}))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
@@ -197,7 +197,7 @@ class TestCalibrationBusiness:
         # SETUP: 前置操作_2：Redis 不设置用户 gender 特征
         setup_calibration(case_id="TC-CAL-008")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_008", "req_cal_008"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_008", "reqId": "req_cal_008"}))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
@@ -217,7 +217,7 @@ class TestCalibrationBusiness:
         # SETUP: 前置操作：线性规则 conditions={"unknown_field":"x"}，k=2.0,b=0.0
         setup_calibration(case_id="TC-CAL-009")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_009", "req_cal_009"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_009", "reqId": "req_cal_009"}))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
@@ -240,7 +240,7 @@ class TestCalibrationBusiness:
         # SETUP: 前置操作_2：规则 conditions={"device":"mobile"}、k=1.5、b=0.0
         setup_calibration(case_id="TC-CAL-010")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_010", "req_cal_010"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_010", "reqId": "req_cal_010"}))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
@@ -261,7 +261,7 @@ class TestCalibrationBusiness:
         # SETUP: 前置操作_2：分段 [0,0.3)->k=0.5,b=0.1、[0.3,0.7)->k=1.0,b=0.0、[0.7,1.0]->k=1.5,b=-0.2，条件 device=mobile
         setup_calibration(case_id="TC-CAL-011")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_011", "req_cal_011"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_011", "reqId": "req_cal_011"}))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
@@ -289,7 +289,7 @@ class TestCalibrationBusiness:
         # SETUP: 请求覆盖：二者都匹配 device=mobile
         setup_calibration(case_id="TC-CAL-012")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_012", "req_cal_012"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_012", "reqId": "req_cal_012"}))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
@@ -316,7 +316,7 @@ class TestCalibrationBusiness:
         # SETUP: 前置操作：线性和分段规则条件均为 device=ios，请求为 mobile
         setup_calibration(case_id="TC-CAL-013")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_013", "req_cal_013"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_013", "reqId": "req_cal_013"}))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
@@ -336,7 +336,7 @@ class TestCalibrationBusiness:
         # SETUP: 前置操作：线性目录包含 1.json 规则 k=1.1,b=0 和 3.json 规则 k=1.8,b=0，均匹配 device=mobile
         setup_calibration(case_id="TC-CAL-014")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req("u_cal_014", "req_cal_014"))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_cal_014", "reqId": "req_cal_014"}))
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]

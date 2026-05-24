@@ -105,6 +105,7 @@ python3 -m pytest test_workspace/tests/generated --collect-only -q
 - `doc-gen`：从源码和现有文档补全测试设计输入。
 - `knowledge-build`：构建或更新测试知识库。
 - `test-design`：生成 Markdown 测试用例。
+- `test-scaffold`：构建模块 fixture + codegen profile。
 - `test-codegen`：从 Markdown/profile 生成 pytest。
 - `test-fix`：修正用例问题并沉淀经验。
 - `emitter-build`：从已验证 pytest 提取确定性模板。

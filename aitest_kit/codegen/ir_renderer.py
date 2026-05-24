@@ -63,8 +63,9 @@ def _render_base_request(ctx: EmitContext) -> list[str]:
         return []
     lines = ["", ""]
     sanitized = dict(body)
-    sanitized["user_id"] = None
-    sanitized["reqId"] = None
+    for key in ctx.project.default_request.auto_fields:
+        if key in sanitized:
+            sanitized[key] = None
     lines.append(f"BASE_REQUEST = {dict_to_python(sanitized)}")
     return lines
 
@@ -73,8 +74,8 @@ def _render_req_helper(ctx: EmitContext) -> list[str]:
     return [
         "",
         "",
-        "def _req(user_id: str, req_id: str, **overrides) -> dict:",
-        '    body = {**BASE_REQUEST, "user_id": user_id, "reqId": req_id}',
+        "def _req(**overrides) -> dict:",
+        "    body = {**BASE_REQUEST}",
         "    body.update(overrides)",
         "    return body",
     ]
@@ -107,10 +108,10 @@ def _render_setup_comments(tc: TestCase) -> list[str]:
 
 def _render_req_call(request: RequestIR) -> str:
     if not request.overrides:
-        return f'_req("{request.user_id}", "{request.req_id}")'
+        return "_req()"
 
     overrides = dict_to_python_compact(request.overrides)
-    return f'_req("{request.user_id}", "{request.req_id}", **{overrides})'
+    return f"_req(**{overrides})"
 
 
 def _render_setup_call(case_ir: CaseIR) -> str | None:

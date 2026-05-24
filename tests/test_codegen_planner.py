@@ -9,7 +9,11 @@ from __future__ import annotations
 from aitest_kit.codegen.ir import FileIR
 from aitest_kit.codegen.parser import ParseResult, SharedConfig, TestCase
 from aitest_kit.codegen.planner import build_file_ir
-from aitest_kit.codegen.project_config import DEFAULT_PROJECT
+from aitest_kit.codegen.project_config import (
+    DEFAULT_PROJECT,
+    DefaultRequestConfig,
+    ProjectConfig,
+)
 
 
 def _parse_result(
@@ -390,7 +394,12 @@ request_overrides:
         )
         case_ir = _case(file_ir, "TC-DEMO-001")
         assert "request_overrides" in case_ir.source_trace
-        assert case_ir.request.overrides == {"external": 1, "score_threshold": 0.8}
+        assert case_ir.request.overrides == {
+            "user_id": "u_demo_001",
+            "reqId": "req_demo_001",
+            "external": 1,
+            "score_threshold": 0.8,
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -459,12 +468,19 @@ case_flows:
 
 class TestRequestIR:
 
-    def test_default_user_id_and_req_id_format(self):
+    def test_configured_auto_fields_are_formatted(self):
         tc = TestCase(id="TC-DEMO-003", title="request", priority="P1", section="req")
         file_ir = build_file_ir(_parse_result([tc]), "business", project=DEFAULT_PROJECT)
         case_ir = _case(file_ir, "TC-DEMO-003")
-        assert case_ir.request.user_id == "u_demo_003"
-        assert case_ir.request.req_id == "req_demo_003"
+        assert case_ir.request.overrides["user_id"] == "u_demo_003"
+        assert case_ir.request.overrides["reqId"] == "req_demo_003"
+
+    def test_no_auto_fields_by_default_for_new_project_config(self):
+        tc = TestCase(id="TC-DEMO-003", title="request", priority="P1", section="req")
+        project = ProjectConfig(default_request=DefaultRequestConfig(auto_fields={}))
+        file_ir = build_file_ir(_parse_result([tc]), "business", project=project)
+        case_ir = _case(file_ir, "TC-DEMO-003")
+        assert case_ir.request.overrides == {}
 
     def test_request_overrides_merge(self, tmp_path):
         profile_path = tmp_path / "codegen_profile_demo.md"
@@ -486,8 +502,11 @@ request_overrides:
             project=DEFAULT_PROJECT,
         )
         case_ir = _case(file_ir, "TC-DEMO-001")
-        assert case_ir.request.user_id == "custom_user"
-        assert case_ir.request.overrides == {"external": 1}
+        assert case_ir.request.overrides == {
+            "user_id": "custom_user",
+            "reqId": "req_demo_001",
+            "external": 1,
+        }
 
     def test_no_request_for_case_body(self, tmp_path):
         profile_path = tmp_path / "codegen_profile_demo.md"
