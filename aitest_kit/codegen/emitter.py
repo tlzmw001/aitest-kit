@@ -20,6 +20,7 @@ from aitest_kit.codegen.profile import (
     load_profile_module_type,
     load_profile_request_overrides,
     load_profile_rules,
+    RuntimeProfile,
 )
 from aitest_kit.codegen.project_config import (
     DEFAULT_PROJECT,
@@ -83,6 +84,32 @@ def emit_file(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"test_{module}_{file_type}.py"
+
+    if output_path.exists():
+        existing_source = _generated_source_path(output_path)
+        if existing_source and existing_source != parse_result.source_file:
+            return EmitResult(
+                output_path=str(output_path),
+                case_count=0,
+                skipped=[],
+                unparsed=[],
+                manual_count=0,
+                diagnostics=[
+                    "E005: generated output conflict: "
+                    f"{output_path} was generated from {existing_source}, "
+                    f"not {parse_result.source_file}"
+                ],
+            )
+
+    if isinstance(profile_path, RuntimeProfile) and profile_path.diagnostics:
+        return EmitResult(
+            output_path=str(output_path),
+            case_count=0,
+            skipped=[],
+            unparsed=[],
+            manual_count=0,
+            diagnostics=list(profile_path.diagnostics),
+        )
 
     profile_rules = load_profile_rules(profile_path) if profile_path else []
     request_overrides = load_profile_request_overrides(profile_path) if profile_path else {}
@@ -223,6 +250,17 @@ def emit_module(
         results.append(result)
 
     return results
+
+
+def _generated_source_path(output_path: Path) -> str | None:
+    try:
+        first_line = output_path.read_text(encoding="utf-8").splitlines()[0]
+    except (IndexError, OSError, UnicodeDecodeError):
+        return None
+    prefix = "# Auto-generated from "
+    if not first_line.startswith(prefix):
+        return None
+    return first_line[len(prefix):]
 
 
 if __name__ == "__main__":

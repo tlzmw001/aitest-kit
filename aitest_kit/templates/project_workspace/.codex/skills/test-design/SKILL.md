@@ -1,8 +1,8 @@
 ---
 name: test-design
-description: 基于测试知识库和测试规范，为指定模块生成业务用例、边界用例和 mismatch 记录
-when_to_use: 当用户需要为某个模块生成测试用例，或需要基于新需求补充测试用例时
-argument-hint: <target_module> [cases_dir]
+description: 基于测试知识库和测试规范，为指定模块或需求 suite 生成 Markdown 用例和 mismatch 记录
+when_to_use: 当用户需要为某个模块、L2 需求或独立用例 suite 生成/补充测试用例时
+argument-hint: <target_module> [cases_dir|suite_dir]
 arguments: [target_module, cases_dir]
 user-invocable: true
 allowed-tools: Read Glob Grep Write Edit Bash
@@ -11,9 +11,9 @@ effort: high
 
 # 测试用例设计
 
-为 `$target_module` 模块生成测试用例。
+为 `$target_module` 模块或某个 L2 需求 suite 生成 Markdown 测试用例。
 
-输出目录：`$cases_dir`（未指定时，从 `aitest_config/config.yaml` 读取 `paths.cases_dir`，默认 `{cases_dir}/$target_module/`）。未指定时询问用户确认后再创建。
+输出目录：`$cases_dir`（未指定时，从 `aitest_config/config.yaml` 读取 `paths.cases_dir`，默认 `{cases_dir}/$target_module/`）。如果用户明确指定 L2/suite 目录，则用该目录承载本批用例；未指定时询问用户确认后再创建。
 
 ## 前置：读取项目配置
 
@@ -72,12 +72,12 @@ effort: high
 7. 知识库没说的行为 → 预期结果写 `TBD-需确认`，不猜测
 8. 用例的"输入"字段必须基于 L1 文档的输入/输出定义，写出完整请求体结构；L1 未给出完整字段定义的，标注 `[!请求体待补全]`
 9. 前置条件必须写出具体构造方式（配置片段、管理 API 请求、测试数据记录、外部依赖状态等），不能只写抽象描述
-10. 区分可控输入与系统中间产物：请求参数、配置、测试数据、外部依赖状态属于可控输入，可在前置条件中指定具体值；系统运行时计算结果（如派生值、聚合值、排序位次）属于中间产物，不能在前置条件或场景变量中假设其具体值（如"外部服务返回固定分数"），只能通过调整可控输入间接影响；对中间产物的断言必须使用范围断言或关系断言
+10. 区分可控输入与系统中间产物：请求参数、配置、测试数据、外部依赖状态属于可控输入，可在前置条件中指定具体值；系统运行时计算结果（如派生值、聚合值、排序位次）属于中间产物，不能在前置条件或场景变量中假设其具体值，只能通过调整可控输入间接影响；对中间产物的断言必须使用范围断言或关系断言
 11. 断言选择遵循 `aitest_config/refs/assertion-strategy.md` 的三种策略
 
 **接口覆盖**：查看 L1 "接口"章节，确认模块暴露的接口类型（HTTP / gRPC / 两者）。两种接口都有时，共享配置必须列出两种接口，每个功能场景必须生成 HTTP 和 gRPC 两组用例（可共享场景变量，仅接口和请求格式不同）。
 
-**输出格式**：输出到 `$cases_dir/business.md`，按 `aitest_config/refs/case-format.md` 的"共享配置 + 精简用例"格式。每条用例只写 **优先级 / 场景变量 / 断言** 三个字段（有特殊状态时加 **标记** 字段）。场景变量必须写成 `key：value` 条目列表，`[manual]`、`[!可行性存疑]` 等标记写在独立的标记字段，不内联到场景变量或断言中。
+**输出格式**：默认输出到 `$cases_dir/business.md`；如果用户指定需求 suite，可输出为 `{suite_name}_business.md` 等带语义的文件名。按 `aitest_config/refs/case-format.md` 的"共享配置 + 精简用例"格式。每条用例只写 **优先级 / 场景变量 / 断言** 三个字段（有特殊状态时加 **标记** 字段）。场景变量必须写成 `key：value` 条目列表，`[manual]`、`[!可行性存疑]` 等标记写在独立的标记字段，不内联到场景变量或断言中。
 
 ### 第三步：第二轮——边界用例（读代码）
 
@@ -98,7 +98,7 @@ effort: high
 4. 发现规格与实现不一致时 → **不修改第一轮用例**，按 `aitest_config/refs/mismatch-format.md` 新建 mismatch 记录。如果 `$cases_dir/mismatch.md` 已存在，新条目**追加在文件末尾，不删除/覆盖已有条目**，编号从已有最大序号 +1 继续
 5. 第一轮中标记 `TBD-需确认` 的预期结果，如果代码能给出答案，在 business.md 中更新并标注来源
 
-输出到 `$cases_dir/boundary.md`，使用与 business.md 相同的共享配置格式。
+默认输出到 `$cases_dir/boundary.md`，使用与 business.md 相同的共享配置格式；suite 模式可使用 `{suite_name}_boundary.md` 等带语义的文件名。
 Mismatch 输出到 `$cases_dir/mismatch.md`（无则不创建）。
 
 ### 第四步：覆盖变更与知识库刷新

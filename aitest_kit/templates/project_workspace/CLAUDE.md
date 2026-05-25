@@ -40,9 +40,9 @@ test_workspace/
 
 关键约定：
 
-- `test_workspace/cases/` 存放 Markdown 源用例。
+- `test_workspace/cases/` 存放按模块组织的 Markdown 源用例；`test_workspace/casesuites/` 可存放按 L2/迭代批次组织的独立 suite。
 - `test_workspace/tests/generated/` 存放 codegen 生成的 pytest 文件，视为编译产物。
-- `test_workspace/tests/fixtures/` 存放模块 fixture 和 `codegen_profile_{module}.md`。
+- `test_workspace/tests/fixtures/` 存放模块 fixture 和 `codegen_profile_{module}.md`；suite profile 跟随用例目录并以 `_suite.md` 结尾。
 - `test_workspace/results/` 记录已确认的待测系统 bug 或重要发现。
 - `test_workspace/reports/` 存放测试执行报告。
 

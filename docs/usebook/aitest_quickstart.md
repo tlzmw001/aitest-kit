@@ -26,6 +26,20 @@ pip install -e ".[dev]"
 - 稳定入口是 `aitest init/codegen/run/report`、workspace layout、Markdown 用例格式和 profile schema。
 - health/promotion report、promotion patch 和内部 Python API 仍按实验能力看待。
 
+### 升级已初始化的 workspace
+
+升级分成两件事：
+
+```bash
+python3 -m pip install -U aitest-kit
+aitest upgrade --workspace /path/to/your_project --check
+aitest upgrade --workspace /path/to/your_project --apply
+```
+
+`pip install -U` 只更新 Python 包中的 CLI 和 codegen 逻辑；已经通过 `aitest init` 复制进项目的 skills、schema、refs、helpers 和协作说明不会自动变化。`aitest upgrade` 用来检查并安全同步这些 workspace 模板资产。
+
+不要用 `aitest init --force` 升级已有 workspace。`upgrade` 会读取 `.aitest/workspace.json`，只自动覆盖仍等于旧模板的文件；疑似用户本地改过的文件会跳过并提示人工 review。
+
 ## 2. 初始化项目 workspace
 
 不要直接复用 AIAutoTest 仓库里的 `test_workspace/`。在你的目标项目目录，或一个独立目录中初始化：

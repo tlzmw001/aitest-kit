@@ -2,14 +2,33 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional, Union
 
 from aitest_kit.codegen.project_config import AssertionRule
 
 
-def load_profile_yaml(profile_path: str | Path) -> dict[str, Any]:
+@dataclass(frozen=True)
+class RuntimeProfile:
+    """Merged profile data used by planner/emitter at generation time."""
+
+    data: dict[str, Any]
+    module_profile_path: Path | None = None
+    suite_profile_path: Path | None = None
+    diagnostics: list[str] = field(default_factory=list)
+
+
+ProfileSource = Optional[Union[str, Path, RuntimeProfile]]
+
+
+def load_profile_yaml(profile_path: ProfileSource) -> dict[str, Any]:
     """Extract the first YAML block from a codegen_profile."""
+    if profile_path is None:
+        return {}
+    if isinstance(profile_path, RuntimeProfile):
+        return dict(profile_path.data)
+
     path = Path(profile_path)
     if not path.exists():
         return {}
@@ -28,7 +47,55 @@ def load_profile_yaml(profile_path: str | Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def load_profile_rules(profile_path: str | Path) -> list[AssertionRule]:
+def _dedupe_strings(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
+
+def merge_profile_yaml(
+    module_data: dict[str, Any],
+    suite_data: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], list[str]]:
+    """Merge stable module profile data with optional case-suite profile data."""
+    suite_data = suite_data or {}
+    merged: dict[str, Any] = {}
+    diagnostics: list[str] = []
+
+    for key in ("module_type", "assertion_rules", "default_fixture", "default_object"):
+        if key in module_data:
+            merged[key] = module_data[key]
+
+    imports = []
+    for raw in (module_data.get("extra_imports", []), suite_data.get("extra_imports", [])):
+        if isinstance(raw, list):
+            imports.extend(item for item in raw if isinstance(item, str) and item.strip())
+    if imports:
+        merged["extra_imports"] = _dedupe_strings(imports)
+
+    for key in ("request_overrides", "case_fixtures", "case_bodies", "case_flows"):
+        module_values = module_data.get(key, {})
+        suite_values = suite_data.get(key, {})
+        module_map = module_values if isinstance(module_values, dict) else {}
+        suite_map = suite_values if isinstance(suite_values, dict) else {}
+        overlap = sorted(set(module_map) & set(suite_map))
+        if overlap:
+            diagnostics.append(
+                f"E520: profile merge conflict in {key}: " + ", ".join(overlap)
+            )
+        merged_values = {**module_map, **suite_map}
+        if merged_values:
+            merged[key] = merged_values
+
+    return merged, diagnostics
+
+
+def load_profile_rules(profile_path: ProfileSource) -> list[AssertionRule]:
     """Extract assertion_rules from a codegen_profile's YAML block."""
     data = load_profile_yaml(profile_path)
     if not data:
@@ -49,7 +116,7 @@ def load_profile_rules(profile_path: str | Path) -> list[AssertionRule]:
     return rules
 
 
-def load_profile_request_overrides(profile_path: str | Path) -> dict[str, dict[str, Any]]:
+def load_profile_request_overrides(profile_path: ProfileSource) -> dict[str, dict[str, Any]]:
     """Extract explicit case-level request overrides from a profile YAML block."""
     data = load_profile_yaml(profile_path)
     raw = data.get("request_overrides", {})
@@ -63,7 +130,7 @@ def load_profile_request_overrides(profile_path: str | Path) -> dict[str, dict[s
     return result
 
 
-def load_profile_extra_imports(profile_path: str | Path) -> list[str]:
+def load_profile_extra_imports(profile_path: ProfileSource) -> list[str]:
     """Extract extra import lines from a profile YAML block."""
     data = load_profile_yaml(profile_path)
     raw = data.get("extra_imports", [])
@@ -72,7 +139,7 @@ def load_profile_extra_imports(profile_path: str | Path) -> list[str]:
     return [item for item in raw if isinstance(item, str) and item.strip()]
 
 
-def load_profile_case_fixtures(profile_path: str | Path) -> dict[str, list[str]]:
+def load_profile_case_fixtures(profile_path: ProfileSource) -> dict[str, list[str]]:
     """Extract per-case fixture signatures from a profile YAML block."""
     data = load_profile_yaml(profile_path)
     raw = data.get("case_fixtures", {})
@@ -90,7 +157,7 @@ def load_profile_case_fixtures(profile_path: str | Path) -> dict[str, list[str]]
     return result
 
 
-def load_profile_case_bodies(profile_path: str | Path) -> dict[str, list[str]]:
+def load_profile_case_bodies(profile_path: ProfileSource) -> dict[str, list[str]]:
     """Extract per-case test body lines from a profile YAML block."""
     data = load_profile_yaml(profile_path)
     raw = data.get("case_bodies", {})
@@ -111,7 +178,7 @@ def load_profile_case_bodies(profile_path: str | Path) -> dict[str, list[str]]:
     return result
 
 
-def load_profile_module_type(profile_path: str | Path) -> str | None:
+def load_profile_module_type(profile_path: ProfileSource) -> str | None:
     """Extract optional module_type from a profile YAML block."""
     data = load_profile_yaml(profile_path)
     module_type = data.get("module_type")
@@ -124,7 +191,7 @@ _CALL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$")
 _BACKTICK_RE = re.compile(r"`([^`]+)`")
 
 
-def load_profile_case_flows(profile_path: str | Path) -> dict[str, dict[str, Any]]:
+def load_profile_case_flows(profile_path: ProfileSource) -> dict[str, dict[str, Any]]:
     """Extract structured case_flows from a profile YAML block."""
     data = load_profile_yaml(profile_path)
     raw = data.get("case_flows", {})

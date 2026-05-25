@@ -341,7 +341,11 @@ def render_file_from_ir(
         all_lines.extend(_render_req_helper(ctx))
 
     class_name = module_class_name(ctx.module, ctx.file_type)
-    desc = f"{ctx.module} {'业务' if ctx.file_type == 'business' else '边界'}测试用例"
+    category_label = {
+        "business": "业务",
+        "boundary": "边界",
+    }.get(ctx.file_type, ctx.file_type)
+    desc = f"{ctx.module} {category_label}测试用例"
     all_lines.extend(["", "", f"class {class_name}:"])
     all_lines.append(f'    """{desc}"""')
 

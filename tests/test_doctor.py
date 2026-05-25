@@ -135,6 +135,73 @@ def test_doctor_warns_when_fixture_module_is_not_registered(tmp_path):
     assert "fail=0" in result.output
 
 
+def test_doctor_checks_case_suite_profiles(tmp_path):
+    target = tmp_path / "project"
+    runner = CliRunner()
+    init_result = runner.invoke(main, ["init", "--target", str(target)])
+    assert init_result.exit_code == 0
+
+    fixture_dir = target / "test_workspace" / "tests" / "fixtures"
+    (fixture_dir / "codegen_profile_demo.md").write_text(
+        """```yaml
+module_type: multi_endpoint
+```
+""",
+        encoding="utf-8",
+    )
+    suite_dir = target / "test_workspace" / "casesuites" / "demo_smoke"
+    suite_dir.mkdir(parents=True, exist_ok=True)
+    (suite_dir / "aitest_suite.yaml").write_text(
+        """module: demo
+suite: demo_smoke
+case_files:
+  - smoke.md
+profile: codegen_profile_demo_smoke_suite.md
+""",
+        encoding="utf-8",
+    )
+    (suite_dir / "smoke.md").write_text(
+        """# smoke
+
+## 共享配置
+
+**接口**：`GET /health`
+
+---
+
+## 一、冒烟
+
+### TC-DEMO-001：health
+- **优先级**：P0
+- **断言**：`response.status == "ok"`
+""",
+        encoding="utf-8",
+    )
+    (suite_dir / "codegen_profile_demo_smoke_suite.md").write_text(
+        """```yaml
+profile_scope: case_suite
+parent_module: demo
+suite: demo_smoke
+case_flows:
+  TC-DEMO-001:
+    fixture: setup_demo
+    object: client
+    steps:
+      - call: client.health
+        save_as: resp
+      - assert: 'assert resp["status"] == "ok"'
+```
+""",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(main, ["doctor", "--workspace", str(target)])
+
+    assert result.exit_code == 0, result.output
+    assert "[OK] case suites: 1 suite(s) valid" in result.output
+    assert "fail=0" in result.output
+
+
 def test_doctor_fails_unknown_module(tmp_path):
     target = tmp_path / "project"
     runner = CliRunner()

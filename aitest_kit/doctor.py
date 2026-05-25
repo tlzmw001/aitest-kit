@@ -13,6 +13,7 @@ import click
 import yaml
 
 from aitest_kit.codegen.project_config import load_project_config
+from aitest_kit.codegen.profile_validator import validate_profile_suite
 from aitest_kit.workspace import push_workspace
 
 
@@ -56,6 +57,7 @@ def _doctor_impl(module_name: str | None) -> int:
     fixture_dir = Path("test_workspace/tests/fixtures")
     env_vars = _scan_env_vars(fixture_dir)
     _check_fixture_registration(results, fixture_dir, Path("test_workspace/tests/conftest.py"))
+    _check_case_suites(results, Path("test_workspace/casesuites"), fixture_dir)
 
     if selected_modules:
         _run_command_check(
@@ -168,6 +170,54 @@ def _discover_modules(cases_dir: Path) -> list[str]:
         and not path.name.startswith(".")
         and ((path / "business.md").exists() or (path / "boundary.md").exists())
     )
+
+
+def _check_case_suites(
+    results: list[CheckResult],
+    suites_dir: Path,
+    fixture_dir: Path,
+) -> None:
+    suite_dirs = _discover_case_suites(suites_dir)
+    if not suite_dirs:
+        return
+    try:
+        project = load_project_config(Path("aitest_config/project_config.yaml"))
+    except Exception as exc:  # noqa: BLE001 - doctor should surface loader failures.
+        results.append(CheckResult("FAIL", "case suites", str(exc)))
+        return
+
+    failures: list[str] = []
+    warnings: list[str] = []
+    for suite_dir in suite_dirs:
+        report = validate_profile_suite(suite_dir, profile_dir=fixture_dir, project=project)
+        if report.errors:
+            first = report.errors[0].format()
+            failures.append(f"{suite_dir}: {len(report.errors)} error(s), first={first}")
+        elif report.warnings:
+            warnings.append(f"{suite_dir}: {len(report.warnings)} warning(s)")
+
+    if failures:
+        results.append(CheckResult("FAIL", "case suites", "; ".join(failures)))
+    elif warnings:
+        results.append(CheckResult("WARN", "case suites", "; ".join(warnings)))
+    else:
+        results.append(CheckResult("OK", "case suites", f"{len(suite_dirs)} suite(s) valid"))
+
+
+def _discover_case_suites(suites_dir: Path) -> list[Path]:
+    if not suites_dir.exists():
+        return []
+    result: list[Path] = []
+    for path in sorted(suites_dir.iterdir()):
+        if not path.is_dir() or path.name.startswith("."):
+            continue
+        has_suite_marker = (
+            (path / "aitest_suite.yaml").exists()
+            or any(path.glob("codegen_profile_*_suite.md"))
+        )
+        if has_suite_marker:
+            result.append(path)
+    return result
 
 
 def _select_modules(

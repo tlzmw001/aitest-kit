@@ -1,32 +1,41 @@
 """Pre-generation validation for codegen profiles."""
 from __future__ import annotations
 
-import json
 import re
-from dataclasses import dataclass, field
-from importlib import resources
 from pathlib import Path
 from typing import Any
 
 import yaml
-from jsonschema import Draft202012Validator
-from jsonschema.exceptions import ValidationError
 
 from aitest_kit.codegen.parser import parse_case_file
 from aitest_kit.codegen.profile import (
+    load_profile_yaml,
     validate_case_flows,
     validate_profile_strategy_conflicts,
 )
 from aitest_kit.codegen.project_config import ProjectConfig, load_project_config
+from aitest_kit.codegen.profile_schema import profile_schema_diagnostics
+from aitest_kit.codegen.profile_validation_report import (
+    ProfileValidationDiagnostic,
+    ProfileValidationReport,
+    profile_validation_to_dict,
+    render_profile_validation_markdown,
+    write_profile_validation_report,
+)
+from aitest_kit.codegen.suite import load_suite_context, parse_suite_case_file
 
 
 _YAML_BLOCK_RE = re.compile(r"```ya?ml\s*\n(.*?)```", re.DOTALL)
 _CASE_ID_RE = re.compile(r"^TC-[A-Z0-9]+-\d+$")
-_PROFILE_SCHEMA_RELATIVE_PATH = Path("aitest_config/schemas/codegen_profile.schema.json")
-_REPO_PROFILE_SCHEMA_PATH = Path(__file__).resolve().parents[2] / _PROFILE_SCHEMA_RELATIVE_PATH
-_PACKAGE_PROFILE_SCHEMA = "aitest_kit.templates.project_workspace"
 _TOP_LEVEL_KEYS = {
     "module_type",
+    "profile_scope",
+    "parent_module",
+    "parent_profile",
+    "suite",
+    "knowledge_refs",
+    "default_fixture",
+    "default_object",
     "assertion_rules",
     "request_overrides",
     "extra_imports",
@@ -34,99 +43,6 @@ _TOP_LEVEL_KEYS = {
     "case_bodies",
     "case_flows",
 }
-
-
-@dataclass(frozen=True)
-class ProfileValidationDiagnostic:
-    code: str
-    severity: str
-    message: str
-    source: str = ""
-
-    def format(self) -> str:
-        location = f" {self.source}" if self.source else ""
-        return f"[{self.severity}] {self.code}:{location} {self.message}"
-
-
-@dataclass
-class ProfileValidationReport:
-    module: str
-    profile_path: Path
-    case_files: list[Path] = field(default_factory=list)
-    case_ids: set[str] = field(default_factory=set)
-    case_markers: dict[str, list[str]] = field(default_factory=dict)
-    diagnostics: list[ProfileValidationDiagnostic] = field(default_factory=list)
-
-    @property
-    def errors(self) -> list[ProfileValidationDiagnostic]:
-        return [diag for diag in self.diagnostics if diag.severity == "ERROR"]
-
-    @property
-    def warnings(self) -> list[ProfileValidationDiagnostic]:
-        return [diag for diag in self.diagnostics if diag.severity == "WARNING"]
-
-
-def profile_validation_to_dict(report: ProfileValidationReport) -> dict[str, Any]:
-    return {
-        "module": report.module,
-        "profile_path": str(report.profile_path),
-        "case_files": [str(path) for path in report.case_files],
-        "case_count": len(report.case_ids),
-        "case_ids": sorted(report.case_ids),
-        "error_count": len(report.errors),
-        "warning_count": len(report.warnings),
-        "diagnostics": [
-            {
-                "code": diag.code,
-                "severity": diag.severity,
-                "message": diag.message,
-                "source": diag.source,
-            }
-            for diag in report.diagnostics
-        ],
-    }
-
-
-def render_profile_validation_markdown(report: ProfileValidationReport) -> str:
-    lines = [
-        f"# Profile Validation Report: {report.module}",
-        "",
-        f"- Profile: `{report.profile_path}`",
-        f"- Case files: {len(report.case_files)}",
-        f"- Cases: {len(report.case_ids)}",
-        f"- Errors: {len(report.errors)}",
-        f"- Warnings: {len(report.warnings)}",
-        "",
-        "## Diagnostics",
-        "",
-    ]
-    if report.diagnostics:
-        lines.extend(f"- {diag.format()}" for diag in report.diagnostics)
-    else:
-        lines.append("- OK")
-    lines.extend(["", "## Case Files", ""])
-    if report.case_files:
-        lines.extend(f"- `{path}`" for path in report.case_files)
-    else:
-        lines.append("- none")
-    lines.append("")
-    return "\n".join(lines)
-
-
-def write_profile_validation_report(
-    report: ProfileValidationReport,
-    output_dir: str | Path,
-) -> dict[str, Path]:
-    out_dir = Path(output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    md_path = out_dir / f"{report.module}_profile_validation.md"
-    json_path = out_dir / f"{report.module}_profile_validation.json"
-    md_path.write_text(render_profile_validation_markdown(report), encoding="utf-8")
-    json_path.write_text(
-        json.dumps(profile_validation_to_dict(report), ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    return {"markdown": md_path, "json": json_path}
 
 
 def validate_profile_module(
@@ -173,6 +89,69 @@ def validate_profile_module(
     return report
 
 
+def validate_profile_suite(
+    cases_path: str | Path,
+    *,
+    module: str | None = None,
+    profile_dir: str | Path = "test_workspace/tests/fixtures",
+    project: ProjectConfig | None = None,
+) -> ProfileValidationReport:
+    """Validate one case suite plus its module and suite profiles."""
+    context = load_suite_context(cases_path, module_override=module, profile_dir=profile_dir)
+    report = ProfileValidationReport(
+        module=context.module or module or "",
+        suite=context.suite,
+        profile_path=context.suite_profile_path,
+    )
+    project_config = project or load_project_config()
+
+    _collect_suite_markdown_cases(report, context.case_files, context.module)
+    for message in context.diagnostics:
+        _error(report, _diagnostic_code(message), message)
+
+    module_data = None
+    if context.module_profile_path.exists():
+        module_data = _load_profile_yaml_strict_from(report, context.module_profile_path)
+        if module_data is not None:
+            _validate_profile_schema(report, module_data)
+            _validate_top_level_shape(report, module_data)
+
+    suite_data = {}
+    if context.suite_profile_path.exists():
+        loaded_suite = _load_profile_yaml_strict_from(report, context.suite_profile_path)
+        if loaded_suite is not None:
+            suite_data = loaded_suite
+            _validate_profile_schema(report, suite_data)
+            _validate_top_level_shape(report, suite_data)
+
+    runtime_data = context.runtime_profile.data
+    if module_data is not None:
+        runtime_data = load_profile_yaml(context.runtime_profile)
+
+    suite_case_bodies = _mapping(suite_data, "case_bodies")
+    suite_case_flows = _mapping(suite_data, "case_flows")
+    suite_case_fixtures = _mapping(suite_data, "case_fixtures")
+    suite_request_overrides = _mapping(suite_data, "request_overrides")
+
+    for message in validate_profile_strategy_conflicts(suite_case_bodies, suite_case_flows):
+        _error(report, "E502", message)
+    for message in validate_case_flows(suite_case_flows):
+        _error(report, "E503", message)
+
+    _validate_case_references(report, "case_bodies", suite_case_bodies)
+    _validate_case_references(report, "case_flows", suite_case_flows)
+    _validate_case_references(report, "case_fixtures", suite_case_fixtures)
+    _validate_case_references(report, "request_overrides", suite_request_overrides)
+    _warn_feasibility_suspect_strategies(report, suite_case_bodies, suite_case_flows)
+    _warn_fixture_reinvocation(report, suite_case_flows)
+
+    runtime_case_bodies = _mapping(runtime_data, "case_bodies")
+    runtime_case_flows = _mapping(runtime_data, "case_flows")
+    _validate_module_type(report, runtime_data, project_config, runtime_case_bodies, runtime_case_flows)
+    _validate_suite_default_coverage(report, context, runtime_case_bodies, runtime_case_flows)
+    return report
+
+
 def _collect_markdown_cases(report: ProfileValidationReport, module_dir: Path) -> None:
     if not module_dir.exists():
         _error(report, "E510", "module case directory not found", str(module_dir))
@@ -194,87 +173,60 @@ def _collect_markdown_cases(report: ProfileValidationReport, module_dir: Path) -
         _error(report, "E511", "module has no business.md or boundary.md", str(module_dir))
 
 
+def _collect_suite_markdown_cases(
+    report: ProfileValidationReport,
+    case_files: list[Path],
+    module: str,
+) -> None:
+    for md_path in case_files:
+        report.case_files.append(md_path)
+        parse_result = parse_suite_case_file(md_path, module)
+        for parser_error in parse_result.errors:
+            _error(report, "E001", parser_error, str(md_path))
+        for tc in parse_result.cases:
+            report.case_ids.add(tc.id)
+            report.case_markers[tc.id] = list(tc.markers)
+
+    if not report.case_files:
+        _error(report, "E511", "suite has no Markdown case files")
+
+
+def _diagnostic_code(message: str) -> str:
+    match = re.match(r"^(E\d+):", message)
+    return match.group(1) if match else "E610"
+
+
 def _load_profile_yaml_strict(report: ProfileValidationReport) -> dict[str, Any] | None:
-    text = report.profile_path.read_text(encoding="utf-8")
+    return _load_profile_yaml_strict_from(report, report.profile_path)
+
+
+def _load_profile_yaml_strict_from(
+    report: ProfileValidationReport,
+    profile_path: Path,
+) -> dict[str, Any] | None:
+    text = profile_path.read_text(encoding="utf-8")
     match = _YAML_BLOCK_RE.search(text)
     if not match:
-        _error(report, "E501", "profile must contain one YAML code block", str(report.profile_path))
+        _error(report, "E501", "profile must contain one YAML code block", str(profile_path))
         return None
 
     try:
         data = yaml.safe_load(match.group(1))
     except yaml.YAMLError as exc:
-        _error(report, "E501", f"profile YAML is invalid: {exc}", str(report.profile_path))
+        _error(report, "E501", f"profile YAML is invalid: {exc}", str(profile_path))
         return None
 
     if data is None:
         return {}
     if not isinstance(data, dict):
-        _error(report, "E501", "profile YAML root must be a mapping", str(report.profile_path))
+        _error(report, "E501", "profile YAML root must be a mapping", str(profile_path))
         return None
     return data
 
 
-def _profile_schema_validator() -> Draft202012Validator:
-    schema_text, _ = _profile_schema_source()
-    schema = json.loads(schema_text)
-    Draft202012Validator.check_schema(schema)
-    return Draft202012Validator(schema)
-
-
-def _profile_schema_path() -> Path:
-    cwd_schema = _PROFILE_SCHEMA_RELATIVE_PATH
-    return cwd_schema if cwd_schema.exists() else _REPO_PROFILE_SCHEMA_PATH
-
-
-def _profile_schema_source() -> tuple[str, str]:
-    cwd_schema = _PROFILE_SCHEMA_RELATIVE_PATH
-    if cwd_schema.exists():
-        return cwd_schema.read_text(encoding="utf-8"), str(cwd_schema)
-    if _REPO_PROFILE_SCHEMA_PATH.exists():
-        return _REPO_PROFILE_SCHEMA_PATH.read_text(encoding="utf-8"), str(_REPO_PROFILE_SCHEMA_PATH)
-    resource = resources.files(_PACKAGE_PROFILE_SCHEMA).joinpath(
-        "aitest_config",
-        "schemas",
-        "codegen_profile.schema.json",
-    )
-    return resource.read_text(encoding="utf-8"), str(resource)
-
-
 def _validate_profile_schema(report: ProfileValidationReport, data: dict[str, Any]) -> None:
-    try:
-        validator = _profile_schema_validator()
-    except Exception as exc:
-        try:
-            _, source = _profile_schema_source()
-        except Exception:
-            source = str(_profile_schema_path())
-        _error(report, "E501", f"profile JSON Schema is unavailable: {exc}", source)
-        return
-
-    for error in sorted(validator.iter_errors(data), key=_schema_error_sort_key):
-        _error(report, "E501", _format_schema_error(error), _schema_error_source(error))
-
-
-def _schema_error_sort_key(error: ValidationError) -> tuple[str, str]:
-    return (_schema_error_source(error), error.message)
-
-
-def _schema_error_source(error: ValidationError) -> str:
-    parts: list[str] = []
-    for part in error.absolute_path:
-        if isinstance(part, int):
-            if parts:
-                parts[-1] = f"{parts[-1]}[{part}]"
-            else:
-                parts.append(f"[{part}]")
-        else:
-            parts.append(str(part))
-    return ".".join(parts) or "<root>"
-
-
-def _format_schema_error(error: ValidationError) -> str:
-    return f"profile schema violation: {error.message}"
+    for message, source in profile_schema_diagnostics(data):
+        _error(report, "E501", message, source)
 
 
 def _validate_top_level_shape(report: ProfileValidationReport, data: dict[str, Any]) -> None:
@@ -286,6 +238,14 @@ def _validate_top_level_shape(report: ProfileValidationReport, data: dict[str, A
     _expect_mapping(report, data, "case_fixtures")
     _expect_mapping(report, data, "case_bodies")
     _expect_mapping(report, data, "case_flows")
+    _expect_mapping(report, data, "knowledge_refs")
+    _expect_string(report, data, "module_type")
+    _expect_string(report, data, "profile_scope")
+    _expect_string(report, data, "parent_module")
+    _expect_string(report, data, "parent_profile")
+    _expect_string(report, data, "suite")
+    _expect_string(report, data, "default_fixture")
+    _expect_string(report, data, "default_object")
     _expect_string_list(report, data, "extra_imports")
     _expect_rule_list(report, data)
     _expect_case_fixture_values(report, _mapping(data, "case_fixtures"))
@@ -296,6 +256,11 @@ def _validate_top_level_shape(report: ProfileValidationReport, data: dict[str, A
 def _expect_mapping(report: ProfileValidationReport, data: dict[str, Any], key: str) -> None:
     if key in data and not isinstance(data[key], dict):
         _error(report, "E501", f"{key} must be a mapping", key)
+
+
+def _expect_string(report: ProfileValidationReport, data: dict[str, Any], key: str) -> None:
+    if key in data and not isinstance(data[key], str):
+        _error(report, "E501", f"{key} must be a string", key)
 
 
 def _expect_string_list(report: ProfileValidationReport, data: dict[str, Any], key: str) -> None:
@@ -361,6 +326,30 @@ def _validate_case_references(
             continue
         if case_id not in report.case_ids:
             _error(report, "E505", "case id does not exist in module markdown cases", source)
+
+
+def _validate_suite_default_coverage(
+    report: ProfileValidationReport,
+    context: Any,
+    case_bodies: dict[str, Any],
+    case_flows: dict[str, Any],
+) -> None:
+    covered = set(case_bodies) | set(case_flows)
+    for md_path in context.case_files:
+        parse_result = parse_suite_case_file(md_path, context.module)
+        for tc in parse_result.cases:
+            if tc.id in covered:
+                continue
+            if any("可行性存疑" in marker for marker in tc.markers):
+                continue
+            if parse_result.shared_config.base_request_http is None:
+                _error(
+                    report,
+                    "E506",
+                    "suite profile is missing coverage for a case that cannot use "
+                    f"default_http without shared base_request_http: {tc.id}",
+                    str(md_path),
+                )
 
 
 def _warn_feasibility_suspect_strategies(
