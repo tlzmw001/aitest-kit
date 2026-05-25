@@ -9,6 +9,31 @@
       "type": "string",
       "minLength": 1
     },
+    "profile_scope": {
+      "type": "string",
+      "enum": ["case_suite"]
+    },
+    "parent_module": {
+      "type": "string",
+      "minLength": 1
+    },
+    "parent_profile": {
+      "type": "string",
+      "minLength": 1
+    },
+    "suite": {
+      "type": "string",
+      "minLength": 1
+    },
+    "knowledge_refs": {
+      "type": "object"
+    },
+    "default_fixture": {
+      "$ref": "#/$defs/identifier"
+    },
+    "default_object": {
+      "$ref": "#/$defs/identifier"
+    },
     "assertion_rules": {
       "type": "array",
       "items": {

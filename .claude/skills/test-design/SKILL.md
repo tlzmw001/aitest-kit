@@ -1,8 +1,8 @@
 ---
 name: test-design
-description: 基于测试知识库和测试规范，为指定模块生成业务用例、边界用例和 mismatch 记录
-when_to_use: 当用户需要为某个模块生成测试用例，或需要基于新需求补充测试用例时
-argument-hint: <target_module> [cases_dir]
+description: 基于测试知识库和测试规范，为指定模块或需求 suite 生成 Markdown 用例和 mismatch 记录
+when_to_use: 当用户需要为某个模块、L2 需求或独立用例 suite 生成/补充测试用例时
+argument-hint: <target_module> [cases_dir|suite_dir]
 arguments: [target_module, cases_dir]
 user-invocable: true
 allowed-tools: Read Glob Grep Write Edit Bash
@@ -11,15 +11,15 @@ effort: high
 
 # 测试用例设计
 
-为 `$target_module` 模块生成测试用例。
+为 `$target_module` 模块或某个 L2 需求 suite 生成 Markdown 测试用例。
 
-输出目录：`$cases_dir`（未指定时，从 `aitest_config/config.yaml` 读取 `paths.cases_dir`，默认 `{cases_dir}/$target_module/`）。未指定时询问用户确认后再创建。
+输出目录：`$cases_dir`（未指定时，从 `aitest_config/config.yaml` 读取 `paths.cases_dir`，默认 `{cases_dir}/$target_module/`）。如果用户明确指定 L2/suite 目录，则用该目录承载本批用例；未指定时询问用户确认后再创建。
 
 ## 前置：读取项目配置
 
 读 `aitest_config/config.yaml`，获取：
-- `paths.*` — 知识库、用例、旧用例等目录路径
-- `service.*` — 路由装饰器模式、Schema 校验模式（第二轮用）
+- `paths.*` — 知识库、用例、文档等目录路径；`paths.old_cases_dir` 如未配置则跳过旧用例搜索
+- `service.*` — 路由装饰器模式、Schema 校验模式（如项目配置了这些模式，第二轮使用）
 
 ## 执行流程
 
@@ -54,7 +54,7 @@ effort: high
 
 5. 搜索已有用例，确定编号起点：
    - 搜索 `{paths.cases_dir}/$target_module/` 下已有用例文件
-   - 搜索 `{paths.old_cases_dir}/` 下相关用例
+   - 如果配置了 `{paths.old_cases_dir}`，搜索其中相关旧用例；未配置时跳过
    - 找到该模块缩写的最大 TC 序号，新用例从 +1 开始
 
 6. 读 `aitest_config/refs/assertion-strategy.md`，建立断言策略（结构断言 / 关系断言 / 不可程序化断言的选择标准）
@@ -71,13 +71,13 @@ effort: high
 6. 跳过"已有测试覆盖"中标注为已覆盖的维度（避免与历史用例重复）
 7. 知识库没说的行为 → 预期结果写 `TBD-需确认`，不猜测
 8. 用例的"输入"字段必须基于 L1 文档的输入/输出定义，写出完整请求体结构；L1 未给出完整字段定义的，标注 `[!请求体待补全]`
-9. 前置条件必须写出具体构造方式（配置文件内容、Redis 命令、实验参数 dict），不能只写抽象描述
-10. 区分可控输入与系统中间产物：请求参数、Redis 数据、配置文件、实验参数属于可控输入，可在前置条件中指定具体值；pipeline 的计算结果（如打分分数、排序位次、校准后分数）属于中间产物，不能在前置条件或场景变量中假设其具体值（如"打分返回 0.8"），只能通过调整可控输入间接影响；对中间产物的断言必须使用范围断言或关系断言
+9. 前置条件必须写出具体构造方式（配置片段、管理 API 请求、测试数据记录、外部依赖状态等），不能只写抽象描述
+10. 区分可控输入与系统中间产物：请求参数、配置、测试数据、外部依赖状态属于可控输入，可在前置条件中指定具体值；系统运行时计算结果（如派生值、聚合值、排序位次）属于中间产物，不能在前置条件或场景变量中假设其具体值，只能通过调整可控输入间接影响；对中间产物的断言必须使用范围断言或关系断言
 11. 断言选择遵循 `aitest_config/refs/assertion-strategy.md` 的三种策略
 
 **接口覆盖**：查看 L1 "接口"章节，确认模块暴露的接口类型（HTTP / gRPC / 两者）。两种接口都有时，共享配置必须列出两种接口，每个功能场景必须生成 HTTP 和 gRPC 两组用例（可共享场景变量，仅接口和请求格式不同）。
 
-**输出格式**：输出到 `$cases_dir/business.md`，按 `aitest_config/refs/case-format.md` 的"共享配置 + 精简用例"格式。每条用例只写 **优先级 / 场景变量 / 断言** 三个字段（有特殊状态时加 **标记** 字段）。场景变量必须写成 `key：value` 条目列表，`[manual]`、`[!可行性存疑]` 等标记写在独立的标记字段，不内联到场景变量或断言中。
+**输出格式**：默认输出到 `$cases_dir/business.md`；如果用户指定需求 suite，可输出为 `{suite_name}_business.md` 等带语义的文件名。按 `aitest_config/refs/case-format.md` 的"共享配置 + 精简用例"格式。每条用例只写 **优先级 / 场景变量 / 断言** 三个字段（有特殊状态时加 **标记** 字段）。场景变量必须写成 `key：value` 条目列表，`[manual]`、`[!可行性存疑]` 等标记写在独立的标记字段，不内联到场景变量或断言中。
 
 ### 第三步：第二轮——边界用例（读代码）
 
@@ -89,8 +89,8 @@ effort: high
    - 精度处理（round、截断）
    - 未在知识库中记录的条件分支
 3. 校验第一轮用例的可行性：
-   - **HTTP 路由校验**：在源代码中搜索 `config.yaml` 中 `service.route_patterns` 定义的路由装饰器，确认第一轮用例中的 HTTP 路径与代码中的实际路由完全一致
-   - **请求体 Schema 校验**：搜索 `service.schema_patterns` 定义的模式找到 Schema 定义，逐字段核对第一轮用例的请求体（必填字段必须存在，嵌套结构也要检查）
+   - **HTTP 路由校验**：如果 `config.yaml` 声明了 `service.route_patterns`，按该模式搜索路由；否则以文档、OpenAPI/proto 或用户指定入口为准，必要时标 `[!可行性存疑]`
+   - **请求体 Schema 校验**：如果 `config.yaml` 声明了 `service.schema_patterns`，按该模式搜索 Schema；否则读取 OpenAPI/proto/JSON Schema 等公开接口定义，逐字段核对请求体（必填字段必须存在，嵌套结构也要检查）
    - 前置条件是否可通过代码构造
    - 输入格式是否与代码接口匹配
    - 补全标注了 `[!请求体待补全]` 的用例
@@ -98,7 +98,7 @@ effort: high
 4. 发现规格与实现不一致时 → **不修改第一轮用例**，按 `aitest_config/refs/mismatch-format.md` 新建 mismatch 记录。如果 `$cases_dir/mismatch.md` 已存在，新条目**追加在文件末尾，不删除/覆盖已有条目**，编号从已有最大序号 +1 继续
 5. 第一轮中标记 `TBD-需确认` 的预期结果，如果代码能给出答案，在 business.md 中更新并标注来源
 
-输出到 `$cases_dir/boundary.md`，使用与 business.md 相同的共享配置格式。
+默认输出到 `$cases_dir/boundary.md`，使用与 business.md 相同的共享配置格式；suite 模式可使用 `{suite_name}_boundary.md` 等带语义的文件名。
 Mismatch 输出到 `$cases_dir/mismatch.md`（无则不创建）。
 
 ### 第四步：覆盖变更与知识库刷新
@@ -189,9 +189,9 @@ Mismatch 输出到 `$cases_dir/mismatch.md`（无则不创建）。
 
 1. 读取已有用例文件，理解共享配置和已有用例的格式
 2. 请用户描述要添加的用例（可以一次描述多条），接受自然语言，例如：
-   - "加一条测试：当库存为 0 时请求推荐，应该返回空列表"
+   - "加一条测试：当资源余量为 0 时请求接口，应该返回空列表"
    - "补一个边界：user_id 为空字符串的情况"
-   - "测试并发场景：同一用户同时发两个请求，不应重复发券"
+   - "测试并发场景：同一用户同时发两个创建请求，不应重复创建记录"
 3. 根据用户描述，结合已有共享配置和项目上下文，生成符合 `case-format.md` 格式的用例：
    - 编号从已有最大序号 +1 继续
    - 复用已有共享配置（接口、基础请求体等）

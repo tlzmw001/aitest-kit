@@ -10,6 +10,7 @@ docs/                   # 开发文档输入目录（skill 的输入源）
 test_workspace/         # AI 生成内容的工作目录
   knowledge/            #   测试知识库（L0/L1/L2 + TEST_SPEC）
   cases/                #   测试用例（Markdown，按模块分目录）
+  casesuites/           #   可选：按 L2/迭代批次组织的独立用例 suite
   tests/                #   pytest 测试代码
     conftest.py         #     全局 session fixtures
     fixtures/           #     模块 fixture（每模块一个 .py + codegen_profile.md）
@@ -187,9 +188,9 @@ aitest codegen ab_service --suggest-promotion-patch
 - 测试知识库是用例设计的唯一输入源，不绕过知识库直接写用例
 - Markdown 用例是唯一数据源，test-codegen 生成 pytest 代码执行
 - TEST_SPEC 是所有 skill 的行为准则，经验教训统一沉淀在此
-- 用例存放在 `test_workspace/cases/{模块名}/` 下，未指定时先询问用户
+- 用例默认存放在 `test_workspace/cases/{模块名}/` 下；L2/迭代批次可放到独立 suite 目录，用 `aitest_suite.yaml` 绑定 module
 - 模块 fixture 按模块拆分到 `test_workspace/tests/fixtures/{module}.py`，conftest.py 只放全局 fixture
-- codegen_profile 存放在 `test_workspace/tests/fixtures/codegen_profile_{module}.md`，与 fixture 文件同目录
+- module profile 存放在 `test_workspace/tests/fixtures/codegen_profile_{module}.md`；suite profile 跟随用例目录，命名为 `codegen_profile_{suite}_suite.md`
 - 测试执行报告写入 `test_workspace/reports/`，属于运行产物，不提交；待测系统 bug 仍记录到 `test_workspace/results/`
 - 项目结构或流程发生变更时，检查是否需要同步更新 `CLAUDE.md` 和 `README.md`，并询问用户是否需要更新 `docs/usebook/` 下的文档
 
@@ -252,6 +253,10 @@ codegen 管线分三层，换项目时只改配置层，不改框架层：
 │  模块配置层（每模块一份）                              │
 │  - codegen_profile_{module}.md                      │
 │  - fixtures/{module}.py                             │
+├─────────────────────────────────────────────────────┤
+│  用例批次层（按 L2/迭代批次，可选）                    │
+│  - aitest_suite.yaml                                │
+│  - codegen_profile_{suite}_suite.md                 │
 └─────────────────────────────────────────────────────┘
 ```
 

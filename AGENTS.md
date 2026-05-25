@@ -42,6 +42,9 @@
 - `test_workspace/cases/`
   Markdown 测试用例目录。测试用例按模块组织，是 codegen 和 pytest 生成前的核心设计产物。
 
+- `test_workspace/casesuites/`
+  可选的独立用例批次目录。适合按 L2 需求、迭代或临时测试批次组织用例，并通过 `aitest_suite.yaml` 绑定到某个 L1 模块。
+
 - `test_workspace/tests/`
   pytest 测试代码目录。
 
@@ -190,14 +193,14 @@ test-codegen
 - workspace 模板只有一个来源。
   `aitest_kit/templates/project_workspace/` 是 `aitest init` 使用的唯一模板源；不要维护第二份顶层模板副本。
 
-- 测试用例按模块组织。
-  默认输出到 `test_workspace/cases/{模块名}/`。若模块不明确，在批量生成前先确认目标模块。
+- 测试用例默认按模块组织，也允许按 suite 组织。
+  模块级默认输出到 `test_workspace/cases/{模块名}/`；L2/迭代批次可放到任意 suite 目录，并用 `aitest_suite.yaml` 声明 `module`、`suite`、`case_files` 和 suite profile。
 
 - 模块 fixture 按模块拆分。
   `test_workspace/tests/conftest.py` 只放全局 fixture 和插件注册；模块逻辑放到 `test_workspace/tests/fixtures/{module}.py`。
 
-- `codegen_profile` 与 fixture 同目录。
-  路径固定为 `test_workspace/tests/fixtures/codegen_profile_{module}.md`。
+- module profile 与 fixture 同目录，suite profile 跟随用例目录。
+  `test_workspace/tests/fixtures/codegen_profile_{module}.md` 放 L1 稳定能力；`codegen_profile_{suite}_suite.md` 放该批用例的 `case_flows/case_bodies/request_overrides`。
 
 - 生成的 pytest 是编译产物。
   优先修改 Markdown 用例、profile、fixture、emitter 或 project_config，再重新生成；不要把生成文件当作长期手写源文件。
@@ -235,8 +238,8 @@ AI 的角色是测试工程师，不是被测系统的开发者。
 4. 读取项目配置。
    `aitest_config/project_config.yaml` 是项目级配置入口；`aitest_kit/codegen/project_config.py` 是 schema/loader，不是项目配置编辑入口。fallback 用于配置缺失或缺字段时兼容，不能随意删除。
 
-5. 读取模块 profile。
-   检查 `test_workspace/tests/fixtures/codegen_profile_{module}.md`。如果不存在，参考其他模块已有 profile 的结构，但不复制模块特有断言逻辑。
+5. 读取 profile。
+   模块模式读取 `test_workspace/tests/fixtures/codegen_profile_{module}.md`；suite 模式读取 `aitest_suite.yaml`，再临时合并 module profile + suite profile。suite profile 必须以 `_suite.md` 结尾。
 
 6. Case IR planner 生成计划。
    `aitest_kit/codegen/planner.py` 结合 ParseResult、project_config 和 profile 选择 `default_http`、`default_grpc`、`structured_case_flow`、`custom_case_body`、`manual` 或 `skipped`，并记录 source_trace。
@@ -299,6 +302,10 @@ codegen 管线分三层，换项目时只改配置层，不改框架层：
 模块配置层（每模块一份）
   - test_workspace/tests/fixtures/codegen_profile_{module}.md
   - test_workspace/tests/fixtures/{module}.py
+
+用例批次层（按 L2/迭代批次，可选）
+  - aitest_suite.yaml
+  - codegen_profile_{suite}_suite.md
 ```
 
 ## AI 与代码生成边界

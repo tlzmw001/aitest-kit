@@ -58,11 +58,28 @@ python3 -m pytest test_workspace/tests/generated --collect-only -q
 ```bash
 aitest codegen <module>              # 生成单个模块的 pytest
 aitest codegen --all                 # 生成全部模块
+aitest codegen --cases <suite_dir>   # 生成一批独立 case suite 的 pytest
 aitest codegen --all --check         # 校验 generated 是否与 Markdown/profile 同步
 aitest run <module>                  # 执行测试 + 生成结构化报告
 aitest report                        # 重新渲染报告
 aitest doctor                        # 检查 workspace、profile、generated 和 collect 状态
+aitest upgrade --check               # 检查已初始化 workspace 是否需要同步新版模板资产
+aitest upgrade --apply               # 安全应用可自动合并的模板资产升级
 ```
+
+### 升级已有 workspace
+
+升级分两步：
+
+```bash
+python3 -m pip install -U aitest-kit
+aitest upgrade --workspace /path/to/your_project --check
+aitest upgrade --workspace /path/to/your_project --apply
+```
+
+`pip install -U` 只升级 CLI、codegen、doctor、run/report 等 Python 程序；`aitest upgrade` 才会检查已经复制进项目的 workspace 资产，例如 skills、schema、refs、helpers 和协作说明。
+
+不要用 `aitest init --force` 升级已有 workspace。`upgrade` 会根据 `.aitest/workspace.json` 判断文件是否仍是旧模板：未被本地修改的模板文件可安全更新，疑似用户修改过的文件默认跳过并提示人工 review。
 
 ### 观测与诊断
 
@@ -170,6 +187,7 @@ Markdown 用例 + codegen_profile
 | **框架层** | parser / Case IR / emitter / validator / CLI / helpers / skills | 不改 |
 | **项目配置层** | `config.yaml` + `project_config.yaml` | 重写 |
 | **模块配置层** | `codegen_profile_{module}.md` + `fixtures/{module}.py` | 每模块一份 |
+| **用例批次层** | `aitest_suite.yaml` + `codegen_profile_{suite}_suite.md` | 按 L2/测试批次跟随用例目录 |
 
 ## Workspace 结构
 
@@ -185,6 +203,7 @@ your_project/
 ├── test_workspace/
 │   ├── knowledge/               # 测试知识库（L0/L1/L2 + TEST_SPEC）
 │   ├── cases/                   # Markdown 测试用例（按模块分目录）
+│   ├── casesuites/              # 可选：独立 case suite（按 L2/测试批次分目录）
 │   ├── tests/
 │   │   ├── fixtures/            # 模块 fixture + codegen profile
 │   │   ├── generated/           # codegen 生成的 pytest（编译产物）

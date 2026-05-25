@@ -20,7 +20,12 @@ def strip_backticks(s: str) -> str:
 def module_class_name(module: str, file_type: str) -> str:
     parts = module.split("_")
     camel = "".join(p.capitalize() for p in parts)
-    suffix = "Business" if file_type == "business" else "Boundary"
+    if file_type == "business":
+        suffix = "Business"
+    elif file_type == "boundary":
+        suffix = "Boundary"
+    else:
+        suffix = "".join(p.capitalize() for p in file_type.split("_"))
     return f"Test{camel}{suffix}"
 
 

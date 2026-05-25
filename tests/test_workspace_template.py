@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 
 from click.testing import CliRunner
@@ -70,6 +72,11 @@ def test_init_creates_workspace_from_single_package_template(tmp_path):
     assert (target / "aitest_config" / "config.yaml").exists()
     assert (target / "aitest_config" / "schemas" / "codegen_profile.schema.json").exists()
     assert (target / "test_workspace" / "tests" / "helpers" / "http.py").exists()
+    metadata = target / ".aitest" / "workspace.json"
+    assert metadata.exists()
+    manifest = json.loads(metadata.read_text(encoding="utf-8"))
+    assert manifest["schema_version"] == 1
+    assert manifest["template_files"]["README.md"]["sha256"]
     assert not (target / "__init__.py").exists()
     assert not list(target.rglob(".DS_Store"))
     assert "Workspace initialized:" in result.output
@@ -161,6 +168,10 @@ def test_cli_help_matches_workspace_product_flow():
     assert doctor_help.exit_code == 0
     assert "Diagnose workspace layout" in doctor_help.output
 
+    upgrade_help = runner.invoke(main, ["upgrade", "--help"])
+    assert upgrade_help.exit_code == 0
+    assert "Upgrade template-managed files" in upgrade_help.output
+
     run_help = runner.invoke(main, ["run", "--help"])
     assert run_help.exit_code == 0
     assert "freshness check" in run_help.output
@@ -169,3 +180,77 @@ def test_cli_help_matches_workspace_product_flow():
     report_help = runner.invoke(main, ["report", "--help"])
     assert report_help.exit_code == 0
     assert "existing result.json" in report_help.output
+
+
+def test_upgrade_check_reports_up_to_date_after_init(tmp_path):
+    target = tmp_path / "project"
+    runner = CliRunner()
+    assert runner.invoke(main, ["init", "--target", str(target)]).exit_code == 0
+
+    result = runner.invoke(main, ["upgrade", "--workspace", str(target), "--check"])
+
+    assert result.exit_code == 0
+    assert "Workspace is up to date." in result.output
+    assert "Summary:" in result.output
+    assert "[UPDATE]" not in result.output
+    assert "[LOCAL]" not in result.output
+
+
+def test_upgrade_apply_restores_missing_safe_template_file(tmp_path):
+    target = tmp_path / "project"
+    runner = CliRunner()
+    assert runner.invoke(main, ["init", "--target", str(target)]).exit_code == 0
+    skill = target / ".codex" / "skills" / "test-codegen" / "SKILL.md"
+    skill.unlink()
+
+    result = runner.invoke(main, ["upgrade", "--workspace", str(target), "--apply"])
+
+    assert result.exit_code == 0
+    assert "[NEW] .codex/skills/test-codegen/SKILL.md" in result.output
+    assert "created=1" in result.output
+    assert skill.exists()
+
+
+def test_upgrade_apply_updates_old_clean_template_file_and_backs_up(tmp_path):
+    target = tmp_path / "project"
+    runner = CliRunner()
+    assert runner.invoke(main, ["init", "--target", str(target)]).exit_code == 0
+
+    readme = target / "README.md"
+    old_content = "# old clean template\n"
+    readme.write_text(old_content, encoding="utf-8")
+    _set_manifest_hash(target, "README.md", old_content)
+
+    result = runner.invoke(main, ["upgrade", "--workspace", str(target), "--apply"])
+
+    assert result.exit_code == 0
+    assert "[UPDATE] README.md" in result.output
+    assert "updated=1" in result.output
+    assert "# AITest 项目工作区" in readme.read_text(encoding="utf-8")
+    backups = list((target / ".aitest" / "backups").glob("upgrade-*/README.md"))
+    assert backups
+    assert backups[0].read_text(encoding="utf-8") == old_content
+
+
+def test_upgrade_apply_does_not_overwrite_local_modified_file(tmp_path):
+    target = tmp_path / "project"
+    runner = CliRunner()
+    assert runner.invoke(main, ["init", "--target", str(target)]).exit_code == 0
+
+    readme = target / "README.md"
+    local_content = "# user modified\n"
+    readme.write_text(local_content, encoding="utf-8")
+
+    result = runner.invoke(main, ["upgrade", "--workspace", str(target), "--apply"])
+
+    assert result.exit_code == 0
+    assert "[LOCAL] README.md" in result.output
+    assert "updated=0" in result.output
+    assert readme.read_text(encoding="utf-8") == local_content
+
+
+def _set_manifest_hash(target: Path, relative: str, content: str) -> None:
+    metadata_path = target / ".aitest" / "workspace.json"
+    manifest = json.loads(metadata_path.read_text(encoding="utf-8"))
+    manifest["template_files"][relative]["sha256"] = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    metadata_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

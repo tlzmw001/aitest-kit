@@ -84,7 +84,31 @@ aitest run --workspace /path/to/your_project/aitest_workspace <module>
 aitest report --workspace /path/to/your_project/aitest_workspace
 ```
 
-## 三、准备迁移输入
+## 三、升级已有 workspace
+
+`aitest-kit` 升级后，先升级 Python 包：
+
+```bash
+python3 -m pip install -U aitest-kit
+```
+
+这一步只更新 CLI、codegen、doctor、run/report 等程序代码，不会自动覆盖已经复制进项目的 workspace 文件。要同步新版模板资产，使用：
+
+```bash
+aitest upgrade --workspace /path/to/your_project/aitest_workspace --check
+aitest upgrade --workspace /path/to/your_project/aitest_workspace --apply
+```
+
+`upgrade` 会检查 `.aitest/workspace.json` 中记录的模板哈希：
+
+- 当前文件仍等于旧模板 → 可以安全升级。
+- 当前文件已经被用户修改 → 默认跳过，提示人工 review。
+- 目标文件缺失 → 如果属于安全模板资产，自动补齐。
+- 项目专属配置、fixture、profile、用例、generated pytest 和测试结果 → 默认不自动覆盖。
+
+不要用 `aitest init --force` 升级已有 workspace，它会直接覆盖模板管理文件，容易丢失项目适配。
+
+## 四、准备迁移输入
 
 把公开文档放入 workspace 的 `docs/` 目录，例如：
 
@@ -107,7 +131,7 @@ docs/config_schema.md
 
 文档缺失的信息不要猜测，在知识库里标 `[?]`，后续由产品、开发或灰盒补文档确认。
 
-## 四、构建测试知识库
+## 五、构建测试知识库
 
 使用 `knowledge-build` 从 `docs/` 构建或更新测试知识库：
 
@@ -127,7 +151,7 @@ docs/
 
 知识库是测试设计的主输入。不要绕过知识库直接从零散文档生成 pytest。
 
-## 五、设计 Markdown 用例
+## 六、设计 Markdown 用例
 
 每个模块至少准备：
 
@@ -151,7 +175,7 @@ Markdown 用例必须满足：
 - 请求体是否完整。
 - 是否把产品 bug、文档缺口、测试基础设施需求混进正常回归用例。
 
-## 六、补充项目配置
+## 七、补充项目配置
 
 优先修改：
 
@@ -181,7 +205,7 @@ aitest_config/project_config.yaml
 
 迁移时先通过项目配置层和模块配置层适配，不要直接改框架层。
 
-## 七、建立模块 fixture 和 profile
+## 八、建立模块 fixture 和 profile
 
 每个模块至少准备：
 
@@ -216,7 +240,7 @@ profile 负责告诉 codegen 这批 Markdown 用例如何生成：
 
 `case_bodies` 不是失败，但长期无理由的大量 `case_bodies` 需要进入治理。能用线性 `call / assign / assert / comment` 表达的流程，优先沉淀为 `case_flows`。
 
-## 八、执行 codegen 门禁
+## 九、执行 codegen 门禁
 
 每轮迁移按固定顺序验证：
 
@@ -254,7 +278,7 @@ PYTHONPATH=/path/to/your_project/aitest_workspace
 ModuleNotFoundError: No module named 'test_workspace'
 ```
 
-## 九、运行测试和生成报告
+## 十、运行测试和生成报告
 
 服务启动后执行：
 
@@ -277,7 +301,7 @@ test_workspace/reports/runs/{run_id}/
 
 `aitest run` 会先做 generated freshness check。如果 Markdown/profile 与 generated pytest 不一致，会生成 `BLOCKED_RUN` 报告并停止，不执行过期测试。
 
-## 十、失败分流
+## 十一、失败分流
 
 失败后先分流，不要直接改 generated pytest。
 
@@ -299,7 +323,7 @@ test_workspace/reports/runs/{run_id}/
 - 伪造响应。
 - 把产品 bug 写成测试侧成功。
 
-## 十一、迁移完成标准
+## 十二、迁移完成标准
 
 一个模块迁移完成至少满足：
 
@@ -327,7 +351,7 @@ aitest run --workspace /path/to/workspace <module>
 - 待测系统 bug 已记录到 `test_workspace/results/`。
 - 重要经验已沉淀到 `TEST_SPEC.md`、profile 或相关文档。
 
-## 十二、相关文档
+## 十三、相关文档
 
 - [AITest Quickstart](./aitest_quickstart.md)
 - [Codegen Profile Guide](./codegen_profile_guide.md)

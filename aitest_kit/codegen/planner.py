@@ -37,18 +37,15 @@ from aitest_kit.codegen.render_utils import (
     tc_number,
 )
 
-
 def _has_marker(tc: TestCase, text: str) -> bool:
     needle = text.lower()
     return any(needle in marker.lower() for marker in tc.markers)
-
 
 def _skip_reason(tc: TestCase) -> str | None:
     for marker in tc.markers:
         if "可行性存疑" in marker:
             return marker
     return None
-
 
 def _is_protocol_key(key: str) -> bool:
     normalized = key.lower()

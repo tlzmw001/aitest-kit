@@ -31,6 +31,12 @@ That makes the process reviewable, reproducible, and easier to improve over time
 pip install aitest-kit
 ```
 
+To upgrade an existing installation:
+
+```bash
+python3 -m pip install -U aitest-kit
+```
+
 ## Initialize a Workspace
 
 ```bash
@@ -44,9 +50,24 @@ The workspace contains:
 - `aitest_config/` for project and codegen configuration
 - `test_workspace/knowledge/` for L0/L1/L2 knowledge docs
 - `test_workspace/cases/` for Markdown test cases
+- `test_workspace/casesuites/` for optional L2 or iteration-oriented case suites
 - `test_workspace/tests/fixtures/` for module fixtures and profiles
 - `test_workspace/tests/generated/` for generated pytest
 - `.codex/`, `.claude/`, and `.agents/` skills for AI-assisted workflows (8 skills: doc-review, doc-gen, knowledge-build, test-design, test-scaffold, test-codegen, test-fix, emitter-build)
+
+## Upgrade a Workspace
+
+Package upgrades and workspace template upgrades are separate:
+
+```bash
+python3 -m pip install -U aitest-kit
+aitest upgrade --workspace /path/to/aitest_workspace --check
+aitest upgrade --workspace /path/to/aitest_workspace --apply
+```
+
+`pip install -U` updates the CLI and Python code. `aitest upgrade` checks files that were copied into the project by `aitest init`, such as skills, schemas, refs, helpers, and workspace guidance docs.
+
+Do not use `aitest init --force` to upgrade an existing workspace. `upgrade` uses `.aitest/workspace.json` to update only files that still match the previous template; locally modified files are skipped for manual review.
 
 ## Codegen Workflow
 
@@ -55,6 +76,7 @@ aitest codegen --all --validate-profile
 aitest codegen --all --dump-ir
 aitest codegen --all
 aitest codegen --all --check
+aitest codegen --cases test_workspace/casesuites/<suite>
 aitest doctor
 python3 -m pytest test_workspace/tests/generated --collect-only -q
 ```

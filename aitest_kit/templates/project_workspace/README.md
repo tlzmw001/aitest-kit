@@ -10,6 +10,7 @@
 - `docs/`：目标系统的公开设计文档，供知识库构建流程使用。
 - `test_workspace/knowledge/`：L0/L1/L2 测试知识库和 `TEST_SPEC.md`。
 - `test_workspace/cases/`：Markdown 测试用例，按模块组织。
+- `test_workspace/casesuites/`：可选，按 L2/迭代批次组织的独立用例 suite。
 - `test_workspace/tests/fixtures/`：模块 fixture 和 `codegen_profile_{module}.md`。
 - `test_workspace/tests/generated/`：codegen 生成的 pytest 文件。
 - `test_workspace/reports/`：测试执行报告。
@@ -19,13 +20,14 @@
 
 1. 将目标系统的公开设计文档放入项目的 docs 目录。
 2. 构建或更新测试知识库。
-3. 在 `test_workspace/cases/{module}/` 下创建 Markdown 用例。
-4. 在 `test_workspace/tests/fixtures/` 下添加 fixture 和 `codegen_profile_{module}.md`。
+3. 在 `test_workspace/cases/{module}/` 下创建 Markdown 用例；或在 suite 目录下创建 `aitest_suite.yaml` + Markdown 用例。
+4. 在 `test_workspace/tests/fixtures/` 下添加 fixture 和 module profile；suite 用例可在用例目录旁添加 `codegen_profile_{suite}_suite.md`。
 5. 生成并运行测试：
 
 ```bash
 aitest codegen --all --validate-profile
 aitest codegen --all
+aitest codegen --cases test_workspace/casesuites/<suite>
 aitest run <module>
 ```
 
@@ -46,6 +48,6 @@ aitest run <module>
 
 ## 稳定性说明
 
-v0.1 的稳定接口包括 `aitest` CLI、本工作区目录结构、Markdown 用例文件、`codegen_profile_{module}.md` 和生成的 pytest 输出。
+v0.1 的稳定接口包括 `aitest` CLI、本工作区目录结构、Markdown 用例文件、module/suite profile 和生成的 pytest 输出。
 
 健康报告、晋升报告、晋升补丁和内部 Python API 属于辅助工具，可能会演进。
