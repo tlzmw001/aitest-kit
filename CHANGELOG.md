@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.3 - 2026-05-26
+
+### Added
+
+- Added case-suite profile support so generated pytest can be organized by Markdown case files instead of only module-level profiles.
+- Added workspace upgrade support through `.aitest/workspace.json` manifests and the `aitest upgrade` command.
+- Added upgrade-aware workspace template metadata, including packaged skill reference files and case-suite directories.
+
+### Changed
+
+- Refactored codegen execution into module and suite runners to reduce CLI orchestration complexity.
+- Strengthened profile validation, doctor checks, and scaffold/codegen skill guidance for new-project migrations.
+- Split long skill files into focused `refs/` documents across Codex, Claude, agents, and workspace templates.
+
 ## 0.1.2 - 2026-05-20
 
 ### Added

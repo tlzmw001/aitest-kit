@@ -1,7 +1,7 @@
 # AITest Kit 代码通读指南
 
 > 目标读者：第一次系统读这个项目的人。  
-> 目标：理解当前 `aitest-kit 0.1.2` 的功能边界、模块职责、关键函数调用和数据流，后续可以按章节交互式学习。
+> 目标：理解当前 `aitest-kit` 的功能边界、模块职责、关键函数调用和数据流，后续可以按章节交互式学习。
 
 本文只梳理 `aitest_kit/`、`aitest_config/`、`test_workspace/`、workspace 模板和 skills 的协作关系。`coupon_system/` 与 `ab_experiment_sdk/` 是历史演练中的待测/依赖服务，不是 AITest Kit 框架本体。
 
