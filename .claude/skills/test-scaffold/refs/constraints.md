@@ -24,14 +24,17 @@
 
 禁止混用（`fixture: setup_xxx` + `object: client` + steps 首步 `call: setup_xxx` → 双重赋值）。
 
+当多条 flow 都使用同一注入方式时，优先在 profile 顶层写 `default_fixture` / `default_object`。factory 模式再加 `default_case_setup`，例如 `case = client_factory(case_id="{case_id}")`，不要在每条 case_flow 重复同一段 setup。
+
 ## case_flow 规则
 
 - steps 只用 `call` / `assign` / `assert` / `comment`
 - `assert` 以 `assert ` 开头，是可执行 Python
 - 不塞 if/loop/try，复杂逻辑下沉到 fixture/helper
 - kwargs/args 值为合法 Python 字面量、`{ref: previous_save_as}`、`{expr: python_expr}` 或 `{var: profile_variable_name}`
-- `{var: name}` 只引用 suite/module profile 的 `variables.defaults` 或 `variables.cases.{case_id}`；缺 env 会在运行时失败并只显示 env 名，不显示值
+- `{var: name}` 只引用 suite/module profile 的 `variables.defaults` 或 `variables.cases.{case_id}`；缺 env 且 `.env` / `AITEST_ENV_FILE` 也无法提供时，会在运行时失败并只显示 env 名，不显示值
 - 不用 fixture 按 case_id 选择账号/token；不同 case 的数据差异放到 profile variables
+- 单条 case_flow 可以显式写 `fixture` 或 `object` 覆盖顶层默认值；否则必须能从 `default_fixture` 得到 fixture
 
 ## auto_fields 判断
 

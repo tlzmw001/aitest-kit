@@ -18,18 +18,24 @@ CODEGEN_EXCEPTIONS = {
     "SyntaxError",
 }
 
+PRECONDITION_EXCEPTIONS = {
+    "ProfileVariableError",
+}
+
 
 def classify_failure(phase: str, exception_type: str) -> str:
     """Classify a failure using the Phase 3 MVP rules."""
     phase = (phase or "unknown").lower()
     exception_type = exception_type or ""
 
+    if exception_type in PRECONDITION_EXCEPTIONS:
+        return "PRECONDITION_MISSING"
     if phase == "teardown":
         return "TEARDOWN_ERROR"
     if phase == "setup":
         if exception_type in ENVIRONMENT_EXCEPTIONS:
             return "ENVIRONMENT_ERROR"
-        return "FIXTURE_ERROR"
+        return "TEST_SCAFFOLD_ERROR"
     if phase == "call":
         if exception_type == "AssertionError":
             return "ASSERTION_FAILURE"
@@ -37,4 +43,3 @@ def classify_failure(phase: str, exception_type: str) -> str:
             return "CODEGEN_ERROR"
         return "UNKNOWN"
     return "UNKNOWN"
-

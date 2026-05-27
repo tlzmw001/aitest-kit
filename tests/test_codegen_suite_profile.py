@@ -207,6 +207,87 @@ case_flows:
         assert "os.environ" not in text
 
 
+def test_codegen_cases_suite_inherits_module_case_flow_defaults(tmp_path):
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
+        root = Path(cwd)
+        fixture_dir = root / "test_workspace" / "tests" / "fixtures"
+        fixture_dir.mkdir(parents=True, exist_ok=True)
+        (fixture_dir / "codegen_profile_gateway_api.md").write_text(
+            """```yaml
+module_type: multi_endpoint
+extra_imports:
+  - "from test_workspace.tests.fixtures.gateway_api import setup_gateway_api"
+default_fixture: setup_gateway_api
+default_object: client_factory
+default_case_setup:
+  call: client_factory
+  kwargs:
+    case_id: "{case_id}"
+  save_as: client
+```
+""",
+            encoding="utf-8",
+        )
+        suite_dir = root / "test_workspace" / "casesuites" / "factory_smoke"
+        suite_dir.mkdir(parents=True, exist_ok=True)
+        (suite_dir / "aitest_suite.yaml").write_text(
+            """module: gateway_api
+suite: factory_smoke
+case_files:
+  - business.md
+profile: codegen_profile_factory_smoke_suite.md
+""",
+            encoding="utf-8",
+        )
+        (suite_dir / "business.md").write_text(
+            """# factory smoke
+
+## 共享配置
+
+**接口**：`GET /health`
+
+---
+
+## 一、冒烟
+
+### TC-GW-061：factory health ok
+- **优先级**：P0
+- **断言**：`response.status == "ok"`
+""",
+            encoding="utf-8",
+        )
+        (suite_dir / "codegen_profile_factory_smoke_suite.md").write_text(
+            """```yaml
+profile_scope: case_suite
+parent_module: gateway_api
+suite: factory_smoke
+case_flows:
+  TC-GW-061:
+    steps:
+      - call: client.health
+        save_as: resp
+      - assert: 'assert resp["status"] == "ok"'
+```
+""",
+            encoding="utf-8",
+        )
+
+        validate = runner.invoke(codegen, ["--cases", str(suite_dir), "--validate-profile"])
+        assert validate.exit_code == 0
+        assert "warnings=0" in validate.output
+
+        dump = runner.invoke(codegen, ["--cases", str(suite_dir), "--dump-ir"])
+        assert dump.exit_code == 0
+        payload = json.loads(dump.output)
+        case = payload["suites"][0]["files"][0]["cases"][0]
+        assert case["fixtures"] == ["setup_gateway_api"]
+        assert case["case_flow"]["object_name"] == "client_factory"
+        assert case["case_flow"]["steps"][0]["call"] == "client_factory"
+        assert case["case_flow"]["steps"][0]["kwargs"] == {"case_id": "TC-GW-061"}
+        assert case["case_flow"]["steps"][1]["call"] == "client.health"
+
+
 def test_codegen_cases_allows_explicit_module_without_manifest(tmp_path):
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:

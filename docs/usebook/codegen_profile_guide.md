@@ -94,6 +94,14 @@ profile assertion_rules > project_config builtin_assertion_rules > named_templat
 - `env`：运行时从环境变量读取。generated pytest 只写 env 名，不写 env 值。
 - `value`：profile 字面量，适合错误密码、非法枚举、固定 path 片段等。
 
+`env` 的读取顺序：
+
+1. 先读当前进程的真实环境变量。
+2. 如果缺失，再读 dotenv 文件：默认是当前工作目录下的 `.env`。
+3. 如需指定其他 dotenv 文件，可设置 `AITEST_ENV_FILE=/path/to/.env`；设置后使用该文件替代当前目录 `.env`。
+
+`.env` 文件只作为本地运行时输入，不会被 codegen 写入 generated pytest；报告和错误信息只显示 env 名，不显示 env 值。
+
 ```yaml
 profile_scope: case_suite
 parent_module: management_auth_user
@@ -138,7 +146,7 @@ case_flows:
 - 变量名必须是合法 Python 标识符。
 - 每个变量只能声明 `env` 或 `value` 之一。
 - `{var: name}` 必须能在 `variables.defaults` 或 `variables.cases.{case_id}` 中找到。
-- 缺 env 时测试失败，错误信息只显示 env 名，不显示 env 值。
+- 缺 env 且 `.env` / `AITEST_ENV_FILE` 也无法提供时，测试失败，错误信息只显示 env 名，不显示 env 值。
 - 不要让 fixture 按 case_id 分发不同账号或 token；case 级数据差异放到 `variables`。
 
 ## case_flows
@@ -147,10 +155,15 @@ case_flows:
 
 ```yaml
 module_type: multi_endpoint
+default_fixture: setup_demo_client
+default_object: client_factory
+default_case_setup:
+  call: client_factory
+  kwargs:
+    case_id: "{case_id}"
+  save_as: client
 case_flows:
   TC-DEMO-002:
-    fixture: setup_demo_client
-    object: client
     steps:
       - call: client.create
         kwargs:
@@ -165,11 +178,21 @@ case_flows:
       - assert: 'assert get_resp["value"] == 3'
 ```
 
+`default_fixture` / `default_object` / `default_case_setup` 是 case_flow 的默认注入规则：
+
+- `default_fixture`：没有单独声明 `fixture` 的 case_flow 使用这个 fixture 进入 pytest 函数签名。
+- `default_object`：renderer 会先生成 `default_object = default_fixture`，例如 `client_factory = setup_demo_client`。
+- `default_case_setup`：自动插入到每条 case_flow 的第一步，常用于 `case = client_factory(case_id="{case_id}")`。
+- `{case_id}` 会在生成 IR 时替换成当前用例 ID。
+- 单条 case_flow 仍可以显式写 `fixture` 或 `object` 覆盖默认值。
+
+适用场景：同一个模块或 suite 下，每条用例都需要相同的 factory setup，但后续业务动作不同。
+
 约束：
 
 - case_id 必须匹配 `^TC-[A-Z0-9]+-[0-9]+$`。
-- `fixture` 必须非空。
-- `object` 必须是合法 Python 标识符。
+- 每条 case_flow 必须能通过自身或顶层 `default_fixture` 得到非空 fixture。
+- `object` / `default_object` 必须是合法 Python 标识符。
 - `steps` 至少一项。
 - `assert` 必须写成可执行 Python 断言，例如 `'assert resp["code"] == 0'`；不要写裸表达式。
 

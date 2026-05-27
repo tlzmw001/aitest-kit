@@ -28,16 +28,19 @@
 ## emitter 规则
 
 ```yaml
+module_type: isolated_service
+default_fixture: setup_validation_ratelimit
+default_object: client_factory
+default_case_setup:
+  call: client_factory
+  kwargs:
+    case_id: "{case_id}"
+  save_as: case
 extra_imports:
   - from test_workspace.tests.fixtures.validation_ratelimit import BOUNDARY_ITEM, ERR, LIMITED
 case_flows:
   TC-VAL-001:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-VAL-001
-        save_as: case
       - call: case.http
         args:
           - ''
@@ -49,12 +52,7 @@ case_flows:
         save_as: resp
       - assert: assert resp == ERR
   TC-VAL-002:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-VAL-002
-        save_as: case
       - call: case.http
         args:
           - u_val_scene_empty
@@ -67,12 +65,7 @@ case_flows:
         save_as: resp
       - assert: assert resp == ERR
   TC-VAL-003:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-VAL-003
-        save_as: case
       - call: case.http
         args:
           - u_val_device_empty
@@ -85,12 +78,7 @@ case_flows:
         save_as: resp
       - assert: assert resp == ERR
   TC-VAL-005:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-VAL-005
-        save_as: case
       - call: case.grpc_missing
         args:
           - u_val_grpc_missing_control
@@ -99,12 +87,7 @@ case_flows:
         save_as: resp
       - assert: assert resp == ERR
   TC-GRPC-001:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-GRPC-001
-        save_as: case
       - call: case.grpc_missing
         args:
           - u_grpc_external_missing
@@ -113,12 +96,7 @@ case_flows:
         save_as: resp
       - assert: assert resp == ERR
   TC-GRPC-002:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-GRPC-002
-        save_as: case
       - call: case.grpc_missing
         args:
           - u_grpc_threshold_missing
@@ -127,12 +105,7 @@ case_flows:
         save_as: resp
       - assert: assert resp == ERR
   TC-GRPC-003:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-GRPC-003
-        save_as: case
       - call: case.grpc_missing
         args:
           - u_grpc_max_claim_missing
@@ -141,12 +114,7 @@ case_flows:
         save_as: resp
       - assert: assert resp == ERR
   TC-SCHEMA-001:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-SCHEMA-001
-        save_as: case
       - call: case.body
         args:
           - u_schema_external_missing
@@ -168,12 +136,7 @@ case_flows:
         expr: '[item["loc"] for item in resp.json()["detail"]]'
       - assert: assert ["body", "external"] in locs
   TC-SCHEMA-002:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-SCHEMA-002
-        save_as: case
       - call: case.body
         args:
           - u_schema_threshold_missing
@@ -195,12 +158,7 @@ case_flows:
         expr: '[item["loc"] for item in resp.json()["detail"]]'
       - assert: assert ["body", "score_threshold"] in locs
   TC-SCHEMA-003:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-SCHEMA-003
-        save_as: case
       - call: case.body
         args:
           - u_schema_max_claim_missing
@@ -222,12 +180,7 @@ case_flows:
         expr: '[item["loc"] for item in resp.json()["detail"]]'
       - assert: assert ["body", "max_claim_per_request"] in locs
   TC-VAL-004:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-VAL-004
-        save_as: case
       - call: case.http
         args:
           - u_val_items_empty
@@ -240,12 +193,7 @@ case_flows:
         save_as: resp
       - assert: assert resp == ERR
   TC-VAL-006:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-VAL-006
-        save_as: case
       - call: case.http
         args:
           - u_val_http_external_2
@@ -257,12 +205,7 @@ case_flows:
         save_as: resp
       - assert: assert resp == ERR
   TC-VAL-007:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-VAL-007
-        save_as: case
       - call: case.grpc
         args:
           - u_val_grpc_external_2
@@ -274,12 +217,7 @@ case_flows:
         save_as: resp
       - assert: assert resp == ERR
   TC-VAL-008:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-VAL-008
-        save_as: case
       - call: case.http
         args:
           - u_val_http_threshold_low
@@ -291,12 +229,7 @@ case_flows:
         save_as: resp
       - assert: assert resp == ERR
   TC-VAL-009:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-VAL-009
-        save_as: case
       - call: case.grpc
         args:
           - u_val_grpc_threshold_high
@@ -308,12 +241,7 @@ case_flows:
         save_as: resp
       - assert: assert resp == ERR
   TC-VAL-010:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-VAL-010
-        save_as: case
       - call: case.http
         args:
           - u_val_http_max_claim_0
@@ -325,12 +253,7 @@ case_flows:
         save_as: resp
       - assert: assert resp == ERR
   TC-VAL-011:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-VAL-011
-        save_as: case
       - call: case.grpc
         args:
           - u_val_grpc_max_claim_0
@@ -342,12 +265,7 @@ case_flows:
         save_as: resp
       - assert: assert resp == ERR
   TC-VAL-012:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-VAL-012
-        save_as: case
       - call: case.http
         args:
           - u_reqid_http_auto
@@ -360,12 +278,7 @@ case_flows:
       - assert: assert resp['code'] == 0
       - comment: 'MANUAL CHECK: 应用日志存在 recommend request:，其中 reqId= 的值匹配 UUID 正则'
   TC-VAL-013:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-VAL-013
-        save_as: case
       - call: case.grpc
         args:
           - u_reqid_grpc_auto
@@ -378,12 +291,7 @@ case_flows:
       - assert: assert resp['code'] == 0
       - comment: 'MANUAL CHECK: 应用日志存在 recommend request:，其中 reqId= 的值匹配 UUID 正则'
   TC-GRPC-004:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-GRPC-004
-        save_as: case
       - call: case.grpc
         args:
           - u_grpc_valid
@@ -395,12 +303,7 @@ case_flows:
         save_as: resp
       - assert: assert resp['code'] == 0
   TC-RATE-001:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-RATE-001
-        save_as: case
       - call: case.http
         args:
           - u_rate_old_user
@@ -432,12 +335,7 @@ case_flows:
       - assert: assert r2['code'] == 0
       - assert: assert r3 == LIMITED
   TC-RATE-002:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-RATE-002
-        save_as: case
       - call: case.http
         args:
           - u_rate_http_global_1
@@ -469,12 +367,7 @@ case_flows:
       - assert: assert r2['code'] == 0
       - assert: assert r3 == LIMITED
   TC-RATE-003:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-RATE-003
-        save_as: case
       - call: case.grpc
         args:
           - u_rate_grpc_global_1
@@ -506,12 +399,7 @@ case_flows:
       - assert: assert r2['code'] == 0
       - assert: assert r3 == LIMITED
   TC-RATE-004:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-RATE-004
-        save_as: case
       - call: case.http
         args:
           - u_rate_http_user
@@ -533,12 +421,7 @@ case_flows:
       - assert: assert r1['code'] == 0
       - assert: assert r2 == LIMITED
   TC-RATE-005:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-RATE-005
-        save_as: case
       - call: case.grpc
         args:
           - u_rate_grpc_user
@@ -560,12 +443,7 @@ case_flows:
       - assert: assert r1['code'] == 0
       - assert: assert r2 == LIMITED
   TC-RATE-006:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-RATE-006
-        save_as: case
       - call: case.http
         args:
           - u_rate_http_window
@@ -606,12 +484,7 @@ case_flows:
       - assert: assert r2 == LIMITED
       - assert: assert r3['code'] == 0
   TC-RATE-007:
-    fixture: setup_validation_ratelimit
     steps:
-      - call: setup_validation_ratelimit
-        kwargs:
-          case_id: TC-RATE-007
-        save_as: case
       - call: case.grpc
         args:
           - u_rate_grpc_window

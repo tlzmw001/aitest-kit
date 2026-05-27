@@ -233,15 +233,47 @@ def _outcome_and_failure(testcase: ET.Element) -> tuple[str, dict[str, Any] | No
             exception_type = _exception_type(child)
             phase = _phase(child)
             text = child.text or child.attrib.get("message", "")
+            message = child.attrib.get("message") or text
+            classification = classify_failure(phase, exception_type)
             failure = {
                 "phase": phase,
-                "classification": classify_failure(phase, exception_type),
+                "classification": classification,
+                "failure_type": classification,
                 "exception_type": exception_type,
-                "message": sanitize_message(child.attrib.get("message") or text),
+                "message": sanitize_message(message),
                 "traceback_summary": traceback_summary(text, exception_type),
             }
+            _attach_precondition_details(failure, message, text)
             return "failed" if tag == "failure" else "error", failure
     return "passed", None
+
+
+def _attach_precondition_details(
+    failure: dict[str, Any],
+    message: str,
+    text: str,
+) -> None:
+    if failure.get("classification") != "PRECONDITION_MISSING":
+        return
+    failure["blocker_type"] = "precondition_unmet"
+    missing_env = sorted(set([
+        *_extract_missing_env(message or ""),
+        *_extract_missing_env(text or ""),
+    ]))
+    if missing_env:
+        failure["missing_env"] = missing_env
+
+
+def _extract_missing_env(text: str) -> list[str]:
+    match = re.search(r"profile variable environment missing:\s*([^\r\n]+)", text)
+    if not match:
+        return []
+    names: list[str] = []
+    for item in match.group(1).split(","):
+        env_name = item.strip().strip("`'\". ")
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", env_name):
+            names.append(env_name)
+    return sorted(set(names))
 
 
 def _exception_type(node: ET.Element) -> str:

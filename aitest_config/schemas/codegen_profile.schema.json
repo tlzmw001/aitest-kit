@@ -34,6 +34,9 @@
     "default_object": {
       "$ref": "#/$defs/identifier"
     },
+    "default_case_setup": {
+      "$ref": "#/$defs/caseFlowCallStep"
+    },
     "assertion_rules": {
       "type": "array",
       "items": {
@@ -192,7 +195,7 @@
     "caseFlow": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["fixture", "steps"],
+      "required": ["steps"],
       "properties": {
         "fixture": {
           "type": "string",
@@ -213,23 +216,7 @@
     "caseFlowStep": {
       "oneOf": [
         {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["call"],
-          "properties": {
-            "call": {
-              "$ref": "#/$defs/dottedCall"
-            },
-            "args": {
-              "type": "array"
-            },
-            "kwargs": {
-              "type": "object"
-            },
-            "save_as": {
-              "$ref": "#/$defs/identifier"
-            }
-          }
+          "$ref": "#/$defs/caseFlowCallStep"
         },
         {
           "type": "object",
@@ -267,6 +254,25 @@
           }
         }
       ]
+    },
+    "caseFlowCallStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["call"],
+      "properties": {
+        "call": {
+          "$ref": "#/$defs/dottedCall"
+        },
+        "args": {
+          "type": "array"
+        },
+        "kwargs": {
+          "type": "object"
+        },
+        "save_as": {
+          "$ref": "#/$defs/identifier"
+        }
+      }
     }
   }
 }

@@ -67,7 +67,9 @@ fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供。按当前项目
 - `case_flows` 是已验证且结构稳定的 `case_bodies` 晋升形态，适合"调用 helper -> 保存结果 -> 派生变量 -> 观察副作用 -> 断言/注释"这类重复多步骤流程；当前支持 `call`、`assign`、`assert`、`comment` 四类 step。
 - 同一个 case_id 不允许同时出现在 `case_bodies` 和 `case_flows`；正式晋升为 `case_flow` 时必须删除旧 `case_body`，否则 codegen 会报错。
 - `case_flow` 的 `assert` step 必须写成可执行 Python 断言，例如 `assert resp["code"] == 0`；裸表达式如 `` `resp == ERR` `` 会被 profile 校验拒绝。
-- `case_flow` 的 `args/kwargs` 可以用 `{var: name}` 引用 profile `variables`；变量来源只支持 `env` 或 `value`，缺 env 时运行失败且只显示 env 名。
+- `case_flow` 的 `args/kwargs` 可以用 `{var: name}` 引用 profile `variables`；变量来源只支持 `env` 或 `value`，`env` 可从进程环境变量、当前工作目录 `.env` 或 `AITEST_ENV_FILE` 指定文件读取；缺 env 时运行失败且只显示 env 名。
+- profile 顶层可以写 `default_fixture`、`default_object`、`default_case_setup`，用于给多条 `case_flows` 统一补 fixture/object/factory setup；`default_case_setup.kwargs.case_id: "{case_id}"` 会替换为当前用例 ID。
+- 如果 `case_flow` 自身没有 `fixture`，必须能从 `default_fixture` 得到；单条 flow 显式 `fixture/object` 时覆盖顶层默认值。
 - 不要把复杂 Python 控制流硬塞进 `case_flow`；包含线程、进程、mock、复杂文件生命周期时继续保留 `case_body`。
 - 新增 `case_flow` 前必须能解释它比原 `case_body` 更稳定、更可读、更可校验。
 - 生成或迁移前显式运行 `--validate-profile`；普通生成也会自动硬门禁，用于提前发现 JSON Schema 格式、case_id 引用、case_flow assert 和 module_type 必需字段问题。

@@ -8,7 +8,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import pytest
 import yaml
@@ -197,8 +197,14 @@ def _start_service(tmp_path: Path, ab_base_url: str, rate_config: dict[str, int]
 
 
 @pytest.fixture
-def setup_validation_ratelimit(http_base_url, grpc_target, ab_base_url, tmp_path, redis_tracker):
-    """Prepare stock, rate keys, and isolated low-QPS services for rate-limit cases."""
+def setup_validation_ratelimit(
+    http_base_url,
+    grpc_target,
+    ab_base_url,
+    tmp_path,
+    redis_tracker,
+) -> Callable[[str], ValidationCase]:
+    """Return a case factory that prepares stock, rate keys, and isolated services."""
     processes: list[subprocess.Popen[str]] = []
 
     def _setup(case_id: str) -> ValidationCase:

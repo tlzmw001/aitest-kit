@@ -98,7 +98,7 @@ value: literal
 
 含义：
 
-- `env`：运行时从 `os.environ` 读取。缺失时应失败，并且不能打印变量值。
+- `env`：运行时先从 `os.environ` 读取，缺失时读取 dotenv 文件；默认读取当前工作目录 `.env`，若设置 `AITEST_ENV_FILE` 则读取该指定文件。缺失时应失败，并且不能打印变量值。
 - `value`：profile 中的字面量，适合错误密码、固定请求字段、非法枚举、固定 URL path 片段等。
 
 暂不支持：
@@ -106,7 +106,6 @@ value: literal
 - `ref`
 - `resource`
 - `expr`
-- `.env` 文件读取
 - secret manager
 - 数据库或远端配置读取
 
@@ -184,6 +183,30 @@ resp = auth.login(
 ```
 
 变量缺失或 env 未设置时，后续 Runtime Preconditions 方案会提供结构化错误；本 spec 先定义数据模型和 scaffold/codegen 接线方向。
+
+## case_flow 默认 setup 设计
+
+真实模块里经常出现同一类重复前置动作，例如每条用例都需要先从 fixture 注入的 factory 创建带 `case_id` 的 case client：
+
+```yaml
+default_fixture: setup_validation_ratelimit
+default_object: client_factory
+default_case_setup:
+  call: client_factory
+  kwargs:
+    case_id: "{case_id}"
+  save_as: case
+```
+
+语义：
+
+- `default_fixture` 给未显式声明 `fixture` 的 `case_flows` 补 pytest fixture。
+- `default_object` 给 fixture 注入对象起别名，例如 generated pytest 中先生成 `client_factory = setup_validation_ratelimit`。
+- `default_case_setup` 自动插入到每条 `case_flow.steps` 前面，`{case_id}` 替换为当前用例 ID。
+- 单条 `case_flow` 可以显式声明 `fixture` / `object` 覆盖默认值。
+- 如果某条 `case_flow` 已经手写了完全相同的第一步，codegen 不重复插入，便于老 profile 渐进迁移。
+
+目标不是引入复杂继承，而是把“每条 flow 都重复的 factory setup”上收到 profile 顶层，降低 profile 膨胀。
 
 ## Suite Profile 解耦模型
 
@@ -484,6 +507,7 @@ tests/test_report_*.py
 - 支持 `env` / `value`。
 - 支持 `{var: name}` 在 case_flow args/kwargs 中引用。
 - 扩展 schema、validator、IR、renderer、测试。
+- 运行时支持 `.env` / `AITEST_ENV_FILE` 作为 env 变量兜底来源。
 
 ### Phase 3：补 report/precondition 分类
 
@@ -506,4 +530,3 @@ tests/test_report_*.py
 5. case_flow 不扩展为脚本语言，复杂控制逻辑放到 action/helper/case_body。
 6. scaffold 负责接线和变量/action review，不负责测试维度设计。
 7. 子 Agent 可以参与提取和草稿生成，但主 Agent 必须负责边界、命名和质量判断。
-
