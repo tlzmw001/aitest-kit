@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.4 - 2026-05-27
+
+### Changed
+
+- Reworked the Chinese README into a 3-minute onboarding entry that covers installation, workspace initialization, core workflow, CLI commands, AI skills, codegen paths, and safety boundaries.
+- Updated the English README to match the current workspace, suite profile, doctor, upgrade, and reporting workflows.
+- Rewrote the packaged workspace README so newly initialized projects get clearer next steps for docs, knowledge, cases, fixture/profile, codegen, and reports.
+- Refined the quickstart and migration guide to emphasize the real new-project workflow and clarify that `business.md`/`boundary.md` are organization conventions, not mandatory file names.
+
 ## 0.1.3 - 2026-05-26
 
 ### Added

@@ -1,210 +1,234 @@
 # AITest Quickstart
 
-本文面向第一次把 `aitest-kit` 接入新项目的用户。目标不是一次性完成完整迁移，而是先跑通最小闭环：
+本文面向第一次把 `aitest-kit` 接入新项目的用户。目标是 3 分钟内完成安装、初始化和第一轮体检，并知道接下来该让 AI 做什么。
+
+核心心智模型：
 
 ```text
-init workspace -> 写一个 Markdown 用例 -> 写一个 codegen_profile -> codegen -> pytest collect
+公开文档 -> 知识库 -> Markdown 用例 -> fixture/profile -> generated pytest -> report
 ```
+
+`aitest-kit` 不要求你一开始就写完所有自动化。正确做法是：先接入一个最小模块，跑通闭环，再逐步扩展。
 
 ## 1. 安装
 
-在你的 Python 环境中安装工具包：
-
-```bash
-pip install aitest-kit
-```
-
-本仓开发态可使用：
-
-```bash
-pip install -e ".[dev]"
-```
-
-发布状态说明：
-
-- v0.1 面向本地试用和新项目迁移演练。
-- 稳定入口是 `aitest init/codegen/run/report`、workspace layout、Markdown 用例格式和 profile schema。
-- health/promotion report、promotion patch 和内部 Python API 仍按实验能力看待。
-
-### 升级已初始化的 workspace
-
-升级分成两件事：
-
 ```bash
 python3 -m pip install -U aitest-kit
-aitest upgrade --workspace /path/to/your_project --check
-aitest upgrade --workspace /path/to/your_project --apply
 ```
 
-`pip install -U` 只更新 Python 包中的 CLI 和 codegen 逻辑；已经通过 `aitest init` 复制进项目的 skills、schema、refs、helpers 和协作说明不会自动变化。`aitest upgrade` 用来检查并安全同步这些 workspace 模板资产。
-
-不要用 `aitest init --force` 升级已有 workspace。`upgrade` 会读取 `.aitest/workspace.json`，只自动覆盖仍等于旧模板的文件；疑似用户本地改过的文件会跳过并提示人工 review。
-
-## 2. 初始化项目 workspace
-
-不要直接复用 AIAutoTest 仓库里的 `test_workspace/`。在你的目标项目目录，或一个独立目录中初始化：
+如果安装后找不到 `aitest` 命令，通常是 Python 脚本目录不在 `PATH`。可以先用模块入口验证：
 
 ```bash
-aitest init --target /path/to/your_project
+python3 -m aitest_kit.cli --help
+```
+
+## 2. 初始化 workspace
+
+推荐把 AITest workspace 放在目标项目下的独立目录：
+
+```bash
+cd /path/to/your_project
+aitest init --target ./aitest_workspace
+cd ./aitest_workspace
 ```
 
 初始化后会生成：
 
 ```text
-AGENTS.md
-CLAUDE.md
-.agents/
-.claude/
-.codex/
-docs/
-aitest_config/
-test_workspace/
+docs/                  # 放公开 API 文档、设计文档、OpenAPI/proto 等
+aitest_config/          # 项目配置、codegen 配置、schema、refs
+test_workspace/         # 知识库、用例、fixture、profile、generated、报告
+.codex/.claude/.agents  # AI skills
+AGENTS.md / CLAUDE.md   # AI 协作说明
 ```
 
-这些文件是新项目测试工作区的一部分。后续命令如果不在 `/path/to/your_project` 内执行，统一加 `--workspace /path/to/your_project`。
-
-安全提醒：
-
-- 不要把 `.env`、生产凭证、token 或真实用户数据放入 workspace 并提交。
-- 生成报告可能包含请求、响应和错误详情，对外共享前需要脱敏。
-- 外部服务地址优先通过环境变量传入 fixture；缺失时让 fixture 明确失败。
-
-## 3. 空 workspace 体检
-
-先确认 CLI 能识别 workspace：
+从 workspace 外执行 CLI 时，加 `--workspace`：
 
 ```bash
-aitest codegen --workspace /path/to/your_project --all --validate-profile
+aitest doctor --workspace /path/to/your_project/aitest_workspace
 ```
 
-如果还没有任何模块，会看到类似提示：
+## 3. 第一轮体检
+
+```bash
+aitest doctor
+```
+
+刚初始化时没有模块是正常的。你会看到类似提示：
 
 ```text
 No modules found under the configured cases directory.
-Next step: create test_workspace/cases/<module>/business.md and a matching codegen profile under test_workspace/tests/fixtures.
-
-Profile validation summary: modules=0, errors=0, warnings=0
 ```
 
-这不是失败，而是告诉你下一步要创建模块用例和 profile。
+这不是失败，只表示还没有 `test_workspace/cases/<module>/` 和对应 profile。
 
-## 4. 创建最小模块
+## 4. 放入文档
 
-以 `demo` 模块为例，创建：
+把目标系统的公开行为资料放入 `docs/`，例如：
 
 ```text
-test_workspace/cases/demo/business.md
-test_workspace/tests/fixtures/codegen_profile_demo.md
+docs/public_api.md
+docs/openapi.yaml
+docs/protos/
+docs/config_schema.md
 ```
 
-`business.md`：
+建议第一轮只选一个小模块或一条主链路，例如：
 
-~~~markdown
-# demo 业务测试用例
+- 用户登录
+- API key 创建和查询
+- 订单创建
+- 网关转发
+- 账单扣费查询
 
----
+不要一开始覆盖整个系统。先跑通一条闭环更重要。
 
-## 共享配置
+## 5. 让 AI 生成测试资产
 
-**接口**：`POST /api/v1/demo`
+在 `aitest_workspace` 下启动 Codex、Claude Code 或其他 AI 编程工具，然后按顺序使用 workspace 内置 skills。
 
-**基础请求体（HTTP）**：
+你可以直接这样提问：
 
-```json
-{
-  "request_id": "req_default",
-  "user_id": "user_default",
-  "value": 1
-}
+```text
+请基于 docs/ 下的公开 API 文档，先用 doc-review 检查文档缺口；
+如果足够，再用 knowledge-build 构建测试知识库；
+然后为 <模块名> 设计一批 Markdown 用例；
+最后用 test-scaffold 生成 fixture 和 codegen profile。
 ```
 
-**标准前置**：
-- 服务已启动
+产物应该出现在：
 
-**通用断言**：`response.code == 0`
-
-**变量定义**：
-- 无
-
----
-
-## 一、基础成功场景
-
-### TC-DEMO-001：默认请求返回成功
-- **优先级**：P1
-- **场景变量**：请求覆盖：`{"request_id": "req_demo_001", "user_id": "u_demo_001"}`
-- **断言**：`response.code == 0`
-~~~
-
-`codegen_profile_demo.md`：
-
-~~~markdown
-# demo codegen profile
-
-```yaml
-module_type: standard_http
-request_overrides:
-  TC-DEMO-001:
-    user_id: "u_demo_001"
-    request_id: "req_demo_001"
-```
-~~~
-
-说明：Markdown 里的“场景变量/请求覆盖”用于人类 review 和 trace；当前确定性 codegen 的请求体差异以 profile 的 `request_overrides` 为准。
-
-## 5. 生成前门禁
-
-```bash
-aitest codegen --workspace /path/to/your_project demo --validate-profile
-aitest codegen --workspace /path/to/your_project demo --dump-ir
+```text
+test_workspace/knowledge/                 # L0/L1/L2
+test_workspace/cases/<module>/            # Markdown 用例
+test_workspace/tests/fixtures/<module>.py # fixture 动作库
+test_workspace/tests/fixtures/codegen_profile_<module>.md
 ```
 
-期望：
+如果是按需求、迭代或临时批次组织用例，也可以使用 suite：
 
-- `--validate-profile` 输出 `Status: OK`
-- `--dump-ir` 能看到每条用例的 `strategy`、`request`、`assertions` 和 `source_trace`
-
-如果这里失败，先看 [codegen_troubleshooting.md](./codegen_troubleshooting.md)。
+```text
+test_workspace/casesuites/<suite>/aitest_suite.yaml
+test_workspace/casesuites/<suite>/business.md
+test_workspace/casesuites/<suite>/codegen_profile_<suite>_suite.md
+```
 
 ## 6. 生成 pytest
 
-```bash
-aitest codegen --workspace /path/to/your_project demo
-aitest codegen --workspace /path/to/your_project demo --check
-```
-
-期望：
-
-- 第一次生成 `test_workspace/tests/generated/test_demo_business.py`
-- 再跑 `--check` 输出 `All generated files are up to date.`
-
-## 7. 收集 generated 测试
-
-推荐在 workspace 根目录执行：
+模块级用例：
 
 ```bash
-cd /path/to/your_project
-python -m pytest test_workspace/tests/generated --collect-only -q
+aitest codegen <module> --validate-profile
+aitest codegen <module> --dump-ir
+aitest codegen <module>
+aitest codegen <module> --check
+python3 -m pytest test_workspace/tests/generated --collect-only -q
 ```
 
-如果你从其他目录执行，需要确保 Python 能找到该 workspace 下的 `test_workspace` 包，例如设置 `PYTHONPATH=/path/to/your_project`。
-
-## 8. 下一步
-
-最小链路跑通后，再进入正式迁移：
-
-1. 把公开设计文档放入 `docs/`。
-2. 用 `knowledge-build` 构建知识库。
-3. 用 `test-design` 生成模块 Markdown 用例。
-4. 为模块补充 fixture 和 `codegen_profile_{module}.md`。
-5. 按门禁顺序执行：
+suite 用例：
 
 ```bash
-aitest codegen --workspace /path/to/your_project --all --validate-profile
-aitest codegen --workspace /path/to/your_project --all --dump-ir
-aitest codegen --workspace /path/to/your_project --all --check
-aitest codegen --workspace /path/to/your_project --all
-python -m pytest /path/to/your_project/test_workspace/tests/generated --collect-only -q
+aitest codegen --cases test_workspace/casesuites/<suite> --validate-profile
+aitest codegen --cases test_workspace/casesuites/<suite> --dump-ir
+aitest codegen --cases test_workspace/casesuites/<suite>
+aitest codegen --cases test_workspace/casesuites/<suite> --check
+python3 -m pytest test_workspace/tests/generated --collect-only -q
 ```
 
-更完整的新项目迁移流程见 [AITest 新项目迁移指南](./aitest_migration_guide.md)。
+判断结果：
+
+- `--validate-profile` 必须 `errors=0`。
+- `--dump-ir` 用来看每条用例最终走 `default_http`、`case_flows`、`case_bodies` 还是 `skipped`。
+- `--check` 必须显示 generated 文件没有过期。
+- `pytest --collect-only` 必须能收集到测试函数。
+
+## 7. 运行测试并看报告
+
+先准备 fixture 需要的环境变量，例如：
+
+```bash
+export YOUR_SYSTEM_BASE_URL=http://127.0.0.1:8080
+export YOUR_SYSTEM_ADMIN_TOKEN=...
+```
+
+然后运行：
+
+```bash
+aitest run <module>
+```
+
+报告位置：
+
+```text
+test_workspace/reports/latest/report.md
+test_workspace/reports/latest/result.json
+test_workspace/reports/latest/junit.xml
+```
+
+`aitest run` 会先做 generated freshness check。如果 Markdown/profile 已经变了但 pytest 没重新生成，会写出 `BLOCKED_RUN` 报告并停止，避免执行旧测试。
+
+## 8. 什么时候用哪个 skill
+
+| 场景 | 推荐入口 |
+|---|---|
+| 文档是否足够做测试不确定 | `doc-review` |
+| 需要从公开文档建立测试知识库 | `knowledge-build` |
+| 需要设计 Markdown 用例 | `test-design` |
+| 新模块还没有 fixture/profile | `test-scaffold` |
+| 现有模块新增用例，fixture 动作已经足够 | `test-codegen` |
+| 新增用例时发现 fixture 缺动作 | 回到 `test-scaffold` 增量补 fixture/profile |
+| 测试失败，需要判断是环境、用例、脚手架还是系统 bug | `aitest run` + `test-fix` |
+| 测试稳定后想沉淀重复规则 | `emitter-build` |
+
+## 9. 升级已有 workspace
+
+升级分两层：
+
+```bash
+python3 -m pip install -U aitest-kit
+aitest upgrade --workspace /path/to/aitest_workspace --check
+aitest upgrade --workspace /path/to/aitest_workspace --apply
+```
+
+`pip install -U` 更新 CLI 和 Python 代码。`aitest upgrade` 同步 `aitest init` 复制进项目的模板资产，例如 skills、schema、refs、helpers 和 workspace 说明。
+
+不要用 `aitest init --force` 升级已有 workspace。`upgrade` 只自动覆盖仍等于旧模板的文件；本地改过的文件会跳过并提示人工 review。
+
+## 10. 常见问题
+
+### 找不到 `aitest`
+
+使用模块入口：
+
+```bash
+python3 -m aitest_kit.cli --help
+```
+
+或把 Python 用户脚本目录加入 `PATH`。
+
+### `doctor` 提示没有模块
+
+刚初始化时正常。创建 `test_workspace/cases/<module>/` 和 `test_workspace/tests/fixtures/codegen_profile_<module>.md` 后再跑。
+
+### profile 校验失败
+
+先修 profile，不要直接生成 pytest。profile gate 是硬门禁，格式错误时不进入 Case IR 和 emitter。
+
+### generated 过期
+
+运行：
+
+```bash
+aitest codegen --all
+aitest codegen --all --check
+```
+
+### 运行测试缺环境变量
+
+fixture 应该明确报出缺少的环境变量名，但不要打印变量值。把变量设置在 shell、CI secret 或本地不提交的 `.env` 加载流程中。
+
+## 下一步
+
+- 新项目完整迁移：见 [AITest Migration Guide](./aitest_migration_guide.md)
+- profile 编写：见 [Profile Guide](./codegen_profile_guide.md)
+- codegen 排错：见 [Troubleshooting](./codegen_troubleshooting.md)

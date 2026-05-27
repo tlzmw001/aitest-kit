@@ -104,8 +104,8 @@ def test_init_force_overwrites_template_managed_files(tmp_path):
     assert result.exit_code == 0
     assert "overwritten:" in result.output
     readme = (target / "README.md").read_text(encoding="utf-8")
-    assert "# AITest 项目工作区" in readme
-    assert "目标系统的测试工作区" in readme
+    assert "# AITest Workspace" in readme
+    assert "目标系统的 AITest 测试工作区" in readme
 
 
 def test_codegen_uses_workspace_for_profile_gate_and_generated_output(tmp_path):
@@ -226,7 +226,7 @@ def test_upgrade_apply_updates_old_clean_template_file_and_backs_up(tmp_path):
     assert result.exit_code == 0
     assert "[UPDATE] README.md" in result.output
     assert "updated=1" in result.output
-    assert "# AITest 项目工作区" in readme.read_text(encoding="utf-8")
+    assert "# AITest Workspace" in readme.read_text(encoding="utf-8")
     backups = list((target / ".aitest" / "backups").glob("upgrade-*/README.md"))
     assert backups
     assert backups[0].read_text(encoding="utf-8") == old_content

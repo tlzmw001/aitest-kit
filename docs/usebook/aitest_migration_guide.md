@@ -48,10 +48,12 @@ aitest_kit/templates/project_workspace/
 
 ## 二、初始化 workspace
 
-在新项目目录外执行：
+推荐把 AITest workspace 放在目标项目下的独立目录：
 
 ```bash
-aitest init --target /path/to/your_project/aitest_workspace
+cd /path/to/your_project
+aitest init --target ./aitest_workspace
+cd ./aitest_workspace
 ```
 
 初始化后，目标目录中会出现：
@@ -153,11 +155,21 @@ docs/
 
 ## 六、设计 Markdown 用例
 
-每个模块至少准备：
+模块级用例默认放在：
 
 ```text
 test_workspace/cases/{module}/business.md
 test_workspace/cases/{module}/boundary.md
+```
+
+这两个文件不是强制都要存在。只有 `business.md`、只有 `boundary.md`，或按更细维度拆成多个 Markdown 文件都可以生成 pytest；拆分的目的只是让人类 review 更清晰。
+
+如果用例按需求、迭代或临时批次组织，也可以使用独立 suite：
+
+```text
+test_workspace/casesuites/{suite}/aitest_suite.yaml
+test_workspace/casesuites/{suite}/{case_file}.md
+test_workspace/casesuites/{suite}/codegen_profile_{suite}_suite.md
 ```
 
 Markdown 用例必须满足：
@@ -247,8 +259,8 @@ profile 负责告诉 codegen 这批 Markdown 用例如何生成：
 ```bash
 aitest codegen --workspace /path/to/your_project/aitest_workspace --all --validate-profile
 aitest codegen --workspace /path/to/your_project/aitest_workspace --all --dump-ir
-aitest codegen --workspace /path/to/your_project/aitest_workspace --all --check
 aitest codegen --workspace /path/to/your_project/aitest_workspace --all
+aitest codegen --workspace /path/to/your_project/aitest_workspace --all --check
 python3 -m pytest /path/to/your_project/aitest_workspace/test_workspace/tests/generated --collect-only -q
 ```
 
@@ -256,7 +268,7 @@ python3 -m pytest /path/to/your_project/aitest_workspace/test_workspace/tests/ge
 
 - `--validate-profile` 是硬门禁，profile schema 或语义错误必须先修。
 - `--dump-ir` 用来观察每条 case 的 strategy、fixture、断言和来源。
-- `--check` 在 generated 文件还没生成时提示 stale 是正常状态；生成后再次执行应为 up to date。
+- `--check` 在 generated 文件还没生成或 Markdown/profile 已变化时会提示 stale；生成后再次执行应为 up to date。
 - collect 阶段只验证 generated pytest 可导入和可收集，不代表真实业务测试通过。
 
 pytest collect 推荐在 workspace 根目录执行：
