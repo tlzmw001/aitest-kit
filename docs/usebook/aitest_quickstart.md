@@ -147,14 +147,16 @@ python3 -m pytest test_workspace/tests/generated --collect-only -q
 先准备 fixture 需要的环境变量，例如：
 
 ```bash
-export YOUR_SYSTEM_BASE_URL=http://127.0.0.1:8080
-export YOUR_SYSTEM_ADMIN_TOKEN=...
+cat > /tmp/your-system-test.env <<'EOF'
+YOUR_SYSTEM_BASE_URL=http://127.0.0.1:8080
+YOUR_SYSTEM_ADMIN_TOKEN=...
+EOF
 ```
 
 然后运行：
 
 ```bash
-aitest run <module>
+AITEST_ENV_FILE=/tmp/your-system-test.env aitest run <module>
 ```
 
 报告位置：
@@ -225,7 +227,7 @@ aitest codegen --all --check
 
 ### 运行测试缺环境变量
 
-fixture 应该明确报出缺少的环境变量名，但不要打印变量值。把变量设置在 shell、CI secret 或本地不提交的 `.env` 加载流程中。
+fixture 应该明确报出缺少的环境变量名，但不要打印变量值。把变量设置在 shell、CI secret、本地不提交的 `.env`，或通过 `AITEST_ENV_FILE=/path/to/test.env aitest run <module>` 指定的 env 文件中。
 
 ## 下一步
 

@@ -2,18 +2,26 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 import click
 import yaml
 
 from aitest_kit.report.collector import blocked_result, collect_result
 from aitest_kit.report.renderer import render_markdown
+from aitest_kit.runtime_variables import (
+    ProfileVariableError,
+    dotenv_path,
+    is_dotenv_configured,
+    load_dotenv_values,
+)
 from aitest_kit.workspace import push_workspace
 
 
@@ -61,12 +69,25 @@ def _run_command_impl(include_manual: bool, skip_codegen_check: bool, args: tupl
     modules, extra_args = _split_args(args)
     generated_dir, reports_dir = _load_paths()
     files = _target_files(generated_dir, modules)
-    run_id = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
-    run_dir = reports_dir / "runs" / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
+    run_id, run_dir = _create_run_dir(reports_dir)
 
     command = "aitest run" + (" " + " ".join(modules) if modules else "")
     manual_policy = "included" if include_manual else "excluded"
+    try:
+        pytest_env, environment = _pytest_environment()
+    except _RunEnvironmentError as exc:
+        result = blocked_result(
+            run_id=run_id,
+            command=command,
+            codegen_check={"status": "skipped", "command": "", "message": ""},
+            generated_files=files,
+            manual_policy=manual_policy,
+            blocked_reason="env_file",
+            environment=exc.environment,
+        )
+        _write_result(run_dir, reports_dir, result)
+        click.echo(f"BLOCKED_RUN: {exc}")
+        raise SystemExit(10) from exc
 
     codegen_check = _codegen_check(modules, skip_codegen_check)
     if codegen_check["status"] == "failed":
@@ -76,6 +97,7 @@ def _run_command_impl(include_manual: bool, skip_codegen_check: bool, args: tupl
             codegen_check=codegen_check,
             generated_files=files,
             manual_policy=manual_policy,
+            environment=environment,
         )
         _write_result(run_dir, reports_dir, result)
         click.echo(f"BLOCKED_RUN: {codegen_check['message']}")
@@ -90,6 +112,7 @@ def _run_command_impl(include_manual: bool, skip_codegen_check: bool, args: tupl
             manual_policy=manual_policy,
             codegen_check=codegen_check,
             status="FAILED_RUN",
+            environment=environment,
         )
         result["summary"]["error"] = 1
         _write_result(run_dir, reports_dir, result)
@@ -110,7 +133,7 @@ def _run_command_impl(include_manual: bool, skip_codegen_check: bool, args: tupl
     pytest_cmd.extend(extra_args)
 
     started = time.monotonic()
-    completed = subprocess.run(pytest_cmd, text=True)
+    completed = subprocess.run(pytest_cmd, text=True, env=pytest_env)
     duration = round(time.monotonic() - started, 3)
 
     result = collect_result(
@@ -121,6 +144,7 @@ def _run_command_impl(include_manual: bool, skip_codegen_check: bool, args: tupl
         duration_seconds=duration,
         manual_policy=manual_policy,
         codegen_check=codegen_check,
+        environment=environment,
     )
     _write_result(run_dir, reports_dir, result)
     summary = result["summary"]
@@ -170,6 +194,54 @@ def _split_args(args: tuple[str, ...]) -> tuple[list[str], list[str]]:
         else:
             modules.append(arg)
     return modules, extra
+
+
+def _create_run_dir(reports_dir: Path, *, max_attempts: int = 10) -> tuple[str, Path]:
+    for _ in range(max_attempts):
+        run_id = _new_run_id()
+        run_dir = reports_dir / "runs" / run_id
+        try:
+            run_dir.mkdir(parents=True, exist_ok=False)
+        except FileExistsError:
+            continue
+        return run_id, run_dir
+    raise click.ClickException("cannot allocate unique report run_id")
+
+
+def _new_run_id() -> str:
+    timestamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S-%f")
+    return f"{timestamp}-{uuid4().hex[:6]}"
+
+
+class _RunEnvironmentError(Exception):
+    def __init__(self, message: str, environment: dict) -> None:
+        super().__init__(message)
+        self.environment = environment
+
+
+def _pytest_environment() -> tuple[dict[str, str], dict]:
+    env = dict(os.environ)
+    path = dotenv_path()
+    configured = is_dotenv_configured()
+    environment = {
+        "env_file": str(path) if configured or path.exists() else "",
+        "env_file_configured": configured,
+        "env_file_loaded": False,
+        "env_file_keys": [],
+    }
+    try:
+        values = load_dotenv_values(strict_configured=True)
+    except ProfileVariableError as exc:
+        environment["env_file_error"] = str(exc)
+        raise _RunEnvironmentError(str(exc), environment) from exc
+
+    if values:
+        for key, value in values.items():
+            env.setdefault(key, value)
+        environment["env_file"] = str(path)
+        environment["env_file_loaded"] = True
+        environment["env_file_keys"] = sorted(values)
+    return env, environment
 
 
 def _target_files(generated_dir: Path, modules: list[str]) -> list[Path]:

@@ -179,3 +179,54 @@ aitest_kit.runtime_variables.ProfileVariableError: profile variable environment 
     assert failure["blocker_type"] == "precondition_unmet"
     assert failure["exception_type"] == "ProfileVariableError"
     assert failure["missing_env"] == ["SUB2API_ADMIN_TOKEN", "SUB2API_BASE_URL"]
+
+
+def test_collect_result_classifies_precondition_missing_as_preconditions(tmp_path):
+    generated = tmp_path / "test_demo_business.py"
+    generated.write_text(
+        '''
+class TestDemoBusiness:
+    def test_tc_demo_001(self):
+        """TC-DEMO-001：normal"""
+        __tc_meta__ = {
+            "tc_id": "TC-DEMO-001",
+            "module": "demo",
+            "category": "business",
+            "source": "test_workspace/cases/demo/business.md",
+            "title": "normal",
+            "priority": "P1",
+            "markers": [],
+        }
+
+
+__codegen_skipped__ = []
+''',
+        encoding="utf-8",
+    )
+    junit = tmp_path / "junit.xml"
+    junit.write_text(
+        '''<?xml version="1.0" encoding="utf-8"?>
+<testsuite name="pytest" tests="1" failures="0" errors="1" skipped="0">
+  <testcase classname="test_demo_business.TestDemoBusiness" name="test_tc_demo_001" time="0.12">
+    <error type="aitest_kit.runtime_variables.PreconditionMissing" message="aitest_kit.runtime_variables.PreconditionMissing: profile variable environment missing: SUB2API_ADMIN_TOKEN">File "/tmp/test_demo_business.py", line 5, in test_tc_demo_001
+aitest_kit.runtime_variables.PreconditionMissing: profile variable environment missing: SUB2API_ADMIN_TOKEN</error>
+  </testcase>
+</testsuite>
+''',
+        encoding="utf-8",
+    )
+
+    result = collect_result(
+        junit_path=junit,
+        generated_files=[generated],
+        run_id="run",
+        command="aitest run demo",
+        codegen_check={"status": "passed", "command": "check", "message": ""},
+    )
+
+    failure = result["cases"][0]["failure"]
+    assert failure["classification"] == "PRECONDITION_MISSING"
+    assert failure["failure_type"] == "PRECONDITION_MISSING"
+    assert failure["blocker_type"] == "precondition_unmet"
+    assert failure["exception_type"] == "PreconditionMissing"
+    assert failure["missing_env"] == ["SUB2API_ADMIN_TOKEN"]

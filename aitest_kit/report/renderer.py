@@ -16,8 +16,9 @@ def render_markdown(result: dict[str, Any]) -> str:
         f"- **命令**：`{result.get('command', '')}`",
         f"- **Codegen Check**：{result.get('codegen_check', {}).get('status', '')}",
         f"- **Manual 策略**：{result.get('manual_policy', '')}",
-        "",
     ]
+    lines.extend(_environment_summary(result.get("environment", {})))
+    lines.append("")
 
     if result.get("status") == "BLOCKED_RUN":
         lines.extend(_blocked_section(result))
@@ -55,6 +56,18 @@ def render_markdown(result: dict[str, Any]) -> str:
 
 def _blocked_section(result: dict[str, Any]) -> list[str]:
     check = result.get("codegen_check", {})
+    if result.get("blocked_reason") == "env_file":
+        environment = result.get("environment", {})
+        return [
+            "## BLOCKED_RUN",
+            "",
+            "运行环境文件加载失败，pytest 未执行。",
+            "",
+            f"- **Env 文件**：{environment.get('env_file', '')}",
+            f"- **原因**：{environment.get('env_file_error', '')}",
+            "- **下一步**：修正 `AITEST_ENV_FILE` 指向的文件后重新运行 `aitest run`",
+            "",
+        ]
     return [
         "## BLOCKED_RUN",
         "",
@@ -64,6 +77,21 @@ def _blocked_section(result: dict[str, Any]) -> list[str]:
         f"- **原因**：{check.get('message', '')}",
         "- **下一步**：先运行 `aitest codegen {modules}`，再运行 `aitest run {modules}`",
         "",
+    ]
+
+
+def _environment_summary(environment: dict[str, Any]) -> list[str]:
+    if not environment:
+        return []
+    env_file = environment.get("env_file", "")
+    if not env_file:
+        return ["- **Env 文件**：未加载"]
+    loaded = "已加载" if environment.get("env_file_loaded") else "未加载"
+    keys = environment.get("env_file_keys", [])
+    key_text = ", ".join(keys) if keys else "-"
+    return [
+        f"- **Env 文件**：{env_file}（{loaded}）",
+        f"- **Env 变量名**：{key_text}",
     ]
 
 

@@ -19,6 +19,7 @@ CODEGEN_EXCEPTIONS = {
 }
 
 PRECONDITION_EXCEPTIONS = {
+    "PreconditionMissing",
     "ProfileVariableError",
 }
 

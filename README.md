@@ -230,6 +230,14 @@ test_workspace/reports/runs/{run_id}/
 | `aitest run <module>` | 执行 generated pytest 并生成结构化报告 |
 | `aitest report` | 从已有 `result.json` 重新渲染报告 |
 
+运行真实接口测试时，可以通过 env 文件提供服务地址、账号、token 和 API key：
+
+```bash
+AITEST_ENV_FILE=/tmp/your-system-test.env aitest run <module>
+```
+
+`aitest run` 会把 env 文件注入 pytest 子进程；报告只记录变量名，不记录变量值。真实 shell 环境变量优先于 env 文件。
+
 ## AI Skills 速查
 
 AITest workspace 会内置 `.codex`、`.claude`、`.agents` 三套 skills，适配不同 AI 编程环境。

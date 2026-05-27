@@ -152,6 +152,7 @@ class {Module}Client:
 - `__init__` 参数和 fail-fast 逻辑 → 从 Step 2 auth 标注 + api_map env 分层
 - cleanup 方法 → 从 Step 4 状态影响表
 - env check 粒度 → 从 Step 3 矩阵中筛出 fixture/driver 必需的模块级 env；case-scoped 变量不写进 fixture 初始化
+- 必需 env 读取统一用 `from aitest_kit.runtime_variables import require_env`；不要手写 `os.environ.get(...)` + `pytest.fail(...)`，这样报告才能稳定归类为 `PRECONDITION_MISSING`
 
 硬约束、代码结构和测试数据分类参考 `refs/constraints.md#fixture-硬约束` 和 `refs/formats.md#fixture-代码结构`。
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.5 - 2026-05-28
+
+### Added
+
+- Added unique report run IDs with microsecond precision and a random suffix to prevent parallel `aitest run` executions from writing to the same report directory.
+- Added `AITEST_ENV_FILE` loading for `aitest run`, injecting configured env-file values into the pytest subprocess while recording only variable names in reports.
+- Added `require_env()` and `require_envs()` helpers so fixtures can report missing runtime inputs as `PRECONDITION_MISSING` instead of generic fixture failures.
+
+### Changed
+
+- Updated report output for env-file blocked runs and env-file metadata.
+- Updated scaffold skills and workspace templates to generate fixture env checks through `require_env()`.
+
 ## 0.1.4 - 2026-05-27
 
 ### Changed

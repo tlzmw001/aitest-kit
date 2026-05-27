@@ -210,6 +210,14 @@ test_workspace/reports/runs/{run_id}/
 | `aitest run <module>` | Run generated pytest and write structured reports |
 | `aitest report` | Re-render report from an existing `result.json` |
 
+For real API tests, provide service URLs, accounts, tokens, and API keys through a local env file:
+
+```bash
+AITEST_ENV_FILE=/tmp/your-system-test.env aitest run <module>
+```
+
+`aitest run` injects that env file into the pytest subprocess. Reports record environment variable names only, never values. Real shell environment variables take precedence over the env file.
+
 ## AI Skills
 
 The workspace includes `.codex`, `.claude`, and `.agents` skills:

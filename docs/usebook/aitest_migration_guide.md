@@ -298,6 +298,14 @@ ModuleNotFoundError: No module named 'test_workspace'
 aitest run --workspace /path/to/your_project/aitest_workspace <module>
 ```
 
+如果测试需要服务地址、账号、token 或 API key，推荐使用本地不提交的 env 文件：
+
+```bash
+AITEST_ENV_FILE=/tmp/your-project-test.env aitest run --workspace /path/to/your_project/aitest_workspace <module>
+```
+
+`aitest run` 会把 env 文件中的变量注入 pytest 子进程，fixture 和 profile variables 都能读取；报告只记录变量名，不记录变量值。真实 shell 环境变量优先于 env 文件。
+
 报告默认写入：
 
 ```text

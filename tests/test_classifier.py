@@ -13,6 +13,7 @@ def test_classifies_fixture_setup_errors():
 def test_classifies_profile_variable_errors_as_precondition_missing():
     assert classify_failure("call", "ProfileVariableError") == "PRECONDITION_MISSING"
     assert classify_failure("setup", "ProfileVariableError") == "PRECONDITION_MISSING"
+    assert classify_failure("setup", "PreconditionMissing") == "PRECONDITION_MISSING"
 
 
 def test_classifies_codegen_and_assertion_errors():

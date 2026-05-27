@@ -32,6 +32,7 @@ def collect_result(
     duration_seconds: float = 0.0,
     manual_policy: str = "excluded",
     codegen_check: dict[str, str] | None = None,
+    environment: dict[str, Any] | None = None,
     status: str = "COMPLETED",
 ) -> dict[str, Any]:
     """Build the Phase 3 result.json payload."""
@@ -61,6 +62,7 @@ def collect_result(
         "command": command,
         "project_config_version": project_config_version(),
         "manual_policy": manual_policy,
+        "environment": environment or {},
         "codegen_check": codegen_check or {"status": "skipped", "command": "", "message": ""},
         "summary": summary,
         "modules": _module_summary(cases, codegen_skipped_cases, list(meta["by_full_key"].values())),
@@ -76,16 +78,21 @@ def blocked_result(
     codegen_check: dict[str, str],
     generated_files: list[str | Path] | None = None,
     manual_policy: str = "excluded",
+    blocked_reason: str = "codegen_check",
+    environment: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return collect_result(
+    result = collect_result(
         junit_path=None,
         generated_files=[Path(p) for p in (generated_files or [])],
         run_id=run_id,
         command=command,
         manual_policy=manual_policy,
         codegen_check=codegen_check,
+        environment=environment,
         status="BLOCKED_RUN",
     )
+    result["blocked_reason"] = blocked_reason
+    return result
 
 
 def _extract_generated_metadata(files: list[Path]) -> dict[str, Any]:

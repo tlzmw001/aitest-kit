@@ -144,6 +144,14 @@ aitest run <module>
 aitest report
 ```
 
+运行真实接口测试时，可以通过本地不提交的 env 文件提供服务地址、账号、token 和 API key：
+
+```bash
+AITEST_ENV_FILE=/tmp/your-system-test.env aitest run <module>
+```
+
+`aitest run` 会把 env 文件注入 pytest 子进程；报告只记录变量名，不记录变量值。真实 shell 环境变量优先于 env 文件。
+
 从本目录外执行时，追加：
 
 ```bash

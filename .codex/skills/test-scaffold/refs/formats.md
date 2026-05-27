@@ -171,6 +171,9 @@ case_bodies:
 ## Fixture 代码结构
 
 ```python
+from aitest_kit.runtime_variables import require_env
+
+
 class {Module}Client:
     def __init__(self, base_url: str, auth_token: str, ...):
         self._client = httpx.Client(transport=httpx.HTTPTransport())
@@ -181,9 +184,7 @@ class {Module}Client:
 
 @pytest.fixture
 def setup_{module}() -> {Module}Client:
-    base_url = os.environ.get("{PROJECT}_BASE_URL")
-    if not base_url:
-        pytest.fail("{PROJECT}_BASE_URL is required")
+    base_url = require_env("{PROJECT}_BASE_URL")
     return {Module}Client(base_url, ...)
 ```
 

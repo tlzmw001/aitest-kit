@@ -102,6 +102,22 @@ profile assertion_rules > project_config builtin_assertion_rules > named_templat
 
 `.env` 文件只作为本地运行时输入，不会被 codegen 写入 generated pytest；报告和错误信息只显示 env 名，不显示 env 值。
 
+`aitest run` 也会读取同一套 dotenv 配置，并把缺失于当前 shell 的变量注入 pytest 子进程。因此 fixture 中读取必需变量时应使用：
+
+```python
+from aitest_kit.runtime_variables import require_env
+
+base_url = require_env("SUB2API_BASE_URL")
+```
+
+这样缺失 env 会在报告中归类为 `PRECONDITION_MISSING`，而不是普通 fixture error。变量可以通过以下方式提供：
+
+```bash
+AITEST_ENV_FILE=/tmp/sub2api-test.env aitest run gateway_api
+```
+
+优先级保持一致：真实 shell 环境变量优先，dotenv 文件只补缺失变量。显式设置 `AITEST_ENV_FILE` 但文件不存在时，本次运行会生成 `BLOCKED_RUN`，不会继续执行 pytest。
+
 ```yaml
 profile_scope: case_suite
 parent_module: management_auth_user

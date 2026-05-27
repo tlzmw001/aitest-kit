@@ -2,7 +2,7 @@
 
 ## Fixture 硬约束
 
-1. **auth fail-fast** — auth 标注为 yes 的方法，对应的 env var 缺失时 `pytest.fail()`，不构造空 header
+1. **auth fail-fast** — auth 标注为 yes 的方法，对应的 env var 必须用 `aitest_kit.runtime_variables.require_env()` 读取；缺失时报告归类为 `PRECONDITION_MISSING`，不构造空 header
 2. **注入模型二选一** — fixture 返回 Client 实例（`object: client`）或 factory（`object: client_factory`），不混用
 3. **不做 case_id 分发** — 不生成 `run_case(case_id)` / `assert_case(case_id, resp)` 分发 dict
 4. **不 import 待测系统内部模块**
@@ -12,7 +12,7 @@
 
 | 类别 | 处理方式 | 示例 |
 |------|---------|------|
-| 凭证类 | env var, fail-fast | token, password, API key |
+| 凭证类 | env var + `require_env()` fail-fast | token, password, API key |
 | 唯一资源 | 动态生成（uuid/timestamp） | email, name, request_id |
 | 非法输入 | 可固定 | 不存在的模型名 |
 | 业务输入 | 可固定，注明来源 | 日期窗口、模型名 |
