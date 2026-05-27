@@ -92,7 +92,43 @@ def merge_profile_yaml(
         if merged_values:
             merged[key] = merged_values
 
+    variables = _merge_profile_variables(
+        module_data.get("variables", {}),
+        suite_data.get("variables", {}),
+    )
+    if variables:
+        merged["variables"] = variables
+
     return merged, diagnostics
+
+
+def _merge_profile_variables(
+    module_variables: Any,
+    suite_variables: Any,
+) -> dict[str, Any]:
+    module_map = module_variables if isinstance(module_variables, dict) else {}
+    suite_map = suite_variables if isinstance(suite_variables, dict) else {}
+
+    defaults = {
+        **dict(module_map.get("defaults", {}) if isinstance(module_map.get("defaults"), dict) else {}),
+        **dict(suite_map.get("defaults", {}) if isinstance(suite_map.get("defaults"), dict) else {}),
+    }
+    module_cases = module_map.get("cases", {}) if isinstance(module_map.get("cases"), dict) else {}
+    suite_cases = suite_map.get("cases", {}) if isinstance(suite_map.get("cases"), dict) else {}
+    cases: dict[str, Any] = {}
+    for case_id in sorted(set(module_cases) | set(suite_cases)):
+        module_case = module_cases.get(case_id, {}) if isinstance(module_cases.get(case_id), dict) else {}
+        suite_case = suite_cases.get(case_id, {}) if isinstance(suite_cases.get(case_id), dict) else {}
+        merged_case = {**module_case, **suite_case}
+        if merged_case:
+            cases[case_id] = merged_case
+
+    result: dict[str, Any] = {}
+    if defaults:
+        result["defaults"] = defaults
+    if cases:
+        result["cases"] = cases
+    return result
 
 
 def load_profile_rules(profile_path: ProfileSource) -> list[AssertionRule]:
@@ -351,9 +387,15 @@ def _validate_case_flow_values(
             if not isinstance(value["expr"], str) or not value["expr"].strip():
                 errors.append(f"{prefix}.expr: must be a non-empty string")
             return
+        if set(value) == {"var"}:
+            var_name = value["var"]
+            if not isinstance(var_name, str) or not _IDENT_RE.match(var_name):
+                errors.append(f"{prefix}.var: must be a valid profile variable name")
+            return
         for key, item in value.items():
             _validate_case_flow_values(item, f"{prefix}.{key}", saved_names, errors)
 
 
 def _case_flow_assert_text(assertion: str) -> str:
     return _BACKTICK_RE.sub(r"\1", assertion).strip()
+

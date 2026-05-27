@@ -34,7 +34,7 @@ effort: high
 
 ## 前置：读取输入
 
-1. **已验证的 .py** — 模块模式读取 `test_workspace/tests/generated/test_{module}_*.py`；suite 模式读取 `test_{module}_{case_file_stem}.py`
+1. **已验证的 .py** — 模块模式读取 `test_workspace/tests/generated/test_{module}_*.py`；suite 模式读取 `test_{module}_{suite}_{case_file_stem}.py`
 2. **parser 输出** — 模块模式读取 `test_workspace/cases/{module}/`；suite 模式读取 `<suite_dir>` 中的 case files
 3. **Case IR 输出** — 如果仓库已支持 `--dump-ir` / `--explain`，读取每条用例的 strategy、protocol、fixtures、assertion resolution
 4. **codegen profile** — `test_workspace/tests/fixtures/codegen_profile_{module}.md`（如果存在）

@@ -2,6 +2,8 @@
 
 `codegen_profile_{module}.md` 是模块级生成配置。它告诉 codegen：这个模块属于什么类型、哪些用例要覆盖请求字段、哪些断言有专属模板、哪些复杂流程需要走 `case_flows` 或 `case_bodies`。
 
+独立 case suite 也可以在用例目录旁放 `codegen_profile_{suite}_suite.md`。module profile 放 L1 稳定能力；suite profile 跟随用例批次，优先放本批用例的 `variables`、`case_flows`、`case_bodies` 和 `request_overrides`。
+
 profile 文件必须包含一个 YAML 代码块：
 
 ~~~markdown
@@ -83,6 +85,62 @@ profile assertion_rules > project_config builtin_assertion_rules > named_templat
 - 断言依赖复杂临时变量。
 - 只有一条用例临时出现，尚不值得沉淀。
 
+## variables
+
+`variables` 是 suite/profile 的变量面板，适合把不同 case 使用的账号、密码、token、URL path、非法值等从 fixture 和 case_flow 里拆出来。
+
+第一版只支持两种来源：
+
+- `env`：运行时从环境变量读取。generated pytest 只写 env 名，不写 env 值。
+- `value`：profile 字面量，适合错误密码、非法枚举、固定 path 片段等。
+
+```yaml
+profile_scope: case_suite
+parent_module: management_auth_user
+suite: login_smoke
+variables:
+  defaults:
+    base_url:
+      env: SUB2API_BASE_URL
+  cases:
+    TC-AUTH-001:
+      username:
+        env: SUB2API_NORMAL_USER_EMAIL
+      password:
+        env: SUB2API_NORMAL_USER_PASSWORD
+    TC-AUTH-002:
+      username:
+        env: SUB2API_NORMAL_USER_EMAIL
+      password:
+        value: wrong-password
+```
+
+`case_flow` 的 `args` / `kwargs` 通过 `{var: name}` 引用：
+
+```yaml
+case_flows:
+  TC-AUTH-001:
+    fixture: setup_management_auth_user
+    object: client
+    steps:
+      - call: client.login
+        kwargs:
+          username:
+            var: username
+          password:
+            var: password
+        save_as: resp
+      - assert: 'assert resp.status_code == 200'
+```
+
+约束：
+
+- 变量名必须是合法 Python 标识符。
+- 每个变量只能声明 `env` 或 `value` 之一。
+- `{var: name}` 必须能在 `variables.defaults` 或 `variables.cases.{case_id}` 中找到。
+- 缺 env 时测试失败，错误信息只显示 env 名，不显示 env 值。
+- 不要让 fixture 按 case_id 分发不同账号或 token；case 级数据差异放到 `variables`。
+
 ## case_flows
 
 `case_flows` 是结构化多步骤流程，适合稳定的 API 组合调用：
@@ -99,12 +157,12 @@ case_flows:
           user_id: "u_demo_002"
           value: 3
         save_as: create_resp
-      - assert: 'create_resp["code"] == 0'
+      - assert: 'assert create_resp["code"] == 0'
       - call: client.get
         kwargs:
           user_id: "u_demo_002"
         save_as: get_resp
-      - assert: 'get_resp["value"] == 3'
+      - assert: 'assert get_resp["value"] == 3'
 ```
 
 约束：
@@ -113,7 +171,7 @@ case_flows:
 - `fixture` 必须非空。
 - `object` 必须是合法 Python 标识符。
 - `steps` 至少一项。
-- `assert` 建议直接写 Python 表达式字符串，例如 `'resp["code"] == 0'`；不要混用反引号和 `assert ` 前缀。
+- `assert` 必须写成可执行 Python 断言，例如 `'assert resp["code"] == 0'`；不要写裸表达式。
 
 适用：
 

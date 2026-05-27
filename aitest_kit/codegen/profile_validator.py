@@ -13,6 +13,10 @@ from aitest_kit.codegen.profile import (
     validate_case_flows,
     validate_profile_strategy_conflicts,
 )
+from aitest_kit.codegen.profile_variables import (
+    validate_case_flow_variable_references,
+    validate_profile_variables,
+)
 from aitest_kit.codegen.project_config import ProjectConfig, load_project_config
 from aitest_kit.codegen.profile_schema import profile_schema_diagnostics
 from aitest_kit.codegen.profile_validation_report import (
@@ -37,6 +41,7 @@ _TOP_LEVEL_KEYS = {
     "default_fixture",
     "default_object",
     "assertion_rules",
+    "variables",
     "request_overrides",
     "extra_imports",
     "case_fixtures",
@@ -73,16 +78,22 @@ def validate_profile_module(
     case_flows = _mapping(data, "case_flows")
     case_fixtures = _mapping(data, "case_fixtures")
     request_overrides = _mapping(data, "request_overrides")
+    variables = _mapping(data, "variables")
 
     for message in validate_profile_strategy_conflicts(case_bodies, case_flows):
         _error(report, "E502", message)
     for message in validate_case_flows(case_flows):
         _error(report, "E503", message)
+    for message in validate_profile_variables(variables):
+        _error(report, "E501", message)
+    for message in validate_case_flow_variable_references(case_flows, variables):
+        _error(report, "E507", message)
 
     _validate_case_references(report, "case_bodies", case_bodies)
     _validate_case_references(report, "case_flows", case_flows)
     _validate_case_references(report, "case_fixtures", case_fixtures)
     _validate_case_references(report, "request_overrides", request_overrides)
+    _validate_case_references(report, "variables.cases", _variable_cases(variables))
     _warn_feasibility_suspect_strategies(report, case_bodies, case_flows)
     _warn_fixture_reinvocation(report, case_flows)
     _validate_module_type(report, data, project_config, case_bodies, case_flows)
@@ -132,21 +143,28 @@ def validate_profile_suite(
     suite_case_flows = _mapping(suite_data, "case_flows")
     suite_case_fixtures = _mapping(suite_data, "case_fixtures")
     suite_request_overrides = _mapping(suite_data, "request_overrides")
+    suite_variables = _mapping(suite_data, "variables")
 
     for message in validate_profile_strategy_conflicts(suite_case_bodies, suite_case_flows):
         _error(report, "E502", message)
     for message in validate_case_flows(suite_case_flows):
         _error(report, "E503", message)
+    for message in validate_profile_variables(suite_variables):
+        _error(report, "E501", message)
 
     _validate_case_references(report, "case_bodies", suite_case_bodies)
     _validate_case_references(report, "case_flows", suite_case_flows)
     _validate_case_references(report, "case_fixtures", suite_case_fixtures)
     _validate_case_references(report, "request_overrides", suite_request_overrides)
+    _validate_case_references(report, "variables.cases", _variable_cases(suite_variables))
     _warn_feasibility_suspect_strategies(report, suite_case_bodies, suite_case_flows)
     _warn_fixture_reinvocation(report, suite_case_flows)
 
     runtime_case_bodies = _mapping(runtime_data, "case_bodies")
     runtime_case_flows = _mapping(runtime_data, "case_flows")
+    runtime_variables = _mapping(runtime_data, "variables")
+    for message in validate_case_flow_variable_references(suite_case_flows, runtime_variables):
+        _error(report, "E507", message)
     _validate_module_type(report, runtime_data, project_config, runtime_case_bodies, runtime_case_flows)
     _validate_suite_default_coverage(report, context, runtime_case_bodies, runtime_case_flows)
     return report
@@ -239,6 +257,7 @@ def _validate_top_level_shape(report: ProfileValidationReport, data: dict[str, A
     _expect_mapping(report, data, "case_bodies")
     _expect_mapping(report, data, "case_flows")
     _expect_mapping(report, data, "knowledge_refs")
+    _expect_mapping(report, data, "variables")
     _expect_string(report, data, "module_type")
     _expect_string(report, data, "profile_scope")
     _expect_string(report, data, "parent_module")
@@ -443,6 +462,11 @@ def _validate_module_type(
 def _mapping(data: dict[str, Any], key: str) -> dict[str, Any]:
     value = data.get(key)
     return value if isinstance(value, dict) else {}
+
+
+def _variable_cases(variables: dict[str, Any]) -> dict[str, Any]:
+    cases = variables.get("cases")
+    return cases if isinstance(cases, dict) else {}
 
 
 def _error(

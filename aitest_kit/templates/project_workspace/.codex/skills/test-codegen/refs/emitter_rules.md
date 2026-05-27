@@ -4,7 +4,7 @@
 
 - `business.md` -> `test_workspace/tests/generated/test_{module}_business.py`
 - `boundary.md` -> `test_workspace/tests/generated/test_{module}_boundary.py`
-- case suite 中的 `{case_file}.md` -> `test_workspace/tests/generated/test_{module}_{case_file_stem}.py`
+- case suite 中的 `{case_file}.md` -> `test_workspace/tests/generated/test_{module}_{suite}_{case_file_stem}.py`
 
 ## 类和函数命名
 
@@ -67,6 +67,7 @@ fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供。按当前项目
 - `case_flows` 是已验证且结构稳定的 `case_bodies` 晋升形态，适合"调用 helper -> 保存结果 -> 派生变量 -> 观察副作用 -> 断言/注释"这类重复多步骤流程；当前支持 `call`、`assign`、`assert`、`comment` 四类 step。
 - 同一个 case_id 不允许同时出现在 `case_bodies` 和 `case_flows`；正式晋升为 `case_flow` 时必须删除旧 `case_body`，否则 codegen 会报错。
 - `case_flow` 的 `assert` step 必须写成可执行 Python 断言，例如 `assert resp["code"] == 0`；裸表达式如 `` `resp == ERR` `` 会被 profile 校验拒绝。
+- `case_flow` 的 `args/kwargs` 可以用 `{var: name}` 引用 profile `variables`；变量来源只支持 `env` 或 `value`，缺 env 时运行失败且只显示 env 名。
 - 不要把复杂 Python 控制流硬塞进 `case_flow`；包含线程、进程、mock、复杂文件生命周期时继续保留 `case_body`。
 - 新增 `case_flow` 前必须能解释它比原 `case_body` 更稳定、更可读、更可校验。
 - 生成或迁移前显式运行 `--validate-profile`；普通生成也会自动硬门禁，用于提前发现 JSON Schema 格式、case_id 引用、case_flow assert 和 module_type 必需字段问题。
@@ -93,6 +94,7 @@ profile 应包含：
 | **setup_{module} 做了什么** | fixture 内部操作步骤 |
 | **新增用例时如何扩展** | dict/map 添加条目格式 |
 | **请求模板** | 固定字段、差异字段、helper 用法 |
+| **profile variables** | 本 suite/case 使用的账号、token、URL path、非法值等变量面板 |
 | **断言模式** | 断言 -> pytest 映射表 |
 | **setup 映射** | 场景变量 -> _CASE_CONFIGS 映射 |
 | **case_bodies / case_flows** | 复杂用例的自定义执行体，或已晋升的结构化多步骤流程 |

@@ -29,7 +29,9 @@
 - steps 只用 `call` / `assign` / `assert` / `comment`
 - `assert` 以 `assert ` 开头，是可执行 Python
 - 不塞 if/loop/try，复杂逻辑下沉到 fixture/helper
-- kwargs 值为合法 Python 字面量或 ref 引用
+- kwargs/args 值为合法 Python 字面量、`{ref: previous_save_as}`、`{expr: python_expr}` 或 `{var: profile_variable_name}`
+- `{var: name}` 只引用 suite/module profile 的 `variables.defaults` 或 `variables.cases.{case_id}`；缺 env 会在运行时失败并只显示 env 名，不显示值
+- 不用 fixture 按 case_id 选择账号/token；不同 case 的数据差异放到 profile variables
 
 ## auto_fields 判断
 

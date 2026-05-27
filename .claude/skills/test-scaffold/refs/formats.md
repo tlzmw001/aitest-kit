@@ -36,17 +36,17 @@
 - {无法从现有来源确认的信息}
 ```
 
-## Case 环境变量矩阵
+## Case variables/env 矩阵
 
 追加写入 api_map。
 
 ```markdown
-## Case 环境变量矩阵
+## Case variables/env 矩阵
 
-| case_id    | required env          | optional env | 缺失行为 |
-|------------|-----------------------|-------------|---------|
-| TC-XXX-001 | BASE_URL, USER_TOKEN  |             | fail    |
-| TC-XXX-010 | BASE_URL              | USER_TOKEN  | 测试无认证场景 |
+| case_id    | profile variables | required env | optional env | 缺失行为 |
+|------------|-------------------|--------------|-------------|---------|
+| TC-XXX-001 | username, password | BASE_URL, USER_EMAIL, USER_PASSWORD | | fail |
+| TC-XXX-010 | token_absent=true | BASE_URL | USER_TOKEN | 测试无认证场景 |
 ```
 
 分类规则：
@@ -54,6 +54,26 @@
 - 资源标识类 env（key_id、user_id）：required
 - 连接类 env（BASE_URL）：始终 required
 - 可选功能 env：optional，注明缺失行为
+- 同一模块不同 case 需要不同账号、token、URL path、非法值时，优先进入 suite profile `variables`，不要让 fixture 按 case_id 分发
+- `variables` 第一版只支持 `env` 和 `value` 两种来源；不读取 `.env`，不打印 env 值
+
+suite profile 示例：
+
+```yaml
+variables:
+  defaults:
+    base_url:
+      env: SUB2API_BASE_URL
+  cases:
+    TC-XXX-001:
+      username:
+        env: SUB2API_NORMAL_USER_EMAIL
+      password:
+        env: SUB2API_NORMAL_USER_PASSWORD
+    TC-XXX-010:
+      token:
+        value: ""
+```
 
 ## 状态影响表
 
@@ -93,6 +113,17 @@ extra_imports:
 fixture: setup_{module}
 object: client
 
+variables:
+  defaults:
+    base_url:
+      env: PROJECT_BASE_URL
+  cases:
+    TC-XXX-001:
+      username:
+        env: PROJECT_TEST_USER
+      password:
+        value: wrong-password
+
 request_overrides:
   TC-XXX-001:
     field_name: value
@@ -106,6 +137,11 @@ case_flows:
   TC-XXX-001:
     steps:
       - call: client.method_name
+        kwargs:
+          username:
+            var: username
+          password:
+            var: password
         save_as: http_resp
       - assign: resp
         expr: http_resp.json()

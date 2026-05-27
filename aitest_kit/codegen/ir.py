@@ -50,6 +50,15 @@ class VariableIR:
 
 
 @dataclass
+class ProfileVariableIR:
+    name: str
+    provider: str
+    source: str
+    env: str = ""
+    value: Any = None
+
+
+@dataclass
 class AssertionIR:
     source: str
     kind: str
@@ -104,6 +113,7 @@ class CaseIR:
     request: RequestIR | None = None
     call: CallIR | None = None
     variables: list[VariableIR] = field(default_factory=list)
+    profile_variables: list[ProfileVariableIR] = field(default_factory=list)
     assertions: list[AssertionIR] = field(default_factory=list)
     custom_body: CustomBodyIR | None = None
     case_flow: CaseFlowIR | None = None
