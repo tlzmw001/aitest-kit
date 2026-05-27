@@ -71,6 +71,7 @@ def emit_file(
     output_dir: str | Path = "test_workspace/tests/generated",
     fixture_dir: str | Path = "test_workspace/tests/fixtures",
     project: ProjectConfig | None = None,
+    output_file_type: str | None = None,
 ) -> EmitResult:
     """Emit a pytest file from a ParseResult.
 
@@ -83,7 +84,8 @@ def emit_file(
     module = parse_result.module
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / f"test_{module}_{file_type}.py"
+    output_suffix = output_file_type or file_type
+    output_path = output_dir / f"test_{module}_{output_suffix}.py"
 
     if output_path.exists():
         existing_source = _generated_source_path(output_path)

@@ -34,6 +34,9 @@
     "default_object": {
       "$ref": "#/$defs/identifier"
     },
+    "default_case_setup": {
+      "$ref": "#/$defs/caseFlowCallStep"
+    },
     "assertion_rules": {
       "type": "array",
       "items": {
@@ -63,6 +66,9 @@
           }
         }
       }
+    },
+    "variables": {
+      "$ref": "#/$defs/profileVariables"
     },
     "request_overrides": {
       "type": "object",
@@ -129,10 +135,67 @@
       "type": "string",
       "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$"
     },
+    "variableName": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "profileVariables": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "defaults": {
+          "type": "object",
+          "patternProperties": {
+            "^[A-Za-z_][A-Za-z0-9_]*$": {
+              "$ref": "#/$defs/profileVariableSource"
+            }
+          },
+          "additionalProperties": false
+        },
+        "cases": {
+          "type": "object",
+          "patternProperties": {
+            "^TC-[A-Z0-9]+-[0-9]+$": {
+              "type": "object",
+              "patternProperties": {
+                "^[A-Za-z_][A-Za-z0-9_]*$": {
+                  "$ref": "#/$defs/profileVariableSource"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "profileVariableSource": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["env"],
+          "properties": {
+            "env": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["value"],
+          "properties": {
+            "value": true
+          }
+        }
+      ]
+    },
     "caseFlow": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["fixture", "steps"],
+      "required": ["steps"],
       "properties": {
         "fixture": {
           "type": "string",
@@ -153,23 +216,7 @@
     "caseFlowStep": {
       "oneOf": [
         {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["call"],
-          "properties": {
-            "call": {
-              "$ref": "#/$defs/dottedCall"
-            },
-            "args": {
-              "type": "array"
-            },
-            "kwargs": {
-              "type": "object"
-            },
-            "save_as": {
-              "$ref": "#/$defs/identifier"
-            }
-          }
+          "$ref": "#/$defs/caseFlowCallStep"
         },
         {
           "type": "object",
@@ -207,6 +254,25 @@
           }
         }
       ]
+    },
+    "caseFlowCallStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["call"],
+      "properties": {
+        "call": {
+          "$ref": "#/$defs/dottedCall"
+        },
+        "args": {
+          "type": "array"
+        },
+        "kwargs": {
+          "type": "object"
+        },
+        "save_as": {
+          "$ref": "#/$defs/identifier"
+        }
+      }
     }
   }
 }

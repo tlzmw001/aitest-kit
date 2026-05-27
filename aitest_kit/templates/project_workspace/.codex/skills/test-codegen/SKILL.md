@@ -99,9 +99,9 @@ profile: codegen_profile_quota_billing_v2_suite.md
 规则：
 
 1. module profile 仍固定在 `test_workspace/tests/fixtures/codegen_profile_{module}.md`，放 L1 级稳定能力。
-2. suite profile 跟用例目录走，文件名必须以 `_suite.md` 结尾，放本批用例的 `case_flows/case_bodies/request_overrides`。
+2. suite profile 跟用例目录走，文件名必须以 `_suite.md` 结尾，放本批用例的 `variables/case_flows/case_bodies/request_overrides`。
 3. 如果没有 `aitest_suite.yaml`，执行时必须显式传 `--module {module}`。
-4. 生成文件名为 `test_{module}_{case_file_stem}.py`；拆分 pytest 文件由用户先拆分 Markdown 文件决定。
+4. 生成文件名为 `test_{module}_{suite}_{case_file_stem}.py`；拆分 pytest 文件由用户先拆分 Markdown 文件决定。
 
 case suite 推荐门禁顺序：
 
@@ -129,7 +129,7 @@ python3 -m aitest_kit.cli codegen --cases <suite_dir> --check
 | 发现 | 处理 |
 |------|------|
 | 只是缺 `aitest_suite.yaml` 或 suite profile | 留在 `test-codegen`：创建 suite 元数据和 `codegen_profile_{suite}_suite.md` |
-| 只是新增参数组合、断言组合或已有 client 方法的新调用顺序 | 留在 `test-codegen`：补 `case_flows/request_overrides/assertion_rules` |
+| 只是新增参数组合、断言组合或已有 client 方法的新调用顺序 | 留在 `test-codegen`：补 `variables/case_flows/request_overrides/assertion_rules` |
 | 需要调用现有 fixture 没封装的新端点 | 切到 `test-scaffold incremental`：补 client/helper 方法后再回到 codegen |
 | 需要新的认证方式、header、cookie、token 来源或 case-scoped env | 切到 `test-scaffold incremental`：补 env 契约和 fixture 注入 |
 | 需要创建/清理测试数据或跨步骤状态管理 | 切到 `test-scaffold incremental`：补 setup/cleanup 能力 |
@@ -146,7 +146,7 @@ python3 -m aitest_kit.cli codegen --cases <suite_dir> --check
 1. 确认 module、suite 名称和 case 文件列表。
 2. 创建或修正 `<suite_dir>/aitest_suite.yaml`，不要把 suite profile 索引写回 module profile。
 3. 读取 module fixture 的 client 方法签名，只使用已存在的方法。
-4. 逐条 case 选择 `case_flow`、`request_overrides`、`skipped/manual`；不要生成 case_id 分发表。
+4. 逐条 case 选择 `variables`、`case_flow`、`request_overrides`、`skipped/manual`；不要生成 case_id 分发表。
 5. 对可行性存疑 case，保持 skipped，不要为了覆盖率强行写可执行 flow。
 6. 生成 `<suite_dir>/codegen_profile_{suite}_suite.md` 后立即跑 suite 级 profile gate 和 dump-ir。
 
@@ -251,7 +251,7 @@ python3 -m aitest_kit.cli codegen --cases <suite_dir> --check
 6. `python3 -m pytest test_workspace/tests/generated/test_{module}_*.py --collect-only -q` — 收集检查
 7. 如果模块 fixture 和服务已就绪：`python3 -m pytest test_workspace/tests/generated/test_{module}_*.py -q`
 
-case suite 模式把前 4 步替换为 `python3 -m aitest_kit.cli codegen --cases <suite_dir> ...`，生成目标文件为 `test_{module}_{case_file_stem}.py`。
+case suite 模式把前 4 步替换为 `python3 -m aitest_kit.cli codegen --cases <suite_dir> ...`，生成目标文件为 `test_{module}_{suite}_{case_file_stem}.py`。
 
 ## 质量要求
 
@@ -272,7 +272,8 @@ case suite 模式把前 4 步替换为 `python3 -m aitest_kit.cli codegen --case
 
 模块：{module}
 生成文件：
-- test_{module}_{case_file_stem}.py — N 条（emitter X 条，AI 补写 Y 条）
+- 模块模式：test_{module}_{case_file_stem}.py — N 条（emitter X 条，AI 补写 Y 条）
+- suite 模式：test_{module}_{suite}_{case_file_stem}.py — N 条（emitter X 条，AI 补写 Y 条）
 
 跳过（可行性存疑）：
 - TC-XXX：原因

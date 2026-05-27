@@ -23,6 +23,10 @@ from aitest_kit.codegen.project_config import ProjectConfig
 from aitest_kit.codegen.suite import SuiteContext, load_suite_context, parse_suite_case_file
 
 
+def _suite_output_file_type(context: SuiteContext, case_path: Path) -> str:
+    return f"{context.suite}_{case_path.stem}"
+
+
 def run_suite_codegen(
     cases_path: str,
     *,
@@ -179,6 +183,7 @@ def _generate_suite(context: SuiteContext, paths: Any, project: ProjectConfig) -
             output_dir=paths.generated_dir,
             fixture_dir=paths.profile_dir,
             project=project,
+            output_file_type=_suite_output_file_type(context, path),
         )
         click.echo(f"\n  {result.output_path}")
         if result.diagnostics:
@@ -214,7 +219,10 @@ def _check_suite_consistency(
 ) -> int:
     stale_count = 0
     blocked_count = 0
-    target_files = {f"test_{context.module}_{path.stem}.py": path for path in context.case_files}
+    target_files = {
+        f"test_{context.module}_{_suite_output_file_type(context, path)}.py": path
+        for path in context.case_files
+    }
     for fname, source_path in sorted(target_files.items()):
         old_file = paths.generated_dir / fname
         existing_source = _generated_source_path(old_file)
@@ -232,6 +240,7 @@ def _check_suite_consistency(
                 output_dir=tmp_path,
                 fixture_dir=paths.profile_dir,
                 project=project,
+                output_file_type=_suite_output_file_type(context, path),
             )
             if result.diagnostics:
                 click.echo(f"[BLOCKED] {Path(result.output_path).name}")

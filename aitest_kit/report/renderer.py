@@ -106,7 +106,9 @@ def _failure_sections(cases: list[dict[str, Any]]) -> list[str]:
         return lines
 
     for classification in [
+        "PRECONDITION_MISSING",
         "ENVIRONMENT_ERROR",
+        "TEST_SCAFFOLD_ERROR",
         "FIXTURE_ERROR",
         "CODEGEN_ERROR",
         "ASSERTION_FAILURE",
@@ -142,13 +144,30 @@ def _feedback_section(result: dict[str, Any]) -> list[str]:
     lines = [
         "## 反哺清单",
         "",
-        "### 需要修 fixture / codegen profile",
+        "### 运行前置条件缺失",
         "",
     ]
-    for classification in ("FIXTURE_ERROR", "CODEGEN_ERROR", "TEARDOWN_ERROR"):
+    precondition_items = groups.get("PRECONDITION_MISSING", [])
+    for case in precondition_items:
+        failure = case.get("failure", {})
+        missing_env = ", ".join(failure.get("missing_env", []))
+        detail = f"缺失 env：{missing_env}" if missing_env else failure.get("message", "")
+        lines.append(f"- {case.get('tc_id')}：{detail}")
+    if not precondition_items:
+        lines.append("- 无")
+
+    lines.extend(["", "### 需要修 scaffold / fixture / helper", ""])
+    for classification in ("TEST_SCAFFOLD_ERROR", "FIXTURE_ERROR", "TEARDOWN_ERROR"):
         for case in groups.get(classification, []):
             lines.append(f"- {case.get('tc_id')}：{case.get('failure', {}).get('message', '')}")
-    if len(lines) == 4:
+    if not any(groups.get(item) for item in ("TEST_SCAFFOLD_ERROR", "FIXTURE_ERROR", "TEARDOWN_ERROR")):
+        lines.append("- 无")
+
+    lines.extend(["", "### 需要修 AITest Kit / codegen", ""])
+    codegen_items = groups.get("CODEGEN_ERROR", [])
+    for case in codegen_items:
+        lines.append(f"- {case.get('tc_id')}：{case.get('failure', {}).get('message', '')}")
+    if not codegen_items:
         lines.append("- 无")
 
     lines.extend(["", "### 需要人工判断", ""])
@@ -158,7 +177,7 @@ def _feedback_section(result: dict[str, Any]) -> list[str]:
     if not manual_items:
         lines.append("- 无")
 
-    lines.extend(["", "### 环境问题（重启服务后重试）", ""])
+    lines.extend(["", "### 环境问题（检查服务/依赖后重试）", ""])
     env_items = groups.get("ENVIRONMENT_ERROR", [])
     if env_items:
         modules = sorted({case.get("module", "") for case in env_items})
@@ -179,4 +198,3 @@ def _feedback_section(result: dict[str, Any]) -> list[str]:
 
 def _cell(text: str) -> str:
     return str(text).replace("|", "\\|").replace("\n", " ")
-

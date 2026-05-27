@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional, Union
@@ -20,6 +21,15 @@ class RuntimeProfile:
 
 
 ProfileSource = Optional[Union[str, Path, RuntimeProfile]]
+
+
+@dataclass(frozen=True)
+class CaseFlowDefaults:
+    """Top-level defaults shared by profile case_flows."""
+
+    fixture: str = ""
+    object_name: str = ""
+    case_setup: dict[str, Any] = field(default_factory=dict)
 
 
 def load_profile_yaml(profile_path: ProfileSource) -> dict[str, Any]:
@@ -67,8 +77,14 @@ def merge_profile_yaml(
     merged: dict[str, Any] = {}
     diagnostics: list[str] = []
 
-    for key in ("module_type", "assertion_rules", "default_fixture", "default_object"):
+    for key in ("module_type", "assertion_rules"):
         if key in module_data:
+            merged[key] = module_data[key]
+
+    for key in ("default_fixture", "default_object", "default_case_setup"):
+        if key in suite_data:
+            merged[key] = suite_data[key]
+        elif key in module_data:
             merged[key] = module_data[key]
 
     imports = []
@@ -92,7 +108,43 @@ def merge_profile_yaml(
         if merged_values:
             merged[key] = merged_values
 
+    variables = _merge_profile_variables(
+        module_data.get("variables", {}),
+        suite_data.get("variables", {}),
+    )
+    if variables:
+        merged["variables"] = variables
+
     return merged, diagnostics
+
+
+def _merge_profile_variables(
+    module_variables: Any,
+    suite_variables: Any,
+) -> dict[str, Any]:
+    module_map = module_variables if isinstance(module_variables, dict) else {}
+    suite_map = suite_variables if isinstance(suite_variables, dict) else {}
+
+    defaults = {
+        **dict(module_map.get("defaults", {}) if isinstance(module_map.get("defaults"), dict) else {}),
+        **dict(suite_map.get("defaults", {}) if isinstance(suite_map.get("defaults"), dict) else {}),
+    }
+    module_cases = module_map.get("cases", {}) if isinstance(module_map.get("cases"), dict) else {}
+    suite_cases = suite_map.get("cases", {}) if isinstance(suite_map.get("cases"), dict) else {}
+    cases: dict[str, Any] = {}
+    for case_id in sorted(set(module_cases) | set(suite_cases)):
+        module_case = module_cases.get(case_id, {}) if isinstance(module_cases.get(case_id), dict) else {}
+        suite_case = suite_cases.get(case_id, {}) if isinstance(suite_cases.get(case_id), dict) else {}
+        merged_case = {**module_case, **suite_case}
+        if merged_case:
+            cases[case_id] = merged_case
+
+    result: dict[str, Any] = {}
+    if defaults:
+        result["defaults"] = defaults
+    if cases:
+        result["cases"] = cases
+    return result
 
 
 def load_profile_rules(profile_path: ProfileSource) -> list[AssertionRule]:
@@ -185,6 +237,23 @@ def load_profile_module_type(profile_path: ProfileSource) -> str | None:
     return module_type if isinstance(module_type, str) and module_type.strip() else None
 
 
+def load_profile_case_flow_defaults(profile_path: ProfileSource) -> CaseFlowDefaults:
+    """Extract top-level case_flow defaults from a profile YAML block."""
+    return case_flow_defaults_from_yaml(load_profile_yaml(profile_path))
+
+
+def case_flow_defaults_from_yaml(data: dict[str, Any]) -> CaseFlowDefaults:
+    """Build case_flow defaults from raw profile YAML data."""
+    default_fixture = data.get("default_fixture")
+    default_object = data.get("default_object")
+    default_case_setup = data.get("default_case_setup")
+    return CaseFlowDefaults(
+        fixture=default_fixture if isinstance(default_fixture, str) else "",
+        object_name=default_object if isinstance(default_object, str) else "",
+        case_setup=dict(default_case_setup) if isinstance(default_case_setup, dict) else {},
+    )
+
+
 _CASE_ID_RE = re.compile(r"^TC-[A-Z0-9]+-\d+$")
 _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _CALL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$")
@@ -195,7 +264,68 @@ def load_profile_case_flows(profile_path: ProfileSource) -> dict[str, dict[str, 
     """Extract structured case_flows from a profile YAML block."""
     data = load_profile_yaml(profile_path)
     raw = data.get("case_flows", {})
-    return raw if isinstance(raw, dict) else {}
+    case_flows = raw if isinstance(raw, dict) else {}
+    return apply_case_flow_defaults(case_flows, case_flow_defaults_from_yaml(data))
+
+
+class _SafeFormatDict(dict[str, Any]):
+    def __missing__(self, key: str) -> str:
+        return "{" + key + "}"
+
+
+def _format_default_value(value: Any, context: dict[str, Any]) -> Any:
+    if isinstance(value, str):
+        return value.format_map(_SafeFormatDict(context))
+    if isinstance(value, list):
+        return [_format_default_value(item, context) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _format_default_value(item, context)
+            for key, item in value.items()
+        }
+    return value
+
+
+def _default_setup_for_case(
+    default_case_setup: dict[str, Any],
+    case_id: str,
+) -> dict[str, Any]:
+    if not default_case_setup:
+        return {}
+    return _format_default_value(deepcopy(default_case_setup), {"case_id": case_id})
+
+
+def _steps_start_with_default(
+    steps: Any,
+    default_step: dict[str, Any],
+) -> bool:
+    return isinstance(steps, list) and bool(steps) and steps[0] == default_step
+
+
+def apply_case_flow_defaults(
+    case_flows: dict[str, Any],
+    defaults: CaseFlowDefaults | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Return case_flows with top-level fixture/object/setup defaults applied."""
+    defaults = defaults or CaseFlowDefaults()
+    result: dict[str, dict[str, Any]] = {}
+    for case_id, raw_flow in case_flows.items():
+        if not isinstance(case_id, str) or not isinstance(raw_flow, dict):
+            result[case_id] = raw_flow
+            continue
+        flow = deepcopy(raw_flow)
+        if defaults.fixture and not flow.get("fixture"):
+            flow["fixture"] = defaults.fixture
+        if defaults.object_name and not flow.get("object"):
+            flow["object"] = defaults.object_name
+
+        default_step = _default_setup_for_case(defaults.case_setup, case_id)
+        if default_step:
+            steps = flow.get("steps", [])
+            if not _steps_start_with_default(steps, default_step):
+                flow["steps"] = [default_step, *list(steps if isinstance(steps, list) else [])]
+        result[case_id] = flow
+    return result
 
 
 def validate_profile_strategy_conflicts(
@@ -212,10 +342,14 @@ def validate_profile_strategy_conflicts(
     ]
 
 
-def validate_case_flows(case_flows: dict[str, Any]) -> list[str]:
+def validate_case_flows(
+    case_flows: dict[str, Any],
+    defaults: CaseFlowDefaults | None = None,
+) -> list[str]:
     """Validate structured case_flow profile data without external deps."""
     errors: list[str] = []
-    for case_id, flow in case_flows.items():
+    normalized = apply_case_flow_defaults(case_flows, defaults)
+    for case_id, flow in normalized.items():
         prefix = f"case_flows.{case_id}"
         if not isinstance(case_id, str) or not _CASE_ID_RE.match(case_id):
             errors.append(f"{prefix}: invalid case_id")
@@ -350,6 +484,11 @@ def _validate_case_flow_values(
         if set(value) == {"expr"}:
             if not isinstance(value["expr"], str) or not value["expr"].strip():
                 errors.append(f"{prefix}.expr: must be a non-empty string")
+            return
+        if set(value) == {"var"}:
+            var_name = value["var"]
+            if not isinstance(var_name, str) or not _IDENT_RE.match(var_name):
+                errors.append(f"{prefix}.var: must be a valid profile variable name")
             return
         for key, item in value.items():
             _validate_case_flow_values(item, f"{prefix}.{key}", saved_names, errors)

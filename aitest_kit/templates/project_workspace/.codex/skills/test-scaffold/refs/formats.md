@@ -36,17 +36,17 @@
 - {无法从现有来源确认的信息}
 ```
 
-## Case 环境变量矩阵
+## Case variables/env 矩阵
 
 追加写入 api_map。
 
 ```markdown
-## Case 环境变量矩阵
+## Case variables/env 矩阵
 
-| case_id    | required env          | optional env | 缺失行为 |
-|------------|-----------------------|-------------|---------|
-| TC-XXX-001 | BASE_URL, USER_TOKEN  |             | fail    |
-| TC-XXX-010 | BASE_URL              | USER_TOKEN  | 测试无认证场景 |
+| case_id    | profile variables | required env | optional env | 缺失行为 |
+|------------|-------------------|--------------|-------------|---------|
+| TC-XXX-001 | username, password | BASE_URL, USER_EMAIL, USER_PASSWORD | | fail |
+| TC-XXX-010 | token_absent=true | BASE_URL | USER_TOKEN | 测试无认证场景 |
 ```
 
 分类规则：
@@ -54,6 +54,26 @@
 - 资源标识类 env（key_id、user_id）：required
 - 连接类 env（BASE_URL）：始终 required
 - 可选功能 env：optional，注明缺失行为
+- 同一模块不同 case 需要不同账号、token、URL path、非法值时，优先进入 suite profile `variables`，不要让 fixture 按 case_id 分发
+- `variables` 第一版只支持 `env` 和 `value` 两种来源；`env` 会先读进程环境变量，缺失时读当前工作目录 `.env` 或 `AITEST_ENV_FILE` 指定文件；不打印 env 值
+
+suite profile 示例：
+
+```yaml
+variables:
+  defaults:
+    base_url:
+      env: SUB2API_BASE_URL
+  cases:
+    TC-XXX-001:
+      username:
+        env: SUB2API_NORMAL_USER_EMAIL
+      password:
+        env: SUB2API_NORMAL_USER_PASSWORD
+    TC-XXX-010:
+      token:
+        value: ""
+```
 
 ## 状态影响表
 
@@ -90,8 +110,27 @@ module_type: {type}
 extra_imports:
   - "from test_workspace.tests.fixtures.{module} import setup_{module}"
 
-fixture: setup_{module}
-object: client
+default_fixture: setup_{module}
+default_object: client_factory
+
+# 当每条 case_flow 都需要同一个 factory/setup 时使用。
+# 如果 setup_{module} 直接返回 client，不需要 default_case_setup。
+default_case_setup:
+  call: client_factory
+  kwargs:
+    case_id: "{case_id}"
+  save_as: case
+
+variables:
+  defaults:
+    base_url:
+      env: PROJECT_BASE_URL
+  cases:
+    TC-XXX-001:
+      username:
+        env: PROJECT_TEST_USER
+      password:
+        value: wrong-password
 
 request_overrides:
   TC-XXX-001:
@@ -105,7 +144,12 @@ assertion_rules:
 case_flows:
   TC-XXX-001:
     steps:
-      - call: client.method_name
+      - call: case.method_name
+        kwargs:
+          username:
+            var: username
+          password:
+            var: password
         save_as: http_resp
       - assign: resp
         expr: http_resp.json()
@@ -117,6 +161,12 @@ case_bodies:
     resp = client.call(...)
     assert resp.status_code == 200
 ```
+
+规则：
+- `default_fixture/default_object/default_case_setup` 用于减少每条 `case_flow` 重复 setup。
+- `default_case_setup` 只在同一批 flow 都需要同一个 factory call 时写；普通 client fixture 不写。
+- 单条 `case_flow` 仍可显式声明 `fixture` 或 `object` 覆盖默认值。
+- `{case_id}` 会由 codegen 替换成当前用例 ID。
 
 ## Fixture 代码结构
 

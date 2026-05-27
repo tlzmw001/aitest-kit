@@ -191,7 +191,8 @@ def test_real_profile_case_flow_strategy_for_validation_pilot():
     assert case_ir.fixtures == ["setup_validation_ratelimit"]
     assert case_ir.custom_body is None
     assert case_ir.case_flow is not None
-    assert case_ir.case_flow.steps[0].call == "setup_validation_ratelimit"
+    assert case_ir.case_flow.object_name == "client_factory"
+    assert case_ir.case_flow.steps[0].call == "client_factory"
 
     grpc_case_ir = _case(file_ir, "TC-GRPC-001")
     assert grpc_case_ir.strategy == "structured_case_flow"
@@ -371,6 +372,60 @@ def test_case_flow_profile_validation_accepts_assign_step():
     })
 
     assert errors == []
+
+
+def test_case_flow_defaults_expand_fixture_object_and_setup_step(tmp_path):
+    profile_path = tmp_path / "codegen_profile_demo.md"
+    profile_path.write_text(
+        """```yaml
+default_fixture: setup_demo
+default_object: client_factory
+default_case_setup:
+  call: client_factory
+  kwargs:
+    case_id: "{case_id}"
+  save_as: case
+case_flows:
+  TC-DEMO-001:
+    steps:
+      - call: case.get
+        args: ["/health"]
+        save_as: resp
+      - assert: 'assert resp["status"] == "ok"'
+```
+""",
+        encoding="utf-8",
+    )
+    parse_result = ParseResult(
+        module="demo",
+        source_file="test_workspace/cases/demo/business.md",
+        shared_config=SharedConfig(base_request_http={"user_id": "", "reqId": ""}),
+        cases=[
+            ParsedTestCase(
+                id="TC-DEMO-001",
+                title="默认 case setup",
+                priority="P1",
+                assertions=['`resp["status"] == "ok"`'],
+                section="流程",
+            )
+        ],
+    )
+
+    file_ir = build_file_ir(
+        parse_result,
+        "business",
+        profile_path=profile_path,
+        project=load_project_config(),
+    )
+    case_ir = _case(file_ir, "TC-DEMO-001")
+
+    assert case_ir.fixtures == ["setup_demo"]
+    assert case_ir.case_flow is not None
+    assert case_ir.case_flow.object_name == "client_factory"
+    assert case_ir.case_flow.steps[0].call == "client_factory"
+    assert case_ir.case_flow.steps[0].kwargs == {"case_id": "TC-DEMO-001"}
+    assert case_ir.case_flow.steps[0].save_as == "case"
+    assert case_ir.case_flow.steps[1].call == "case.get"
 
 
 def test_emitter_can_render_structured_case_flow(tmp_path):

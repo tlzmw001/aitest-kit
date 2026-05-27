@@ -44,7 +44,11 @@ class RenderedFile:
     diagnostics: list[str] = field(default_factory=list)
 
 
-def _render_header(ctx: EmitContext, has_grpc: bool = False) -> list[str]:
+def _render_header(
+    ctx: EmitContext,
+    has_grpc: bool = False,
+    has_profile_variables: bool = False,
+) -> list[str]:
     lines = [
         f"# Auto-generated from {ctx.source_path}",
         f"# DO NOT EDIT — regenerate with: /test-codegen {ctx.module}",
@@ -53,6 +57,8 @@ def _render_header(ctx: EmitContext, has_grpc: bool = False) -> list[str]:
     ]
     if has_grpc:
         lines.append(ctx.project.grpc_helper_import)
+    if has_profile_variables:
+        lines.append("from aitest_kit.runtime_variables import resolve_profile_variables")
     lines.extend(ctx.extra_imports)
     return lines
 
@@ -176,6 +182,8 @@ def _render_flow_value(value: Any) -> str:
             return str(value["ref"])
         if keys == {"expr"}:
             return str(value["expr"])
+        if keys == {"var"}:
+            return f"__tc_vars__[{dict_to_python_compact(value['var'])}]"
         pairs = [
             f"{dict_to_python_compact(key)}: {_render_flow_value(item)}"
             for key, item in value.items()
@@ -218,6 +226,11 @@ def _render_case_flow(
     lines.append(f"    def {tc_func_name(case_ir.case_id)}({signature}):")
     lines.append(f'        """{case_ir.case_id}：{case_ir.title}"""')
     lines.extend(render_assignment("__tc_meta__", _case_meta(tc, ctx), indent=2))
+    if case_ir.profile_variables:
+        lines.append(
+            "        __tc_vars__ = resolve_profile_variables("
+            f"{dict_to_python_compact(_profile_variable_specs(case_ir))})"
+        )
     lines.extend(_render_setup_comments(tc))
     lines.append("")
     if case_ir.case_flow.object_name and case_ir.fixtures:
@@ -247,6 +260,16 @@ def _render_case_flow(
         )
 
     return lines, unparsed, diagnostics
+
+
+def _profile_variable_specs(case_ir: CaseIR) -> dict[str, dict[str, Any]]:
+    specs: dict[str, dict[str, Any]] = {}
+    for item in case_ir.profile_variables:
+        if item.provider == "env":
+            specs[item.name] = {"env": item.env}
+        elif item.provider == "value":
+            specs[item.name] = {"value": item.value}
+    return specs
 
 
 def _render_default_body(
@@ -335,7 +358,13 @@ def render_file_from_ir(
     case_count = 0
     diagnostics: list[str] = []
 
-    all_lines.extend(_render_header(ctx, has_grpc=has_grpc))
+    has_profile_variables = any(case.profile_variables for case in file_ir.cases)
+
+    all_lines.extend(_render_header(
+        ctx,
+        has_grpc=has_grpc,
+        has_profile_variables=has_profile_variables,
+    ))
     all_lines.extend(_render_base_request(ctx))
     if ctx.shared_config.base_request_http:
         all_lines.extend(_render_req_helper(ctx))

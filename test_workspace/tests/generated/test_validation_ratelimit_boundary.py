@@ -47,7 +47,8 @@ class TestValidationRatelimitBoundary:
         # SETUP: 请求覆盖：HTTP 请求固定 user_id="u_rate_http_window"
         # SETUP: 请求覆盖_2：第 2 次请求触发限流后，轮询 EXISTS coupon:rate:user:u_rate_http_window 直到返回 0，最长等待 3 秒，再发送第 3 次请求
 
-        case = setup_validation_ratelimit(case_id="TC-RATE-006")
+        client_factory = setup_validation_ratelimit
+        case = client_factory(case_id="TC-RATE-006")
         r1 = case.http("u_rate_http_window", "req-rate-006-1", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
         r2 = case.http("u_rate_http_window", "req-rate-006-2", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
         case.wait_rate_key_gone("u_rate_http_window")
@@ -72,7 +73,8 @@ class TestValidationRatelimitBoundary:
         # SETUP: 请求覆盖：gRPC 请求固定 user_id="u_rate_grpc_window"
         # SETUP: 请求覆盖_2：第 2 次请求触发限流后，轮询 EXISTS coupon:rate:user:u_rate_grpc_window 直到返回 0，最长等待 3 秒，再发送第 3 次请求
 
-        case = setup_validation_ratelimit(case_id="TC-RATE-007")
+        client_factory = setup_validation_ratelimit
+        case = client_factory(case_id="TC-RATE-007")
         r1 = case.grpc("u_rate_grpc_window", "req-rate-007-1", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
         r2 = case.grpc("u_rate_grpc_window", "req-rate-007-2", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
         case.wait_rate_key_gone("u_rate_grpc_window")

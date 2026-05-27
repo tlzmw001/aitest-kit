@@ -8,8 +8,6 @@ from typing import Any
 from aitest_kit.codegen.ir import (
     AssertionIR,
     CallIR,
-    CaseFlowIR,
-    CaseFlowStepIR,
     CaseIR,
     CustomBodyIR,
     DiagnosticIR,
@@ -19,6 +17,7 @@ from aitest_kit.codegen.ir import (
     SourceTraceIR,
     VariableIR,
 )
+from aitest_kit.codegen.case_flow_planner import build_case_flow_ir
 from aitest_kit.codegen.parser import ParseResult, TestCase
 from aitest_kit.codegen.profile import (
     load_profile_case_bodies,
@@ -26,8 +25,16 @@ from aitest_kit.codegen.profile import (
     load_profile_case_flows,
     load_profile_request_overrides,
     load_profile_rules,
+    load_profile_yaml,
     validate_case_flows,
     validate_profile_strategy_conflicts,
+)
+from aitest_kit.codegen.profile_variables import (
+    case_flow_variable_refs,
+    load_profile_variables,
+    profile_variable_irs_for_case,
+    validate_case_flow_variable_references,
+    validate_profile_variables,
 )
 from aitest_kit.codegen.project_config import DEFAULT_PROJECT, AssertionRule, ProjectConfig
 from aitest_kit.codegen.render_utils import (
@@ -274,79 +281,6 @@ def _assertions_for(
     return result
 
 
-def _case_flow_assertion_ir(
-    assertion: str,
-    profile_rules: list[AssertionRule],
-    project: ProjectConfig,
-) -> AssertionIR:
-    clean = strip_backticks(assertion)
-    if clean.startswith("assert "):
-        return AssertionIR(
-            source=assertion,
-            kind="raw_python",
-            code_lines=[clean],
-            resolved_by="profile.case_flows.raw_assert",
-        )
-    code_lines, pattern_name = resolve_assertion(assertion, profile_rules, project)
-    return AssertionIR(
-        source=assertion,
-        kind=_assertion_kind(pattern_name),
-        code_lines=code_lines,
-        resolved_by=pattern_name,
-    )
-
-
-def _case_flow_for(
-    tc: TestCase,
-    case_flows: dict[str, dict[str, Any]],
-    profile_rules: list[AssertionRule],
-    project: ProjectConfig,
-) -> CaseFlowIR | None:
-    flow = case_flows.get(tc.id)
-    if not isinstance(flow, dict):
-        return None
-
-    steps: list[CaseFlowStepIR] = []
-    for raw_step in flow.get("steps", []):
-        if not isinstance(raw_step, dict):
-            continue
-        if "call" in raw_step:
-            steps.append(CaseFlowStepIR(
-                kind="call",
-                call=raw_step.get("call", ""),
-                args=list(raw_step.get("args", []) or []),
-                kwargs=dict(raw_step.get("kwargs", {}) or {}),
-                save_as=raw_step.get("save_as", "") or "",
-            ))
-        elif "assert" in raw_step:
-            steps.append(CaseFlowStepIR(
-                kind="assert",
-                assertion=_case_flow_assertion_ir(
-                    raw_step.get("assert", ""),
-                    profile_rules,
-                    project,
-                ),
-            ))
-        elif "assign" in raw_step:
-            steps.append(CaseFlowStepIR(
-                kind="assign",
-                target=raw_step.get("assign", "") or "",
-                expr=raw_step.get("expr", "") or "",
-            ))
-        elif "comment" in raw_step:
-            steps.append(CaseFlowStepIR(
-                kind="comment",
-                comment=raw_step.get("comment", "") or "",
-            ))
-
-    return CaseFlowIR(
-        source=f"profile.case_flows.{tc.id}",
-        fixture=flow.get("fixture", ""),
-        object_name=flow.get("object", "") or "",
-        steps=steps,
-    )
-
-
 def _case_diagnostics(case_ir: CaseIR, has_http_body: bool) -> list[DiagnosticIR]:
     diagnostics: list[DiagnosticIR] = []
     if case_ir.strategy in {"default_http", "default_grpc", "manual"} and not has_http_body:
@@ -378,6 +312,7 @@ def build_file_ir(
     case_fixtures = load_profile_case_fixtures(profile_path) if profile_path else {}
     case_bodies = load_profile_case_bodies(profile_path) if profile_path else {}
     case_flows = load_profile_case_flows(profile_path) if profile_path else {}
+    profile_variables = load_profile_variables(load_profile_yaml(profile_path)) if profile_path else {}
 
     file_ir = FileIR(
         module=parse_result.module,
@@ -395,6 +330,14 @@ def build_file_ir(
     file_ir.diagnostics.extend(
         DiagnosticIR(code="E202", layer="planner", message=error)
         for error in validate_case_flows(case_flows)
+    )
+    file_ir.diagnostics.extend(
+        DiagnosticIR(code="E202", layer="planner", message=error)
+        for error in validate_profile_variables(profile_variables)
+    )
+    file_ir.diagnostics.extend(
+        DiagnosticIR(code="E202", layer="planner", message=error)
+        for error in validate_case_flow_variable_references(case_flows, profile_variables)
     )
 
     for tc in parse_result.cases:
@@ -441,9 +384,18 @@ def build_file_ir(
                 lines=list(case_bodies.get(tc.id, [])),
             )
         case_flow = (
-            _case_flow_for(tc, case_flows, profile_rules, proj)
+            build_case_flow_ir(tc, case_flows, profile_rules, proj)
             if strategy == "structured_case_flow"
             else None
+        )
+        case_profile_variables = (
+            profile_variable_irs_for_case(
+                profile_variables,
+                tc.id,
+                case_flow_variable_refs(case_flows.get(tc.id, {})),
+            )
+            if strategy == "structured_case_flow"
+            else []
         )
 
         source_trace = {
@@ -464,6 +416,12 @@ def build_file_ir(
             source_trace["default_request.auto_fields"] = SourceTraceIR(
                 proj.default_request.auto_fields,
                 "project_config.default_request.auto_fields",
+            )
+        if case_profile_variables:
+            source_trace["profile_variables"] = SourceTraceIR(
+                [item.name for item in case_profile_variables],
+                "profile.variables",
+                "case_flow {var: name} references",
             )
 
         case_ir = CaseIR(
@@ -487,6 +445,7 @@ def build_file_ir(
             request=request,
             call=call,
             variables=variables,
+            profile_variables=case_profile_variables,
             assertions=assertions,
             custom_body=custom_body,
             case_flow=case_flow,

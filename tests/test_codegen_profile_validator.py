@@ -159,6 +159,94 @@ def test_profile_validator_rejects_unknown_case_reference(tmp_path):
     assert any("does not exist" in diag.message for diag in report.errors)
 
 
+def test_profile_validator_rejects_variables_with_unknown_case_reference(tmp_path):
+    cases_dir = tmp_path / "cases"
+    profile_dir = tmp_path / "fixtures"
+    _write_case_file(cases_dir, "demo")
+    _write_profile(
+        profile_dir,
+        "demo",
+        """variables:
+  cases:
+    TC-DEMO-999:
+      username:
+        env: DEMO_USER
+""",
+    )
+
+    report = validate_profile_module(
+        "demo",
+        cases_dir=cases_dir,
+        profile_dir=profile_dir,
+        project=_project(),
+    )
+
+    assert any(diag.code == "E505" for diag in report.errors)
+    assert any("variables.cases.TC-DEMO-999" in diag.source for diag in report.errors)
+
+
+def test_profile_validator_rejects_undefined_case_flow_variable(tmp_path):
+    cases_dir = tmp_path / "cases"
+    profile_dir = tmp_path / "fixtures"
+    _write_case_file(cases_dir, "demo")
+    _write_profile(
+        profile_dir,
+        "demo",
+        """variables:
+  defaults:
+    token:
+      env: DEMO_TOKEN
+case_flows:
+  TC-DEMO-001:
+    fixture: setup_demo
+    object: client
+    steps:
+      - call: client.get
+        kwargs:
+          token:
+            var: missing_token
+        save_as: resp
+      - assert: 'assert resp["code"] == 0'
+""",
+    )
+
+    report = validate_profile_module(
+        "demo",
+        cases_dir=cases_dir,
+        profile_dir=profile_dir,
+        project=_project(),
+    )
+
+    assert any(diag.code == "E507" for diag in report.errors)
+    assert any("undefined profile variables: missing_token" in diag.message for diag in report.errors)
+
+
+def test_profile_validator_rejects_variable_env_and_value_together(tmp_path):
+    cases_dir = tmp_path / "cases"
+    profile_dir = tmp_path / "fixtures"
+    _write_case_file(cases_dir, "demo")
+    _write_profile(
+        profile_dir,
+        "demo",
+        """variables:
+  defaults:
+    token:
+      env: DEMO_TOKEN
+      value: literal
+""",
+    )
+
+    report = validate_profile_module(
+        "demo",
+        cases_dir=cases_dir,
+        profile_dir=profile_dir,
+        project=_project(),
+    )
+
+    assert any(diag.code == "E501" for diag in report.errors)
+    assert any("must declare exactly one of env or value" in diag.message for diag in report.errors)
+
+
 def test_profile_validator_warns_when_feasibility_suspect_case_has_flow(tmp_path):
     cases_dir = tmp_path / "cases"
     profile_dir = tmp_path / "fixtures"
@@ -240,6 +328,67 @@ def test_profile_validator_warns_when_flow_reinvokes_declared_fixture(tmp_path):
 
     assert any(diag.code == "W504" for diag in report.warnings)
     assert any("first step calls the declared fixture" in diag.message for diag in report.warnings)
+
+
+def test_profile_validator_accepts_case_flow_defaults(tmp_path):
+    cases_dir = tmp_path / "cases"
+    profile_dir = tmp_path / "fixtures"
+    _write_case_file(cases_dir, "demo")
+    _write_profile(
+        profile_dir,
+        "demo",
+        """default_fixture: setup_demo
+default_object: client_factory
+default_case_setup:
+  call: client_factory
+  kwargs:
+    case_id: "{case_id}"
+  save_as: case
+case_flows:
+  TC-DEMO-001:
+    steps:
+      - call: case.get
+        save_as: resp
+      - assert: 'assert resp["code"] == 0'
+""",
+    )
+
+    report = validate_profile_module(
+        "demo",
+        cases_dir=cases_dir,
+        profile_dir=profile_dir,
+        project=_project(),
+    )
+
+    assert report.errors == []
+    assert report.warnings == []
+
+
+def test_profile_validator_rejects_case_flow_without_fixture_or_default(tmp_path):
+    cases_dir = tmp_path / "cases"
+    profile_dir = tmp_path / "fixtures"
+    _write_case_file(cases_dir, "demo")
+    _write_profile(
+        profile_dir,
+        "demo",
+        """case_flows:
+  TC-DEMO-001:
+    steps:
+      - call: case.get
+        save_as: resp
+      - assert: 'assert resp["code"] == 0'
+""",
+    )
+
+    report = validate_profile_module(
+        "demo",
+        cases_dir=cases_dir,
+        profile_dir=profile_dir,
+        project=_project(),
+    )
+
+    assert any(diag.code == "E503" for diag in report.errors)
+    assert any("fixture: must be a non-empty string" in diag.message for diag in report.errors)
 
 
 def test_profile_validator_rejects_schema_unknown_nested_field(tmp_path):
