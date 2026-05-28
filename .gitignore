@@ -17,8 +17,13 @@ build/
 # Environment
 .env
 *.local.json
-!.claude/settings.local.json
 *.bak
+
+# Local agent/editor state
+.claude/settings.local.json
+
+# Local test backups
+test_workspace/backups/
 
 # Test / coverage
 .pytest_cache/

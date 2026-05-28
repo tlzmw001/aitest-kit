@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.6 - 2026-05-28
+
+### Added
+
+- Added the `test-maintain` skill as a maintenance router for test asset updates, including Codex, Claude, agents, and initialized workspace template copies.
+
+### Changed
+
+- Ignored local agent settings and local test backup directories so personal machine state does not pollute release diffs.
+
 ## 0.1.5 - 2026-05-28
 
 ### Added

@@ -12,3 +12,8 @@ __pycache__/
 .venv/
 venv/
 
+# Local agent/editor state
+.claude/settings.local.json
+
+# Local test backups
+test_workspace/backups/
