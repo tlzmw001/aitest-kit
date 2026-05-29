@@ -14,9 +14,12 @@ def render_markdown(result: dict[str, Any]) -> str:
         f"- **时间**：{result.get('timestamp', '')}",
         f"- **耗时**：{result.get('duration_seconds', 0)}s",
         f"- **命令**：`{result.get('command', '')}`",
+    ]
+    lines.extend(_run_scope_summary(result))
+    lines.extend([
         f"- **Codegen Check**：{result.get('codegen_check', {}).get('status', '')}",
         f"- **Manual 策略**：{result.get('manual_policy', '')}",
-    ]
+    ])
     lines.extend(_environment_summary(result.get("environment", {})))
     lines.append("")
 
@@ -54,6 +57,21 @@ def render_markdown(result: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _run_scope_summary(result: dict[str, Any]) -> list[str]:
+    if result.get("task_file"):
+        return [
+            f"- **Task 文件**：{result.get('task_file', '')}",
+        ]
+    if result.get("suite") or result.get("suite_file"):
+        return [
+            f"- **Target**：{result.get('target') or '-'}",
+            f"- **Module**：{result.get('module') or '-'}",
+            f"- **Suite**：{result.get('suite') or '-'}",
+            f"- **Suite 文件**：{result.get('suite_file') or '-'}",
+        ]
+    return []
+
+
 def _blocked_section(result: dict[str, Any]) -> list[str]:
     check = result.get("codegen_check", {})
     if result.get("blocked_reason") == "env_file":
@@ -75,7 +93,7 @@ def _blocked_section(result: dict[str, Any]) -> list[str]:
         "",
         f"- **Codegen Check**：{check.get('status', '')}",
         f"- **原因**：{check.get('message', '')}",
-        "- **下一步**：先运行 `aitest codegen {modules}`，再运行 `aitest run {modules}`",
+        "- **下一步**：先运行对应的 `aitest codegen --suite-file <suite.yaml>`，再运行 `aitest run --suite-file <suite.yaml>`",
         "",
     ]
 
@@ -237,8 +255,8 @@ def _feedback_section(result: dict[str, Any]) -> list[str]:
     lines.extend(["", "### 环境问题（检查服务/依赖后重试）", ""])
     env_items = groups.get("ENVIRONMENT_ERROR", [])
     if env_items:
-        modules = sorted({case.get("module", "") for case in env_items})
-        lines.append(f"- {len(env_items)} 条 ENVIRONMENT_ERROR，重试命令：`aitest run {' '.join(modules)}`")
+        command = result.get("command") or "aitest run --suite-file <suite.yaml>"
+        lines.append(f"- {len(env_items)} 条 ENVIRONMENT_ERROR，重试命令：`{command}`")
     else:
         lines.append("- 无")
 

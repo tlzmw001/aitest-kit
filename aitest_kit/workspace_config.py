@@ -9,13 +9,10 @@ import yaml
 
 
 AITEST_CONFIG_PATH = Path("aitest_config/aitest.yaml")
-LEGACY_CONFIG_PATH = Path("aitest_config/config.yaml")
-LEGACY_PROJECT_CONFIG_PATH = Path("aitest_config/project_config.yaml")
 
 
 @dataclass(frozen=True)
 class WorkspacePaths:
-    cases_dir: Path
     generated_dir: Path
     profile_dir: Path
     reports_dir: Path
@@ -23,53 +20,30 @@ class WorkspacePaths:
 
 
 def load_workspace_paths() -> WorkspacePaths:
-    """Load path settings from aitest.yaml or legacy config.yaml."""
+    """Load path settings from aitest.yaml."""
     raw = _workspace_paths_data()
     return WorkspacePaths(
-        cases_dir=Path(raw.get("cases_dir", "test_workspace/cases")),
-        generated_dir=Path(
-            raw.get("generated_dir")
-            or raw.get("generated_root")
-            or "test_workspace/tests/generated"
-        ),
-        profile_dir=Path(
-            raw.get("profile_dir")
-            or raw.get("fixtures_dir")
-            or "test_workspace/tests/fixtures"
-        ),
-        reports_dir=Path(
-            raw.get("reports_dir")
-            or raw.get("reports_root")
-            or "test_workspace/reports"
-        ),
-        project_config=Path(raw.get("project_config", LEGACY_PROJECT_CONFIG_PATH)),
+        generated_dir=Path(raw.get("generated_dir", "test_workspace/generated")),
+        profile_dir=Path(raw.get("profile_dir", "test_workspace/targets")),
+        reports_dir=Path(raw.get("reports_dir", "test_workspace/reports")),
+        project_config=AITEST_CONFIG_PATH,
     )
 
 
-def load_codegen_config_data(path: str | Path = LEGACY_PROJECT_CONFIG_PATH) -> dict[str, Any] | None:
-    """Load the codegen config mapping from aitest.yaml or project_config.yaml.
-
-    ``aitest_config/aitest.yaml`` wins only when it has a non-empty ``codegen``
-    section and the caller is using the default project-config path. Explicit
-    project-config paths keep their legacy behavior.
-    """
-    config_path = Path(path)
-    if config_path == LEGACY_PROJECT_CONFIG_PATH and AITEST_CONFIG_PATH.exists():
-        data = _read_yaml_mapping(AITEST_CONFIG_PATH)
-        codegen = data.get("codegen")
-        if isinstance(codegen, dict) and codegen:
-            return codegen
-
-    if not config_path.exists():
+def load_codegen_config_data(path: str | Path = AITEST_CONFIG_PATH) -> dict[str, Any] | None:
+    """Load the codegen config mapping from aitest.yaml."""
+    if not AITEST_CONFIG_PATH.exists():
         return None
-    return _read_yaml_mapping(config_path)
+    data = _read_yaml_mapping(AITEST_CONFIG_PATH)
+    codegen = data.get("codegen")
+    if isinstance(codegen, dict) and codegen:
+        return codegen
+    return None
 
 
 def has_workspace_config() -> bool:
-    """Return whether the workspace has either new or legacy config files."""
-    return AITEST_CONFIG_PATH.exists() or (
-        LEGACY_CONFIG_PATH.exists() and LEGACY_PROJECT_CONFIG_PATH.exists()
-    )
+    """Return whether the workspace has aitest.yaml."""
+    return AITEST_CONFIG_PATH.exists()
 
 
 def _workspace_paths_data() -> dict[str, Any]:
@@ -80,11 +54,6 @@ def _workspace_paths_data() -> dict[str, Any]:
             paths = workspace.get("paths", {})
             if isinstance(paths, dict):
                 return dict(paths)
-        paths = data.get("paths", {})
-        return dict(paths) if isinstance(paths, dict) else {}
-
-    if LEGACY_CONFIG_PATH.exists():
-        data = _read_yaml_mapping(LEGACY_CONFIG_PATH)
         paths = data.get("paths", {})
         return dict(paths) if isinstance(paths, dict) else {}
 

@@ -198,19 +198,19 @@ knowledge_refs:
     assert any("MISSING_KNOWLEDGE_ROOT" in diagnostic for diagnostic in context.diagnostics)
 
 
-def test_registry_accepts_legacy_aitest_suite_manifest_name(tmp_path):
+def test_registry_loads_suite_yaml_manifest(tmp_path):
     workspace = tmp_path / "aitest_project"
     suite_dir = tmp_path / "external_suite"
     suite_dir.mkdir()
     (suite_dir / "business.md").write_text("# business\n", encoding="utf-8")
-    (suite_dir / "codegen_profile_smoke_suite.md").write_text("# profile\n", encoding="utf-8")
-    (suite_dir / "aitest_suite.yaml").write_text(
+    (suite_dir / "profile_smoke_suite.md").write_text("# profile\n", encoding="utf-8")
+    (suite_dir / "suite.yaml").write_text(
         """target: coupon_system
 module: calibration
 suite: smoke
 case_files:
   - business.md
-profile: codegen_profile_smoke_suite.md
+profile: profile_smoke_suite.md
 """,
         encoding="utf-8",
     )
@@ -218,6 +218,6 @@ profile: codegen_profile_smoke_suite.md
     context = load_suite_context(suite_dir, workspace_root=workspace)
 
     assert context.diagnostics == []
-    assert context.manifest_path == suite_dir / "aitest_suite.yaml"
-    assert context.profile_path == suite_dir / "codegen_profile_smoke_suite.md"
+    assert context.manifest_path == suite_dir / "suite.yaml"
+    assert context.profile_path == suite_dir / "profile_smoke_suite.md"
     assert context.case_files == [suite_dir / "business.md"]

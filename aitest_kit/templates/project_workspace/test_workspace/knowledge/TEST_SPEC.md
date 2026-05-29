@@ -27,7 +27,7 @@
 | Q5 | 断言必须指向可观察结果，不能写“结果正确”“功能正常”等空泛表述 |
 | Q6 | 不猜测系统中间产物固定值；不可预知值使用关系断言、范围断言或人工标记 |
 | Q7 | `[manual]` 和 `[!可行性存疑: 原因]` 必须写在独立标记字段 |
-| Q8 | 生成 pytest 前优先修 Markdown、profile、fixture、helper 或 project_config |
+| Q8 | 生成 pytest 前优先修 Markdown、profile、fixture、helper 或 `aitest.yaml` |
 | Q9 | generated pytest 是编译产物，不作为长期手写源文件维护 |
 | Q10 | 确认待测系统 bug 时记录到 `test_workspace/results/`，不通过 skip 或放宽断言掩盖 |
 
@@ -48,5 +48,5 @@
 ## Codegen
 
 - Markdown 用例是生成 pytest 的源数据。
-- `test_workspace/tests/generated/` 下的 pytest 文件是编译产物。
-- 优先修改 Markdown、profile、fixture、helper 或 project_config，然后重新生成。
+- `test_workspace/generated/{target}/` 下的 pytest 文件是编译产物。
+- 优先修改 Markdown、profile、fixture、helper 或 `aitest.yaml`，然后重新生成。

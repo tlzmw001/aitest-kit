@@ -2,9 +2,7 @@
 
 ## 文件结构
 
-- `business.md` -> `test_workspace/tests/generated/test_{module}_business.py`
-- `boundary.md` -> `test_workspace/tests/generated/test_{module}_boundary.py`
-- case suite 中的 `{case_file}.md` -> `test_workspace/tests/generated/test_{module}_{suite}_{case_file_stem}.py`
+- target/suite 中的 `{case_file}.md` -> `test_workspace/generated/{target}/test_{module}_{suite}_{case_file_stem}.py`
 
 ## 类和函数命名
 
@@ -16,11 +14,13 @@
 
 场景变量 -> `# SETUP:` 注释 + `setup_{module}(case_id="TC-XXX")` 调用。
 
-fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供。按当前项目的 generated import/profile 机制接线；只有项目采用 `pytest_plugins` 注册时，才需要维护 `conftest.py` 中的 `pytest_plugins` 列表。
+target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{module}.py` 提供，helper 由 `test_workspace/targets/{target}/helpers/` 提供。codegen 根据 `module.yaml.fixture.file/default_fixture` 自动注入 fixture import；target helper 文件存在时优先生成 target helper import。
 
 新增模块时需要：
-1. 创建 `test_workspace/tests/fixtures/{module}.py`
-2. 确认 `codegen_profile_{module}.md` 或 generated pytest 能引用到对应 fixture；如果项目使用 `pytest_plugins`，同步添加插件注册
+1. 创建 `test_workspace/targets/{target}/fixtures/{module}.py`
+2. 创建或更新 `test_workspace/targets/{target}/modules/{module}.yaml`
+3. 创建 `test_workspace/targets/{target}/profiles/profile_{module}.md`
+4. 确认 generated pytest 能引用到 target fixture/helper
 
 ## fixture 编写检查清单
 
@@ -38,7 +38,7 @@ fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供。按当前项目
 
 ## 断言生成
 
-断言匹配优先级：profile assertion_rules > project_config builtin_assertion_rules > named_templates。
+断言匹配优先级：profile assertion_rules > `aitest.yaml.codegen.builtin_assertion_rules` > named_templates。
 
 通用断言模式（框架内置）：
 
@@ -51,7 +51,7 @@ fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供。按当前项目
 | `[manual]` 标记 | `# MANUAL CHECK: {原文}` |
 | 无法翻译 | `# UNPARSED ASSERTION: {原文}` |
 
-项目专属断言模式见 `aitest_config/project_config.yaml` 的 `builtin_assertion_rules`。
+项目专属断言模式见 `aitest_config/aitest.yaml` 的 `codegen.builtin_assertion_rules`。
 
 `round(..., 4)` -> `pytest.approx(..., abs=1e-4)`。`clamp(x)` -> `max(0, min(1, x))`。
 
@@ -85,8 +85,8 @@ fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供。按当前项目
 
 测试调通后编写 module profile 或 suite profile：
 
-- module profile：`test_workspace/tests/fixtures/codegen_profile_{module}.md`，承载 L1 级稳定能力
-- suite profile：`{suite_dir}/codegen_profile_{suite}_suite.md`，只覆盖该 suite 的 case_id
+- module profile：`test_workspace/targets/{target}/profiles/profile_{module}.md`，承载 L1 级稳定能力
+- suite profile：`{suite_dir}/profile_{suite}_suite.md`，只覆盖该 suite 的 case_id
 
 profile 应包含：
 
@@ -104,7 +104,7 @@ profile 应包含：
 | **调试经验** | 模块特有排错经验 |
 | **emitter 规则** | YAML code block，模块特有断言规则 |
 
-参考已有模块的 codegen_profile 作为结构模板。
+参考已有模块的 profile 作为结构模板。
 
 ## 后续：emitter-build
 

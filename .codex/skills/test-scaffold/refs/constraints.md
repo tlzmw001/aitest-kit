@@ -38,11 +38,11 @@
 
 ## auto_fields 判断
 
-判断是否配置 `project_config.yaml` 的 `default_request.auto_fields`。核心规则：只要有一个关键点不确定就不配置。多端点模块优先用 fixture Client + case_flows。只输出判断，不直接修改配置。
+判断是否配置 `aitest.yaml.codegen.default_request.auto_fields`。核心规则：只要有一个关键点不确定就不配置。多端点模块优先用 fixture Client + case_flows。只输出判断，不直接修改配置。
 
 ## module_type → 路线映射
 
-实际可用的 module_type 从 `project_config.yaml` 的 `module_types` 读取。
+实际可用的 module_type 从 `aitest.yaml.codegen.module_types` 读取；target/module 在 `modules/{module}.yaml` 声明本模块类型。
 
 | module_type | 基线路线 |
 |-------------|----------|
@@ -82,7 +82,7 @@ python3 -m compileall test_workspace/generated/{target}
 python3 -m aitest_kit.cli run --suite-file <suite_dir>/suite.yaml -- --collect-only -q
 ```
 
-legacy 模块模式仍可使用 `python3 -m aitest_kit.cli codegen {module} ...` 和 `test_workspace/tests/generated/`；新 target/suite 模式优先使用 `--suite-file`。
+使用 `python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> ...`；多个 suite 用 `--task-file`。
 
 | 命令 | 预期 | 失败时 |
 |------|------|--------|

@@ -28,7 +28,7 @@ effort: high
 ## 硬边界
 
 1. **只路由，不直接改文件**：本 skill 不使用 Write/Edit/apply_patch 修改任何文件；真正修改必须交给 `test-design`、`test-fix`、`test-scaffold`、`test-codegen` 等对应 skill。
-2. **不直接编辑 generated pytest**：`test_workspace/tests/generated/` 是编译产物。修改必须回到 Markdown 用例、profile、fixture、project_config 或 emitter。
+2. **不直接编辑 generated pytest**：`test_workspace/generated/{target}/` 是编译产物。修改必须回到 Markdown 用例、profile、fixture、`aitest.yaml` 或 emitter。
 3. **不绕过知识库**：需求变化可能影响业务规则时，先判断是否需要更新 knowledge，再进入用例维护。
 4. **不自动大批删除**：删除或废弃 case 前必须列出影响面，默认优先 `retire`，用户明确要求后才 `delete`。
 5. **不猜业务语义**：断言失败不自动判定为 SUT bug；报告只能做规则化初判，SUT bug 需要人工确认后记录到 `test_workspace/results/`。
@@ -88,9 +88,10 @@ effort: high
 只读检查，优先使用 `rg`：
 
 - knowledge：`test_workspace/knowledge/L1/`、`test_workspace/knowledge/L2/`、`TEST_SPEC.md`
-- cases：`test_workspace/cases/`、`test_workspace/casesuites/`
-- fixture/profile：`test_workspace/tests/fixtures/`、suite profile
-- generated：`test_workspace/tests/generated/`
+- suites：`test_workspace/suites/`
+- target registry：`test_workspace/targets/{target}/target.yaml`、`modules/{module}.yaml`
+- fixture/profile/helper：`test_workspace/targets/{target}/fixtures/`、`profiles/`、`helpers/`
+- generated：`test_workspace/generated/{target}/`
 - reports/results：`test_workspace/reports/latest/`、`test_workspace/results/`
 
 输出格式：
@@ -124,8 +125,8 @@ effort: high
 
 1. 如果需求规则未进入知识库，建议先用 `knowledge-build`。
 2. 如果只是补 Markdown 用例，路由 `test-design`。
-3. 如果已有 fixture/profile 能力足够，路由 `test-codegen` 生成或补 suite profile。
-4. 如果需要新增端点、认证、header、case-scoped env、cleanup、文件上传、流式响应、mock 或复杂生命周期，路由 `test-scaffold incremental`。
+3. 如果已有 target/module fixture/profile 能力足够，路由 `test-codegen` 生成或补 suite profile。
+4. 如果缺少 target/module registry、fixture、helper、module profile，或需要新增端点、认证、header、case-scoped env、cleanup、文件上传、流式响应、mock、复杂生命周期，路由 `test-scaffold incremental`。
 
 #### update：修改测试
 
@@ -172,8 +173,8 @@ generated pytest 函数
 
 - `test-design`：模块/suite、关联 knowledge、需要新增或覆盖的测试维度
 - `test-fix`：case_id、错误描述、期望修正方向
-- `test-scaffold`：模块、模式（scaffold-module/scaffold-suite/incremental）、suite_dir、fixture/profile 缺口
-- `test-codegen`：模块或 `--cases <suite_dir>`、是否 check/dump-ir
+- `test-scaffold`：target、模块、模式（scaffold-module/scaffold-suite/incremental）、suite_dir、fixture/profile/helper 缺口
+- `test-codegen`：模块、`--suite-file <suite_dir>/suite.yaml` 或 `--task-file <task.yaml>`、是否 check/dump-ir
 - `emitter-build`：已验证 pytest、profile、可沉淀模式
 
 不要把本 skill 的完整分析原文原样塞给底层 skill；只传决策所需的最小上下文。
@@ -182,23 +183,31 @@ generated pytest 函数
 
 底层 skill 修改后，按能力域选择验证。
 
-API 模块模式：
+API suite 模式：
 
 ```bash
-python3 -m aitest_kit.cli codegen <module> --validate-profile
-python3 -m aitest_kit.cli codegen <module> --dump-ir
-python3 -m aitest_kit.cli codegen <module>
-python3 -m aitest_kit.cli codegen <module> --check
-python3 -m pytest test_workspace/tests/generated/test_<module>_*.py --collect-only -q
+python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> --validate-profile
+python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> --dump-ir
+python3 -m aitest_kit.cli codegen --suite-file <suite.yaml>
+python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> --check
+python3 -m aitest_kit.cli run --suite-file <suite.yaml> -- --collect-only -q
 ```
 
 API suite 模式：
 
 ```bash
-python3 -m aitest_kit.cli codegen --cases <suite_dir> --validate-profile
-python3 -m aitest_kit.cli codegen --cases <suite_dir> --dump-ir
-python3 -m aitest_kit.cli codegen --cases <suite_dir>
-python3 -m aitest_kit.cli codegen --cases <suite_dir> --check
+python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --validate-profile
+python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --dump-ir
+python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml
+python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --check
+python3 -m aitest_kit.cli run --suite-file <suite_dir>/suite.yaml -- --collect-only -q
+```
+
+API task 模式：
+
+```bash
+python3 -m aitest_kit.cli codegen --task-file <task.yaml> --check
+python3 -m aitest_kit.cli run --task-file <task.yaml> -- --collect-only -q
 ```
 
 如果真实服务和前置 env 已准备好，再运行：
@@ -207,7 +216,7 @@ python3 -m aitest_kit.cli codegen --cases <suite_dir> --check
 aitest run <module>
 ```
 
-或对应 suite/module pytest。
+或 `aitest run --suite-file <suite_dir>/suite.yaml`。
 
 ### Step 6：维护摘要
 
@@ -246,6 +255,7 @@ aitest run <module>
 
 - 新测试能力域，如前端、契约、数据资源、移动端、性能测试
 - 新用例格式或目录结构
+- 新 target/module/suite/task 配置字段
 - 新 profile 类型或生成器
 - 新执行入口或报告分类
 - 新底层 skill

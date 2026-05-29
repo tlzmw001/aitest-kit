@@ -29,4 +29,6 @@ def init_command(target: Path, force: bool) -> None:
     click.echo("")
     click.echo("Next steps:")
     click.echo(f"  cd {result.target}")
-    click.echo("  aitest codegen --all --validate-profile")
+    click.echo("  aitest doctor")
+    click.echo("  # after creating target/module/suite assets:")
+    click.echo("  aitest codegen --suite-file <suite_dir>/suite.yaml --validate-profile")

@@ -29,6 +29,7 @@ from aitest_kit.codegen.suite import (
     suite_generated_path,
 )
 from aitest_kit.report.task_runner import run_task_command_impl
+from aitest_kit.registry import load_task_context
 from aitest_kit.workspace import push_workspace
 from aitest_kit.workspace_config import load_workspace_paths
 
@@ -51,7 +52,6 @@ def _load_paths() -> ReportPaths:
 )
 @click.option("--include-manual", is_flag=True, help="Include tests marked manual; excluded by default")
 @click.option("--skip-codegen-check", is_flag=True, help="Skip generated freshness check before pytest")
-@click.option("--cases", "cases_path", type=click.Path(file_okay=False, dir_okay=True), help="Run generated tests for one case suite directory")
 @click.option("--suite-file", type=click.Path(file_okay=True, dir_okay=False), help="Run generated tests for one suite manifest file")
 @click.option(
     "--task-file",
@@ -60,16 +60,13 @@ def _load_paths() -> ReportPaths:
     type=click.Path(file_okay=True, dir_okay=False),
     help="Run generated tests for suites listed by one task manifest",
 )
-@click.option("--module", "module_option", help="Owning module for --cases when no aitest_suite.yaml is present")
 @click.option("--workspace", type=click.Path(file_okay=False, dir_okay=True), help="Run from another AITest workspace root")
-@click.argument("args", nargs=-1, type=click.UNPROCESSED, metavar="[MODULE]... [PYTEST_ARGS]...")
+@click.argument("args", nargs=-1, type=click.UNPROCESSED, metavar="[PYTEST_ARGS]...")
 def run_command(
     include_manual: bool,
     skip_codegen_check: bool,
-    cases_path: str | None,
     suite_file: str | None,
     task_file: str | None,
-    module_option: str | None,
     workspace: str | None,
     args: tuple[str, ...],
 ):
@@ -77,9 +74,9 @@ def run_command(
 
     Examples:
 
-      aitest run calibration
+      aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 
-      aitest run calibration -- -k boundary
+      aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- -k boundary
     """
     try:
         with push_workspace(workspace):
@@ -87,10 +84,8 @@ def run_command(
                 include_manual,
                 skip_codegen_check,
                 args,
-                cases_path=cases_path,
                 suite_file=suite_file,
                 task_file=task_file,
-                module_override=module_option,
             )
     except (FileNotFoundError, NotADirectoryError) as exc:
         raise click.ClickException(str(exc)) from exc
@@ -101,22 +96,16 @@ def _run_command_impl(
     skip_codegen_check: bool,
     args: tuple[str, ...],
     *,
-    cases_path: str | None = None,
     suite_file: str | None = None,
     task_file: str | None = None,
-    module_override: str | None = None,
     env_files: list[Path] | None = None,
 ) -> None:
-    modules, extra_args = _split_args(args)
-    suite_sources = [item for item in (cases_path, suite_file, task_file) if item]
-    if len(suite_sources) > 1:
-        click.echo("Error: --cases, --suite-file, and --task-file are mutually exclusive")
+    extra_args = list(args)
+    if suite_file and task_file:
+        click.echo("Error: --suite-file and --task-file are mutually exclusive")
         raise SystemExit(2)
-    if (suite_file or task_file) and module_override:
-        click.echo("Error: --module can only be used with --cases")
-        raise SystemExit(2)
-    if (cases_path or suite_file or task_file) and modules:
-        click.echo("Error: suite/task run cannot be combined with positional modules")
+    if not suite_file and not task_file:
+        click.echo("Usage: aitest run --suite-file <suite.yaml> [-- PYTEST_ARGS] or aitest run --task-file <task.yaml>")
         raise SystemExit(2)
     if task_file:
         run_task_command_impl(
@@ -126,45 +115,34 @@ def _run_command_impl(
             extra_args,
         )
         return
-    suite_source = suite_file or cases_path
     paths = _load_paths()
-    suite_context = None
-    if suite_source:
-        suite_context = load_suite_context_for_paths(
-            suite_source,
-            module_override=module_override,
-            profile_dir=paths.profile_dir,
-        )
-        suite_paths = resolve_suite_runtime_paths(
-            suite_context,
-            generated_dir=paths.generated_dir,
-            reports_dir=paths.reports_dir,
-            profile_dir=paths.profile_dir,
-        )
-        paths = ReportPaths(
-            suite_paths.generated_dir,
-            suite_paths.reports_dir,
-            suite_paths.profile_dir,
-        )
+    suite_context = load_suite_context_for_paths(
+        suite_file,
+        profile_dir=paths.profile_dir,
+    )
+    suite_paths = resolve_suite_runtime_paths(
+        suite_context,
+        generated_dir=paths.generated_dir,
+        reports_dir=paths.reports_dir,
+        profile_dir=paths.profile_dir,
+    )
+    paths = ReportPaths(
+        suite_paths.generated_dir,
+        suite_paths.reports_dir,
+        suite_paths.profile_dir,
+    )
     files = _target_files(
         paths.generated_dir,
-        modules,
-        cases_path=suite_source,
-        module_override=module_override,
-        profile_dir=paths.profile_dir,
         suite_context=suite_context,
     )
     run_id, run_dir = _create_run_dir(paths.reports_dir)
 
-    if suite_file:
-        command = "aitest run --suite-file " + suite_file
-    elif cases_path:
-        command = "aitest run --cases " + cases_path
-        if module_override:
-            command += " --module " + module_override
-    else:
-        command = "aitest run" + (" " + " ".join(modules) if modules else "")
+    command = "aitest run --suite-file " + suite_file
     manual_policy = "included" if include_manual else "excluded"
+    run_scope = _run_scope_payload(
+        suite_context=suite_context,
+        suite_file=suite_file,
+    )
     try:
         pytest_env, environment = _pytest_environment(env_files=env_files)
     except _RunEnvironmentError as exc:
@@ -176,17 +154,15 @@ def _run_command_impl(
             manual_policy=manual_policy,
             blocked_reason="env_file",
             environment=exc.environment,
+            run_scope=run_scope,
         )
         _write_result(run_dir, paths.reports_dir, result)
         click.echo(f"BLOCKED_RUN: {exc}")
         raise SystemExit(10) from exc
 
     codegen_check = run_codegen_check(
-        modules,
         skip_codegen_check,
-        cases_path=suite_source,
-        suite_file=bool(suite_file),
-        module_override=module_override,
+        suite_file=suite_file,
     )
     if codegen_check["status"] == "failed":
         result = blocked_result(
@@ -196,6 +172,7 @@ def _run_command_impl(
             generated_files=files,
             manual_policy=manual_policy,
             environment=environment,
+            run_scope=run_scope,
         )
         _write_result(run_dir, paths.reports_dir, result)
         click.echo(f"BLOCKED_RUN: {codegen_check['message']}")
@@ -211,6 +188,7 @@ def _run_command_impl(
             codegen_check=codegen_check,
             status="FAILED_RUN",
             environment=environment,
+            run_scope=run_scope,
         )
         result["summary"]["error"] = 1
         _write_result(run_dir, paths.reports_dir, result)
@@ -243,6 +221,7 @@ def _run_command_impl(
         manual_policy=manual_policy,
         codegen_check=codegen_check,
         environment=environment,
+        run_scope=run_scope,
     )
     _write_result(run_dir, paths.reports_dir, result)
     summary = result["summary"]
@@ -254,22 +233,61 @@ def _run_command_impl(
 
 @click.command(name="report")
 @click.option("--workspace", type=click.Path(file_okay=False, dir_okay=True), help="Read reports from another AITest workspace root")
+@click.option("--suite-file", type=click.Path(file_okay=True, dir_okay=False), help="Read reports for one suite manifest file")
+@click.option(
+    "--task-file",
+    "--task",
+    "task_file",
+    type=click.Path(file_okay=True, dir_okay=False),
+    help="Read reports for one task manifest",
+)
 @click.argument("run_id", required=False)
-def report_command(workspace: str | None, run_id: str | None):
+def report_command(
+    workspace: str | None,
+    suite_file: str | None,
+    task_file: str | None,
+    run_id: str | None,
+):
     """Re-render report.md from an existing result.json."""
     try:
         with push_workspace(workspace):
-            _report_command_impl(run_id)
+            _report_command_impl(run_id, suite_file=suite_file, task_file=task_file)
     except (FileNotFoundError, NotADirectoryError) as exc:
         raise click.ClickException(str(exc)) from exc
 
 
-def _report_command_impl(run_id: str | None) -> None:
+def _report_command_impl(
+    run_id: str | None,
+    *,
+    suite_file: str | None = None,
+    task_file: str | None = None,
+) -> None:
+    if suite_file and task_file:
+        raise click.ClickException("--suite-file and --task-file are mutually exclusive")
     paths = _load_paths()
+    reports_dir = paths.reports_dir
+    if suite_file:
+        suite_context = load_suite_context_for_paths(
+            suite_file,
+            profile_dir=paths.profile_dir,
+        )
+        suite_paths = resolve_suite_runtime_paths(
+            suite_context,
+            generated_dir=paths.generated_dir,
+            reports_dir=paths.reports_dir,
+            profile_dir=paths.profile_dir,
+        )
+        reports_dir = suite_paths.reports_dir
+    elif task_file:
+        task = load_task_context(task_file)
+        if task.diagnostics:
+            raise click.ClickException("; ".join(task.diagnostics))
+        reports_dir = paths.reports_dir / "tasks" / task.task
+
     result_path = (
-        paths.reports_dir / "runs" / run_id / "result.json"
+        reports_dir / "runs" / run_id / "result.json"
         if run_id
-        else paths.reports_dir / "latest" / "result.json"
+        else reports_dir / "latest" / "result.json"
     )
     if not result_path.exists():
         raise click.ClickException(f"result.json not found: {result_path}")
@@ -277,20 +295,6 @@ def _report_command_impl(run_id: str | None) -> None:
     report_path = result_path.parent / "report.md"
     report_path.write_text(render_markdown(result), encoding="utf-8")
     click.echo(f"Report written: {report_path}")
-
-
-def _split_args(args: tuple[str, ...]) -> tuple[list[str], list[str]]:
-    modules: list[str] = []
-    extra: list[str] = []
-    in_extra = False
-    for arg in args:
-        if arg.startswith("-"):
-            in_extra = True
-        if in_extra:
-            extra.append(arg)
-        else:
-            modules.append(arg)
-    return modules, extra
 
 
 def _create_run_dir(reports_dir: Path, *, max_attempts: int = 10) -> tuple[str, Path]:
@@ -355,33 +359,36 @@ def _pytest_environment(env_files: list[Path] | None = None) -> tuple[dict[str, 
 
 def _target_files(
     generated_dir: Path,
-    modules: list[str],
     *,
-    cases_path: str | None = None,
-    module_override: str | None = None,
-    profile_dir: Path | None = None,
     suite_context=None,
 ) -> list[Path]:
-    if cases_path:
-        context = suite_context or load_suite_context_for_paths(
-            cases_path,
-            module_override=module_override,
-            profile_dir=profile_dir or "test_workspace/tests/fixtures",
-        )
-        return [
-            suite_generated_path(generated_dir, context, path)
-            for path in context.case_files
-            if context.module and context.suite
-        ]
-    if not modules:
-        return sorted(generated_dir.glob("test_*.py"))
-    files: list[Path] = []
-    for module in modules:
-        for category in ("business", "boundary"):
-            path = generated_dir / f"test_{module}_{category}.py"
-            if path.exists():
-                files.append(path)
-    return files
+    if suite_context is None:
+        return []
+    return [
+        suite_generated_path(generated_dir, suite_context, path)
+        for path in suite_context.case_files
+        if suite_context.module and suite_context.suite
+    ]
+
+
+def _run_scope_payload(
+    *,
+    suite_context,
+    suite_file: str | None,
+) -> dict:
+    if suite_context is not None:
+        suite_manifest = suite_context.manifest_path
+        suite_source = suite_manifest or Path(suite_file or "")
+        return {
+            "type": "suite_file",
+            "target": suite_context.target,
+            "module": suite_context.module,
+            "suite": suite_context.suite,
+            "suite_file": str(suite_source) if str(suite_source) != "." else "",
+            "suite_dir": str(suite_context.suite_dir),
+            "case_files": [str(path) for path in suite_context.case_files],
+        }
+    return {"type": "unknown"}
 
 
 def _write_result(run_dir: Path, reports_dir: Path, result: dict) -> None:

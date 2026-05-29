@@ -14,13 +14,23 @@ from aitest_kit.codegen.suite import (
 
 
 def _write_module_profile(root: Path) -> None:
-    fixture_dir = root / "test_workspace" / "tests" / "fixtures"
-    fixture_dir.mkdir(parents=True, exist_ok=True)
-    (fixture_dir / "codegen_profile_gateway_api.md").write_text(
+    target_dir = root / "test_workspace" / "targets" / "sub2api"
+    profile_dir = target_dir / "profiles"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    (target_dir / "target.yaml").write_text(
+        """target: sub2api
+defaults:
+  profile_dir: test_workspace/targets/sub2api/profiles
+  generated_dir: test_workspace/generated/sub2api
+  reports_dir: test_workspace/reports/sub2api
+""",
+        encoding="utf-8",
+    )
+    (profile_dir / "profile_gateway_api.md").write_text(
         """```yaml
 module_type: multi_endpoint
 extra_imports:
-  - "from test_workspace.tests.fixtures.gateway_api import setup_gateway_api"
+  - "from test_workspace.targets.sub2api.fixtures.gateway_api import setup_gateway_api"
 default_fixture: setup_gateway_api
 default_object: client
 ```
@@ -33,15 +43,16 @@ def _write_suite(
     root: Path,
     *,
     with_manifest: bool = True,
-    profile_name: str = "codegen_profile_quota_billing_v2_suite.md",
+    profile_name: str = "profile_quota_billing_v2_suite.md",
     case_id: str = "TC-GW-041",
     profile_case_id: str = "TC-GW-041",
 ) -> Path:
-    suite_dir = root / "test_workspace" / "casesuites" / "quota_billing_v2"
+    suite_dir = root / "test_workspace" / "suites" / "sub2api" / "quota_billing_v2"
     suite_dir.mkdir(parents=True, exist_ok=True)
     if with_manifest:
-        (suite_dir / "aitest_suite.yaml").write_text(
-            f"""module: gateway_api
+        (suite_dir / "suite.yaml").write_text(
+            f"""target: sub2api
+module: gateway_api
 suite: quota_billing_v2
 case_files:
   - quota_billing_business.md
@@ -93,11 +104,11 @@ def test_codegen_cases_suite_validates_dumps_generates_and_checks(tmp_path):
         _write_module_profile(root)
         suite_dir = _write_suite(root)
 
-        validate = runner.invoke(codegen, ["--cases", str(suite_dir), "--validate-profile"])
+        validate = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml"), "--validate-profile"])
         assert validate.exit_code == 0
         assert "Profile validation summary: suites=1, errors=0, warnings=0" in validate.output
 
-        dump = runner.invoke(codegen, ["--cases", str(suite_dir), "--dump-ir"])
+        dump = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml"), "--dump-ir"])
         assert dump.exit_code == 0
         payload = json.loads(dump.output)
         case = payload["suites"][0]["files"][0]["cases"][0]
@@ -105,19 +116,19 @@ def test_codegen_cases_suite_validates_dumps_generates_and_checks(tmp_path):
         assert payload["suites"][0]["suite"] == "quota_billing_v2"
         assert case["strategy"] == "structured_case_flow"
 
-        generate = runner.invoke(codegen, ["--cases", str(suite_dir)])
+        generate = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml")])
         assert generate.exit_code == 0
-        generated = root / "test_workspace" / "tests" / "generated" / (
+        generated = root / "test_workspace" / "generated" / "sub2api" / (
             "test_gateway_api_quota_billing_v2_quota_billing_business.py"
         )
         assert generated.exists()
-        assert "# Auto-generated from test_workspace/casesuites/quota_billing_v2" in generated.read_text(encoding="utf-8")
+        assert "# Auto-generated from test_workspace/suites/sub2api/quota_billing_v2" in generated.read_text(encoding="utf-8")
 
-        check = runner.invoke(codegen, ["--cases", str(suite_dir), "--check"])
+        check = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml"), "--check"])
         assert check.exit_code == 0
         assert "All generated files are up to date." in check.output
 
-        explain = runner.invoke(codegen, ["--cases", str(suite_dir), "--explain", "TC-GW-041"])
+        explain = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml"), "--explain", "TC-GW-041"])
         assert explain.exit_code == 0
         assert "case_id: TC-GW-041" in explain.output
         assert "strategy: structured_case_flow" in explain.output
@@ -125,7 +136,7 @@ def test_codegen_cases_suite_validates_dumps_generates_and_checks(tmp_path):
         report_dir = root / "reports"
         health = runner.invoke(
             codegen,
-            ["--cases", str(suite_dir), "--health-report", "--write-report", "--report-dir", str(report_dir)],
+            ["--suite-file", str(suite_dir / "suite.yaml"), "--health-report", "--write-report", "--report-dir", str(report_dir)],
         )
         assert health.exit_code == 0
         assert "suite: quota_billing_v2" in health.output
@@ -157,7 +168,7 @@ profile: profile_quota_billing_v2_suite.md
 
         generate = runner.invoke(codegen, ["--suite-file", str(suite_file)])
         assert generate.exit_code == 0, generate.output
-        generated = root / "test_workspace" / "tests" / "generated" / (
+        generated = root / "test_workspace" / "generated" / "sub2api" / (
             "test_gateway_api_quota_billing_v2_quota_billing_business.py"
         )
         assert generated.exists()
@@ -262,20 +273,21 @@ env_file: .env.test
         assert "env_file" in validate.output
 
 
-def test_codegen_cases_allows_explicit_module_without_manifest(tmp_path):
+def test_codegen_cases_requires_suite_yaml(tmp_path):
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
         root = Path(cwd)
         _write_module_profile(root)
-        suite_dir = _write_suite(root, with_manifest=False, profile_name="codegen_profile_quota_billing_v2_suite.md")
+        suite_dir = _write_suite(root, with_manifest=False, profile_name="profile_quota_billing_v2_suite.md")
 
         result = runner.invoke(
             codegen,
-            ["--module", "gateway_api", "--cases", str(suite_dir), "--validate-profile"],
+            ["--suite-file", str(suite_dir / "suite.yaml"), "--validate-profile"],
         )
 
-        assert result.exit_code == 0
-        assert "Suite: quota_billing_v2" in result.output
+        assert result.exit_code == 1
+        assert "suite.yaml not found" in result.output
+        assert "suite.yaml requires case_files" in result.output
 
 
 def test_codegen_cases_rejects_suite_profile_filename_without_suite_suffix(tmp_path):
@@ -285,7 +297,7 @@ def test_codegen_cases_rejects_suite_profile_filename_without_suite_suffix(tmp_p
         _write_module_profile(root)
         suite_dir = _write_suite(root, profile_name="profile.md")
 
-        result = runner.invoke(codegen, ["--cases", str(suite_dir), "--validate-profile"])
+        result = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml"), "--validate-profile"])
 
         assert result.exit_code == 1
         assert "filename must end with _suite.md" in result.output
@@ -298,7 +310,7 @@ def test_codegen_cases_rejects_unknown_suite_case_reference(tmp_path):
         _write_module_profile(root)
         suite_dir = _write_suite(root, profile_case_id="TC-GW-999")
 
-        result = runner.invoke(codegen, ["--cases", str(suite_dir), "--validate-profile"])
+        result = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml"), "--validate-profile"])
 
         assert result.exit_code == 1
         assert "case id does not exist" in result.output
@@ -310,14 +322,14 @@ def test_codegen_cases_rejects_generated_source_conflict(tmp_path):
         root = Path(cwd)
         _write_module_profile(root)
         suite_dir = _write_suite(root)
-        generated_dir = root / "test_workspace" / "tests" / "generated"
+        generated_dir = root / "test_workspace" / "generated" / "sub2api"
         generated_dir.mkdir(parents=True, exist_ok=True)
         (generated_dir / "test_gateway_api_quota_billing_v2_quota_billing_business.py").write_text(
             "# Auto-generated from other_suite/quota_billing_business.md\n",
             encoding="utf-8",
         )
 
-        result = runner.invoke(codegen, ["--cases", str(suite_dir)])
+        result = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml")])
 
         assert result.exit_code == 1
         assert "generated output conflict" in result.output
@@ -328,14 +340,15 @@ def test_codegen_cases_suite_analyzes_promotion_and_writes_patch(tmp_path):
     with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
         root = Path(cwd)
         _write_module_profile(root)
-        suite_dir = root / "test_workspace" / "casesuites" / "promotion_smoke"
+        suite_dir = root / "test_workspace" / "suites" / "sub2api" / "promotion_smoke"
         suite_dir.mkdir(parents=True, exist_ok=True)
-        (suite_dir / "aitest_suite.yaml").write_text(
-            """module: gateway_api
+        (suite_dir / "suite.yaml").write_text(
+            """target: sub2api
+module: gateway_api
 suite: promotion_smoke
 case_files:
   - business.md
-profile: codegen_profile_promotion_smoke_suite.md
+profile: profile_promotion_smoke_suite.md
 """,
             encoding="utf-8",
         )
@@ -364,7 +377,7 @@ profile: codegen_profile_promotion_smoke_suite.md
 """,
             encoding="utf-8",
         )
-        (suite_dir / "codegen_profile_promotion_smoke_suite.md").write_text(
+        (suite_dir / "profile_promotion_smoke_suite.md").write_text(
             """```yaml
 profile_scope: case_suite
 parent_module: gateway_api
@@ -384,7 +397,7 @@ case_bodies:
             encoding="utf-8",
         )
 
-        analyze = runner.invoke(codegen, ["--cases", str(suite_dir), "--analyze-promotion"])
+        analyze = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml"), "--analyze-promotion"])
         assert analyze.exit_code == 0
         assert "suite: promotion_smoke" in analyze.output
         assert "candidate: true" in analyze.output
@@ -392,7 +405,7 @@ case_bodies:
         out_dir = root / "promotion-reports"
         patch = runner.invoke(
             codegen,
-            ["--cases", str(suite_dir), "--suggest-promotion-patch", "--report-dir", str(out_dir)],
+            ["--suite-file", str(suite_dir / "suite.yaml"), "--suggest-promotion-patch", "--report-dir", str(out_dir)],
         )
         assert patch.exit_code == 0
         assert "Promotion artifacts written:" in patch.output

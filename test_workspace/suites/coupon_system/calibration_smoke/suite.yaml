@@ -1,12 +1,9 @@
 target: coupon_system
 module: calibration
 suite: calibration_smoke
-
 case_files:
-  - ../../../cases/calibration/business.md
-
+  - business.md
 profile: profile_calibration_smoke_suite.md
-
 knowledge_refs:
   l1:
     - test_workspace/knowledge/L1/calibration.md

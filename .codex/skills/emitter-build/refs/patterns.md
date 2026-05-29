@@ -2,7 +2,7 @@
 
 ## 通用断言模式
 
-跨模块复用，写入 `project_config.yaml` 的 `builtin_assertion_rules`。
+跨模块复用，写入 `aitest_config/aitest.yaml` 的 `codegen.builtin_assertion_rules`。
 
 | 模式 | 匹配正则 | 生成模板 |
 |------|----------|----------|
@@ -18,7 +18,7 @@
 | 可行性存疑 | `[!可行性存疑` 在 markers 中 | 跳过不生成，末尾 `# SKIPPED:` |
 | 无法解析 | 以上都不匹配 | `# UNPARSED ASSERTION: {原文}` |
 
-项目专属模式的完整清单见 `aitest_config/project_config.yaml` 的 `builtin_assertion_rules`。
+项目专属模式的完整清单见 `aitest_config/aitest.yaml` 的 `codegen.builtin_assertion_rules`。
 
 ## 模块特有模式
 
@@ -82,7 +82,7 @@ python3 -m aitest_kit.cli codegen $target_module --validate-profile
 python3 -m aitest_kit.cli codegen $target_module --validate-profile --write-report
 python3 -m aitest_kit.cli codegen $target_module --analyze-promotion --write-report
 python3 -m aitest_kit.cli codegen $target_module --suggest-promotion-patch
-python3 -m aitest_kit.cli codegen --all --health-report --write-report
+python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> --health-report --write-report
 ```
 
 target/suite 模式使用 `python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml ...` 完成同类验证和分析，generated pytest 默认位于 `test_workspace/generated/{target}/`。
@@ -120,7 +120,7 @@ target/suite 模式使用 `python3 -m aitest_kit.cli codegen --suite-file <suite
 
 ## 分类产出规则
 
-- 在 2+ 模块出现的断言模式 → 通用，写入 `project_config.yaml` 的 `builtin_assertion_rules`
+- 在 2+ 模块出现的断言模式 → 通用，写入 `aitest.yaml.codegen.builtin_assertion_rules`
 - 只在 1 个模块出现的断言模式 → 模块特有，写入该模块的 codegen_profile
 - 需要生成 if/elif/else 块的复杂模式 → named_template（Python 实现）
 - 简单的"匹配文本 → 替换生成代码" → YAML assertion_rule

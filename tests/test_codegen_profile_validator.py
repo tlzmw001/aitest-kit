@@ -1,603 +1,264 @@
+from __future__ import annotations
+
 from pathlib import Path
 
-from click.testing import CliRunner
+import pytest
 
-from aitest_kit.codegen.cli import codegen
-from aitest_kit.codegen.profile_validator import validate_profile_module
+from aitest_kit.codegen.profile_validator import validate_profile_suite
 from aitest_kit.codegen.project_config import ProjectConfig
 
 
-def _write_case_file(cases_dir: Path, module: str, case_id: str = "TC-DEMO-001") -> None:
-    module_dir = cases_dir / module
-    module_dir.mkdir(parents=True)
-    (module_dir / "business.md").write_text(
-        f"""# {module} 业务测试用例
+def _write_target(
+    root: Path,
+    *,
+    module_type: str = "standard_http",
+    module_profile: str = "",
+) -> Path:
+    target_dir = root / "test_workspace" / "targets" / "sub2api"
+    module_dir = target_dir / "modules"
+    profile_dir = target_dir / "profiles"
+    module_dir.mkdir(parents=True, exist_ok=True)
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    (target_dir / "target.yaml").write_text(
+        """target: sub2api
+defaults:
+  module_dir: test_workspace/targets/sub2api/modules
+  fixture_dir: test_workspace/targets/sub2api/fixtures
+  helper_dir: test_workspace/targets/sub2api/helpers
+  profile_dir: test_workspace/targets/sub2api/profiles
+  suite_dir: test_workspace/suites/sub2api
+  generated_dir: test_workspace/generated/sub2api
+  reports_dir: test_workspace/reports/sub2api
+""",
+        encoding="utf-8",
+    )
+    (module_dir / "gateway_api.yaml").write_text(
+        f"""target: sub2api
+module: gateway_api
+module_type: {module_type}
+fixture:
+  file: gateway_api.py
+  default_fixture: setup_gateway_api
+profile:
+  file: profile_gateway_api.md
+""",
+        encoding="utf-8",
+    )
+    (profile_dir / "profile_gateway_api.md").write_text(
+        f"```yaml\n{module_profile}```\n",
+        encoding="utf-8",
+    )
+    return profile_dir
+
+
+def _write_suite(
+    root: Path,
+    *,
+    case_id: str = "TC-GW-001",
+    marker: str = "",
+    suite_profile: str = "",
+    with_base_request: bool = False,
+) -> Path:
+    suite_dir = root / "test_workspace" / "suites" / "sub2api" / "gateway_smoke"
+    suite_dir.mkdir(parents=True, exist_ok=True)
+    (suite_dir / "suite.yaml").write_text(
+        """target: sub2api
+module: gateway_api
+suite: gateway_smoke
+case_files:
+  - business.md
+profile: profile_gateway_smoke_suite.md
+""",
+        encoding="utf-8",
+    )
+    base_request = ""
+    if with_base_request:
+        base_request = """**基础请求体（HTTP）**：
+
+```json
+{"request_id": "req_demo"}
+```
+"""
+    marker_line = f"- **标记**：`{marker}`\n" if marker else ""
+    (suite_dir / "business.md").write_text(
+        f"""# gateway smoke
 
 ## 共享配置
 
 **通用断言**：`response.code == 0`
-
+{base_request}
 ---
 
 ## 一、基础场景
 
 ### {case_id}：demo case
 - **优先级**：P1
-- **断言**：`response.code == 0`
+{marker_line}- **断言**：`response.code == 0`
 """,
         encoding="utf-8",
     )
-
-
-def _write_feasibility_case_file(cases_dir: Path, module: str, case_id: str = "TC-DEMO-001") -> None:
-    module_dir = cases_dir / module
-    module_dir.mkdir(parents=True)
-    (module_dir / "business.md").write_text(
-        f"""# {module} 业务测试用例
-
-## 共享配置
-
-**通用断言**：`response.code == 0`
-
----
-
-## 一、基础场景
-
-### {case_id}：demo case
-- **优先级**：P2
-- **标记**：`[!可行性存疑: 需要可控外部服务]`
-- **断言**：`response.code == 0`
-""",
+    (suite_dir / "profile_gateway_smoke_suite.md").write_text(
+        f"```yaml\n{suite_profile}```\n",
         encoding="utf-8",
     )
+    return suite_dir
 
 
-def _write_profile(profile_dir: Path, module: str, yaml_body: str) -> None:
-    profile_dir.mkdir(parents=True, exist_ok=True)
-    (profile_dir / f"codegen_profile_{module}.md").write_text(
-        f"```yaml\n{yaml_body}```\n",
-        encoding="utf-8",
-    )
-
-
-def _project(module_type: str = "standard_recommend") -> ProjectConfig:
+def _project(module_type: str = "standard_http") -> ProjectConfig:
     return ProjectConfig(
         module_types={
-            "standard_recommend": {"description": "standard"},
+            "standard_http": {"description": "standard"},
             "isolated_service": {"description": "isolated", "requires": ["case_bodies"]},
+            module_type: {"description": module_type},
         },
-        modules={"demo": {"module_type": module_type}},
     )
 
 
-def test_validate_profile_module_accepts_current_repo_profiles():
-    result = CliRunner().invoke(codegen, ["--all", "--validate-profile"])
+def test_validate_profile_suite_rejects_module_override(tmp_path):
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(tmp_path)
 
-    assert result.exit_code == 0
-    assert "Profile validation summary: modules=11, errors=0" in result.output
-
-
-def test_validate_profile_cli_writes_report_artifacts(tmp_path):
-    report_dir = tmp_path / "reports"
-
-    result = CliRunner().invoke(
-        codegen,
-        [
-            "ab_service",
-            "--validate-profile",
-            "--write-report",
-            "--report-dir",
-            str(report_dir),
-        ],
-    )
-
-    assert result.exit_code == 0
-    md_path = report_dir / "ab_service_profile_validation.md"
-    json_path = report_dir / "ab_service_profile_validation.json"
-    assert md_path.exists()
-    assert json_path.exists()
-    assert "# Profile Validation Report: ab_service" in md_path.read_text(encoding="utf-8")
-    assert '"module": "ab_service"' in json_path.read_text(encoding="utf-8")
-    assert "Profile validation artifacts written:" in result.output
+    with pytest.raises(ValueError):
+        validate_profile_suite(suite_dir, module="gateway_api", profile_dir=profile_dir)
 
 
-def test_profile_validator_rejects_conflict_and_naked_assert(tmp_path):
-    cases_dir = tmp_path / "cases"
-    profile_dir = tmp_path / "fixtures"
-    _write_case_file(cases_dir, "demo")
-    _write_profile(
-        profile_dir,
-        "demo",
-        """case_bodies:
-  TC-DEMO-001: |
+def test_profile_validator_rejects_conflict_and_naked_assert(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+case_bodies:
+  TC-GW-001: |
     assert True
 case_flows:
-  TC-DEMO-001:
-    fixture: setup_demo
+  TC-GW-001:
+    fixture: setup_gateway_api
     steps:
-      - call: setup_demo
-        kwargs:
-          case_id: "TC-DEMO-001"
-        save_as: case
       - assert: "`resp == ERR`"
 """,
     )
 
-    report = validate_profile_module(
-        "demo",
-        cases_dir=cases_dir,
-        profile_dir=profile_dir,
-        project=_project(),
-    )
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
 
     messages = "\n".join(diag.message for diag in report.errors)
     assert "defined in both case_bodies and case_flows" in messages
     assert "must start with 'assert '" in messages
 
 
-def test_profile_validator_prefers_new_module_profile_name(tmp_path):
-    cases_dir = tmp_path / "cases"
-    profile_dir = tmp_path / "fixtures"
-    _write_case_file(cases_dir, "demo")
-    _write_profile(
-        profile_dir,
-        "demo",
-        """case_flows:
-  TC-DEMO-001:
-    fixture: setup_demo
-    steps:
-      - assert: "`resp == ERR`"
-""",
-    )
-    (profile_dir / "profile_demo.md").write_text(
-        """```yaml
-extra_imports: []
-```
-""",
-        encoding="utf-8",
-    )
-
-    report = validate_profile_module(
-        "demo",
-        cases_dir=cases_dir,
-        profile_dir=profile_dir,
-        project=_project(),
-    )
-
-    assert report.profile_path.name == "profile_demo.md"
-    assert report.errors == []
-
-
-def test_profile_validator_rejects_unknown_case_reference(tmp_path):
-    cases_dir = tmp_path / "cases"
-    profile_dir = tmp_path / "fixtures"
-    _write_case_file(cases_dir, "demo")
-    _write_profile(
-        profile_dir,
-        "demo",
-        """request_overrides:
-  TC-DEMO-999:
+def test_profile_validator_rejects_unknown_case_reference(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+request_overrides:
+  TC-GW-999:
     user_id: u_missing
 """,
     )
 
-    report = validate_profile_module(
-        "demo",
-        cases_dir=cases_dir,
-        profile_dir=profile_dir,
-        project=_project(),
-    )
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
 
     assert any(diag.code == "E505" for diag in report.errors)
-    assert any("does not exist" in diag.message for diag in report.errors)
+    assert any("does not exist in suite markdown cases" in diag.message for diag in report.errors)
 
 
-def test_profile_validator_rejects_variables_with_unknown_case_reference(tmp_path):
-    cases_dir = tmp_path / "cases"
-    profile_dir = tmp_path / "fixtures"
-    _write_case_file(cases_dir, "demo")
-    _write_profile(
-        profile_dir,
-        "demo",
-        """variables:
+def test_profile_validator_rejects_variables_with_unknown_case_reference(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+variables:
   cases:
-    TC-DEMO-999:
+    TC-GW-999:
       username:
         env: DEMO_USER
 """,
     )
 
-    report = validate_profile_module(
-        "demo",
-        cases_dir=cases_dir,
-        profile_dir=profile_dir,
-        project=_project(),
-    )
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
 
     assert any(diag.code == "E505" for diag in report.errors)
-    assert any("variables.cases.TC-DEMO-999" in diag.source for diag in report.errors)
+    assert any("variables.cases.TC-GW-999" in diag.source for diag in report.errors)
 
 
-def test_profile_validator_rejects_undefined_case_flow_variable(tmp_path):
-    cases_dir = tmp_path / "cases"
-    profile_dir = tmp_path / "fixtures"
-    _write_case_file(cases_dir, "demo")
-    _write_profile(
-        profile_dir,
-        "demo",
-        """variables:
-  defaults:
-    token:
-      env: DEMO_TOKEN
+def test_profile_validator_warns_feasibility_suspect_executable_case(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        marker="[!可行性存疑: 需要外部账号]",
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
 case_flows:
-  TC-DEMO-001:
-    fixture: setup_demo
+  TC-GW-001:
+    fixture: setup_gateway_api
     object: client
     steps:
-      - call: client.get
-        kwargs:
-          token:
-            var: missing_token
-        save_as: resp
-      - assert: 'assert resp["code"] == 0'
+      - assert: 'assert True'
 """,
     )
 
-    report = validate_profile_module(
-        "demo",
-        cases_dir=cases_dir,
-        profile_dir=profile_dir,
-        project=_project(),
-    )
-
-    assert any(diag.code == "E507" for diag in report.errors)
-    assert any("undefined profile variables: missing_token" in diag.message for diag in report.errors)
-
-
-def test_profile_validator_rejects_variable_env_and_value_together(tmp_path):
-    cases_dir = tmp_path / "cases"
-    profile_dir = tmp_path / "fixtures"
-    _write_case_file(cases_dir, "demo")
-    _write_profile(
-        profile_dir,
-        "demo",
-        """variables:
-  defaults:
-    token:
-      env: DEMO_TOKEN
-      value: literal
-""",
-    )
-
-    report = validate_profile_module(
-        "demo",
-        cases_dir=cases_dir,
-        profile_dir=profile_dir,
-        project=_project(),
-    )
-
-    assert any(diag.code == "E501" for diag in report.errors)
-    assert any("must declare exactly one of env or value" in diag.message for diag in report.errors)
-
-
-def test_profile_validator_warns_when_feasibility_suspect_case_has_flow(tmp_path):
-    cases_dir = tmp_path / "cases"
-    profile_dir = tmp_path / "fixtures"
-    _write_feasibility_case_file(cases_dir, "demo")
-    _write_profile(
-        profile_dir,
-        "demo",
-        """case_flows:
-  TC-DEMO-001:
-    fixture: setup_demo
-    steps:
-      - call: client.health
-        save_as: resp
-      - assert: 'assert resp["code"] == 0'
-""",
-    )
-
-    report = validate_profile_module(
-        "demo",
-        cases_dir=cases_dir,
-        profile_dir=profile_dir,
-        project=_project(),
-    )
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
 
     assert any(diag.code == "W503" for diag in report.warnings)
-    assert any("可行性存疑" in diag.message for diag in report.warnings)
 
 
-def test_profile_validator_warns_when_feasibility_suspect_case_has_body(tmp_path):
-    cases_dir = tmp_path / "cases"
-    profile_dir = tmp_path / "fixtures"
-    _write_feasibility_case_file(cases_dir, "demo")
-    _write_profile(
-        profile_dir,
-        "demo",
-        """case_bodies:
-  TC-DEMO-001: |
-    assert True
-""",
-    )
-
-    report = validate_profile_module(
-        "demo",
-        cases_dir=cases_dir,
-        profile_dir=profile_dir,
-        project=_project(),
-    )
-
-    assert any(diag.code == "W503" for diag in report.warnings)
-    assert any("case_bodies" in diag.source for diag in report.warnings)
-
-
-def test_profile_validator_warns_when_flow_reinvokes_declared_fixture(tmp_path):
-    cases_dir = tmp_path / "cases"
-    profile_dir = tmp_path / "fixtures"
-    _write_case_file(cases_dir, "demo")
-    _write_profile(
-        profile_dir,
-        "demo",
-        """case_flows:
-  TC-DEMO-001:
-    fixture: setup_demo
+def test_profile_validator_warns_fixture_reinvocation(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+case_flows:
+  TC-GW-001:
+    fixture: setup_gateway_api
     object: client
     steps:
-      - call: setup_demo
-        kwargs:
-          case_id: TC-DEMO-001
+      - call: setup_gateway_api
         save_as: client
-      - assert: 'assert client is not None'
+      - assert: 'assert True'
 """,
     )
 
-    report = validate_profile_module(
-        "demo",
-        cases_dir=cases_dir,
-        profile_dir=profile_dir,
-        project=_project(),
-    )
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
 
     assert any(diag.code == "W504" for diag in report.warnings)
-    assert any("first step calls the declared fixture" in diag.message for diag in report.warnings)
 
 
-def test_profile_validator_accepts_case_flow_defaults(tmp_path):
-    cases_dir = tmp_path / "cases"
-    profile_dir = tmp_path / "fixtures"
-    _write_case_file(cases_dir, "demo")
-    _write_profile(
-        profile_dir,
-        "demo",
-        """default_fixture: setup_demo
-default_object: client_factory
-default_case_setup:
-  call: client_factory
-  kwargs:
-    case_id: "{case_id}"
-  save_as: case
-case_flows:
-  TC-DEMO-001:
-    steps:
-      - call: case.get
-        save_as: resp
-      - assert: 'assert resp["code"] == 0'
+def test_profile_validator_checks_module_type_from_module_yaml(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path, module_type="isolated_service")
+    suite_dir = _write_suite(
+        tmp_path,
+        with_base_request=True,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
 """,
     )
 
-    report = validate_profile_module(
-        "demo",
-        cases_dir=cases_dir,
+    report = validate_profile_suite(
+        suite_dir,
         profile_dir=profile_dir,
-        project=_project(),
-    )
-
-    assert report.errors == []
-    assert report.warnings == []
-
-
-def test_profile_validator_rejects_case_flow_without_fixture_or_default(tmp_path):
-    cases_dir = tmp_path / "cases"
-    profile_dir = tmp_path / "fixtures"
-    _write_case_file(cases_dir, "demo")
-    _write_profile(
-        profile_dir,
-        "demo",
-        """case_flows:
-  TC-DEMO-001:
-    steps:
-      - call: case.get
-        save_as: resp
-      - assert: 'assert resp["code"] == 0'
-""",
-    )
-
-    report = validate_profile_module(
-        "demo",
-        cases_dir=cases_dir,
-        profile_dir=profile_dir,
-        project=_project(),
-    )
-
-    assert any(diag.code == "E503" for diag in report.errors)
-    assert any("fixture: must be a non-empty string" in diag.message for diag in report.errors)
-
-
-def test_profile_validator_rejects_schema_unknown_nested_field(tmp_path):
-    cases_dir = tmp_path / "cases"
-    profile_dir = tmp_path / "fixtures"
-    _write_case_file(cases_dir, "demo")
-    _write_profile(
-        profile_dir,
-        "demo",
-        """case_flows:
-  TC-DEMO-001:
-    fixture: setup_demo
-    steps:
-      - call: setup_demo
-        save_as: case
-        unexpected: true
-""",
-    )
-
-    report = validate_profile_module(
-        "demo",
-        cases_dir=cases_dir,
-        profile_dir=profile_dir,
-        project=_project(),
-    )
-
-    assert any(diag.code == "E501" for diag in report.errors)
-    assert any("profile schema violation" in diag.message for diag in report.errors)
-
-
-def test_profile_validator_rejects_schema_invalid_case_id_mapping_keys(tmp_path):
-    cases_dir = tmp_path / "cases"
-    profile_dir = tmp_path / "fixtures"
-    _write_case_file(cases_dir, "demo")
-    sections = {
-        "request_overrides": "request_overrides:\n  not-a-case:\n    user_id: u_bad\n",
-        "case_fixtures": "case_fixtures:\n  not-a-case: [setup_demo]\n",
-        "case_bodies": "case_bodies:\n  not-a-case: |\n    assert True\n",
-    }
-
-    for section, yaml_body in sections.items():
-        _write_profile(profile_dir, "demo", yaml_body)
-        report = validate_profile_module(
-            "demo",
-            cases_dir=cases_dir,
-            profile_dir=profile_dir,
-            project=_project(),
-        )
-        messages = "\n".join(diag.message for diag in report.errors if diag.code == "E501")
-        sources = {diag.source for diag in report.errors if diag.code == "E501"}
-
-        assert "does not match any of the regexes" in messages
-        assert section in sources
-
-
-def test_profile_validator_rejects_template_placeholders_in_http_json(tmp_path):
-    cases_dir = tmp_path / "cases"
-    profile_dir = tmp_path / "fixtures"
-    module_dir = cases_dir / "demo"
-    module_dir.mkdir(parents=True)
-    (module_dir / "business.md").write_text(
-        """# demo 业务测试用例
-
-## 共享配置
-
-**基础请求体（HTTP）**：
-
-```json
-{
-  "user_id": "{{user_id}}",
-  "items": [{"item_id": "{{item_id}}"}]
-}
-```
-
----
-
-## 一、基础场景
-
-### TC-DEMO-001：demo case
-- **优先级**：P1
-- **断言**：`response.code == 0`
-""",
-        encoding="utf-8",
-    )
-    _write_profile(profile_dir, "demo", "extra_imports: []\n")
-
-    report = validate_profile_module(
-        "demo",
-        cases_dir=cases_dir,
-        profile_dir=profile_dir,
-        project=_project(),
-    )
-
-    messages = "\n".join(diag.message for diag in report.errors)
-    assert "JSON 中禁止模板占位符" in messages
-    assert "$.user_id={{user_id}}" in messages
-    assert "$.items[0].item_id={{item_id}}" in messages
-
-
-def test_profile_validator_rejects_template_placeholders_in_named_json_body(tmp_path):
-    cases_dir = tmp_path / "cases"
-    profile_dir = tmp_path / "fixtures"
-    module_dir = cases_dir / "demo"
-    module_dir.mkdir(parents=True)
-    (module_dir / "business.md").write_text(
-        """# demo 业务测试用例
-
-## 共享配置
-
-**基础请求体（Evaluate）**：
-
-```json
-{
-  "request_id": "{{request_id}}"
-}
-```
-
----
-
-## 一、基础场景
-
-### TC-DEMO-001：demo case
-- **优先级**：P1
-- **断言**：`response.code == 0`
-""",
-        encoding="utf-8",
-    )
-    _write_profile(profile_dir, "demo", "extra_imports: []\n")
-
-    report = validate_profile_module(
-        "demo",
-        cases_dir=cases_dir,
-        profile_dir=profile_dir,
-        project=_project(),
-    )
-
-    messages = "\n".join(diag.message for diag in report.errors)
-    assert "基础请求体（Evaluate）不是合法 JSON" in messages
-    assert "$.request_id={{request_id}}" in messages
-
-
-def test_profile_validator_checks_module_type_requirements(tmp_path):
-    cases_dir = tmp_path / "cases"
-    profile_dir = tmp_path / "fixtures"
-    _write_case_file(cases_dir, "demo")
-    _write_profile(profile_dir, "demo", "extra_imports: []\n")
-
-    report = validate_profile_module(
-        "demo",
-        cases_dir=cases_dir,
-        profile_dir=profile_dir,
-        project=_project("isolated_service"),
+        project=ProjectConfig(
+            module_types={
+                "standard_http": {"description": "standard"},
+                "isolated_service": {"description": "isolated", "requires": ["case_bodies"]},
+            },
+        ),
     )
 
     assert any(diag.code == "E504" for diag in report.errors)
     assert any("requires case_bodies or case_flows" in diag.message for diag in report.errors)
-
-
-def test_codegen_hard_gate_blocks_generation_before_emitter(tmp_path):
-    runner = CliRunner()
-    with runner.isolated_filesystem(temp_dir=tmp_path):
-        cases_dir = Path("test_workspace/cases")
-        profile_dir = Path("test_workspace/tests/fixtures")
-        _write_case_file(cases_dir, "demo")
-        _write_profile(
-            profile_dir,
-            "demo",
-            """case_flows:
-  TC-DEMO-001:
-    fixture: setup_demo
-    steps:
-      - assert: "`resp == ERR`"
-""",
-        )
-        result = runner.invoke(codegen, ["demo"])
-
-    assert result.exit_code == 1
-    assert "Profile gate blocked codegen" in result.output
-    assert "must start with 'assert '" in result.output

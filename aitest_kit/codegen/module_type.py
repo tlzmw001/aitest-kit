@@ -25,28 +25,15 @@ def resolve_module_type(
     profile_data: dict[str, Any],
     project: ProjectConfig,
 ) -> ModuleTypeResolution:
-    """Resolve module_type from the currently supported fact sources.
+    """Resolve module_type from the runtime profile.
 
     Target-aware suite codegen injects ``module.yaml.module_type`` into the
-    runtime profile before this resolver runs, so it is observed here as
-    ``profile.module_type``. Legacy module codegen still preserves the old
-    fallback order: profile wins, then project_config.modules, then missing.
+    runtime profile before this resolver runs, so the validator only needs one
+    source of truth here.
     """
     profile_module_type = profile_data.get("module_type")
     if isinstance(profile_module_type, str) and profile_module_type.strip():
         return ModuleTypeResolution(profile_module_type.strip(), "profile.module_type")
-
-    module_config = project.modules.get(module, {})
-    config_module_type = (
-        module_config.get("module_type")
-        if isinstance(module_config, dict)
-        else None
-    )
-    if isinstance(config_module_type, str) and config_module_type.strip():
-        return ModuleTypeResolution(
-            config_module_type.strip(),
-            f"project_config.modules.{module}.module_type",
-        )
 
     return ModuleTypeResolution(None, "missing")
 

@@ -1,13 +1,11 @@
-# calibration target profile
+# calibration module profile
 
-This module profile is used by target-aware suite codegen for `coupon_system`.
-The fixture remains registered through the legacy pytest plugin path during
-Phase 4; this profile proves that suite codegen can read module rules from the
-target profile directory.
+This profile stores calibration-specific deterministic assertion rules and target-local fixture imports.
 
 ```yaml
 module_type: standard_recommend
-
+extra_imports:
+  - "from test_workspace.targets.coupon_system.fixtures.calibration import http_base_url, ab_base_url, grpc_target"
 assertion_rules:
   - pattern: 'mid = round(clamp(k_pw * s + b_pw), 4)'
     template: piecewise_cascade

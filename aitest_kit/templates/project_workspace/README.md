@@ -75,8 +75,6 @@ test_workspace/
   targets/                     # 按目标系统组织 fixture/helper/module profile
   suites/                      # 按目标系统组织独立 suite
   generated/                   # 按目标系统保存 generated pytest
-  cases/                       # legacy：模块级 Markdown 用例
-  tests/                       # legacy：fixture/generated/helper 路径
   reports/                     # aitest run 生成的报告
   results/                     # 已确认待测系统 bug 记录
 .codex/skills/                 # Codex skills
@@ -98,7 +96,6 @@ AGENTS.md / CLAUDE.md          # AI 协作说明
 | `test_workspace/targets/{target}/profiles/profile_{module}.md` | target module profile，配置稳定生成规则 |
 | `profile_{suite}_suite.md` | suite profile，跟随某批用例 |
 | `test_workspace/generated/` | 推荐 generated pytest 输出根目录 |
-| `test_workspace/tests/` | legacy 兼容路径 |
 | `test_workspace/reports/` | 执行报告 |
 | `test_workspace/results/` | 已确认的待测系统 bug |
 

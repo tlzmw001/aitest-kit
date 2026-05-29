@@ -8,14 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from aitest_kit.codegen.ir import AssertionIR, FileIR
-from aitest_kit.codegen.parser import parse_case_file
 from aitest_kit.codegen.planner import build_file_ir
 from aitest_kit.codegen.profile_validator import (
     ProfileValidationReport,
-    validate_profile_module,
     validate_profile_suite,
 )
-from aitest_kit.codegen.profile import resolve_module_profile_path
 from aitest_kit.codegen.project_config import load_project_config
 from aitest_kit.codegen.suite import SuiteContext, parse_suite_case_file
 
@@ -69,28 +66,6 @@ class CodegenHealthReport:
         return sum(module.profile_warnings for module in self.modules)
 
 
-def build_codegen_health_report(
-    modules: list[str],
-    cases_dir: Path,
-    *,
-    profile_dir: str | Path = "test_workspace/tests/fixtures",
-    project: Any | None = None,
-) -> CodegenHealthReport:
-    project = project or load_project_config()
-    profile_root = Path(profile_dir)
-    items: list[ModuleHealth] = []
-    for module in modules:
-        validation = validate_profile_module(
-            module,
-            cases_dir=cases_dir,
-            profile_dir=profile_root,
-            project=project,
-        )
-        file_irs = _build_module_file_irs(module, cases_dir, profile_root, project)
-        items.append(_module_health(module, validation, file_irs))
-    return CodegenHealthReport(items)
-
-
 def build_suite_codegen_health_report(
     context: SuiteContext,
     *,
@@ -99,7 +74,6 @@ def build_suite_codegen_health_report(
     project = project or load_project_config()
     validation = validate_profile_suite(
         context.suite_dir,
-        module=context.module,
         profile_dir=context.module_profile_path.parent,
         project=project,
     )
@@ -169,26 +143,6 @@ def write_codegen_health_report(
         encoding="utf-8",
     )
     return {"markdown": md_path, "json": json_path}
-
-
-def _build_module_file_irs(
-    module: str,
-    cases_dir: Path,
-    profile_dir: Path,
-    project: Any,
-) -> list[FileIR]:
-    profile_path = resolve_module_profile_path(profile_dir, module)
-    file_irs: list[FileIR] = []
-    for file_type in ("business", "boundary"):
-        md_path = cases_dir / module / f"{file_type}.md"
-        if md_path.exists():
-            file_irs.append(build_file_ir(
-                parse_case_file(md_path),
-                file_type,
-                profile_path=profile_path,
-                project=project,
-            ))
-    return file_irs
 
 
 def _build_suite_file_irs(

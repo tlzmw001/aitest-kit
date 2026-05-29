@@ -7,7 +7,7 @@ def test_render_markdown_separates_precondition_and_scaffold_failures():
         "status": "COMPLETED",
         "timestamp": "2026-05-27T00:00:00+08:00",
         "duration_seconds": 1.0,
-        "command": "aitest run demo",
+        "command": "aitest run --suite-file test_workspace/suites/demo_target/demo_suite/suite.yaml",
         "codegen_check": {"status": "passed"},
         "manual_policy": "excluded",
         "summary": {
@@ -54,3 +54,40 @@ def test_render_markdown_separates_precondition_and_scaffold_failures():
     assert "TC-DEMO-001：缺失 env：DEMO_TOKEN" in text
     assert "### 需要修 scaffold / fixture / helper" in text
     assert "TC-DEMO-002：fixture failed" in text
+
+
+def test_render_markdown_includes_suite_scope():
+    result = {
+        "run_id": "run",
+        "status": "COMPLETED",
+        "timestamp": "2026-05-27T00:00:00+08:00",
+        "duration_seconds": 1.0,
+        "command": "aitest run --suite-file external_suites/demo/suite.yaml",
+        "target": "sub2api",
+        "module": "gateway_api",
+        "suite": "quota_billing_v2",
+        "suite_file": "external_suites/demo/suite.yaml",
+        "codegen_check": {"status": "passed"},
+        "manual_policy": "excluded",
+        "summary": {
+            "passed": 1,
+            "failed": 0,
+            "error": 0,
+            "pytest_skipped": 0,
+            "auto_collected": 1,
+            "manual_total": 0,
+            "manual_executed": 0,
+            "manual_not_run": 0,
+            "codegen_skipped": 0,
+        },
+        "modules": {},
+        "cases": [],
+        "codegen_skipped_cases": [],
+    }
+
+    text = render_markdown(result)
+
+    assert "- **Target**：sub2api" in text
+    assert "- **Module**：gateway_api" in text
+    assert "- **Suite**：quota_billing_v2" in text
+    assert "- **Suite 文件**：external_suites/demo/suite.yaml" in text

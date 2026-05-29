@@ -45,9 +45,9 @@ def _read_manifest(path: Path) -> tuple[dict[str, Any], list[str]]:
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except yaml.YAMLError as exc:
-        return {}, [f"E610: aitest_suite.yaml is invalid: {exc}"]
+        return {}, [f"E610: suite.yaml is invalid: {exc}"]
     if not isinstance(data, dict):
-        return {}, ["E610: aitest_suite.yaml root must be a mapping"]
+        return {}, ["E610: suite.yaml root must be a mapping"]
     return data, []
 
 
@@ -68,38 +68,23 @@ def suite_generated_path(generated_dir: str | Path, context: SuiteContext, case_
     return Path(generated_dir) / f"test_{context.module}_{suite_output_file_type(context, case_path)}.py"
 
 
-def _scan_case_files(suite_dir: Path) -> list[Path]:
-    result: list[Path] = []
-    for path in sorted(suite_dir.glob("*.md")):
-        if path.name == "README.md" or path.name.startswith(("profile_", "codegen_profile_")):
-            continue
-        parsed = parse_case_file(path)
-        if parsed.cases:
-            result.append(path)
-    return result
-
-
 def _case_files_from_manifest(
     suite_dir: Path,
     manifest: dict[str, Any],
     diagnostics: list[str],
-    *,
-    allow_scan: bool,
 ) -> list[Path]:
     raw_files = manifest.get("case_files")
     if raw_files is None:
-        if not allow_scan:
-            diagnostics.append("E610: suite.yaml requires case_files")
-            return []
-        return _scan_case_files(suite_dir)
+        diagnostics.append("E610: suite.yaml requires case_files")
+        return []
     if not isinstance(raw_files, list):
-        diagnostics.append("E610: aitest_suite.yaml case_files must be a list")
+        diagnostics.append("E610: suite.yaml case_files must be a list")
         return []
 
     paths: list[Path] = []
     for item in raw_files:
         if not isinstance(item, str) or not item.strip():
-            diagnostics.append("E610: aitest_suite.yaml case_files values must be strings")
+            diagnostics.append("E610: suite.yaml case_files values must be strings")
             continue
         path = suite_dir / item
         if not path.exists():
@@ -133,12 +118,6 @@ _FORBIDDEN_SUITE_MANIFEST_FIELDS = {
 }
 
 
-def _strict_suite_manifest(manifest_path: Path, explicit_file: bool) -> bool:
-    if manifest_path.name == "aitest_suite.yaml":
-        return False
-    return manifest_path.name == "suite.yaml" or explicit_file
-
-
 def _validate_strict_suite_manifest(
     manifest_path: Path,
     manifest: dict[str, Any],
@@ -161,12 +140,10 @@ def _validate_strict_suite_manifest(
 def load_suite_context(
     cases_path: str | Path,
     *,
-    module_override: str | None = None,
-    profile_dir: str | Path = "test_workspace/tests/fixtures",
+    profile_dir: str | Path = "test_workspace/targets",
 ) -> SuiteContext:
     """Load suite manifest, case files, module profile and optional suite profile."""
     suite_input = Path(cases_path)
-    explicit_file = suite_input.is_file()
     if suite_input.is_file():
         suite_dir = suite_input.parent
         manifest_path = suite_input
@@ -180,8 +157,9 @@ def load_suite_context(
     manifest, manifest_errors = _read_manifest(manifest_path)
     diagnostics.extend(manifest_errors)
     has_manifest = manifest_path.exists() and not manifest_errors
-    strict_manifest = has_manifest and _strict_suite_manifest(manifest_path, explicit_file)
-    if strict_manifest:
+    if not manifest_path.exists():
+        diagnostics.append(f"E610: suite.yaml not found: {manifest_path}")
+    if has_manifest:
         _validate_strict_suite_manifest(manifest_path, manifest, diagnostics)
 
     target = manifest.get("target", "") if has_manifest else ""
@@ -191,27 +169,17 @@ def load_suite_context(
         diagnostics.append("E610: suite manifest target must be a string")
         target = ""
 
-    module = module_override or manifest.get("module")
+    module = manifest.get("module")
     if not isinstance(module, str) or not module.strip():
-        diagnostics.append("E610: suite manifest requires module, or pass --module")
-        module = module_override or ""
-
-    if module_override and isinstance(manifest.get("module"), str) and manifest["module"] != module_override:
-        diagnostics.append(
-            f"E610: --module {module_override} conflicts with manifest module {manifest['module']}"
-        )
+        diagnostics.append("E610: suite.yaml requires module")
+        module = ""
 
     suite = manifest.get("suite") if has_manifest else suite_dir.name
     if not isinstance(suite, str) or not suite.strip():
         diagnostics.append("E610: suite manifest requires suite")
         suite = suite_dir.name
 
-    case_files = _case_files_from_manifest(
-        suite_dir,
-        manifest,
-        diagnostics,
-        allow_scan=not strict_manifest,
-    )
+    case_files = _case_files_from_manifest(suite_dir, manifest, diagnostics)
     if not case_files and not diagnostics:
         diagnostics.append(f"E614: no Markdown case files found in {suite_dir}")
 
@@ -269,13 +237,11 @@ def load_suite_context(
 def load_suite_context_for_paths(
     cases_path: str | Path,
     *,
-    module_override: str | None = None,
-    profile_dir: str | Path = "test_workspace/tests/fixtures",
+    profile_dir: str | Path = "test_workspace/targets",
 ) -> SuiteContext:
     """Load a suite, preferring target profile defaults when target config exists."""
     context = load_suite_context(
         cases_path,
-        module_override=module_override,
         profile_dir=profile_dir,
     )
     target_context = _load_target_context_if_available(context.target)
@@ -286,7 +252,6 @@ def load_suite_context_for_paths(
         return _with_target_module_fixture_import(context, target_context)
     target_context_loaded = load_suite_context(
         cases_path,
-        module_override=module_override,
         profile_dir=target_profile_dir,
     )
     return _with_target_module_fixture_import(target_context_loaded, target_context)
@@ -302,7 +267,7 @@ def resolve_suite_runtime_paths(
     """Resolve generated/report/profile directories for a suite.
 
     If a suite target has a registry config, target defaults win. Otherwise the
-    legacy caller-provided directories are preserved.
+    caller-provided workspace directories are preserved.
     """
     target_context = _load_target_context_if_available(context.target)
     if target_context is None:
@@ -419,18 +384,11 @@ def _profile_imports_fixture(data: dict[str, Any], fixture_name: str) -> bool:
 
 
 def _manifest_path_for_dir(suite_dir: Path) -> Path:
-    suite_manifest = suite_dir / "suite.yaml"
-    if suite_manifest.exists():
-        return suite_manifest
-    return suite_dir / "aitest_suite.yaml"
+    return suite_dir / "suite.yaml"
 
 
 def _default_suite_profile_name(suite_dir: Path, suite: str) -> str:
-    new_name = suite_dir / f"profile_{suite}_suite.md"
-    old_name = suite_dir / f"codegen_profile_{suite}_suite.md"
-    if new_name.exists() or not old_name.exists():
-        return new_name.name
-    return old_name.name
+    return f"profile_{suite}_suite.md"
 
 
 def _validate_suite_identity(

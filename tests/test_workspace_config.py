@@ -6,7 +6,7 @@ from aitest_kit.codegen.project_config import load_project_config
 from aitest_kit.workspace_config import load_workspace_paths
 
 
-def test_workspace_paths_load_legacy_config(tmp_path, monkeypatch):
+def test_workspace_paths_require_aitest_yaml_for_custom_paths(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     config_dir = tmp_path / "aitest_config"
     config_dir.mkdir()
@@ -23,11 +23,10 @@ def test_workspace_paths_load_legacy_config(tmp_path, monkeypatch):
 
     paths = load_workspace_paths()
 
-    assert paths.cases_dir == Path("cases")
-    assert paths.generated_dir == Path("generated")
-    assert paths.profile_dir == Path("fixtures")
-    assert paths.reports_dir == Path("reports")
-    assert paths.project_config == Path("aitest_config/project_config.yaml")
+    assert paths.generated_dir == Path("test_workspace/generated")
+    assert paths.profile_dir == Path("test_workspace/targets")
+    assert paths.reports_dir == Path("test_workspace/reports")
+    assert paths.project_config == Path("aitest_config/aitest.yaml")
 
 
 def test_workspace_paths_load_aitest_yaml_aliases(tmp_path, monkeypatch):
@@ -37,20 +36,18 @@ def test_workspace_paths_load_aitest_yaml_aliases(tmp_path, monkeypatch):
     (config_dir / "aitest.yaml").write_text(
         """workspace:
   paths:
-    cases_dir: suites
-    generated_root: generated_root
+    generated_dir: generated
     profile_dir: profiles
-    reports_root: reports_root
+    reports_dir: reports
 """,
         encoding="utf-8",
     )
 
     paths = load_workspace_paths()
 
-    assert paths.cases_dir == Path("suites")
-    assert paths.generated_dir == Path("generated_root")
+    assert paths.generated_dir == Path("generated")
     assert paths.profile_dir == Path("profiles")
-    assert paths.reports_dir == Path("reports_root")
+    assert paths.reports_dir == Path("reports")
 
 
 def test_project_config_loads_codegen_section_from_aitest_yaml(tmp_path, monkeypatch):

@@ -1,41 +1,4 @@
 target: coupon_system
-
-docs:
-  - docs/
-
-service:
-  language: python
-  frameworks:
-    - fastapi
-    - grpc
-  endpoints:
-    http_base_url: http://localhost:8000
-    grpc_target: localhost:50051
-  route_patterns:
-    - "@app.post"
-    - "@app.get"
-    - "@app.put"
-    - "@app.delete"
-  schema_patterns:
-    - "Field(...)"
-    - "message "
-
-data:
-  stores:
-    - type: redis
-      host: localhost
-      port: 6379
-
-protocols:
-  primary: http
-  secondary: grpc
-  grpc_identifier: "协议：gRPC"
-
-known_limitations:
-  - scene_experiments.json 不支持热更新，依赖运行时修改配置的用例需标记为待测系统 bug
-  - gRPC mock scoring 服务没有公开故障注入接口，打分故障边界场景标记为可行性存疑
-  - 限流测试需要隔离服务实例（随机端口 + 临时配置文件），不能用默认服务
-
 defaults:
   module_dir: test_workspace/targets/coupon_system/modules
   fixture_dir: test_workspace/targets/coupon_system/fixtures
@@ -44,7 +7,7 @@ defaults:
   suite_dir: test_workspace/suites/coupon_system
   generated_dir: test_workspace/generated/coupon_system
   reports_dir: test_workspace/reports/coupon_system
-
+docs:
+  - docs/
 knowledge_refs:
   l0: test_workspace/knowledge/L0_system_architecture.md
-  test_spec: test_workspace/knowledge/TEST_SPEC.md

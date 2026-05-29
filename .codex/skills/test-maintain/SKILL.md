@@ -28,7 +28,7 @@ effort: high
 ## 硬边界
 
 1. **只路由，不直接改文件**：本 skill 不使用 Write/Edit/apply_patch 修改任何文件；真正修改必须交给 `test-design`、`test-fix`、`test-scaffold`、`test-codegen` 等对应 skill。
-2. **不直接编辑 generated pytest**：`test_workspace/generated/{target}/` 和 legacy `test_workspace/tests/generated/` 都是编译产物。修改必须回到 Markdown 用例、profile、fixture、project_config 或 emitter。
+2. **不直接编辑 generated pytest**：`test_workspace/generated/{target}/` 是编译产物。修改必须回到 Markdown 用例、profile、fixture、`aitest.yaml` 或 emitter。
 3. **不绕过知识库**：需求变化可能影响业务规则时，先判断是否需要更新 knowledge，再进入用例维护。
 4. **不自动大批删除**：删除或废弃 case 前必须列出影响面，默认优先 `retire`，用户明确要求后才 `delete`。
 5. **不猜业务语义**：断言失败不自动判定为 SUT bug；报告只能做规则化初判，SUT bug 需要人工确认后记录到 `test_workspace/results/`。
@@ -88,10 +88,10 @@ effort: high
 只读检查，优先使用 `rg`：
 
 - knowledge：`test_workspace/knowledge/L1/`、`test_workspace/knowledge/L2/`、`TEST_SPEC.md`
-- cases/suites：`test_workspace/cases/`、`test_workspace/suites/`、legacy `test_workspace/casesuites/`
+- suites：`test_workspace/suites/`
 - target registry：`test_workspace/targets/{target}/target.yaml`、`modules/{module}.yaml`
-- fixture/profile/helper：`test_workspace/targets/{target}/fixtures/`、`profiles/`、`helpers/`，legacy `test_workspace/tests/fixtures/`
-- generated：`test_workspace/generated/{target}/`，legacy `test_workspace/tests/generated/`
+- fixture/profile/helper：`test_workspace/targets/{target}/fixtures/`、`profiles/`、`helpers/`
+- generated：`test_workspace/generated/{target}/`
 - reports/results：`test_workspace/reports/latest/`、`test_workspace/results/`
 
 输出格式：
@@ -183,14 +183,14 @@ generated pytest 函数
 
 底层 skill 修改后，按能力域选择验证。
 
-API 模块模式：
+API suite 模式：
 
 ```bash
-python3 -m aitest_kit.cli codegen <module> --validate-profile
-python3 -m aitest_kit.cli codegen <module> --dump-ir
-python3 -m aitest_kit.cli codegen <module>
-python3 -m aitest_kit.cli codegen <module> --check
-python3 -m pytest test_workspace/tests/generated/test_<module>_*.py --collect-only -q
+python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> --validate-profile
+python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> --dump-ir
+python3 -m aitest_kit.cli codegen --suite-file <suite.yaml>
+python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> --check
+python3 -m aitest_kit.cli run --suite-file <suite.yaml> -- --collect-only -q
 ```
 
 API suite 模式：

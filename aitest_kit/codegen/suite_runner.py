@@ -45,7 +45,6 @@ from aitest_kit.codegen.suite_target import project_config_for_suite_target
 def run_suite_codegen(
     cases_path: str,
     *,
-    module_override: str | None,
     paths: Any,
     project: ProjectConfig,
     dry_run: bool,
@@ -62,7 +61,6 @@ def run_suite_codegen(
     """Run codegen in case-suite mode."""
     context = load_suite_context_for_paths(
         cases_path,
-        module_override=module_override,
         profile_dir=paths.profile_dir,
     )
     runtime_paths = resolve_suite_runtime_paths(
@@ -75,7 +73,6 @@ def run_suite_codegen(
     if validate_profile:
         report = validate_profile_suite(
             cases_path,
-            module=module_override,
             profile_dir=runtime_paths.profile_dir,
             project=suite_project,
         )
@@ -88,7 +85,7 @@ def run_suite_codegen(
                 click.echo(f"- {path}")
         return 1 if report.errors else 0
 
-    gate_result = _suite_profile_gate(cases_path, module_override, runtime_paths, suite_project)
+    gate_result = _suite_profile_gate(cases_path, runtime_paths, suite_project)
     if gate_result:
         return gate_result
 
@@ -134,13 +131,11 @@ def _print_suite_validation(report: Any) -> None:
 
 def _suite_profile_gate(
     cases_path: str,
-    module_override: str | None,
     paths: Any,
     project: ProjectConfig,
 ) -> int:
     report = validate_profile_suite(
         cases_path,
-        module=module_override,
         profile_dir=paths.profile_dir,
         project=project,
     )
@@ -154,7 +149,7 @@ def _suite_profile_gate(
     click.echo(f"\nSuite: {report.suite}")
     for diag in report.errors:
         click.echo(f"  {diag.format()}")
-    click.echo("\nRun `aitest codegen --cases <dir> --validate-profile --write-report` for artifacts.")
+    click.echo("\nRun `aitest codegen --suite-file <suite.yaml> --validate-profile --write-report` for artifacts.")
     return 1
 
 
@@ -410,7 +405,8 @@ def _check_suite_consistency(
     if stale_count:
         if blocked_count:
             click.echo(f"\n{blocked_count} file(s) blocked by diagnostics.")
-        click.echo(f"\n{stale_count} file(s) stale. Run `aitest codegen --cases {context.suite_dir}` to update.")
+        manifest = context.manifest_path or (context.suite_dir / "suite.yaml")
+        click.echo(f"\n{stale_count} file(s) stale. Run `aitest codegen --suite-file {manifest}` to update.")
         return 1
     click.echo("All generated files are up to date.")
     return 0

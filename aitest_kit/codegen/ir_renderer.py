@@ -31,7 +31,7 @@ class EmitContext:
     case_fixtures: dict[str, list[str]] = field(default_factory=dict)
     case_bodies: dict[str, list[str]] = field(default_factory=dict)
     variables: dict[str, str] = field(default_factory=dict)
-    fixture_dir: Path = field(default_factory=lambda: Path("test_workspace/tests/fixtures"))
+    fixture_dir: Path = field(default_factory=lambda: Path("test_workspace/targets"))
 
 
 @dataclass
@@ -49,9 +49,10 @@ def _render_header(
     has_grpc: bool = False,
     has_profile_variables: bool = False,
 ) -> list[str]:
+    regenerate_hint = _regenerate_hint(ctx)
     lines = [
         f"# Auto-generated from {ctx.source_path}",
-        f"# DO NOT EDIT — regenerate with: /test-codegen {ctx.module}",
+        f"# DO NOT EDIT — regenerate with: {regenerate_hint}",
         "import pytest",
         ctx.project.helper_import,
     ]
@@ -61,6 +62,13 @@ def _render_header(
         lines.append("from aitest_kit.runtime_variables import resolve_profile_variables")
     lines.extend(ctx.extra_imports)
     return lines
+
+
+def _regenerate_hint(ctx: EmitContext) -> str:
+    suite_manifest = Path(ctx.source_path).parent / "suite.yaml"
+    if suite_manifest.exists():
+        return f"aitest codegen --suite-file {suite_manifest}"
+    return "aitest codegen --suite-file <suite.yaml>"
 
 
 def _render_base_request(ctx: EmitContext) -> list[str]:

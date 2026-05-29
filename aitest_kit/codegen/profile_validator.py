@@ -7,7 +7,6 @@ from typing import Any
 
 import yaml
 
-from aitest_kit.codegen.parser import parse_case_file
 from aitest_kit.codegen.module_type import (
     resolve_module_type,
     validate_module_type_requirements,
@@ -16,8 +15,6 @@ from aitest_kit.codegen.profile import (
     apply_case_flow_defaults,
     case_flow_defaults_from_yaml,
     load_profile_yaml,
-    preferred_module_profile_path,
-    resolve_module_profile_path,
     validate_case_flows,
     validate_profile_strategy_conflicts,
 )
@@ -59,70 +56,17 @@ _TOP_LEVEL_KEYS = {
 }
 
 
-def validate_profile_module(
-    module: str,
-    *,
-    cases_dir: str | Path = "test_workspace/cases",
-    profile_dir: str | Path = "test_workspace/tests/fixtures",
-    project: ProjectConfig | None = None,
-) -> ProfileValidationReport:
-    """Validate one module profile without generating pytest."""
-    cases_root = Path(cases_dir)
-    profile_path = (
-        resolve_module_profile_path(profile_dir, module)
-        or preferred_module_profile_path(profile_dir, module)
-    )
-    report = ProfileValidationReport(module=module, profile_path=profile_path)
-    project_config = project or load_project_config()
-
-    _collect_markdown_cases(report, cases_root / module)
-    if not profile_path.exists():
-        _warn(report, "W501", "codegen profile not found", str(profile_path))
-        return report
-
-    data = _load_profile_yaml_strict(report)
-    if data is None:
-        return report
-
-    _validate_profile_schema(report, data)
-    _validate_top_level_shape(report, data)
-    case_bodies = _mapping(data, "case_bodies")
-    case_flows = _mapping(data, "case_flows")
-    case_fixtures = _mapping(data, "case_fixtures")
-    request_overrides = _mapping(data, "request_overrides")
-    variables = _mapping(data, "variables")
-    case_flow_defaults = case_flow_defaults_from_yaml(data)
-    normalized_case_flows = apply_case_flow_defaults(case_flows, case_flow_defaults)
-
-    for message in validate_profile_strategy_conflicts(case_bodies, case_flows):
-        _error(report, "E502", message)
-    for message in validate_case_flows(case_flows, case_flow_defaults):
-        _error(report, "E503", message)
-    for message in validate_profile_variables(variables):
-        _error(report, "E501", message)
-    for message in validate_case_flow_variable_references(normalized_case_flows, variables):
-        _error(report, "E507", message)
-
-    _validate_case_references(report, "case_bodies", case_bodies)
-    _validate_case_references(report, "case_flows", case_flows)
-    _validate_case_references(report, "case_fixtures", case_fixtures)
-    _validate_case_references(report, "request_overrides", request_overrides)
-    _validate_case_references(report, "variables.cases", _variable_cases(variables))
-    _warn_feasibility_suspect_strategies(report, case_bodies, case_flows)
-    _warn_fixture_reinvocation(report, normalized_case_flows)
-    _validate_module_type(report, data, project_config, case_bodies, normalized_case_flows)
-    return report
-
-
 def validate_profile_suite(
     cases_path: str | Path,
     *,
     module: str | None = None,
-    profile_dir: str | Path = "test_workspace/tests/fixtures",
+    profile_dir: str | Path = "test_workspace/targets",
     project: ProjectConfig | None = None,
 ) -> ProfileValidationReport:
     """Validate one case suite plus its module and suite profiles."""
-    context = load_suite_context_for_paths(cases_path, module_override=module, profile_dir=profile_dir)
+    if module is not None:
+        raise ValueError("suite validation no longer accepts module overrides; declare module in suite.yaml")
+    context = load_suite_context_for_paths(cases_path, profile_dir=profile_dir)
     report = ProfileValidationReport(
         module=context.module or module or "",
         suite=context.suite,
@@ -184,27 +128,6 @@ def validate_profile_suite(
     _validate_module_type(report, runtime_data, project_config, runtime_case_bodies, runtime_case_flows)
     _validate_suite_default_coverage(report, context, runtime_case_bodies, runtime_case_flows)
     return report
-
-
-def _collect_markdown_cases(report: ProfileValidationReport, module_dir: Path) -> None:
-    if not module_dir.exists():
-        _error(report, "E510", "module case directory not found", str(module_dir))
-        return
-
-    for file_type in ("business", "boundary"):
-        md_path = module_dir / f"{file_type}.md"
-        if not md_path.exists():
-            continue
-        report.case_files.append(md_path)
-        parse_result = parse_case_file(md_path)
-        for parser_error in parse_result.errors:
-            _error(report, "E001", parser_error, str(md_path))
-        for tc in parse_result.cases:
-            report.case_ids.add(tc.id)
-            report.case_markers[tc.id] = list(tc.markers)
-
-    if not report.case_files:
-        _error(report, "E511", "module has no business.md or boundary.md", str(module_dir))
 
 
 def _collect_suite_markdown_cases(
@@ -361,7 +284,7 @@ def _validate_case_references(
             _error(report, "E505", "case id must match ^TC-[A-Z0-9]+-\\d+$", source)
             continue
         if case_id not in report.case_ids:
-            _error(report, "E505", "case id does not exist in module markdown cases", source)
+            _error(report, "E505", "case id does not exist in suite markdown cases", source)
 
 
 def _validate_suite_default_coverage(
@@ -448,7 +371,7 @@ def _validate_module_type(
 
     resolution = resolve_module_type(report.module, data, project)
     if not resolution.module_type:
-        _warn(report, "W502", "module_type is not declared in profile or project_config.modules")
+        _warn(report, "W502", "module_type is not declared in profile or aitest.yaml")
         return
 
     for diagnostic in validate_module_type_requirements(

@@ -1,11 +1,7 @@
 """Project-level codegen config schema and loader.
 
 This module is not the project configuration edit point. Project-specific
-codegen configuration should live in aitest_config/project_config.yaml.
-
-The fallback data below is only for compatibility when that YAML file is
-missing or omits optional fields; it is not the source of truth for this
-repository's active project configuration.
+codegen configuration should live in ``aitest_config/aitest.yaml``.
 """
 from __future__ import annotations
 
@@ -33,23 +29,22 @@ class DefaultRequestConfig:
 
 @dataclass
 class ProjectConfig:
-    helper_import: str = "from test_workspace.tests.helpers import http as http_helper"
+    helper_import: str = "from aitest_kit.helpers import http as http_helper"
     api_path: str = "/api/v1/recommend"
     helper_call: str = "http_helper.post"
-    grpc_helper_import: str = "from test_workspace.tests.helpers import grpc_ops"
+    grpc_helper_import: str = "from aitest_kit.helpers import grpc_ops"
     grpc_helper_call: str = "grpc_ops.recommend"
     var_map: dict[str, str] = field(default_factory=dict)
     module_abbrevs: dict[str, str] = field(default_factory=dict)
     builtin_assertion_rules: list[AssertionRule] = field(default_factory=list)
     named_templates: set[str] = field(default_factory=set)
     module_types: dict[str, dict[str, Any]] = field(default_factory=dict)
-    modules: dict[str, dict[str, Any]] = field(default_factory=dict)
     default_request: DefaultRequestConfig = field(default_factory=DefaultRequestConfig)
 
 
 FALLBACK_PROJECT_CONFIG_DATA: dict[str, Any] = {
-    "helper_import": "from test_workspace.tests.helpers import http as http_helper",
-    "grpc_helper_import": "from test_workspace.tests.helpers import grpc_ops",
+    "helper_import": "from aitest_kit.helpers import http as http_helper",
+    "grpc_helper_import": "from aitest_kit.helpers import grpc_ops",
     "api_path": "/api/v1/recommend",
     "helper_call": "http_helper.post",
     "grpc_helper_call": "grpc_ops.recommend",
@@ -76,7 +71,6 @@ FALLBACK_PROJECT_CONFIG_DATA: dict[str, Any] = {
         "subprocess_capture": {"description": "需要隔离进程捕获输出", "requires": ["case_bodies"]},
         "isolated_service": {"description": "需要隔离服务实例", "requires": ["case_bodies"]},
     },
-    "modules": {},
     "default_request": {
         "auto_fields": {},
     },
@@ -194,7 +188,6 @@ def _project_from(data: dict[str, Any]) -> ProjectConfig:
         builtin_assertion_rules=_rules_from(data.get("builtin_assertion_rules")),
         named_templates=set(data.get("named_templates") or FALLBACK_PROJECT_CONFIG_DATA["named_templates"]),
         module_types=dict(data.get("module_types") or FALLBACK_PROJECT_CONFIG_DATA["module_types"]),
-        modules=dict(data.get("modules") or FALLBACK_PROJECT_CONFIG_DATA["modules"]),
         default_request=_default_request_from(data.get("default_request")),
     )
 
@@ -203,7 +196,7 @@ def fallback_project_config() -> ProjectConfig:
     return _project_from(FALLBACK_PROJECT_CONFIG_DATA)
 
 
-def load_project_config(path: str | Path = "aitest_config/project_config.yaml") -> ProjectConfig:
+def load_project_config(path: str | Path = "aitest_config/aitest.yaml") -> ProjectConfig:
     raw = load_codegen_config_data(path)
     if raw is None:
         return fallback_project_config()

@@ -17,7 +17,7 @@ class TestDemoBusiness:
             "tc_id": "TC-DEMO-001",
             "module": "demo",
             "category": "business",
-            "source": "test_workspace/cases/demo/business.md",
+            "source": "test_workspace/suites/demo_target/demo_suite/business.md",
             "title": "normal",
             "priority": "P1",
             "markers": [],
@@ -30,7 +30,7 @@ class TestDemoBusiness:
             "tc_id": "TC-DEMO-002",
             "module": "demo",
             "category": "business",
-            "source": "test_workspace/cases/demo/business.md",
+            "source": "test_workspace/suites/demo_target/demo_suite/business.md",
             "title": "manual",
             "priority": "P2",
             "markers": ["manual"],
@@ -42,7 +42,7 @@ __codegen_skipped__ = [
         "tc_id": "TC-DEMO-003",
         "module": "demo",
         "category": "business",
-        "source": "test_workspace/cases/demo/business.md",
+        "source": "test_workspace/suites/demo_target/demo_suite/business.md",
         "title": "skipped",
         "priority": "P2",
         "reason": "[!可行性存疑: demo]",
@@ -65,7 +65,7 @@ __codegen_skipped__ = [
         junit_path=junit,
         generated_files=[generated],
         run_id="run",
-        command="aitest run demo",
+        command="aitest run --suite-file test_workspace/suites/demo_target/demo_suite/suite.yaml",
         manual_policy="excluded",
         codegen_check={"status": "passed", "command": "check", "message": ""},
     )
@@ -82,6 +82,33 @@ __codegen_skipped__ = [
     assert result["codegen_skipped_cases"][0]["tc_id"] == "TC-DEMO-003"
 
 
+def test_collect_result_preserves_run_scope_metadata(tmp_path):
+    result = collect_result(
+        junit_path=None,
+        generated_files=[],
+        run_id="run",
+        command="aitest run --suite-file external_suites/demo/suite.yaml",
+        codegen_check={"status": "passed", "command": "check", "message": ""},
+        run_scope={
+            "type": "suite_file",
+            "target": "sub2api",
+            "module": "gateway_api",
+            "suite": "quota_billing_v2",
+            "suite_file": "external_suites/demo/suite.yaml",
+            "suite_dir": "external_suites/demo",
+            "case_files": ["external_suites/demo/business.md"],
+        },
+    )
+
+    assert result["target"] == "sub2api"
+    assert result["module"] == "gateway_api"
+    assert result["suite"] == "quota_billing_v2"
+    assert result["suite_file"] == "external_suites/demo/suite.yaml"
+    assert result["suite_dir"] == "external_suites/demo"
+    assert result["case_files"] == ["external_suites/demo/business.md"]
+    assert result["run_scope"]["type"] == "suite_file"
+
+
 def test_collect_result_classifies_failure(tmp_path):
     generated = tmp_path / "test_demo_business.py"
     generated.write_text(
@@ -93,7 +120,7 @@ class TestDemoBusiness:
             "tc_id": "TC-DEMO-001",
             "module": "demo",
             "category": "business",
-            "source": "test_workspace/cases/demo/business.md",
+            "source": "test_workspace/suites/demo_target/demo_suite/business.md",
             "title": "normal",
             "priority": "P1",
             "markers": [],
@@ -121,7 +148,7 @@ AssertionError: assert 1 == 2</failure>
         junit_path=junit,
         generated_files=[generated],
         run_id="run",
-        command="aitest run demo",
+        command="aitest run --suite-file test_workspace/suites/demo_target/demo_suite/suite.yaml",
         codegen_check={"status": "passed", "command": "check", "message": ""},
     )
 
@@ -141,7 +168,7 @@ class TestDemoBusiness:
             "tc_id": "TC-DEMO-001",
             "module": "demo",
             "category": "business",
-            "source": "test_workspace/cases/demo/business.md",
+            "source": "test_workspace/suites/demo_target/demo_suite/business.md",
             "title": "normal",
             "priority": "P1",
             "markers": [],
@@ -169,7 +196,7 @@ aitest_kit.runtime_variables.ProfileVariableError: profile variable environment 
         junit_path=junit,
         generated_files=[generated],
         run_id="run",
-        command="aitest run demo",
+        command="aitest run --suite-file test_workspace/suites/demo_target/demo_suite/suite.yaml",
         codegen_check={"status": "passed", "command": "check", "message": ""},
     )
 
@@ -192,7 +219,7 @@ class TestDemoBusiness:
             "tc_id": "TC-DEMO-001",
             "module": "demo",
             "category": "business",
-            "source": "test_workspace/cases/demo/business.md",
+            "source": "test_workspace/suites/demo_target/demo_suite/business.md",
             "title": "normal",
             "priority": "P1",
             "markers": [],
@@ -220,7 +247,7 @@ aitest_kit.runtime_variables.PreconditionMissing: profile variable environment m
         junit_path=junit,
         generated_files=[generated],
         run_id="run",
-        command="aitest run demo",
+        command="aitest run --suite-file test_workspace/suites/demo_target/demo_suite/suite.yaml",
         codegen_check={"status": "passed", "command": "check", "message": ""},
     )
 

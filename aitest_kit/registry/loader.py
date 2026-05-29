@@ -96,7 +96,7 @@ def load_suite_context(
     *,
     workspace_root: str | Path = ".",
 ) -> SuiteManifestContext:
-    """Load one suite manifest. Directories resolve to suite.yaml or aitest_suite.yaml."""
+    """Load one suite manifest. Directories resolve to suite.yaml."""
     root = Path(workspace_root).expanduser().resolve()
     diagnostics: list[str] = []
     manifest_path = _suite_manifest_path(suite_file, diagnostics)
@@ -328,12 +328,11 @@ def _registered_suites(
 def _suite_manifest_path(suite_file: str | Path, diagnostics: list[str]) -> Path:
     path = Path(suite_file).expanduser()
     if path.is_dir():
-        for name in ("suite.yaml", "aitest_suite.yaml"):
-            candidate = path / name
-            if candidate.exists():
-                return candidate.resolve(strict=False)
-        diagnostics.append(f"E730: suite directory has no suite.yaml or aitest_suite.yaml: {path}")
-        return (path / "suite.yaml").resolve(strict=False)
+        candidate = path / "suite.yaml"
+        if candidate.exists():
+            return candidate.resolve(strict=False)
+        diagnostics.append(f"E730: suite directory has no suite.yaml: {path}")
+        return candidate.resolve(strict=False)
     return path.resolve(strict=False)
 
 
@@ -370,9 +369,7 @@ def _suite_profile_path(
 ) -> Path:
     profile = data.get("profile")
     if profile is None:
-        new_name = manifest_path.parent / f"profile_{suite}_suite.md"
-        old_name = manifest_path.parent / f"codegen_profile_{suite}_suite.md"
-        profile = new_name.name if new_name.exists() or not old_name.exists() else old_name.name
+        profile = f"profile_{suite}_suite.md"
     return resolve_path(
         profile,
         base_dir=manifest_path.parent,

@@ -2,8 +2,6 @@
 
 ## 文件结构
 
-- legacy 模块 `business.md` -> `test_workspace/tests/generated/test_{module}_business.py`
-- legacy 模块 `boundary.md` -> `test_workspace/tests/generated/test_{module}_boundary.py`
 - target/suite 中的 `{case_file}.md` -> `test_workspace/generated/{target}/test_{module}_{suite}_{case_file_stem}.py`
 
 ## 类和函数命名
@@ -24,8 +22,6 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 3. 创建 `test_workspace/targets/{target}/profiles/profile_{module}.md`
 4. 确认 generated pytest 能引用到 target fixture/helper
 
-legacy 模块模式才使用 `test_workspace/tests/fixtures/{module}.py` 和 `pytest_plugins` 注册。
-
 ## fixture 编写检查清单
 
 编写新模块的 `setup_{module}` fixture 前，确认：
@@ -42,7 +38,7 @@ legacy 模块模式才使用 `test_workspace/tests/fixtures/{module}.py` 和 `py
 
 ## 断言生成
 
-断言匹配优先级：profile assertion_rules > project_config builtin_assertion_rules > named_templates。
+断言匹配优先级：profile assertion_rules > `aitest.yaml.codegen.builtin_assertion_rules` > named_templates。
 
 通用断言模式（框架内置）：
 
@@ -55,7 +51,7 @@ legacy 模块模式才使用 `test_workspace/tests/fixtures/{module}.py` 和 `py
 | `[manual]` 标记 | `# MANUAL CHECK: {原文}` |
 | 无法翻译 | `# UNPARSED ASSERTION: {原文}` |
 
-项目专属断言模式见 `aitest_config/project_config.yaml` 的 `builtin_assertion_rules`。
+项目专属断言模式见 `aitest_config/aitest.yaml` 的 `codegen.builtin_assertion_rules`。
 
 `round(..., 4)` -> `pytest.approx(..., abs=1e-4)`。`clamp(x)` -> `max(0, min(1, x))`。
 
@@ -92,8 +88,6 @@ legacy 模块模式才使用 `test_workspace/tests/fixtures/{module}.py` 和 `py
 - module profile：`test_workspace/targets/{target}/profiles/profile_{module}.md`，承载 L1 级稳定能力
 - suite profile：`{suite_dir}/profile_{suite}_suite.md`，只覆盖该 suite 的 case_id
 
-legacy 模块模式继续兼容 `test_workspace/tests/fixtures/codegen_profile_{module}.md` 和 `{suite_dir}/codegen_profile_{suite}_suite.md`。
-
 profile 应包含：
 
 | 章节 | 内容 |
@@ -110,7 +104,7 @@ profile 应包含：
 | **调试经验** | 模块特有排错经验 |
 | **emitter 规则** | YAML code block，模块特有断言规则 |
 
-参考已有模块的 codegen_profile 作为结构模板。
+参考已有模块的 profile 作为结构模板。
 
 ## 后续：emitter-build
 

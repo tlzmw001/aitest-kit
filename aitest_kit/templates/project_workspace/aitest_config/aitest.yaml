@@ -5,17 +5,15 @@ workspace:
     knowledge_dir: test_workspace/knowledge
     test_spec: test_workspace/knowledge/TEST_SPEC.md
     l0_architecture: test_workspace/knowledge/L0_system_architecture.md
-    cases_dir: test_workspace/cases
-    generated_dir: test_workspace/tests/generated
-    fixtures_dir: test_workspace/tests/fixtures
+    generated_dir: test_workspace/generated
+    profile_dir: test_workspace/targets
     reports_dir: test_workspace/reports
     results_dir: test_workspace/results
     docs_dir: docs
     refs_dir: aitest_config/refs
-    project_config: aitest_config/project_config.yaml
 codegen:
-  helper_import: from test_workspace.tests.helpers import http as http_helper
-  grpc_helper_import: from test_workspace.tests.helpers import grpc_ops
+  helper_import: from aitest_kit.helpers import http as http_helper
+  grpc_helper_import: from aitest_kit.helpers import grpc_ops
   api_path: /api/v1/replace-me
   helper_call: http_helper.post
   grpc_helper_call: grpc_ops.call
@@ -33,7 +31,6 @@ codegen:
       description: 需要隔离服务/运行时控制的模块
       requires:
       - case_bodies
-  modules: {}
   default_request:
     auto_fields: {}
   builtin_assertion_rules:

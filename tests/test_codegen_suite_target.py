@@ -10,13 +10,23 @@ from aitest_kit.codegen.suite import load_suite_context_for_paths
 
 
 def _write_module_profile(root: Path) -> None:
-    fixture_dir = root / "test_workspace" / "tests" / "fixtures"
-    fixture_dir.mkdir(parents=True, exist_ok=True)
-    (fixture_dir / "codegen_profile_gateway_api.md").write_text(
+    target_dir = root / "test_workspace" / "targets" / "sub2api"
+    profile_dir = target_dir / "profiles"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    (target_dir / "target.yaml").write_text(
+        """target: sub2api
+defaults:
+  profile_dir: test_workspace/targets/sub2api/profiles
+  generated_dir: test_workspace/generated/sub2api
+  reports_dir: test_workspace/reports/sub2api
+""",
+        encoding="utf-8",
+    )
+    (profile_dir / "profile_gateway_api.md").write_text(
         """```yaml
 module_type: multi_endpoint
 extra_imports:
-  - "from test_workspace.tests.fixtures.gateway_api import setup_gateway_api"
+  - "from test_workspace.targets.sub2api.fixtures.gateway_api import setup_gateway_api"
 default_fixture: setup_gateway_api
 default_object: client
 ```
@@ -26,7 +36,7 @@ default_object: client
 
 
 def _write_suite(root: Path, *, profile_name: str = "profile_quota_billing_v2_suite.md") -> Path:
-    suite_dir = root / "test_workspace" / "casesuites" / "quota_billing_v2"
+    suite_dir = root / "test_workspace" / "suites" / "sub2api" / "quota_billing_v2"
     suite_dir.mkdir(parents=True, exist_ok=True)
     (suite_dir / "quota_billing_business.md").write_text(
         """# quota billing cases
@@ -85,7 +95,7 @@ defaults:
             """```yaml
 module_type: multi_endpoint
 extra_imports:
-  - "from test_workspace.tests.fixtures.gateway_api import setup_gateway_api"
+  - "from test_workspace.targets.sub2api.fixtures.gateway_api import setup_gateway_api"
 default_fixture: setup_gateway_api
 default_object: client
 ```
@@ -113,11 +123,11 @@ profile: profile_quota_billing_v2_suite.md
         generated = root / "test_workspace" / "generated" / "sub2api" / (
             "test_gateway_api_quota_billing_v2_quota_billing_business.py"
         )
-        legacy_generated = root / "test_workspace" / "tests" / "generated" / (
+        old_generated = root / "test_workspace" / "tests" / "generated" / (
             "test_gateway_api_quota_billing_v2_quota_billing_business.py"
         )
         assert generated.exists()
-        assert not legacy_generated.exists()
+        assert not old_generated.exists()
 
 
 def test_suite_file_auto_imports_target_module_fixture(tmp_path):
@@ -211,14 +221,15 @@ def test_codegen_cases_suite_profile_variables_render_runtime_lookup(tmp_path):
     with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
         root = Path(cwd)
         _write_module_profile(root)
-        suite_dir = root / "test_workspace" / "casesuites" / "login_smoke"
+        suite_dir = root / "test_workspace" / "suites" / "sub2api" / "login_smoke"
         suite_dir.mkdir(parents=True, exist_ok=True)
-        (suite_dir / "aitest_suite.yaml").write_text(
-            """module: gateway_api
+        (suite_dir / "suite.yaml").write_text(
+            """target: sub2api
+module: gateway_api
 suite: login_smoke
 case_files:
   - business.md
-profile: codegen_profile_login_smoke_suite.md
+profile: profile_login_smoke_suite.md
 """,
             encoding="utf-8",
         )
@@ -239,7 +250,7 @@ profile: codegen_profile_login_smoke_suite.md
 """,
             encoding="utf-8",
         )
-        (suite_dir / "codegen_profile_login_smoke_suite.md").write_text(
+        (suite_dir / "profile_login_smoke_suite.md").write_text(
             """```yaml
 profile_scope: case_suite
 parent_module: gateway_api
@@ -274,10 +285,10 @@ case_flows:
             encoding="utf-8",
         )
 
-        validate = runner.invoke(codegen, ["--cases", str(suite_dir), "--validate-profile"])
+        validate = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml"), "--validate-profile"])
         assert validate.exit_code == 0
 
-        dump = runner.invoke(codegen, ["--cases", str(suite_dir), "--dump-ir"])
+        dump = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml"), "--dump-ir"])
         assert dump.exit_code == 0
         payload = json.loads(dump.output)
         case = payload["suites"][0]["files"][0]["cases"][0]
@@ -287,9 +298,9 @@ case_flows:
             "username": "env",
         }
 
-        generate = runner.invoke(codegen, ["--cases", str(suite_dir)])
+        generate = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml")])
         assert generate.exit_code == 0
-        generated = root / "test_workspace" / "tests" / "generated" / (
+        generated = root / "test_workspace" / "generated" / "sub2api" / (
             "test_gateway_api_login_smoke_business.py"
         )
         text = generated.read_text(encoding="utf-8")
@@ -304,13 +315,23 @@ def test_codegen_cases_suite_inherits_module_case_flow_defaults(tmp_path):
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
         root = Path(cwd)
-        fixture_dir = root / "test_workspace" / "tests" / "fixtures"
-        fixture_dir.mkdir(parents=True, exist_ok=True)
-        (fixture_dir / "codegen_profile_gateway_api.md").write_text(
+        target_dir = root / "test_workspace" / "targets" / "sub2api"
+        profile_dir = target_dir / "profiles"
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        (target_dir / "target.yaml").write_text(
+            """target: sub2api
+defaults:
+  profile_dir: test_workspace/targets/sub2api/profiles
+  generated_dir: test_workspace/generated/sub2api
+  reports_dir: test_workspace/reports/sub2api
+""",
+            encoding="utf-8",
+        )
+        (profile_dir / "profile_gateway_api.md").write_text(
             """```yaml
 module_type: multi_endpoint
 extra_imports:
-  - "from test_workspace.tests.fixtures.gateway_api import setup_gateway_api"
+  - "from test_workspace.targets.sub2api.fixtures.gateway_api import setup_gateway_api"
 default_fixture: setup_gateway_api
 default_object: client_factory
 default_case_setup:
@@ -322,14 +343,15 @@ default_case_setup:
 """,
             encoding="utf-8",
         )
-        suite_dir = root / "test_workspace" / "casesuites" / "factory_smoke"
+        suite_dir = root / "test_workspace" / "suites" / "sub2api" / "factory_smoke"
         suite_dir.mkdir(parents=True, exist_ok=True)
-        (suite_dir / "aitest_suite.yaml").write_text(
-            """module: gateway_api
+        (suite_dir / "suite.yaml").write_text(
+            """target: sub2api
+module: gateway_api
 suite: factory_smoke
 case_files:
   - business.md
-profile: codegen_profile_factory_smoke_suite.md
+profile: profile_factory_smoke_suite.md
 """,
             encoding="utf-8",
         )
@@ -350,7 +372,7 @@ profile: codegen_profile_factory_smoke_suite.md
 """,
             encoding="utf-8",
         )
-        (suite_dir / "codegen_profile_factory_smoke_suite.md").write_text(
+        (suite_dir / "profile_factory_smoke_suite.md").write_text(
             """```yaml
 profile_scope: case_suite
 parent_module: gateway_api
@@ -366,11 +388,11 @@ case_flows:
             encoding="utf-8",
         )
 
-        validate = runner.invoke(codegen, ["--cases", str(suite_dir), "--validate-profile"])
+        validate = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml"), "--validate-profile"])
         assert validate.exit_code == 0
         assert "warnings=0" in validate.output
 
-        dump = runner.invoke(codegen, ["--cases", str(suite_dir), "--dump-ir"])
+        dump = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml"), "--dump-ir"])
         assert dump.exit_code == 0
         payload = json.loads(dump.output)
         case = payload["suites"][0]["files"][0]["cases"][0]

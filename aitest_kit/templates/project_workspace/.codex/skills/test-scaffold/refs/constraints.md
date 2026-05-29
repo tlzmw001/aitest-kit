@@ -38,11 +38,11 @@
 
 ## auto_fields 判断
 
-判断是否配置 `project_config.yaml` 的 `default_request.auto_fields`。核心规则：只要有一个关键点不确定就不配置。多端点模块优先用 fixture Client + case_flows。只输出判断，不直接修改配置。
+判断是否配置 `aitest.yaml.codegen.default_request.auto_fields`。核心规则：只要有一个关键点不确定就不配置。多端点模块优先用 fixture Client + case_flows。只输出判断，不直接修改配置。
 
 ## module_type → 路线映射
 
-实际可用的 module_type 从 `project_config.yaml` 的 `module_types` 读取。
+实际可用的 module_type 从 `aitest.yaml.codegen.module_types` 读取；target/module 在 `modules/{module}.yaml` 声明本模块类型。
 
 | module_type | 基线路线 |
 |-------------|----------|
@@ -62,31 +62,31 @@
 ## 验证命令与预期
 
 ```bash
-# 1. conftest 接线验证
-python3 -m pytest test_workspace/tests/generated/ --collect-only -q 2>&1 | head -5
+# 1. target fixture/helper 语法检查
+python3 -m compileall test_workspace/targets/{target}/fixtures/{module}.py test_workspace/targets/{target}/helpers
 
 # 2. profile 门禁
-python3 -m aitest_kit.cli codegen $target_module --validate-profile
+python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --validate-profile
 
 # 3. Case IR 观测
-python3 -m aitest_kit.cli codegen $target_module --dump-ir
+python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --dump-ir
 
 # 4. 生成
-python3 -m aitest_kit.cli codegen $target_module
+python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml
 
 # 5. 一致性校验
-python3 -m aitest_kit.cli codegen $target_module --check
+python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --check
 
 # 6. 语法 + 收集
-python3 -m compileall test_workspace/tests/fixtures/{module}.py test_workspace/tests/generated
-python3 -m pytest test_workspace/tests/generated/test_{module}_*.py --collect-only -q
+python3 -m compileall test_workspace/generated/{target}
+python3 -m aitest_kit.cli run --suite-file <suite_dir>/suite.yaml -- --collect-only -q
 ```
 
-suite 模式把第 2-5 步替换为 `python3 -m aitest_kit.cli codegen --cases <suite_dir> ...`。
+使用 `python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> ...`；多个 suite 用 `--task-file`。
 
 | 命令 | 预期 | 失败时 |
 |------|------|--------|
-| collect（全量） | fixture 被发现 | 检查 conftest pytest_plugins 注册 |
+| collect（suite） | fixture 被发现 | 检查 module.yaml fixture 声明和 generated import |
 | `--validate-profile` | 无 ERROR | 修 profile YAML |
 | `--dump-ir` | strategy 符合 Step 6 路线 | 修 case_flow/case_body 映射 |
 | `codegen` | 生成 .py | 检查 import 路径 |

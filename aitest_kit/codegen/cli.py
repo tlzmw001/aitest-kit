@@ -7,18 +7,6 @@ from pathlib import Path
 
 import click
 
-from aitest_kit.codegen.module_runner import (
-    analyze_promotion as run_analyze_promotion,
-    check_consistency,
-    dry_run_modules,
-    dump_ir as dump_module_ir,
-    explain_case,
-    generate_modules,
-    health_report as run_health_report,
-    list_modules,
-    profile_gate,
-    validate_profiles,
-)
 from aitest_kit.codegen.project_config import load_project_config
 from aitest_kit.codegen.suite_runner import run_suite_codegen
 from aitest_kit.registry import load_task_context
@@ -28,7 +16,6 @@ from aitest_kit.workspace_config import load_workspace_paths
 
 @dataclass(frozen=True)
 class CodegenPaths:
-    cases_dir: Path
     generated_dir: Path
     profile_dir: Path
     reports_dir: Path
@@ -38,7 +25,6 @@ class CodegenPaths:
 def _load_codegen_paths() -> CodegenPaths:
     paths = load_workspace_paths()
     return CodegenPaths(
-        cases_dir=paths.cases_dir,
         generated_dir=paths.generated_dir,
         profile_dir=paths.profile_dir,
         reports_dir=paths.reports_dir,
@@ -47,9 +33,6 @@ def _load_codegen_paths() -> CodegenPaths:
 
 
 @click.command()
-@click.argument("module", required=False)
-@click.option("--all", "all_modules", is_flag=True, help="Operate on all modules under test_workspace/cases")
-@click.option("--cases", "cases_path", type=click.Path(file_okay=False, dir_okay=True), help="Operate on one case suite directory")
 @click.option("--suite-file", type=click.Path(file_okay=True, dir_okay=False), help="Operate on one suite manifest file")
 @click.option(
     "--task-file",
@@ -58,7 +41,6 @@ def _load_codegen_paths() -> CodegenPaths:
     type=click.Path(file_okay=True, dir_okay=False),
     help="Operate on suites listed by one task manifest",
 )
-@click.option("--module", "module_option", help="Owning module for --cases when no aitest_suite.yaml is present")
 @click.option("--dry-run", is_flag=True, help="Parse Markdown only; do not write generated files")
 @click.option("--check", is_flag=True, help="Verify generated pytest matches Markdown/profile/config")
 @click.option("--dump-ir", is_flag=True, help="Print Case IR as JSON without generating files")
@@ -68,15 +50,11 @@ def _load_codegen_paths() -> CodegenPaths:
 @click.option("--suggest-promotion-patch", is_flag=True, help="Write review-only promotion patch artifacts")
 @click.option("--report-dir", type=click.Path(file_okay=False, dir_okay=True), help="Codegen report output directory")
 @click.option("--validate-profile", is_flag=True, help="Validate codegen_profile JSON Schema and semantics")
-@click.option("--health-report", is_flag=True, help="Report codegen module health and maturity")
+@click.option("--health-report", is_flag=True, help="Report codegen suite health and maturity")
 @click.option("--workspace", type=click.Path(file_okay=False, dir_okay=True), help="Run from another AITest workspace root")
 def codegen(
-    module: str | None,
-    all_modules: bool,
-    cases_path: str | None,
     suite_file: str | None,
     task_file: str | None,
-    module_option: str | None,
     dry_run: bool,
     check: bool,
     dump_ir: bool,
@@ -93,12 +71,8 @@ def codegen(
     try:
         with push_workspace(workspace):
             _codegen_impl(
-                module,
-                all_modules,
-                cases_path,
                 suite_file,
                 task_file,
-                module_option,
                 dry_run,
                 check,
                 dump_ir,
@@ -115,12 +89,8 @@ def codegen(
 
 
 def _codegen_impl(
-    module: str | None,
-    all_modules: bool,
-    cases_path: str | None,
     suite_file: str | None,
     task_file: str | None,
-    module_option: str | None,
     dry_run: bool,
     check: bool,
     dump_ir: bool,
@@ -143,9 +113,6 @@ def _codegen_impl(
     if exclusive_modes > 1:
         click.echo("Error: report/IR/profile modes are mutually exclusive")
         sys.exit(2)
-    if explain and all_modules:
-        click.echo("Error: --explain requires a single module, not --all")
-        sys.exit(2)
     if write_report and not (promotion_mode or validate_profile or health_report):
         click.echo("Error: --write-report requires promotion analysis, --validate-profile, or --health-report")
         sys.exit(2)
@@ -156,15 +123,8 @@ def _codegen_impl(
     paths = _load_codegen_paths()
     project = load_project_config(paths.project_config)
 
-    suite_sources = [item for item in (cases_path, suite_file, task_file) if item]
-    if len(suite_sources) > 1:
-        click.echo("Error: --cases, --suite-file, and --task-file are mutually exclusive")
-        sys.exit(2)
-    if (suite_file or task_file) and module_option:
-        click.echo("Error: --module can only be used with --cases")
-        sys.exit(2)
-    if (suite_file or task_file) and (module or all_modules):
-        click.echo("Error: --suite-file/--task-file cannot be combined with positional module or --all")
+    if suite_file and task_file:
+        click.echo("Error: --suite-file and --task-file are mutually exclusive")
         sys.exit(2)
 
     if task_file:
@@ -185,17 +145,9 @@ def _codegen_impl(
             report_dir=report_dir,
         ))
 
-    if cases_path or suite_file:
-        suite_source = suite_file or cases_path
-        if all_modules:
-            click.echo("Error: --cases/--suite-file cannot be combined with --all")
-            sys.exit(2)
-        if module and module_option and module != module_option:
-            click.echo("Error: positional module conflicts with --module")
-            sys.exit(2)
+    if suite_file:
         sys.exit(run_suite_codegen(
-            suite_source,
-            module_override=module_option or module,
+            suite_file,
             paths=paths,
             project=project,
             dry_run=dry_run,
@@ -210,63 +162,8 @@ def _codegen_impl(
             report_dir=report_dir,
         ))
 
-    if all_modules:
-        modules = list_modules(paths.cases_dir)
-    elif module:
-        modules = [module]
-    else:
-        click.echo("Usage: aitest codegen <module> or aitest codegen --all")
-        sys.exit(1)
-
-    if check:
-        gate_result = profile_gate(modules, paths)
-        if gate_result:
-            sys.exit(gate_result)
-        sys.exit(check_consistency(
-            modules,
-            paths,
-            include_all_generated=all_modules,
-            project=project,
-        ))
-    if validate_profile:
-        sys.exit(validate_profiles(
-            modules,
-            paths,
-            output_dir=report_dir,
-            write_report=write_report,
-        ))
-    if health_report:
-        sys.exit(run_health_report(
-            modules,
-            paths,
-            output_dir=report_dir,
-            write_report=write_report,
-        ))
-    if not dry_run:
-        gate_result = profile_gate(modules, paths)
-        if gate_result:
-            sys.exit(gate_result)
-    if dump_ir:
-        sys.exit(dump_module_ir(modules, paths))
-    if explain:
-        if not module:
-            click.echo("Error: --explain requires a module")
-            sys.exit(2)
-        sys.exit(explain_case(module, explain, paths))
-    if promotion_mode:
-        sys.exit(run_analyze_promotion(
-            modules,
-            paths,
-            output_dir=report_dir,
-            write_report=write_report or suggest_promotion_patch,
-            write_patch=suggest_promotion_patch,
-            echo_yaml=analyze_promotion,
-        ))
-
-    if dry_run:
-        dry_run_modules(modules, paths)
-        return
-    sys.exit(generate_modules(modules, paths, project))
+    click.echo("Usage: aitest codegen --suite-file <suite.yaml> or aitest codegen --task-file <task.yaml>")
+    sys.exit(1)
 
 
 def _run_task_codegen(
@@ -294,18 +191,13 @@ def _run_task_codegen(
     exit_code = 0
     click.echo(f"Task: {task.task}")
     for index, unit in enumerate(task.units, start=1):
-        if unit.all:
-            click.echo(f"\n[{index}] target all is not supported in Phase 2: {unit.target}")
-            exit_code = 2
-            continue
         if unit.suite_file is None:
-            click.echo(f"\n[{index}] task unit requires suite_file in Phase 2")
+            click.echo(f"\n[{index}] task unit requires suite_file")
             exit_code = 2
             continue
         click.echo(f"\n[{index}] suite_file: {unit.suite_file}")
         result = run_suite_codegen(
             str(unit.suite_file),
-            module_override=unit.module or None,
             paths=paths,
             project=project,
             dry_run=dry_run,

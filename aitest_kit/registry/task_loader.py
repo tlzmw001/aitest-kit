@@ -104,7 +104,6 @@ def _task_unit(item: Any, task_dir: Path, diagnostics: list[str], index: int) ->
     if not isinstance(target, str):
         diagnostics.append(f"E721: units[{index}].target must be a string")
         target = ""
-    is_all = bool(item.get("all", False))
     suite_file = (
         resolve_path(
             item.get("suite_file"),
@@ -115,12 +114,10 @@ def _task_unit(item: Any, task_dir: Path, diagnostics: list[str], index: int) ->
         if "suite_file" in item
         else None
     )
-    if is_all and not target.strip():
-        diagnostics.append(f"E721: units[{index}] with all=true requires target")
-    if is_all and suite_file is not None:
-        diagnostics.append(f"E721: units[{index}] cannot combine all=true with suite_file")
-    if not is_all and suite_file is None:
-        diagnostics.append(f"E721: units[{index}] requires suite_file or target with all=true")
+    if item.get("all") is not None:
+        diagnostics.append(f"E721: units[{index}].all is no longer supported; use explicit suite_file units")
+    if suite_file is None:
+        diagnostics.append(f"E721: units[{index}] requires suite_file")
     case_ids = item.get("case_ids", [])
     if case_ids is None:
         case_ids = []
@@ -138,7 +135,6 @@ def _task_unit(item: Any, task_dir: Path, diagnostics: list[str], index: int) ->
         include_manual=include_manual,
         pytest_args=_string_list(item.get("pytest_args", []), f"units[{index}].pytest_args", diagnostics),
         allow_risk=_string_list(item.get("allow_risk", []), f"units[{index}].allow_risk", diagnostics),
-        all=is_all,
     )
 
 

@@ -180,16 +180,6 @@ aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
 ```
 
-legacy 单模块命令仍兼容旧 workspace：
-
-```bash
-aitest codegen <module> --validate-profile
-aitest codegen <module> --dump-ir
-aitest codegen <module> --explain TC-XXX-001
-aitest codegen <module>
-aitest codegen <module> --check
-```
-
 从 workspace 外部执行时加：
 
 ```bash
@@ -226,12 +216,8 @@ test_workspace/reports/runs/{run_id}/
 | `aitest upgrade --workspace <dir> --check` | 检查已初始化 workspace 是否需要同步新版模板 |
 | `aitest upgrade --workspace <dir> --apply` | 安全应用可自动合并的模板升级 |
 | `aitest doctor` | 检查 workspace、profile、generated、collect 和环境变量提示 |
-| `aitest codegen <module>` | legacy：生成单个模块 pytest |
-| `aitest codegen --all` | legacy：生成所有模块 pytest |
 | `aitest codegen --suite-file <suite.yaml>` | 生成 target-aware case suite pytest |
 | `aitest codegen --task-file <task.yaml>` | 按 task 中的 suite 列表生成或检查 pytest |
-| `aitest codegen --all --check` | legacy：检查 generated 是否过期 |
-| `aitest run <module>` | legacy：执行模块 generated pytest 并生成结构化报告 |
 | `aitest run --suite-file <suite.yaml>` | 执行一个 suite 并生成结构化报告 |
 | `aitest run --task-file <task.yaml>` | 执行一个 task 并生成 task 级汇总报告 |
 | `aitest report` | 从已有 `result.json` 重新渲染报告 |
@@ -291,8 +277,6 @@ aitest_workspace/
 ├── docs/                         # 公开文档和迁移输入
 ├── aitest_config/
 │   ├── aitest.yaml               # 推荐统一入口：workspace 路径 + codegen 默认规则
-│   ├── config.yaml               # legacy：旧 workspace 路径配置
-│   ├── project_config.yaml       # legacy：旧 codegen 项目配置
 │   ├── schemas/                  # profile JSON Schema
 │   └── refs/                     # 用例格式、断言策略等参考
 ├── test_workspace/
@@ -300,7 +284,6 @@ aitest_workspace/
 │   ├── suites/                   # 按 target/suite 组织 Markdown 用例
 │   ├── targets/                  # target/module fixture、helper、profile
 │   ├── generated/                # 按 target 分桶的 generated pytest
-│   ├── tests/                    # legacy 兼容路径
 │   ├── reports/                  # 运行报告
 │   └── results/                  # 已确认待测系统 bug 记录
 ├── .codex/skills/
@@ -345,8 +328,8 @@ cd aitest-kit
 python3 -m pip install -e ".[dev,server]"
 
 python3 -m pytest tests -q
-python3 -m aitest_kit.cli codegen --all --validate-profile
-python3 -m aitest_kit.cli codegen --all --check
+python3 -m aitest_kit.cli codegen --suite-file test_workspace/suites/coupon_system/calibration_smoke/suite.yaml --validate-profile
+python3 -m aitest_kit.cli codegen --suite-file test_workspace/suites/coupon_system/calibration_smoke/suite.yaml --check
 python3 -m aitest_kit.cli doctor
 ```
 

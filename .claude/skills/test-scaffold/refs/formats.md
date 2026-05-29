@@ -206,7 +206,6 @@ module_type：{type}
 - {suite_dir}/suite.yaml — suite manifest（suite 模式）
 - {suite_dir}/profile_{suite}_suite.md — suite profile（suite 模式）
 - api_map_{module}.md — API 面 + env 契约 + 可行性判定
-- conftest.py — 仅 legacy 模块模式需要 pytest_plugins 注册
 
 Client 方法：
 - {method_name}({params}) [auth: yes/no]

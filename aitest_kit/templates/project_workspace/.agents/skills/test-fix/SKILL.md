@@ -15,18 +15,17 @@ effort: high
 
 ## 前置：读取项目配置
 
-读 `aitest_config/config.yaml`，获取 `paths.*`（知识库、用例等目录路径；`paths.old_cases_dir` 如未配置则跳过旧用例搜索）。
+读 `aitest_config/aitest.yaml`，获取 `workspace.paths.*`、target/module registry 和 codegen 配置。
 
 ## 执行流程
 
 ### 第一步：定位用例
 
-1. 从 `$case_id` 中提取模块缩写（如 TC-MOD-013 → MOD）
+1. 从 `$case_id` 中提取模块缩写（如 TC-ROUTE-013 → ROUTE）
 2. 查 `{paths.test_spec}` 的模块缩写对照表，确定模块名
 3. 在以下位置搜索该用例：
-   - `{paths.cases_dir}/{模块名}/business.md`
-   - `{paths.cases_dir}/{模块名}/boundary.md`
-   - 如果配置了 `{paths.old_cases_dir}`，搜索其中相关旧用例；未配置时跳过
+   - 已知 suite 目录或 `suite.yaml` 声明的 `case_files`
+   - `test_workspace/suites/` 中绑定该 module 的 suite
 4. 读取该用例的完整内容和上下文（前后用例、关联的知识库文档）
 
 ### 第二步：分析错误

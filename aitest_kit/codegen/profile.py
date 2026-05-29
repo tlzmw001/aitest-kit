@@ -38,14 +38,11 @@ def preferred_module_profile_path(profile_dir: str | Path, module: str) -> Path:
 
 
 def resolve_module_profile_path(profile_dir: str | Path, module: str) -> Path | None:
-    """Resolve module profile path with new naming preferred and old naming compatible."""
+    """Resolve the canonical module profile path."""
     profile_root = Path(profile_dir)
     preferred = preferred_module_profile_path(profile_root, module)
     if preferred.exists():
         return preferred
-    legacy = profile_root / f"codegen_profile_{module}.md"
-    if legacy.exists():
-        return legacy
     return None
 
 

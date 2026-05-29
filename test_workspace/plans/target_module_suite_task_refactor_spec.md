@@ -1166,6 +1166,13 @@ find /tmp/aitest-skill-layout/.codex/skills -maxdepth 2 -type f | sort
 - 已验证三套 skill 目录 diff 一致。
 - 已验证核心 suite 回归：
   - `python3 -m pytest tests/test_codegen_suite_target.py tests/test_codegen_suite_profile.py -q`
+- Phase 3 配置收口后，已完成第二轮 skill 校准：
+  - `test-design`：新用例默认面向 target/suite 目录，`aitest.yaml` 为主配置，旧 `config.yaml/project_config.yaml` 仅作为 legacy fallback。
+  - `test-codegen`：新项目检查改为读取/补充 `aitest.yaml.codegen`、target/module profile，不再提示创建旧 `project_config.yaml`。
+  - `test-scaffold` refs：`auto_fields` 和 `module_type` 来源改为 `aitest.yaml.codegen` + target module，旧配置仅兼容。
+  - `test-fix`：定位用例时优先 suite manifest / `test_workspace/suites/`，再回退 legacy module cases。
+  - `emitter-build`：通用断言和 module_type 晋升优先写入 `aitest.yaml.codegen`，legacy workspace 才写回 `project_config.yaml`。
+  - 已同步到 `.codex/skills`、`.claude/skills`、`.agents/skills` 以及 `aitest_kit/templates/project_workspace/` 三套模板 skills。
 
 ### Phase 6：文档修改
 

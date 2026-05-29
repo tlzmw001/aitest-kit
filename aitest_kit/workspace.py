@@ -19,9 +19,6 @@ _METADATA_SCHEMA_VERSION = 1
 
 _MANUAL_EXACT_PATHS = {
     "aitest_config/aitest.yaml",
-    "aitest_config/config.yaml",
-    "aitest_config/project_config.yaml",
-    "test_workspace/tests/conftest.py",
     "test_workspace/knowledge/L0_system_architecture.md",
     "test_workspace/knowledge/TEST_SPEC.md",
 }
@@ -29,9 +26,6 @@ _MANUAL_PREFIXES = (
     "test_workspace/knowledge/L1/",
     "test_workspace/knowledge/L2/",
 )
-_PLACEHOLDER_FILENAMES = {".gitkeep", "__init__.py", ".DS_Store"}
-
-
 @dataclass
 class InitWorkspaceResult:
     target: Path
@@ -195,9 +189,6 @@ def upgrade_workspace(
     for key in sorted(set(previous_hashes) - set(template_hashes)):
         entries.append(UpgradeEntry(relative=Path(key), status="OBSOLETE", message="not present in current template; kept"))
 
-    if not apply:
-        entries.extend(_layout_suggestions(target_path))
-
     if apply:
         merged_hashes = dict(previous_hashes)
         merged_hashes.update(synced_hashes)
@@ -269,68 +260,6 @@ def _is_manual_path(key: str) -> bool:
     if key in _MANUAL_EXACT_PATHS:
         return True
     return any(key.startswith(prefix) for prefix in _MANUAL_PREFIXES)
-
-
-def _layout_suggestions(target: Path) -> list[UpgradeEntry]:
-    """Return read-only migration hints for legacy workspace layout assets."""
-    suggestions: list[UpgradeEntry] = []
-
-    legacy_fixtures = target / "test_workspace" / "tests" / "fixtures"
-    if _contains_real_file(
-        legacy_fixtures,
-        lambda path: path.suffix in {".py", ".md"} or path.name.startswith(("profile_", "codegen_profile_")),
-    ):
-        suggestions.append(
-            UpgradeEntry(
-                relative=Path("test_workspace/tests/fixtures"),
-                status="SUGGEST",
-                message=(
-                    "legacy module fixtures/profiles detected; new target layout can place "
-                    "fixture/profile assets under test_workspace/targets/{target}/"
-                ),
-            )
-        )
-
-    legacy_generated = target / "test_workspace" / "tests" / "generated"
-    if _contains_real_file(legacy_generated, lambda path: path.name.startswith("test_") and path.suffix == ".py"):
-        suggestions.append(
-            UpgradeEntry(
-                relative=Path("test_workspace/tests/generated"),
-                status="SUGGEST",
-                message=(
-                    "legacy generated pytest detected; new target layout writes suite output "
-                    "under test_workspace/generated/{target}/"
-                ),
-            )
-        )
-
-    legacy_casesuites = target / "test_workspace" / "casesuites"
-    if _contains_real_file(legacy_casesuites, lambda path: True):
-        suggestions.append(
-            UpgradeEntry(
-                relative=Path("test_workspace/casesuites"),
-                status="SUGGEST",
-                message=(
-                    "legacy casesuite assets detected; new suite layout can use "
-                    "test_workspace/suites/{target}/{suite}/"
-                ),
-            )
-        )
-
-    return suggestions
-
-
-def _contains_real_file(root: Path, predicate) -> bool:
-    if not root.exists() or not root.is_dir():
-        return False
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        if path.name in _PLACEHOLDER_FILENAMES:
-            continue
-        if predicate(path):
-            return True
-    return False
 
 
 def _template_hashes(root) -> dict[str, str]:

@@ -83,7 +83,6 @@ class TaskUnit:
     include_manual: bool | None = None
     pytest_args: list[str] = field(default_factory=list)
     allow_risk: list[str] = field(default_factory=list)
-    all: bool = False
 
 
 @dataclass(frozen=True)

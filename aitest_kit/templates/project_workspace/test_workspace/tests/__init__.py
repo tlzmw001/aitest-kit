@@ -1,2 +1,0 @@
-"""Project test workspace package."""
-

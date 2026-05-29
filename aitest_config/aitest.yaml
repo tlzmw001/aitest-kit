@@ -1,21 +1,17 @@
 # AITest unified workspace config
-# New code should read this file first. Legacy config.yaml/project_config.yaml are kept for compatibility.
 workspace:
   paths:
     knowledge_dir: test_workspace/knowledge
     test_spec: test_workspace/knowledge/TEST_SPEC.md
     l0_architecture: test_workspace/knowledge/L0_system_architecture.md
-    cases_dir: test_workspace/cases
-    generated_dir: test_workspace/tests/generated
-    fixtures_dir: test_workspace/tests/fixtures
+    generated_dir: test_workspace/generated
+    profile_dir: test_workspace/targets
     reports_dir: test_workspace/reports
-    project_config: aitest_config/project_config.yaml
-    old_cases_dir: cases/old-cases
     docs_dir: docs
     refs_dir: aitest_config/refs
 codegen:
-  helper_import: from test_workspace.tests.helpers import http as http_helper
-  grpc_helper_import: from test_workspace.tests.helpers import grpc_ops
+  helper_import: from aitest_kit.helpers import http as http_helper
+  grpc_helper_import: from aitest_kit.helpers import grpc_ops
   api_path: /api/v1/recommend
   helper_call: http_helper.post
   grpc_helper_call: grpc_ops.recommend
@@ -53,39 +49,6 @@ codegen:
       description: 需要隔离服务实例
       requires:
       - case_bodies
-  modules:
-    calibration:
-      module_type: standard_recommend
-    ab_experiment:
-      module_type: standard_recommend
-      notes: + request_overrides
-    feature_scoring:
-      module_type: standard_recommend
-      notes: + request_overrides
-    e2e:
-      module_type: standard_recommend
-      notes: 端到端链路组合验证
-    issuance:
-      module_type: standard_recommend
-      notes: + case_bodies（多请求/查询）
-    scene_routing:
-      module_type: standard_recommend
-      notes: + request_overrides
-    ab_service:
-      module_type: multi_endpoint
-      notes: 独立 AB 服务，多端点 CRUD
-    logging:
-      module_type: subprocess_capture
-      notes: 需要隔离子进程采集日志
-    rough_ranking:
-      module_type: isolated_service
-      notes: 需要隔离服务 + scoring proxy
-    validation_ratelimit:
-      module_type: isolated_service
-      notes: 限流用例需要隔离服务 + 低 QPS 配置
-    discount_policy:
-      module_type: multi_endpoint
-      notes: discount_system HTTP 多端点：健康检查、策略评估、决策查询/删除
   default_request:
     auto_fields:
       user_id: u_{module_abbrev}_{case_number}

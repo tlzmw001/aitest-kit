@@ -84,9 +84,6 @@ def _run_task_unit(
     extra_args: list[str],
     run_suite,
 ) -> tuple[dict[str, Any], int]:
-    if unit.all:
-        click.echo(f"\n[{index}] target all is not supported in this phase: {unit.target}")
-        return _synthetic_unit_result(task, unit, index, "target all is not supported"), 2
     if unit.suite_file is None:
         click.echo(f"\n[{index}] task unit requires suite_file")
         return _synthetic_unit_result(task, unit, index, "task unit requires suite_file"), 2
@@ -131,7 +128,6 @@ def _read_unit_latest_result(unit: TaskUnit) -> dict[str, Any] | None:
     paths = _load_paths()
     context = load_suite_context_for_paths(
         str(unit.suite_file),
-        module_override=unit.module or None,
         profile_dir=paths.profile_dir,
     )
     runtime_paths = resolve_suite_runtime_paths(
@@ -179,12 +175,20 @@ def _task_result(
             codegen_messages.append(check["message"])
 
     summary["duration_seconds"] = duration_seconds
+    run_scope = {
+        "type": "task",
+        "task": task.task,
+        "task_file": str(task.task_path),
+        "units": units,
+    }
     return {
         "run_id": run_id,
         "status": "COMPLETED" if exit_code == 0 else "FAILED_RUN",
         "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
         "duration_seconds": duration_seconds,
         "command": f"aitest run --task-file {task.task_path}",
+        "task_file": str(task.task_path),
+        "run_scope": run_scope,
         "project_config_version": unit_results[0].get("project_config_version", "missing") if unit_results else "missing",
         "manual_policy": _task_manual_policy(task, include_manual),
         "environment": _aggregate_environment(unit_results),
