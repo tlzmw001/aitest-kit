@@ -56,6 +56,7 @@ def load_module_context(
     diagnostics = list(target_context.diagnostics)
     config_path, data = _load_module_data(target_context, module, diagnostics)
     module_name = _module_name(module, data)
+    module_type = _module_type(data, diagnostics)
 
     declared_target = data.get("target")
     if declared_target and declared_target != target_context.target:
@@ -78,6 +79,7 @@ def load_module_context(
         workspace_root=target_context.workspace_root,
         target=target_context.target,
         module=module_name,
+        module_type=module_type,
         config_path=config_path,
         knowledge_refs=knowledge_refs,
         fixture_path=fixture_path,
@@ -215,6 +217,16 @@ def _module_name(module: str | Path, data: dict[str, Any]) -> str:
     if isinstance(data.get("module"), str) and data["module"].strip():
         return data["module"].strip()
     return Path(module).stem
+
+
+def _module_type(data: dict[str, Any], diagnostics: list[str]) -> str:
+    value = data.get("module_type", "")
+    if value in (None, ""):
+        return ""
+    if not isinstance(value, str):
+        diagnostics.append("E711: module_type must be a string")
+        return ""
+    return value.strip()
 
 
 def _module_fixture(

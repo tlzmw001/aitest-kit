@@ -14,6 +14,7 @@ import yaml
 
 from aitest_kit.codegen.project_config import load_project_config
 from aitest_kit.codegen.profile_validator import validate_profile_suite
+from aitest_kit.registry import load_module_context, load_suite_context, load_target_context
 from aitest_kit.workspace import push_workspace
 
 
@@ -58,6 +59,7 @@ def _doctor_impl(module_name: str | None) -> int:
     env_vars = _scan_env_vars(fixture_dir)
     _check_fixture_registration(results, fixture_dir, Path("test_workspace/tests/conftest.py"))
     _check_case_suites(results, Path("test_workspace/casesuites"), fixture_dir)
+    _check_target_registry(results, Path("test_workspace/targets"))
 
     if selected_modules:
         _run_command_check(
@@ -220,6 +222,77 @@ def _discover_case_suites(suites_dir: Path) -> list[Path]:
         if has_suite_marker:
             result.append(path)
     return result
+
+
+def _check_target_registry(results: list[CheckResult], targets_dir: Path) -> None:
+    target_files = sorted(targets_dir.glob("*/target.yaml"))
+    if not target_files:
+        results.append(CheckResult("INFO", "target registry", "no target registry entries found"))
+        return
+
+    failures: list[str] = []
+    warnings: list[str] = []
+    module_count = 0
+    suite_count = 0
+    for target_file in target_files:
+        target = load_target_context(target_file)
+        if target.diagnostics:
+            failures.append(f"{target_file}: {_diagnostic_summary(target.diagnostics)}")
+            continue
+        if not target.defaults.module_dir.exists():
+            warnings.append(f"{target.target}: module_dir not found: {target.defaults.module_dir}")
+            continue
+        module_files = sorted(target.defaults.module_dir.glob("*.yaml"))
+        if not module_files:
+            warnings.append(f"{target.target}: no module registry files under {target.defaults.module_dir}")
+            continue
+        for module_file in module_files:
+            module_count += 1
+            module = load_module_context(target, module_file)
+            if module.diagnostics:
+                failures.append(f"{module_file}: {_diagnostic_summary(module.diagnostics)}")
+                continue
+            if module.fixture_path and not module.fixture_path.exists():
+                failures.append(f"{module_file}: fixture not found: {module.fixture_path}")
+            if module.profile_path and not module.profile_path.exists():
+                failures.append(f"{module_file}: profile not found: {module.profile_path}")
+            for registered in module.registered_suites:
+                suite_count += 1
+                if registered.status != "active":
+                    continue
+                if not registered.manifest.exists():
+                    failures.append(f"{module_file}: suite manifest not found: {registered.manifest}")
+                    continue
+                suite = load_suite_context(registered.manifest)
+                if suite.diagnostics:
+                    failures.append(f"{registered.manifest}: {_diagnostic_summary(suite.diagnostics)}")
+                    continue
+                if suite.target != target.target or suite.module != module.module:
+                    failures.append(
+                        f"{registered.manifest}: suite target/module "
+                        f"{suite.target}/{suite.module} does not match "
+                        f"{target.target}/{module.module}"
+                    )
+                for case_file in suite.case_files:
+                    if not case_file.exists():
+                        failures.append(f"{registered.manifest}: case file not found: {case_file}")
+                if not suite.profile_path.exists():
+                    failures.append(f"{registered.manifest}: suite profile not found: {suite.profile_path}")
+
+    if failures:
+        results.append(CheckResult("FAIL", "target registry", "; ".join(failures[:4])))
+    elif warnings:
+        results.append(CheckResult("WARN", "target registry", "; ".join(warnings[:4])))
+    else:
+        results.append(CheckResult(
+            "OK",
+            "target registry",
+            f"{len(target_files)} target(s), {module_count} module(s), {suite_count} registered suite(s) valid",
+        ))
+
+
+def _diagnostic_summary(diagnostics: list[str]) -> str:
+    return "; ".join(diagnostics[:3])
 
 
 def _select_modules(

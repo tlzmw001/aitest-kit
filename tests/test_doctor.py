@@ -202,6 +202,84 @@ case_flows:
     assert "fail=0" in result.output
 
 
+def test_doctor_checks_target_registry(tmp_path):
+    target = tmp_path / "project"
+    runner = CliRunner()
+    init_result = runner.invoke(main, ["init", "--target", str(target)])
+    assert init_result.exit_code == 0
+
+    target_dir = target / "test_workspace" / "targets" / "demo_target"
+    (target_dir / "modules").mkdir(parents=True, exist_ok=True)
+    (target_dir / "fixtures").mkdir(parents=True, exist_ok=True)
+    (target_dir / "profiles").mkdir(parents=True, exist_ok=True)
+    (target_dir / "target.yaml").write_text(
+        """target: demo_target
+defaults:
+  module_dir: test_workspace/targets/demo_target/modules
+  fixture_dir: test_workspace/targets/demo_target/fixtures
+  profile_dir: test_workspace/targets/demo_target/profiles
+  suite_dir: test_workspace/suites/demo_target
+  generated_dir: test_workspace/generated/demo_target
+  reports_dir: test_workspace/reports/demo_target
+""",
+        encoding="utf-8",
+    )
+    (target_dir / "fixtures" / "demo.py").write_text(
+        "def setup_demo():\n    return object()\n",
+        encoding="utf-8",
+    )
+    (target_dir / "profiles" / "profile_demo.md").write_text(
+        "```yaml\nmodule_type: multi_endpoint\n```\n",
+        encoding="utf-8",
+    )
+    (target_dir / "modules" / "demo.yaml").write_text(
+        """target: demo_target
+module: demo
+module_type: multi_endpoint
+fixture:
+  file: demo.py
+  default_fixture: setup_demo
+profile:
+  file: profile_demo.md
+registered_suites:
+  - suite: demo_smoke
+    manifest: test_workspace/suites/demo_target/demo_smoke/suite.yaml
+    status: active
+""",
+        encoding="utf-8",
+    )
+
+    suite_dir = target / "test_workspace" / "suites" / "demo_target" / "demo_smoke"
+    suite_dir.mkdir(parents=True, exist_ok=True)
+    (suite_dir / "business.md").write_text("# business\n", encoding="utf-8")
+    (suite_dir / "profile_demo_smoke_suite.md").write_text(
+        """```yaml
+profile_scope: case_suite
+parent_module: demo
+suite: demo_smoke
+case_flows: {}
+```
+""",
+        encoding="utf-8",
+    )
+    (suite_dir / "suite.yaml").write_text(
+        """target: demo_target
+module: demo
+suite: demo_smoke
+case_files:
+  - business.md
+profile: profile_demo_smoke_suite.md
+""",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(main, ["doctor", "--workspace", str(target)])
+
+    assert result.exit_code == 0, result.output
+    assert "[OK] target registry: 1 target(s), 1 module(s), 1 registered suite(s) valid" in result.output
+    assert "fail=0" in result.output
+
+
 def test_doctor_fails_unknown_module(tmp_path):
     target = tmp_path / "project"
     runner = CliRunner()

@@ -41,6 +41,7 @@ class ModuleContext:
     workspace_root: Path
     target: str
     module: str
+    module_type: str
     config_path: Path | None
     knowledge_refs: dict[str, Any]
     fixture_path: Path | None

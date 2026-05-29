@@ -27,9 +27,10 @@ def resolve_module_type(
 ) -> ModuleTypeResolution:
     """Resolve module_type from the currently supported fact sources.
 
-    New registry-backed module.yaml defaults will be wired through this function
-    later. For now this preserves legacy behavior: profile wins, then
-    project_config.modules, then missing.
+    Target-aware suite codegen injects ``module.yaml.module_type`` into the
+    runtime profile before this resolver runs, so it is observed here as
+    ``profile.module_type``. Legacy module codegen still preserves the old
+    fallback order: profile wins, then project_config.modules, then missing.
     """
     profile_module_type = profile_data.get("module_type")
     if isinstance(profile_module_type, str) and profile_module_type.strip():

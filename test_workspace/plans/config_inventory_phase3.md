@@ -540,7 +540,7 @@ registered_suites:
 
 - `module` 必填。
 - `target` 可选；标准路径下可推导。
-- `module_type` 可选；默认 `standard_http`。
+- `module_type` 可选；目标架构默认 `standard_http`，当前第一版只消费显式声明值，未声明时保留 legacy profile / project_config 兼容。
 - `knowledge_refs.l1` 强烈建议写，但不强制。
 - `fixture/profile/helpers/registered_suites` 可省略。
 
@@ -558,7 +558,7 @@ registered_suites:
       -> default: standard_http
 ```
 
-一旦 `module.yaml` 存在，就不再从 module profile 或 `project_config.modules` 推导 module_type。
+当前第一版已经接入 `module.yaml.module_type`：target-aware suite codegen 会把该字段注入运行时 profile，使 validator / emitter 走同一条 `module_type` 校验路径。未声明 `module_type` 的 module registry 仍不强行默认，避免当前项目的 `standard_recommend` 与新模板 `standard_http` 在兼容期产生误判。
 
 默认推导：
 
@@ -678,6 +678,14 @@ Phase 3-3 已完成第三刀：
 - 由 `aitest_kit.codegen.suite` 暴露统一函数。
 - suite runner 和 report/run 不再各自拼接。
 - 不迁移 generated 目录，不改变文件名格式。
+
+Phase 3-3 已完成第四刀：
+
+- `module.yaml.module_type` 已进入 registry loader。
+- target-aware suite codegen 会将 `module.yaml.module_type` 注入 runtime profile。
+- `doctor` 增加 target registry 检查，覆盖 target/module/fixture/profile/registered suite/case file/suite profile 的基础接线。
+- 当前 coupon_system/calibration 试点已在 `module.yaml` 声明 `module_type: standard_recommend`。
+- 未声明 `module_type` 时继续走 legacy profile / project_config 兼容，后续统一到 `aitest.yaml` 后再决定是否强制默认 `standard_http`。
 
 Phase 4 已完成第一刀：
 

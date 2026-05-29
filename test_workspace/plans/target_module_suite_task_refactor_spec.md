@@ -349,7 +349,7 @@ registered_suites:
 
 - `module` 必填。
 - `target` 可选；标准路径 `test_workspace/targets/{target}/modules/{module}.yaml` 下可推导。
-- `module_type` 可选；默认 `standard_http`。
+- `module_type` 可选；目标架构默认 `standard_http`，当前第一版只消费显式声明值，未声明时保留 legacy profile / project_config 兼容。
 
 ### module_type 事实来源
 
@@ -371,7 +371,12 @@ module.yaml.module_type
 
 一旦 `module.yaml` 存在，就不再从 module profile 或 `project_config.modules` 偷偷推导 module_type。这样能保证事实来源唯一。
 
-当前 Phase 3-3 已完成 legacy 入口一致性修复：validator 与 emitter 都通过同一个 `module_type` resolver 读取 legacy module profile / `project_config.modules`。`module.yaml` 接入仍属于后续 registry-driven 阶段。
+当前 Phase 3-3 已完成两步接入：
+
+1. legacy 入口一致性修复：validator 与 emitter 都通过同一个 `module_type` resolver 读取 legacy module profile / `project_config.modules`。
+2. target-aware suite 路径接入 `module.yaml.module_type`：registry loader 读取该字段，suite runtime profile 注入该字段，validator / emitter 复用现有校验链路。
+
+兼容期内，`module.yaml` 未声明 `module_type` 时暂不强制默认，避免当前项目的 `standard_recommend` 与新模板 `standard_http` 混用产生误判。后续统一 `aitest.yaml` 后，再决定是否落地强默认。
 
 ### 默认推导
 

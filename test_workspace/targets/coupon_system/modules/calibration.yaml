@@ -1,5 +1,6 @@
 target: coupon_system
 module: calibration
+module_type: standard_recommend
 
 fixture:
   file: calibration.py

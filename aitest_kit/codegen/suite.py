@@ -338,6 +338,8 @@ def _with_target_module_fixture_import(context: SuiteContext, target_context) ->
     data = load_profile_yaml(context.runtime_profile)
     diagnostics = list(context.diagnostics)
     diagnostics.extend(module_context.diagnostics)
+    if module_context.module_type:
+        data["module_type"] = module_context.module_type
 
     fixture_import = _target_fixture_import(
         module_context.fixture_path,

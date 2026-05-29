@@ -146,6 +146,7 @@ defaults:
         (module_dir / "gateway_api.yaml").write_text(
             """target: sub2api
 module: gateway_api
+module_type: multi_endpoint
 fixture:
   file: gateway_api.py
   default_fixture: setup_gateway_api
@@ -170,7 +171,7 @@ def setup_gateway_api():
         )
         (profile_dir / "profile_gateway_api.md").write_text(
             """```yaml
-module_type: multi_endpoint
+default_fixture: setup_gateway_api
 ```
 """,
             encoding="utf-8",
@@ -195,6 +196,8 @@ profile: profile_quota_billing_v2_suite.md
             "test_gateway_api_quota_billing_v2_quota_billing_business.py"
         )
         assert generated.exists()
+        context = load_suite_context_for_paths(suite_file)
+        assert context.runtime_profile.data["module_type"] == "multi_endpoint"
         text = generated.read_text(encoding="utf-8")
         assert (
             "from test_workspace.targets.sub2api.fixtures.gateway_api import setup_gateway_api"

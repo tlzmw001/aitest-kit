@@ -44,6 +44,7 @@ defaults:
     (target_dir / "modules" / "gateway_api.yaml").write_text(
         """target: sub2api
 module: gateway_api
+module_type: multi_endpoint
 knowledge_refs:
   l1: ${SUB2API_KNOWLEDGE}/L1/gateway_api.md
 fixture:
@@ -119,6 +120,7 @@ units:
     module = load_module_context(target, "gateway_api")
     assert module.diagnostics == []
     assert module.module == "gateway_api"
+    assert module.module_type == "multi_endpoint"
     assert module.knowledge_refs["l1"] == knowledge_l1 / "gateway_api.md"
     assert module.fixture_path == target_dir / "fixtures" / "gateway_api.py"
     assert module.default_fixture == "setup_gateway_api"
