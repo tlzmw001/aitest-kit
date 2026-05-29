@@ -5,12 +5,11 @@
 推荐顺序：
 
 ```bash
-aitest codegen --workspace /path/to/project --all --validate-profile
-aitest codegen --workspace /path/to/project --all --dump-ir
-aitest codegen --workspace /path/to/project --all --check
-aitest codegen --workspace /path/to/project --all
-cd /path/to/project
-python -m pytest test_workspace/tests/generated --collect-only -q
+aitest codegen --workspace /path/to/project --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
+aitest codegen --workspace /path/to/project --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --dump-ir
+aitest codegen --workspace /path/to/project --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
+aitest codegen --workspace /path/to/project --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest run --workspace /path/to/project --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
 ```
 
 ## 空 workspace
@@ -19,18 +18,20 @@ python -m pytest test_workspace/tests/generated --collect-only -q
 
 ```text
 No modules found under the configured cases directory.
-Next step: create test_workspace/cases/<module>/business.md and a matching codegen profile under test_workspace/tests/fixtures.
+Next step: create a target/module registry and a suite.yaml, or keep using legacy module cases.
 ```
 
 含义：
 
 - CLI 正常。
-- workspace 还没有模块用例。
+- workspace 还没有 target/module/suite 测试资产。
 
 处理：
 
-- 创建 `test_workspace/cases/{module}/business.md`。
-- 创建 `test_workspace/tests/fixtures/codegen_profile_{module}.md`。
+- 创建 `test_workspace/targets/{target}/target.yaml`。
+- 创建 `test_workspace/targets/{target}/modules/{module}.yaml`。
+- 创建 `test_workspace/targets/{target}/profiles/profile_{module}.md`。
+- 创建 `test_workspace/suites/{target}/{suite}/suite.yaml` 和 Markdown 用例。
 
 ## E001: JSON 解析失败
 
@@ -156,13 +157,14 @@ fixture 'setup_xxx' not found
 常见原因：
 
 - generated pytest 引用了 `setup_{module}`。
-- `test_workspace/tests/fixtures/{module}.py` 没有定义该 fixture。
-- fixture 文件没有被 `test_workspace/tests/conftest.py` 注册。
+- target/suite 模式下，`test_workspace/targets/{target}/fixtures/{module}.py` 没有定义该 fixture，或 `module.yaml.fixture.default_fixture` 写错。
+- legacy 模块模式下，`test_workspace/tests/fixtures/{module}.py` 没有定义该 fixture，或 fixture 文件没有被 `test_workspace/tests/conftest.py` 注册。
 
 处理：
 
-- 在模块 fixture 文件中补 `setup_{module}`。
-- 检查 `conftest.py` 的插件注册方式。
+- 在 target 模块 fixture 文件中补 `setup_{module}`。
+- 检查 `module.yaml` 的 `fixture.file/default_fixture`。
+- legacy 模块模式再检查 `conftest.py` 的插件注册方式。
 - 不要直接改 generated pytest。
 
 ## 环境变量缺失

@@ -15,6 +15,7 @@ from uuid import uuid4
 import click
 import yaml
 
+from aitest_kit.report.codegen_check import run_codegen_check
 from aitest_kit.report.collector import blocked_result, collect_result
 from aitest_kit.report.renderer import render_markdown
 from aitest_kit.runtime_variables import (
@@ -23,7 +24,13 @@ from aitest_kit.runtime_variables import (
     is_dotenv_configured,
     load_dotenv_values,
 )
-from aitest_kit.codegen.suite import load_suite_context
+from aitest_kit.codegen.suite import (
+    load_suite_context_for_paths,
+    resolve_suite_runtime_paths,
+    suite_generated_path,
+)
+from aitest_kit.registry import load_task_context
+from aitest_kit.registry.models import TaskUnit
 from aitest_kit.workspace import push_workspace
 
 
@@ -57,6 +64,8 @@ def _load_paths() -> ReportPaths:
 @click.option("--include-manual", is_flag=True, help="Include tests marked manual; excluded by default")
 @click.option("--skip-codegen-check", is_flag=True, help="Skip generated freshness check before pytest")
 @click.option("--cases", "cases_path", type=click.Path(file_okay=False, dir_okay=True), help="Run generated tests for one case suite directory")
+@click.option("--suite-file", type=click.Path(file_okay=True, dir_okay=False), help="Run generated tests for one suite manifest file")
+@click.option("--task", "task_file", type=click.Path(file_okay=True, dir_okay=False), help="Run generated tests for suites listed by one task manifest")
 @click.option("--module", "module_option", help="Owning module for --cases when no aitest_suite.yaml is present")
 @click.option("--workspace", type=click.Path(file_okay=False, dir_okay=True), help="Run from another AITest workspace root")
 @click.argument("args", nargs=-1, type=click.UNPROCESSED, metavar="[MODULE]... [PYTEST_ARGS]...")
@@ -64,6 +73,8 @@ def run_command(
     include_manual: bool,
     skip_codegen_check: bool,
     cases_path: str | None,
+    suite_file: str | None,
+    task_file: str | None,
     module_option: str | None,
     workspace: str | None,
     args: tuple[str, ...],
@@ -83,6 +94,8 @@ def run_command(
                 skip_codegen_check,
                 args,
                 cases_path=cases_path,
+                suite_file=suite_file,
+                task_file=task_file,
                 module_override=module_option,
             )
     except (FileNotFoundError, NotADirectoryError) as exc:
@@ -95,23 +108,63 @@ def _run_command_impl(
     args: tuple[str, ...],
     *,
     cases_path: str | None = None,
+    suite_file: str | None = None,
+    task_file: str | None = None,
     module_override: str | None = None,
+    env_files: list[Path] | None = None,
 ) -> None:
     modules, extra_args = _split_args(args)
-    if cases_path and modules:
-        click.echo("Error: --cases cannot be combined with positional modules")
+    suite_sources = [item for item in (cases_path, suite_file, task_file) if item]
+    if len(suite_sources) > 1:
+        click.echo("Error: --cases, --suite-file, and --task are mutually exclusive")
         raise SystemExit(2)
+    if (suite_file or task_file) and module_override:
+        click.echo("Error: --module can only be used with --cases")
+        raise SystemExit(2)
+    if (cases_path or suite_file or task_file) and modules:
+        click.echo("Error: suite/task run cannot be combined with positional modules")
+        raise SystemExit(2)
+    if task_file:
+        _run_task_command_impl(
+            include_manual,
+            skip_codegen_check,
+            task_file,
+            extra_args,
+        )
+        return
+    suite_source = suite_file or cases_path
     paths = _load_paths()
+    suite_context = None
+    if suite_source:
+        suite_context = load_suite_context_for_paths(
+            suite_source,
+            module_override=module_override,
+            profile_dir=paths.profile_dir,
+        )
+        suite_paths = resolve_suite_runtime_paths(
+            suite_context,
+            generated_dir=paths.generated_dir,
+            reports_dir=paths.reports_dir,
+            profile_dir=paths.profile_dir,
+        )
+        paths = ReportPaths(
+            suite_paths.generated_dir,
+            suite_paths.reports_dir,
+            suite_paths.profile_dir,
+        )
     files = _target_files(
         paths.generated_dir,
         modules,
-        cases_path=cases_path,
+        cases_path=suite_source,
         module_override=module_override,
         profile_dir=paths.profile_dir,
+        suite_context=suite_context,
     )
     run_id, run_dir = _create_run_dir(paths.reports_dir)
 
-    if cases_path:
+    if suite_file:
+        command = "aitest run --suite-file " + suite_file
+    elif cases_path:
         command = "aitest run --cases " + cases_path
         if module_override:
             command += " --module " + module_override
@@ -119,7 +172,7 @@ def _run_command_impl(
         command = "aitest run" + (" " + " ".join(modules) if modules else "")
     manual_policy = "included" if include_manual else "excluded"
     try:
-        pytest_env, environment = _pytest_environment()
+        pytest_env, environment = _pytest_environment(env_files=env_files)
     except _RunEnvironmentError as exc:
         result = blocked_result(
             run_id=run_id,
@@ -134,10 +187,11 @@ def _run_command_impl(
         click.echo(f"BLOCKED_RUN: {exc}")
         raise SystemExit(10) from exc
 
-    codegen_check = _codegen_check(
+    codegen_check = run_codegen_check(
         modules,
         skip_codegen_check,
-        cases_path=cases_path,
+        cases_path=suite_source,
+        suite_file=bool(suite_file),
         module_override=module_override,
     )
     if codegen_check["status"] == "failed":
@@ -205,6 +259,75 @@ def _run_command_impl(
     raise SystemExit(completed.returncode)
 
 
+def _run_task_command_impl(
+    include_manual: bool,
+    skip_codegen_check: bool,
+    task_file: str,
+    extra_args: list[str],
+) -> None:
+    task = load_task_context(task_file)
+    if task.diagnostics:
+        click.echo(f"Task: {task.task}")
+        click.echo("Task manifest diagnostics:")
+        for diagnostic in task.diagnostics:
+            click.echo(f"  {diagnostic}")
+        raise SystemExit(1)
+    if not task.units:
+        click.echo(f"Task {task.task} has no units")
+        raise SystemExit(1)
+
+    exit_code = 0
+    click.echo(f"Task: {task.task}")
+    for index, unit in enumerate(task.units, start=1):
+        if unit.all:
+            click.echo(f"\n[{index}] target all is not supported in Phase 2: {unit.target}")
+            exit_code = max(exit_code, 2)
+            continue
+        if unit.suite_file is None:
+            click.echo(f"\n[{index}] task unit requires suite_file in Phase 2")
+            exit_code = max(exit_code, 2)
+            continue
+        unit_args = tuple(
+            task.defaults.pytest_args
+            + unit.pytest_args
+            + extra_args
+            + _case_id_filter_args(unit.case_ids)
+        )
+        unit_include_manual = _unit_include_manual(include_manual, task.defaults.include_manual, unit)
+        label = unit.name or unit.suite or str(unit.suite_file)
+        click.echo(f"\n[{index}] suite_file: {unit.suite_file}")
+        if label:
+            click.echo(f"    unit: {label}")
+        try:
+            _run_command_impl(
+                unit_include_manual,
+                skip_codegen_check,
+                unit_args,
+                suite_file=str(unit.suite_file),
+                env_files=task.env_files,
+            )
+        except SystemExit as exc:
+            code = int(exc.code or 0)
+            if code:
+                exit_code = code
+    raise SystemExit(exit_code)
+
+
+def _unit_include_manual(cli_include_manual: bool, default_include_manual: bool | None, unit: TaskUnit) -> bool:
+    if unit.include_manual is not None:
+        return unit.include_manual
+    if default_include_manual is not None:
+        return default_include_manual
+    return cli_include_manual
+
+
+def _case_id_filter_args(case_ids: list[str]) -> list[str]:
+    if not case_ids:
+        return []
+    terms = [case_id.lower().replace("-", "_") for case_id in case_ids]
+    return ["-k", " or ".join(terms)]
+
+
 @click.command(name="report")
 @click.option("--workspace", type=click.Path(file_okay=False, dir_okay=True), help="Read reports from another AITest workspace root")
 @click.argument("run_id", required=False)
@@ -269,18 +392,29 @@ class _RunEnvironmentError(Exception):
         self.environment = environment
 
 
-def _pytest_environment() -> tuple[dict[str, str], dict]:
+def _pytest_environment(env_files: list[Path] | None = None) -> tuple[dict[str, str], dict]:
     env = dict(os.environ)
+    explicit_env_files = list(env_files or [])
     path = dotenv_path()
-    configured = is_dotenv_configured()
+    configured = bool(explicit_env_files) or is_dotenv_configured()
+    env_file_display = (
+        os.pathsep.join(str(path) for path in explicit_env_files)
+        if explicit_env_files
+        else str(path) if configured or path.exists() else ""
+    )
     environment = {
-        "env_file": str(path) if configured or path.exists() else "",
+        "env_file": env_file_display,
         "env_file_configured": configured,
         "env_file_loaded": False,
         "env_file_keys": [],
     }
+    if explicit_env_files:
+        environment["env_files"] = [str(path) for path in explicit_env_files]
     try:
-        values = load_dotenv_values(strict_configured=True)
+        values = load_dotenv_values(
+            strict_configured=True,
+            paths=explicit_env_files or None,
+        )
     except ProfileVariableError as exc:
         environment["env_file_error"] = str(exc)
         raise _RunEnvironmentError(str(exc), environment) from exc
@@ -288,7 +422,8 @@ def _pytest_environment() -> tuple[dict[str, str], dict]:
     if values:
         for key, value in values.items():
             env.setdefault(key, value)
-        environment["env_file"] = str(path)
+        if not explicit_env_files:
+            environment["env_file"] = str(path)
         environment["env_file_loaded"] = True
         environment["env_file_keys"] = sorted(values)
     return env, environment
@@ -301,15 +436,16 @@ def _target_files(
     cases_path: str | None = None,
     module_override: str | None = None,
     profile_dir: Path | None = None,
+    suite_context=None,
 ) -> list[Path]:
     if cases_path:
-        context = load_suite_context(
+        context = suite_context or load_suite_context_for_paths(
             cases_path,
             module_override=module_override,
             profile_dir=profile_dir or "test_workspace/tests/fixtures",
         )
         return [
-            generated_dir / f"test_{context.module}_{context.suite}_{path.stem}.py"
+            suite_generated_path(generated_dir, context, path)
             for path in context.case_files
             if context.module and context.suite
         ]
@@ -322,51 +458,6 @@ def _target_files(
             if path.exists():
                 files.append(path)
     return files
-
-
-def _codegen_check(
-    modules: list[str],
-    skip: bool,
-    *,
-    cases_path: str | None = None,
-    module_override: str | None = None,
-) -> dict[str, str]:
-    if skip:
-        return {"status": "skipped", "command": "", "message": "--skip-codegen-check"}
-
-    if cases_path:
-        cmd = [sys.executable, "-m", "aitest_kit.cli", "codegen", "--cases", cases_path]
-        if module_override:
-            cmd.extend(["--module", module_override])
-        cmd.append("--check")
-        completed = subprocess.run(cmd, text=True, capture_output=True)
-        return _check_result(cmd, completed)
-
-    if not modules:
-        cmd = [sys.executable, "-m", "aitest_kit.cli", "codegen", "--all", "--check"]
-        completed = subprocess.run(cmd, text=True, capture_output=True)
-        return _check_result(cmd, completed)
-
-    messages: list[str] = []
-    commands: list[str] = []
-    for module in modules:
-        cmd = [sys.executable, "-m", "aitest_kit.cli", "codegen", module, "--check"]
-        commands.append(" ".join(cmd))
-        completed = subprocess.run(cmd, text=True, capture_output=True)
-        if completed.returncode:
-            messages.append(completed.stdout + completed.stderr)
-    if messages:
-        return {"status": "failed", "command": " && ".join(commands), "message": "\n".join(messages).strip()}
-    return {"status": "passed", "command": " && ".join(commands), "message": ""}
-
-
-def _check_result(cmd: list[str], completed: subprocess.CompletedProcess[str]) -> dict[str, str]:
-    status = "passed" if completed.returncode == 0 else "failed"
-    return {
-        "status": status,
-        "command": " ".join(cmd),
-        "message": (completed.stdout + completed.stderr).strip(),
-    }
 
 
 def _write_result(run_dir: Path, reports_dir: Path, result: dict) -> None:

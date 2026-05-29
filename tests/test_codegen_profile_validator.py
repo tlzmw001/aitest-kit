@@ -135,6 +135,39 @@ case_flows:
     assert "must start with 'assert '" in messages
 
 
+def test_profile_validator_prefers_new_module_profile_name(tmp_path):
+    cases_dir = tmp_path / "cases"
+    profile_dir = tmp_path / "fixtures"
+    _write_case_file(cases_dir, "demo")
+    _write_profile(
+        profile_dir,
+        "demo",
+        """case_flows:
+  TC-DEMO-001:
+    fixture: setup_demo
+    steps:
+      - assert: "`resp == ERR`"
+""",
+    )
+    (profile_dir / "profile_demo.md").write_text(
+        """```yaml
+extra_imports: []
+```
+""",
+        encoding="utf-8",
+    )
+
+    report = validate_profile_module(
+        "demo",
+        cases_dir=cases_dir,
+        profile_dir=profile_dir,
+        project=_project(),
+    )
+
+    assert report.profile_path.name == "profile_demo.md"
+    assert report.errors == []
+
+
 def test_profile_validator_rejects_unknown_case_reference(tmp_path):
     cases_dir = tmp_path / "cases"
     profile_dir = tmp_path / "fixtures"

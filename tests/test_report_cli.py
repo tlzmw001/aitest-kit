@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import textwrap
 
 import pytest
 
+from aitest_kit.report.codegen_check import run_codegen_check
 from aitest_kit.report.cli import _create_run_dir, _run_command_impl
 
 
@@ -20,6 +22,28 @@ def test_create_run_dir_uses_unique_filesystem_directory(tmp_path):
     assert first_dir.exists()
     assert second_dir.exists()
     assert first_dir != second_dir
+
+
+def test_codegen_check_uses_suite_file_option_for_suite_manifest(monkeypatch):
+    captured: dict[str, list[str]] = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr("aitest_kit.report.codegen_check.subprocess.run", fake_run)
+
+    result = run_codegen_check(
+        [],
+        False,
+        cases_path="test_workspace/suites/demo/suite.yaml",
+        suite_file=True,
+    )
+
+    assert result["status"] == "passed"
+    assert "--suite-file" in captured["cmd"]
+    assert "--cases" not in captured["cmd"]
+    assert captured["cmd"][-1] == "--check"
 
 
 def test_run_loads_aitest_env_file_into_pytest_subprocess(tmp_path, monkeypatch):
@@ -149,3 +173,273 @@ profile: codegen_profile_quota_billing_v2_suite.md
     assert result["cases"][0]["suite"] == "quota_billing_v2"
     report = (tmp_path / "test_workspace" / "reports" / "latest" / "report.md").read_text(encoding="utf-8")
     assert "quota_billing_business" in report
+
+
+def test_run_suite_file_and_task_execute_suite_generated_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("AITEST_ENV_FILE", raising=False)
+    suite_dir = tmp_path / "external_suites" / "quota_billing_v2"
+    suite_dir.mkdir(parents=True)
+    suite_file = suite_dir / "suite.yaml"
+    suite_file.write_text(
+        """target: sub2api
+module: gateway_api
+suite: quota_billing_v2
+case_files:
+  - quota_billing_business.md
+profile: profile_quota_billing_v2_suite.md
+""",
+        encoding="utf-8",
+    )
+    (suite_dir / "quota_billing_business.md").write_text(
+        """# quota billing
+
+### TC-GW-041：suite case
+- **优先级**：P0
+- **断言**：`response.status == "ok"`
+""",
+        encoding="utf-8",
+    )
+    generated = tmp_path / "test_workspace" / "tests" / "generated"
+    generated.mkdir(parents=True)
+    (generated / "test_gateway_api_quota_billing_v2_quota_billing_business.py").write_text(
+        textwrap.dedent(
+            '''
+            class TestGatewayApiQuotaBillingV2QuotaBillingBusiness:
+                def test_tc_gw_041(self):
+                    __tc_meta__ = {
+                        "tc_id": "TC-GW-041",
+                        "module": "gateway_api",
+                        "category": "quota_billing_business",
+                        "source": "external_suites/quota_billing_v2/quota_billing_business.md",
+                        "title": "suite case",
+                        "priority": "P0",
+                        "markers": [],
+                    }
+                    assert True
+
+
+            __codegen_skipped__ = []
+            '''
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        _run_command_impl(False, True, (), suite_file=str(suite_file))
+
+    assert exc_info.value.code == 0
+    result_path = tmp_path / "test_workspace" / "reports" / "latest" / "result.json"
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    assert result["summary"]["passed"] == 1
+    assert result["command"].startswith("aitest run --suite-file ")
+
+    task_dir = tmp_path / "test_workspace" / "tasks"
+    task_dir.mkdir(parents=True)
+    task_file = task_dir / "release_regression.yaml"
+    task_file.write_text(
+        f"""task: release_regression
+units:
+  - target: sub2api
+    module: gateway_api
+    suite: quota_billing_v2
+    suite_file: {suite_file}
+    case_ids:
+      - TC-GW-041
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as task_exit:
+        _run_command_impl(False, True, (), task_file=str(task_file))
+
+    assert task_exit.value.code == 0
+    task_result = json.loads(result_path.read_text(encoding="utf-8"))
+    assert task_result["summary"]["passed"] == 1
+
+
+def test_run_suite_file_uses_target_generated_and_reports_dirs(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("AITEST_ENV_FILE", raising=False)
+    target_dir = tmp_path / "test_workspace" / "targets" / "sub2api"
+    profile_dir = target_dir / "profiles"
+    profile_dir.mkdir(parents=True)
+    (target_dir / "target.yaml").write_text(
+        """target: sub2api
+defaults:
+  profile_dir: test_workspace/targets/sub2api/profiles
+  generated_dir: test_workspace/generated/sub2api
+  reports_dir: test_workspace/reports/sub2api
+""",
+        encoding="utf-8",
+    )
+    (profile_dir / "profile_gateway_api.md").write_text(
+        """```yaml
+module_type: multi_endpoint
+case_flows:
+  TC-GW-041:
+    fixture: setup_gateway_api
+    steps:
+      - assert: 'assert True'
+```
+""",
+        encoding="utf-8",
+    )
+    suite_dir = tmp_path / "external_suites" / "quota_billing_v2"
+    suite_dir.mkdir(parents=True)
+    suite_file = suite_dir / "suite.yaml"
+    suite_file.write_text(
+        """target: sub2api
+module: gateway_api
+suite: quota_billing_v2
+case_files:
+  - quota_billing_business.md
+""",
+        encoding="utf-8",
+    )
+    (suite_dir / "quota_billing_business.md").write_text(
+        """# quota billing
+
+### TC-GW-041：suite case
+- **优先级**：P0
+- **断言**：`response.status == "ok"`
+""",
+        encoding="utf-8",
+    )
+    generated = tmp_path / "test_workspace" / "generated" / "sub2api"
+    generated.mkdir(parents=True)
+    (generated / "test_gateway_api_quota_billing_v2_quota_billing_business.py").write_text(
+        textwrap.dedent(
+            '''
+            class TestGatewayApiQuotaBillingV2QuotaBillingBusiness:
+                def test_tc_gw_041(self):
+                    __tc_meta__ = {
+                        "tc_id": "TC-GW-041",
+                        "module": "gateway_api",
+                        "category": "quota_billing_business",
+                        "source": "external_suites/quota_billing_v2/quota_billing_business.md",
+                        "title": "suite case",
+                        "priority": "P0",
+                        "markers": [],
+                    }
+                    assert True
+
+
+            __codegen_skipped__ = []
+            '''
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        _run_command_impl(False, True, (), suite_file=str(suite_file))
+
+    assert exc_info.value.code == 0
+    result_path = tmp_path / "test_workspace" / "reports" / "sub2api" / "latest" / "result.json"
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    assert result["summary"]["passed"] == 1
+
+
+def test_run_task_loads_env_files_and_filters_case_ids(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("AITEST_ENV_FILE", raising=False)
+    suite_dir = tmp_path / "external_suites" / "task_env_smoke"
+    suite_dir.mkdir(parents=True)
+    suite_file = suite_dir / "suite.yaml"
+    suite_file.write_text(
+        """target: sub2api
+module: gateway_api
+suite: task_env_smoke
+case_files:
+  - business.md
+profile: profile_task_env_smoke_suite.md
+""",
+        encoding="utf-8",
+    )
+    (suite_dir / "business.md").write_text(
+        """# task env smoke
+
+### TC-GW-041：selected case
+- **优先级**：P0
+- **断言**：`response.status == "ok"`
+
+### TC-GW-042：non selected case
+- **优先级**：P0
+- **断言**：`response.status == "ok"`
+""",
+        encoding="utf-8",
+    )
+    generated = tmp_path / "test_workspace" / "tests" / "generated"
+    generated.mkdir(parents=True)
+    (generated / "test_gateway_api_task_env_smoke_business.py").write_text(
+        textwrap.dedent(
+            '''
+            import os
+
+
+            class TestGatewayApiTaskEnvSmokeBusiness:
+                def test_tc_gw_041(self):
+                    __tc_meta__ = {
+                        "tc_id": "TC-GW-041",
+                        "module": "gateway_api",
+                        "category": "business",
+                        "source": "external_suites/task_env_smoke/business.md",
+                        "title": "selected case",
+                        "priority": "P0",
+                        "markers": [],
+                    }
+                    assert os.environ["TASK_TOKEN"] == "from-task-env"
+
+                def test_tc_gw_042(self):
+                    __tc_meta__ = {
+                        "tc_id": "TC-GW-042",
+                        "module": "gateway_api",
+                        "category": "business",
+                        "source": "external_suites/task_env_smoke/business.md",
+                        "title": "non selected case",
+                        "priority": "P0",
+                        "markers": [],
+                    }
+                    assert False
+
+
+            __codegen_skipped__ = []
+            '''
+        ),
+        encoding="utf-8",
+    )
+
+    task_dir = tmp_path / "test_workspace" / "tasks"
+    task_dir.mkdir(parents=True)
+    env_file = task_dir / "task.env"
+    env_file.write_text("TASK_TOKEN=from-task-env\n", encoding="utf-8")
+    task_file = task_dir / "task_env.yaml"
+    task_file.write_text(
+        f"""task: task_env
+env_files:
+  - task.env
+defaults:
+  include_manual: false
+  pytest_args:
+    - -q
+units:
+  - name: selected
+    suite_file: {suite_file}
+    case_ids:
+      - TC-GW-041
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as task_exit:
+        _run_command_impl(False, True, (), task_file=str(task_file))
+
+    assert task_exit.value.code == 0
+    result_path = tmp_path / "test_workspace" / "reports" / "latest" / "result.json"
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    assert result["summary"]["passed"] == 1
+    assert result["summary"]["failed"] == 0
+    assert result["environment"]["env_file"] == str(env_file)
+    assert result["environment"]["env_files"] == [str(env_file)]
+    assert result["environment"]["env_file_keys"] == ["TASK_TOKEN"]
+    assert "from-task-env" not in result_path.read_text(encoding="utf-8")

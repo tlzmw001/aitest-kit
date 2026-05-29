@@ -34,7 +34,7 @@ python3 -m aitest_kit.cli --help
 
 ### 2. 初始化一个测试工作区
 
-推荐把 AITest workspace 放在目标项目下的独立目录：
+推荐创建一个独立的 AITest workspace。它可以放在目标项目下，也可以单独建一个测试仓库；对接多个服务时，更推荐单独维护测试项目。
 
 ```bash
 cd /path/to/your_project
@@ -67,10 +67,10 @@ doc-review -> knowledge-build -> test-design -> test-scaffold -> test-codegen ->
 如果你已经有 Markdown 用例和 profile，可以直接跑：
 
 ```bash
-aitest codegen --all --validate-profile
-aitest codegen --all
-aitest codegen --all --check
-python3 -m pytest test_workspace/tests/generated --collect-only -q
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
 ```
 
 ## 适合解决什么问题
@@ -128,16 +128,9 @@ docs/config_schema.md
 用例是人类可 review 的测试设计源文件：
 
 ```text
-test_workspace/cases/{module}/business.md
-test_workspace/cases/{module}/boundary.md
-```
-
-也可以按需求批次组织独立 suite：
-
-```text
-test_workspace/casesuites/{suite}/aitest_suite.yaml
-test_workspace/casesuites/{suite}/business.md
-test_workspace/casesuites/{suite}/codegen_profile_{suite}_suite.md
+test_workspace/suites/{target}/{suite}/suite.yaml
+test_workspace/suites/{target}/{suite}/business.md
+test_workspace/suites/{target}/{suite}/profile_{suite}_suite.md
 ```
 
 用例由 `/test-design` 生成或修订，人工 review 后进入 codegen。
@@ -147,8 +140,11 @@ test_workspace/casesuites/{suite}/codegen_profile_{suite}_suite.md
 fixture 是测试动作库，profile 是 codegen 配置。
 
 ```text
-test_workspace/tests/fixtures/{module}.py
-test_workspace/tests/fixtures/codegen_profile_{module}.md
+test_workspace/targets/{target}/target.yaml
+test_workspace/targets/{target}/modules/{module}.yaml
+test_workspace/targets/{target}/fixtures/{module}.py
+test_workspace/targets/{target}/helpers/
+test_workspace/targets/{target}/profiles/profile_{module}.md
 ```
 
 fixture 负责：
@@ -170,14 +166,14 @@ profile 负责：
 日常门禁顺序：
 
 ```bash
-aitest codegen --all --validate-profile
-aitest codegen --all --dump-ir
-aitest codegen --all
-aitest codegen --all --check
-python3 -m pytest test_workspace/tests/generated --collect-only -q
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --dump-ir
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
 ```
 
-常用单模块命令：
+legacy 单模块命令仍兼容旧 workspace：
 
 ```bash
 aitest codegen <module> --validate-profile
@@ -196,7 +192,7 @@ aitest codegen <module> --check
 ### 5. 执行和报告
 
 ```bash
-aitest run <module>
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 aitest report
 ```
 
@@ -223,17 +219,18 @@ test_workspace/reports/runs/{run_id}/
 | `aitest upgrade --workspace <dir> --check` | 检查已初始化 workspace 是否需要同步新版模板 |
 | `aitest upgrade --workspace <dir> --apply` | 安全应用可自动合并的模板升级 |
 | `aitest doctor` | 检查 workspace、profile、generated、collect 和环境变量提示 |
-| `aitest codegen <module>` | 生成单个模块 pytest |
-| `aitest codegen --all` | 生成所有模块 pytest |
-| `aitest codegen --cases <suite_dir>` | 生成独立 case suite pytest |
-| `aitest codegen --all --check` | 检查 generated 是否过期 |
-| `aitest run <module>` | 执行 generated pytest 并生成结构化报告 |
+| `aitest codegen <module>` | legacy：生成单个模块 pytest |
+| `aitest codegen --all` | legacy：生成所有模块 pytest |
+| `aitest codegen --suite-file <suite.yaml>` | 生成 target-aware case suite pytest |
+| `aitest codegen --all --check` | legacy：检查 generated 是否过期 |
+| `aitest run <module>` | legacy：执行模块 generated pytest 并生成结构化报告 |
+| `aitest run --suite-file <suite.yaml>` | 执行一个 suite 并生成结构化报告 |
 | `aitest report` | 从已有 `result.json` 重新渲染报告 |
 
 运行真实接口测试时，可以通过 env 文件提供服务地址、账号、token 和 API key：
 
 ```bash
-AITEST_ENV_FILE=/tmp/your-system-test.env aitest run <module>
+AITEST_ENV_FILE=/tmp/your-system-test.env aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 ```
 
 `aitest run` 会把 env 文件注入 pytest 子进程；报告只记录变量名，不记录变量值。真实 shell 环境变量优先于 env 文件。
@@ -290,12 +287,10 @@ aitest_workspace/
 │   └── refs/                     # 用例格式、断言策略等参考
 ├── test_workspace/
 │   ├── knowledge/                # L0/L1/L2 + TEST_SPEC
-│   ├── cases/                    # 模块级 Markdown 用例
-│   ├── casesuites/               # 可选：按需求/迭代组织的 suite
-│   ├── tests/
-│   │   ├── fixtures/             # fixture + codegen profile
-│   │   ├── generated/            # 生成的 pytest，视为编译产物
-│   │   └── helpers/              # HTTP/gRPC/Redis helpers
+│   ├── suites/                   # 按 target/suite 组织 Markdown 用例
+│   ├── targets/                  # target/module fixture、helper、profile
+│   ├── generated/                # 按 target 分桶的 generated pytest
+│   ├── tests/                    # legacy 兼容路径
 │   ├── reports/                  # 运行报告
 │   └── results/                  # 已确认待测系统 bug 记录
 ├── .codex/skills/

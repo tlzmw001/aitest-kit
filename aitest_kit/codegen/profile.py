@@ -32,6 +32,23 @@ class CaseFlowDefaults:
     case_setup: dict[str, Any] = field(default_factory=dict)
 
 
+def preferred_module_profile_path(profile_dir: str | Path, module: str) -> Path:
+    """Return the preferred module profile path for new workspaces."""
+    return Path(profile_dir) / f"profile_{module}.md"
+
+
+def resolve_module_profile_path(profile_dir: str | Path, module: str) -> Path | None:
+    """Resolve module profile path with new naming preferred and old naming compatible."""
+    profile_root = Path(profile_dir)
+    preferred = preferred_module_profile_path(profile_root, module)
+    if preferred.exists():
+        return preferred
+    legacy = profile_root / f"codegen_profile_{module}.md"
+    if legacy.exists():
+        return legacy
+    return None
+
+
 def load_profile_yaml(profile_path: ProfileSource) -> dict[str, Any]:
     """Extract the first YAML block from a codegen_profile."""
     if profile_path is None:

@@ -101,12 +101,16 @@ def resolve_profile_variables(specs: dict[str, dict[str, Any]]) -> dict[str, Any
     return values
 
 
-def load_dotenv_values(*, strict_configured: bool = False) -> dict[str, str]:
+def load_dotenv_values(
+    *,
+    strict_configured: bool = False,
+    paths: Iterable[str | Path] | None = None,
+) -> dict[str, str]:
     """Load the configured AITest dotenv file without overriding process env."""
-    paths = _dotenv_paths()
+    dotenv_paths = [Path(path).expanduser() for path in paths] if paths is not None else _dotenv_paths()
     values: dict[str, str] = {}
-    configured = is_dotenv_configured()
-    for path in paths:
+    configured = is_dotenv_configured() or paths is not None
+    for path in dotenv_paths:
         if not path.exists() or not path.is_file():
             if strict_configured and configured:
                 raise ProfileVariableError(f"env file not found: {path}")

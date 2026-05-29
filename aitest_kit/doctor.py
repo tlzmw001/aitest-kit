@@ -212,7 +212,9 @@ def _discover_case_suites(suites_dir: Path) -> list[Path]:
         if not path.is_dir() or path.name.startswith("."):
             continue
         has_suite_marker = (
-            (path / "aitest_suite.yaml").exists()
+            (path / "suite.yaml").exists()
+            or (path / "aitest_suite.yaml").exists()
+            or any(path.glob("profile_*_suite.md"))
             or any(path.glob("codegen_profile_*_suite.md"))
         )
         if has_suite_marker:

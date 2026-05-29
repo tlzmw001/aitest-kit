@@ -22,6 +22,7 @@ from aitest_kit.codegen.module_runner import (
 )
 from aitest_kit.codegen.project_config import load_project_config
 from aitest_kit.codegen.suite_runner import run_suite_codegen
+from aitest_kit.registry import load_task_context
 from aitest_kit.workspace import push_workspace
 
 
@@ -62,6 +63,8 @@ def _load_codegen_paths() -> CodegenPaths:
 @click.argument("module", required=False)
 @click.option("--all", "all_modules", is_flag=True, help="Operate on all modules under test_workspace/cases")
 @click.option("--cases", "cases_path", type=click.Path(file_okay=False, dir_okay=True), help="Operate on one case suite directory")
+@click.option("--suite-file", type=click.Path(file_okay=True, dir_okay=False), help="Operate on one suite manifest file")
+@click.option("--task", "task_file", type=click.Path(file_okay=True, dir_okay=False), help="Operate on suites listed by one task manifest")
 @click.option("--module", "module_option", help="Owning module for --cases when no aitest_suite.yaml is present")
 @click.option("--dry-run", is_flag=True, help="Parse Markdown only; do not write generated files")
 @click.option("--check", is_flag=True, help="Verify generated pytest matches Markdown/profile/config")
@@ -78,6 +81,8 @@ def codegen(
     module: str | None,
     all_modules: bool,
     cases_path: str | None,
+    suite_file: str | None,
+    task_file: str | None,
     module_option: str | None,
     dry_run: bool,
     check: bool,
@@ -98,6 +103,8 @@ def codegen(
                 module,
                 all_modules,
                 cases_path,
+                suite_file,
+                task_file,
                 module_option,
                 dry_run,
                 check,
@@ -118,6 +125,8 @@ def _codegen_impl(
     module: str | None,
     all_modules: bool,
     cases_path: str | None,
+    suite_file: str | None,
+    task_file: str | None,
     module_option: str | None,
     dry_run: bool,
     check: bool,
@@ -154,15 +163,42 @@ def _codegen_impl(
     paths = _load_codegen_paths()
     project = load_project_config(paths.project_config)
 
-    if cases_path:
+    suite_sources = [item for item in (cases_path, suite_file, task_file) if item]
+    if len(suite_sources) > 1:
+        click.echo("Error: --cases, --suite-file, and --task are mutually exclusive")
+        sys.exit(2)
+    if (suite_file or task_file) and module_option:
+        click.echo("Error: --module can only be used with --cases")
+        sys.exit(2)
+    if (suite_file or task_file) and (module or all_modules):
+        click.echo("Error: --suite-file/--task cannot be combined with positional module or --all")
+        sys.exit(2)
+
+    if task_file:
+        if dump_ir or explain or promotion_mode or health_report:
+            click.echo("Error: --task currently supports generation, --check, --dry-run, and --validate-profile")
+            sys.exit(2)
+        sys.exit(_run_task_codegen(
+            task_file,
+            paths=paths,
+            project=project,
+            dry_run=dry_run,
+            check=check,
+            validate_profile=validate_profile,
+            write_report=write_report,
+            report_dir=report_dir,
+        ))
+
+    if cases_path or suite_file:
+        suite_source = suite_file or cases_path
         if all_modules:
-            click.echo("Error: --cases cannot be combined with --all")
+            click.echo("Error: --cases/--suite-file cannot be combined with --all")
             sys.exit(2)
         if module and module_option and module != module_option:
             click.echo("Error: positional module conflicts with --module")
             sys.exit(2)
         sys.exit(run_suite_codegen(
-            cases_path,
+            suite_source,
             module_override=module_option or module,
             paths=paths,
             project=project,
@@ -235,3 +271,58 @@ def _codegen_impl(
         dry_run_modules(modules, paths)
         return
     sys.exit(generate_modules(modules, paths, project))
+
+
+def _run_task_codegen(
+    task_file: str,
+    *,
+    paths: CodegenPaths,
+    project,
+    dry_run: bool,
+    check: bool,
+    validate_profile: bool,
+    write_report: bool,
+    report_dir: str | None,
+) -> int:
+    task = load_task_context(task_file)
+    if task.diagnostics:
+        click.echo(f"Task: {task.task}")
+        click.echo("Task manifest diagnostics:")
+        for diagnostic in task.diagnostics:
+            click.echo(f"  {diagnostic}")
+        return 1
+    if not task.units:
+        click.echo(f"Task {task.task} has no units")
+        return 1
+
+    exit_code = 0
+    click.echo(f"Task: {task.task}")
+    for index, unit in enumerate(task.units, start=1):
+        if unit.all:
+            click.echo(f"\n[{index}] target all is not supported in Phase 2: {unit.target}")
+            exit_code = 2
+            continue
+        if unit.suite_file is None:
+            click.echo(f"\n[{index}] task unit requires suite_file in Phase 2")
+            exit_code = 2
+            continue
+        click.echo(f"\n[{index}] suite_file: {unit.suite_file}")
+        result = run_suite_codegen(
+            str(unit.suite_file),
+            module_override=unit.module or None,
+            paths=paths,
+            project=project,
+            dry_run=dry_run,
+            check=check,
+            dump_ir=False,
+            explain=None,
+            analyze_promotion=False,
+            suggest_promotion_patch=False,
+            validate_profile=validate_profile,
+            health_report=False,
+            write_report=write_report,
+            report_dir=report_dir,
+        )
+        if result:
+            exit_code = result
+    return exit_code

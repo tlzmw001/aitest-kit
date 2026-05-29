@@ -1,0 +1,17 @@
+target: coupon_system
+
+docs:
+  - docs/
+
+defaults:
+  module_dir: test_workspace/targets/coupon_system/modules
+  fixture_dir: test_workspace/targets/coupon_system/fixtures
+  helper_dir: test_workspace/targets/coupon_system/helpers
+  profile_dir: test_workspace/targets/coupon_system/profiles
+  suite_dir: test_workspace/suites/coupon_system
+  generated_dir: test_workspace/generated/coupon_system
+  reports_dir: test_workspace/reports/coupon_system
+
+knowledge_refs:
+  l0: test_workspace/knowledge/L0_system_architecture.md
+  test_spec: test_workspace/knowledge/TEST_SPEC.md

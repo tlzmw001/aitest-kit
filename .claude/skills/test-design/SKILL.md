@@ -13,7 +13,7 @@ effort: high
 
 为 `$target_module` 模块或某个 L2 需求 suite 生成 Markdown 测试用例。
 
-输出目录：`$cases_dir`（未指定时，从 `aitest_config/config.yaml` 读取 `paths.cases_dir`，默认 `{cases_dir}/$target_module/`）。如果用户明确指定 L2/suite 目录，则用该目录承载本批用例；未指定时询问用户确认后再创建。
+输出目录：`$cases_dir`（未指定时，从 `aitest_config/config.yaml` 读取 `paths.cases_dir`，默认 `{cases_dir}/$target_module/`）。如果用户明确指定 L2/suite 目录，则用该目录承载本批用例；新 target/suite 结构推荐使用 `test_workspace/suites/{target}/{suite}/`，并在后续 `test-scaffold` / `test-codegen` 中由 `suite.yaml` 绑定 target/module。
 
 ## 前置：读取项目配置
 
@@ -77,7 +77,7 @@ effort: high
 
 **接口覆盖**：查看 L1 "接口"章节，确认模块暴露的接口类型（HTTP / gRPC / 两者）。两种接口都有时，共享配置必须列出两种接口，每个功能场景必须生成 HTTP 和 gRPC 两组用例（可共享场景变量，仅接口和请求格式不同）。
 
-**输出格式**：默认输出到 `$cases_dir/business.md`；如果用户指定需求 suite，可输出为 `{suite_name}_business.md` 等带语义的文件名。按 `aitest_config/refs/case-format.md` 的"共享配置 + 精简用例"格式。每条用例只写 **优先级 / 场景变量 / 断言** 三个字段（有特殊状态时加 **标记** 字段）。场景变量必须写成 `key：value` 条目列表，`[manual]`、`[!可行性存疑]` 等标记写在独立的标记字段，不内联到场景变量或断言中。
+**输出格式**：默认输出到 `$cases_dir/business.md`；如果用户指定需求 suite，可输出为 `{suite_name}_business.md` 等带语义的文件名。按 `aitest_config/refs/case-format.md` 的"共享配置 + 精简用例"格式。每条用例只写 **优先级 / 场景变量 / 断言** 三个字段（有特殊状态时加 **标记** 字段）。场景变量必须写成 `key：value` 条目列表，`[manual]`、`[!可行性存疑]` 等标记写在独立的标记字段，不内联到场景变量或断言中。test-design 只产出 Markdown 用例，不写 `suite.yaml` 和 suite profile；这些由 `test-scaffold` / `test-codegen` 接线。
 
 ### 第三步：第二轮——边界用例（读代码）
 

@@ -8,10 +8,16 @@ from typing import Any
 import yaml
 
 from aitest_kit.codegen.parser import parse_case_file
+from aitest_kit.codegen.module_type import (
+    resolve_module_type,
+    validate_module_type_requirements,
+)
 from aitest_kit.codegen.profile import (
     apply_case_flow_defaults,
     case_flow_defaults_from_yaml,
     load_profile_yaml,
+    preferred_module_profile_path,
+    resolve_module_profile_path,
     validate_case_flows,
     validate_profile_strategy_conflicts,
 )
@@ -28,7 +34,7 @@ from aitest_kit.codegen.profile_validation_report import (
     render_profile_validation_markdown,
     write_profile_validation_report,
 )
-from aitest_kit.codegen.suite import load_suite_context, parse_suite_case_file
+from aitest_kit.codegen.suite import load_suite_context_for_paths, parse_suite_case_file
 
 
 _YAML_BLOCK_RE = re.compile(r"```ya?ml\s*\n(.*?)```", re.DOTALL)
@@ -62,7 +68,10 @@ def validate_profile_module(
 ) -> ProfileValidationReport:
     """Validate one module profile without generating pytest."""
     cases_root = Path(cases_dir)
-    profile_path = Path(profile_dir) / f"codegen_profile_{module}.md"
+    profile_path = (
+        resolve_module_profile_path(profile_dir, module)
+        or preferred_module_profile_path(profile_dir, module)
+    )
     report = ProfileValidationReport(module=module, profile_path=profile_path)
     project_config = project or load_project_config()
 
@@ -113,7 +122,7 @@ def validate_profile_suite(
     project: ProjectConfig | None = None,
 ) -> ProfileValidationReport:
     """Validate one case suite plus its module and suite profiles."""
-    context = load_suite_context(cases_path, module_override=module, profile_dir=profile_dir)
+    context = load_suite_context_for_paths(cases_path, module_override=module, profile_dir=profile_dir)
     report = ProfileValidationReport(
         module=context.module or module or "",
         suite=context.suite,
@@ -437,34 +446,19 @@ def _validate_module_type(
         _error(report, "E504", "module_type must be a string", "module_type")
         return
 
-    module_config = project.modules.get(report.module, {})
-    config_module_type = (
-        module_config.get("module_type")
-        if isinstance(module_config, dict)
-        else None
-    )
-    module_type = profile_module_type or config_module_type
-    if not module_type:
+    resolution = resolve_module_type(report.module, data, project)
+    if not resolution.module_type:
         _warn(report, "W502", "module_type is not declared in profile or project_config.modules")
         return
 
-    module_type_cfg = project.module_types.get(module_type)
-    if module_type_cfg is None:
-        _error(report, "E504", f"unknown module_type={module_type}", "module_type")
-        return
-
-    for required in module_type_cfg.get("requires", []):
-        if required == "case_bodies":
-            if not (case_bodies or case_flows):
-                _error(
-                    report,
-                    "E504",
-                    f"module_type={module_type} requires case_bodies or case_flows",
-                    "module_type",
-                )
-            continue
-        if not data.get(required):
-            _error(report, "E504", f"module_type={module_type} requires {required}", "module_type")
+    for diagnostic in validate_module_type_requirements(
+        resolution,
+        project,
+        data,
+        case_bodies,
+        case_flows,
+    ):
+        _error(report, diagnostic.code, diagnostic.message, diagnostic.source)
 
 
 def _mapping(data: dict[str, Any], key: str) -> dict[str, Any]:

@@ -1,8 +1,10 @@
 # Codegen Profile Guide
 
-`codegen_profile_{module}.md` 是模块级生成配置。它告诉 codegen：这个模块属于什么类型、哪些用例要覆盖请求字段、哪些断言有专属模板、哪些复杂流程需要走 `case_flows` 或 `case_bodies`。
+`profile_{module}.md` 是 target/module 级生成配置。它告诉 codegen：这个模块属于什么类型、哪些用例要覆盖请求字段、哪些断言有专属模板、哪些复杂流程需要走 `case_flows` 或 `case_bodies`。
 
-独立 case suite 也可以在用例目录旁放 `codegen_profile_{suite}_suite.md`。module profile 放 L1 稳定能力；suite profile 跟随用例批次，优先放本批用例的 `variables`、`case_flows`、`case_bodies` 和 `request_overrides`。
+独立 case suite 在用例目录旁放 `profile_{suite}_suite.md`。module profile 放 L1 稳定能力，路径通常是 `test_workspace/targets/{target}/profiles/profile_{module}.md`；suite profile 跟随用例批次，优先放本批用例的 `variables`、`case_flows`、`case_bodies` 和 `request_overrides`。
+
+legacy workspace 仍兼容 `test_workspace/tests/fixtures/codegen_profile_{module}.md` 和 `codegen_profile_{suite}_suite.md`，但新项目优先使用 target/suite 命名。
 
 profile 文件必须包含一个 YAML 代码块：
 
@@ -268,7 +270,7 @@ profile gate 会阻断同一 case_id 同时存在 `case_bodies` 和 `case_flows`
 
 v0.1 中，以下内容按稳定契约维护：
 
-- profile 文件路径：`test_workspace/tests/fixtures/codegen_profile_{module}.md`
+- profile 文件路径：`test_workspace/targets/{target}/profiles/profile_{module}.md` 和 `{suite_dir}/profile_{suite}_suite.md`
 - YAML 顶层字段：`module_type`、`request_overrides`、`assertion_rules`、`case_flows`、`case_bodies`
 - case_id 格式：`^TC-[A-Z0-9]+-[0-9]+$`
 - profile gate 的原则：ERROR 阻断生成，WARNING 允许继续但需要 review

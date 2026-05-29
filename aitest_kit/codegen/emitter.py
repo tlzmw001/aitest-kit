@@ -10,6 +10,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from aitest_kit.codegen.ir_renderer import EmitContext, render_file_from_ir
+from aitest_kit.codegen.module_type import (
+    resolve_module_type,
+    validate_module_type_requirements,
+)
 from aitest_kit.codegen.parser import ParseResult, parse_case_file
 from aitest_kit.codegen.planner import build_file_ir
 from aitest_kit.codegen.profile import (
@@ -17,7 +21,8 @@ from aitest_kit.codegen.profile import (
     load_profile_case_fixtures,
     load_profile_case_flows,
     load_profile_extra_imports,
-    load_profile_module_type,
+    load_profile_yaml,
+    resolve_module_profile_path,
     load_profile_request_overrides,
     load_profile_rules,
     RuntimeProfile,
@@ -40,28 +45,6 @@ class EmitResult:
     unparsed: list[tuple[str, str]]  # (tc_id, assertion_text)
     manual_count: int
     diagnostics: list[str] = field(default_factory=list)
-
-
-def _module_type_diagnostics(
-    module_type: str | None,
-    project: ProjectConfig,
-    case_bodies: dict[str, list[str]],
-    case_flows: dict[str, dict],
-) -> list[str]:
-    if not module_type:
-        return []
-
-    module_type_cfg = project.module_types.get(module_type)
-    if module_type_cfg is None:
-        return [f"E003: codegen_profile 声明了未知 module_type={module_type}"]
-
-    diagnostics: list[str] = []
-    for required in module_type_cfg.get("requires", []):
-        if required == "case_bodies" and not (case_bodies or case_flows):
-            diagnostics.append(
-                f"E004: module_type={module_type} 要求 codegen_profile 提供 case_bodies 或 case_flows"
-            )
-    return diagnostics
 
 
 def emit_file(
@@ -119,7 +102,7 @@ def emit_file(
     case_fixtures = load_profile_case_fixtures(profile_path) if profile_path else {}
     case_bodies = load_profile_case_bodies(profile_path) if profile_path else {}
     case_flows = load_profile_case_flows(profile_path) if profile_path else {}
-    module_type = load_profile_module_type(profile_path) if profile_path else None
+    profile_data = load_profile_yaml(profile_path) if profile_path else {}
     proj = project or DEFAULT_PROJECT
 
     ctx = EmitContext(
@@ -147,7 +130,17 @@ def emit_file(
             diagnostics=list(parse_result.errors),
         )
 
-    module_type_errors = _module_type_diagnostics(module_type, proj, case_bodies, case_flows)
+    module_type_resolution = resolve_module_type(module, profile_data, proj)
+    module_type_errors = [
+        f"{diag.code}: {diag.message}"
+        for diag in validate_module_type_requirements(
+            module_type_resolution,
+            proj,
+            profile_data,
+            case_bodies,
+            case_flows,
+        )
+    ]
     if module_type_errors:
         return EmitResult(
             output_path=str(output_path),
@@ -231,9 +224,7 @@ def emit_module(
 ) -> list[EmitResult]:
     """Emit all files for a module. Returns list of EmitResult."""
     cases_dir = Path(cases_dir)
-    profile_path = Path(profile_dir) / f"codegen_profile_{module}.md"
-    if not profile_path.exists():
-        profile_path = None
+    profile_path = resolve_module_profile_path(profile_dir, module)
 
     results = []
     for file_type in ("business", "boundary"):

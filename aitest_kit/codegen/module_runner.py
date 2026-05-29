@@ -32,6 +32,7 @@ from aitest_kit.codegen.profile_validator import (
     validate_profile_module,
     write_profile_validation_report,
 )
+from aitest_kit.codegen.profile import resolve_module_profile_path
 
 
 def list_modules(cases_dir: Path) -> list[str]:
@@ -374,8 +375,7 @@ def _default_codegen_report_dir(paths: Any) -> Path:
 
 
 def _profile_path(module: str, paths: Any) -> Path | None:
-    path = paths.profile_dir / f"codegen_profile_{module}.md"
-    return path if path.exists() else None
+    return resolve_module_profile_path(paths.profile_dir, module)
 
 
 def _build_module_ir(module: str, paths: Any) -> list[FileIR]:

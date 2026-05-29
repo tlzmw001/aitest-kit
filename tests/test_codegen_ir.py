@@ -8,7 +8,7 @@ from aitest_kit.codegen.emitter import emit_file, emit_module
 from aitest_kit.codegen.ir import ir_to_dict
 from aitest_kit.codegen.parser import ParseResult, SharedConfig, TestCase as ParsedTestCase, parse_case_file
 from aitest_kit.codegen.planner import build_file_ir
-from aitest_kit.codegen.project_config import load_project_config
+from aitest_kit.codegen.project_config import ProjectConfig, load_project_config
 from aitest_kit.codegen.profile import (
     load_profile_case_flows,
     validate_case_flows,
@@ -278,6 +278,96 @@ case_flows:
     )
 
     assert result.diagnostics == []
+
+
+def test_emitter_uses_project_config_module_type_fallback(tmp_path):
+    profile_path = tmp_path / "codegen_profile_demo.md"
+    profile_path.write_text(
+        """```yaml
+extra_imports: []
+```
+""",
+        encoding="utf-8",
+    )
+    parse_result = ParseResult(
+        module="demo",
+        source_file="test_workspace/cases/demo/business.md",
+        shared_config=SharedConfig(base_request_http={"user_id": "", "reqId": ""}),
+        cases=[
+            ParsedTestCase(
+                id="TC-DEMO-001",
+                title="legacy module_type fallback",
+                priority="P1",
+                assertions=["`response.code == 0`"],
+                section="配置兜底",
+            )
+        ],
+    )
+    project = ProjectConfig(
+        module_types={"isolated_service": {"requires": ["case_bodies"]}},
+        modules={"demo": {"module_type": "isolated_service"}},
+    )
+
+    result = emit_file(
+        parse_result,
+        "business",
+        profile_path=profile_path,
+        output_dir=tmp_path,
+        project=project,
+    )
+
+    assert any("module_type=isolated_service requires case_bodies or case_flows" in d for d in result.diagnostics)
+    assert not (tmp_path / "test_demo_business.py").exists()
+
+
+def test_emit_module_prefers_new_module_profile_name(tmp_path):
+    cases_dir = tmp_path / "cases"
+    profile_dir = tmp_path / "fixtures"
+    output_dir = tmp_path / "generated"
+    module_dir = cases_dir / "demo"
+    module_dir.mkdir(parents=True)
+    profile_dir.mkdir(parents=True)
+    (module_dir / "business.md").write_text(
+        """# demo 业务测试用例
+
+## 共享配置
+
+**通用断言**：`response.code == 0`
+
+---
+
+## 一、基础场景
+
+### TC-DEMO-001：demo case
+- **优先级**：P1
+- **断言**：`response.code == 0`
+""",
+        encoding="utf-8",
+    )
+    (profile_dir / "profile_demo.md").write_text(
+        """```yaml
+case_flows:
+  TC-DEMO-001:
+    fixture: setup_demo
+    steps:
+      - call: setup_demo
+        save_as: client
+      - assert: 'assert client is not None'
+```
+""",
+        encoding="utf-8",
+    )
+
+    results = emit_module(
+        "demo",
+        cases_dir=cases_dir,
+        output_dir=output_dir,
+        profile_dir=profile_dir,
+    )
+
+    assert len(results) == 1
+    assert results[0].diagnostics == []
+    assert (output_dir / "test_demo_business.py").exists()
 
 
 def test_case_flow_profile_validation_rejects_forward_refs():

@@ -15,6 +15,7 @@ from aitest_kit.codegen.profile_validator import (
     validate_profile_module,
     validate_profile_suite,
 )
+from aitest_kit.codegen.profile import resolve_module_profile_path
 from aitest_kit.codegen.project_config import load_project_config
 from aitest_kit.codegen.suite import SuiteContext, parse_suite_case_file
 
@@ -176,9 +177,7 @@ def _build_module_file_irs(
     profile_dir: Path,
     project: Any,
 ) -> list[FileIR]:
-    profile_path = profile_dir / f"codegen_profile_{module}.md"
-    if not profile_path.exists():
-        profile_path = None
+    profile_path = resolve_module_profile_path(profile_dir, module)
     file_irs: list[FileIR] = []
     for file_type in ("business", "boundary"):
         md_path = cases_dir / module / f"{file_type}.md"

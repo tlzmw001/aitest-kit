@@ -85,7 +85,7 @@ python3 -m aitest_kit.cli codegen $target_module --suggest-promotion-patch
 python3 -m aitest_kit.cli codegen --all --health-report --write-report
 ```
 
-suite 模式使用 `python3 -m aitest_kit.cli codegen --cases <suite_dir> ...` 完成同类验证和分析。
+target/suite 模式使用 `python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml ...` 完成同类验证和分析，generated pytest 默认位于 `test_workspace/generated/{target}/`。
 
 `promotion_report.md/json` 用于解释和工具消费；`promotion_patch.md/diff` 是 review-only 草案，默认不自动修改 profile。
 

@@ -2,8 +2,8 @@
 name: emitter-build
 description: 从已验证 pytest、Case IR 和 profile 中识别可沉淀模式，评估是否晋升为 assertion_rules、case_flows、fixture helper 或 emitter 规则
 when_to_use: 当 generated pytest 已通过，需要复盘重复模式、减少 case_body/flow 重复，或评估是否值得沉淀为确定性生成规则时
-argument-hint: <target_module> [suite_dir]
-arguments: [target_module, suite_dir]
+argument-hint: <target_module>|--suite-file <suite.yaml>
+arguments: [target_module, suite_file]
 user-invocable: true
 allowed-tools: Read Glob Grep Write Edit Bash
 effort: high
@@ -11,7 +11,7 @@ effort: high
 
 # Emitter 模板构建
 
-从 `$target_module` 模块或某个 case suite 的已验证 pytest 代码中识别可沉淀模式，评估是否更新 profile、fixture/helper、project_config 或 emitter 规则。
+从 `$target_module` 模块或某个 target-aware case suite 的已验证 pytest 代码中识别可沉淀模式，评估是否更新 profile、fixture/helper、project_config 或 emitter 规则。
 
 `emitter-build` 的核心职责是把"已经跑通的 AI/人工补写经验"沉淀为确定性模式；不要从未验证的 pytest、失败用例或猜测出的业务语义中提取规则。
 
@@ -34,10 +34,10 @@ effort: high
 
 ## 前置：读取输入
 
-1. **已验证的 .py** — 模块模式读取 `test_workspace/tests/generated/test_{module}_*.py`；suite 模式读取 `test_{module}_{suite}_{case_file_stem}.py`
-2. **parser 输出** — 模块模式读取 `test_workspace/cases/{module}/`；suite 模式读取 `<suite_dir>` 中的 case files
+1. **已验证的 .py** — legacy 模块模式读取 `test_workspace/tests/generated/test_{module}_*.py`；target/suite 模式读取 `test_workspace/generated/{target}/test_{module}_{suite}_{case_file_stem}.py`
+2. **parser 输出** — 模块模式读取 `test_workspace/cases/{module}/`；suite 模式读取 `<suite_dir>/suite.yaml` 声明的 case files
 3. **Case IR 输出** — 如果仓库已支持 `--dump-ir` / `--explain`，读取每条用例的 strategy、protocol、fixtures、assertion resolution
-4. **codegen profile** — `test_workspace/tests/fixtures/codegen_profile_{module}.md`（如果存在）
+4. **codegen profile** — target/suite 模式读取 `test_workspace/targets/{target}/profiles/profile_{module}.md` 和 `<suite_dir>/profile_{suite}_suite.md`；legacy 模块模式读取 `test_workspace/tests/fixtures/codegen_profile_{module}.md`
 5. **emitter/renderer 现有规则** — `aitest_kit/codegen/emitter.py`、`aitest_kit/codegen/ir_renderer.py`、`aitest_kit/codegen/render_utils.py`（如果已存在）
 
 如果当前仓库尚未实现 Case IR CLI，仍按 parser/profile/generated pytest 对齐，不因此阻断规则提取。
@@ -106,16 +106,17 @@ effort: high
 
 更新规则后，验证 emitter 能正确重新生成该模块的 .py：
 
-1. 用 emitter 重新生成 → `test_workspace/tests/generated/test_{module}_*.py`
+1. 用 emitter 重新生成 → legacy 模块模式写入 `test_workspace/tests/generated/test_{module}_*.py`，target/suite 模式写入 `test_workspace/generated/{target}/test_{module}_{suite}_{case_file_stem}.py`
 2. `python3 -c "import ast; ast.parse(open('file').read())"` 验证语法
 3. `diff` 对比重新生成的 .py 与原 .py，差异应仅限于空行/注释格式
 4. 如果有实质性差异，说明规则提取不完整 → 回到第二步补充
 
 最终验证标准：
 
-1. `aitest codegen --all --check` 通过（生成结果不变）
-2. `pytest test_workspace/tests/generated/ -v` 全部通过
-3. emitter.py / ir_renderer.py 行数均 < 500
+1. legacy 模块模式：`aitest codegen --all --check` 通过（生成结果不变）
+2. target/suite 模式：`aitest codegen --suite-file <suite_dir>/suite.yaml --check` 通过
+3. 对应 generated pytest collect 或真实执行通过
+4. emitter.py / ir_renderer.py 行数均 < 500
 
 ## 输出摘要
 

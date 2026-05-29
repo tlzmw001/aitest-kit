@@ -71,6 +71,9 @@ def test_init_creates_workspace_from_single_package_template(tmp_path):
     assert (target / "docs" / ".gitkeep").exists()
     assert (target / "aitest_config" / "config.yaml").exists()
     assert (target / "aitest_config" / "schemas" / "codegen_profile.schema.json").exists()
+    assert (target / "test_workspace" / "targets" / ".gitkeep").exists()
+    assert (target / "test_workspace" / "suites" / ".gitkeep").exists()
+    assert (target / "test_workspace" / "generated" / ".gitkeep").exists()
     assert (target / "test_workspace" / "tests" / "helpers" / "http.py").exists()
     metadata = target / ".aitest" / "workspace.json"
     assert metadata.exists()
@@ -194,6 +197,33 @@ def test_upgrade_check_reports_up_to_date_after_init(tmp_path):
     assert "Summary:" in result.output
     assert "[UPDATE]" not in result.output
     assert "[LOCAL]" not in result.output
+
+
+def test_upgrade_check_reports_legacy_layout_suggestions(tmp_path):
+    target = tmp_path / "project"
+    runner = CliRunner()
+    assert runner.invoke(main, ["init", "--target", str(target)]).exit_code == 0
+
+    legacy_fixture = target / "test_workspace" / "tests" / "fixtures" / "demo.py"
+    legacy_fixture.write_text("import pytest\n", encoding="utf-8")
+    legacy_generated = target / "test_workspace" / "tests" / "generated" / "test_demo_business.py"
+    legacy_generated.write_text("def test_demo():\n    assert True\n", encoding="utf-8")
+    legacy_suite = target / "test_workspace" / "casesuites" / "demo_suite"
+    legacy_suite.mkdir(parents=True)
+    (legacy_suite / "aitest_suite.yaml").write_text("module: demo\nsuite: demo_suite\ncase_files: []\n", encoding="utf-8")
+
+    result = runner.invoke(main, ["upgrade", "--workspace", str(target), "--check"])
+
+    assert result.exit_code == 0
+    assert "[SUGGEST] test_workspace/tests/fixtures" in result.output
+    assert "test_workspace/targets/{target}/" in result.output
+    assert "[SUGGEST] test_workspace/tests/generated" in result.output
+    assert "test_workspace/generated/{target}/" in result.output
+    assert "[SUGGEST] test_workspace/casesuites" in result.output
+    assert "test_workspace/suites/{target}/{suite}/" in result.output
+    assert legacy_fixture.exists()
+    assert legacy_generated.exists()
+    assert (legacy_suite / "aitest_suite.yaml").exists()
 
 
 def test_upgrade_apply_restores_missing_safe_template_file(tmp_path):

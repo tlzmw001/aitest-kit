@@ -5,7 +5,7 @@
 AITest 的迁移目标不是一次性让 AI 直接生成大量 pytest，而是建立一条可审查、可重复、可逐步沉淀规则的测试飞轮：
 
 ```text
-公开文档 -> 测试知识库 -> Markdown 用例 -> profile/fixture -> generated pytest -> run/report -> 修正与沉淀
+公开文档 -> 测试知识库 -> Markdown suite -> target fixture/profile -> generated pytest -> run/report -> 修正与沉淀
 ```
 
 ## 一、迁移原则
@@ -30,9 +30,12 @@ AITest 当前不拆分 `aitest_kit` 与 workspace 协议仓库。框架代码、
 
 - `aitest_config/config.yaml`
 - `aitest_config/project_config.yaml`
-- `test_workspace/tests/fixtures/{module}.py`
-- `test_workspace/tests/fixtures/codegen_profile_{module}.md`
-- `test_workspace/cases/{module}/`
+- `test_workspace/targets/{target}/target.yaml`
+- `test_workspace/targets/{target}/modules/{module}.yaml`
+- `test_workspace/targets/{target}/fixtures/{module}.py`
+- `test_workspace/targets/{target}/helpers/`
+- `test_workspace/targets/{target}/profiles/profile_{module}.md`
+- `test_workspace/suites/{target}/{suite}/`
 
 不要为了适配单个项目直接修改 parser、planner、renderer 或 emitter engine。只有当多个项目反复出现同一稳定模式时，才考虑进入框架层沉淀。
 
@@ -80,9 +83,9 @@ test_workspace/
 如果不在 workspace 目录内执行命令，统一使用 `--workspace`：
 
 ```bash
-aitest codegen --workspace /path/to/your_project/aitest_workspace --all --validate-profile
-aitest codegen --workspace /path/to/your_project/aitest_workspace --all
-aitest run --workspace /path/to/your_project/aitest_workspace <module>
+aitest codegen --workspace /path/to/your_project/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
+aitest codegen --workspace /path/to/your_project/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest run --workspace /path/to/your_project/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 aitest report --workspace /path/to/your_project/aitest_workspace
 ```
 
@@ -155,21 +158,26 @@ docs/
 
 ## 六、设计 Markdown 用例
 
-模块级用例默认放在：
+新结构推荐按 suite 放用例：
 
 ```text
-test_workspace/cases/{module}/business.md
-test_workspace/cases/{module}/boundary.md
+test_workspace/suites/{target}/{suite}/suite.yaml
+test_workspace/suites/{target}/{suite}/business.md
+test_workspace/suites/{target}/{suite}/boundary.md
+test_workspace/suites/{target}/{suite}/profile_{suite}_suite.md
 ```
 
-这两个文件不是强制都要存在。只有 `business.md`、只有 `boundary.md`，或按更细维度拆成多个 Markdown 文件都可以生成 pytest；拆分的目的只是让人类 review 更清晰。
+`business.md` 和 `boundary.md` 不是强制都要存在。只有 `business.md`、只有 `boundary.md`，或按更细维度拆成多个 Markdown 文件都可以生成 pytest；拆分的目的只是让人类 review 更清晰。
 
-如果用例按需求、迭代或临时批次组织，也可以使用独立 suite：
+`suite.yaml` 只描述这批用例属于哪个 target/module，以及包含哪些 Markdown 文件：
 
-```text
-test_workspace/casesuites/{suite}/aitest_suite.yaml
-test_workspace/casesuites/{suite}/{case_file}.md
-test_workspace/casesuites/{suite}/codegen_profile_{suite}_suite.md
+```yaml
+target: your_system
+module: gateway_api
+suite: login_smoke
+case_files:
+  - business.md
+profile: profile_login_smoke_suite.md
 ```
 
 Markdown 用例必须满足：
@@ -210,9 +218,9 @@ aitest_config/project_config.yaml
 典型分层如下：
 
 ```text
-框架层：parser / planner / renderer / CLI / helpers
+框架层：parser / planner / renderer / CLI / 通用 helpers
 项目配置层：config.yaml / project_config.yaml
-模块配置层：fixture / codegen_profile / Markdown cases
+target/module/suite 层：target.yaml / module.yaml / fixture / helper / profile / Markdown suite
 ```
 
 迁移时先通过项目配置层和模块配置层适配，不要直接改框架层。
@@ -222,8 +230,10 @@ aitest_config/project_config.yaml
 每个模块至少准备：
 
 ```text
-test_workspace/tests/fixtures/{module}.py
-test_workspace/tests/fixtures/codegen_profile_{module}.md
+test_workspace/targets/{target}/modules/{module}.yaml
+test_workspace/targets/{target}/fixtures/{module}.py
+test_workspace/targets/{target}/helpers/
+test_workspace/targets/{target}/profiles/profile_{module}.md
 ```
 
 fixture 负责把“测试能力”封装成可调用对象：
@@ -257,11 +267,11 @@ profile 负责告诉 codegen 这批 Markdown 用例如何生成：
 每轮迁移按固定顺序验证：
 
 ```bash
-aitest codegen --workspace /path/to/your_project/aitest_workspace --all --validate-profile
-aitest codegen --workspace /path/to/your_project/aitest_workspace --all --dump-ir
-aitest codegen --workspace /path/to/your_project/aitest_workspace --all
-aitest codegen --workspace /path/to/your_project/aitest_workspace --all --check
-python3 -m pytest /path/to/your_project/aitest_workspace/test_workspace/tests/generated --collect-only -q
+aitest codegen --workspace /path/to/your_project/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
+aitest codegen --workspace /path/to/your_project/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --dump-ir
+aitest codegen --workspace /path/to/your_project/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest codegen --workspace /path/to/your_project/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
+aitest run --workspace /path/to/your_project/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
 ```
 
 说明：
@@ -275,7 +285,7 @@ pytest collect 推荐在 workspace 根目录执行：
 
 ```bash
 cd /path/to/your_project/aitest_workspace
-python3 -m pytest test_workspace/tests/generated --collect-only -q
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
 ```
 
 如果必须从其他目录执行，需要显式设置：
@@ -295,13 +305,13 @@ ModuleNotFoundError: No module named 'test_workspace'
 服务启动后执行：
 
 ```bash
-aitest run --workspace /path/to/your_project/aitest_workspace <module>
+aitest run --workspace /path/to/your_project/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 ```
 
 如果测试需要服务地址、账号、token 或 API key，推荐使用本地不提交的 env 文件：
 
 ```bash
-AITEST_ENV_FILE=/tmp/your-project-test.env aitest run --workspace /path/to/your_project/aitest_workspace <module>
+AITEST_ENV_FILE=/tmp/your-project-test.env aitest run --workspace /path/to/your_project/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 ```
 
 `aitest run` 会把 env 文件中的变量注入 pytest 子进程，fixture 和 profile variables 都能读取；报告只记录变量名，不记录变量值。真实 shell 环境变量优先于 env 文件。
@@ -329,7 +339,7 @@ test_workspace/reports/runs/{run_id}/
 |---|---|---|
 | 文档问题 | 公开文档未说明、字段不明确、行为缺失 | 补知识库 `[?]` 或找产品确认 |
 | 用例问题 | Markdown 断言不可观测、场景不稳定、请求不合法 | 修 Markdown，必要时记录 mismatch |
-| profile 问题 | profile gate 报错、case_id 不匹配、flow 引用错误 | 修 `codegen_profile_{module}.md` |
+| profile 问题 | profile gate 报错、case_id 不匹配、flow 引用错误 | 修 `profile_{module}.md` 或 `profile_{suite}_suite.md` |
 | fixture 问题 | 前置状态没准备好、环境变量缺失、清理不完整 | 修模块 fixture/helper |
 | codegen 问题 | IR/renderer 生成错误、重复模式值得沉淀 | 修 codegen 或增加规则，并补测试 |
 | 环境问题 | 服务没启动、端口不通、依赖未安装 | 修启动命令或环境配置 |
@@ -348,17 +358,17 @@ test_workspace/reports/runs/{run_id}/
 一个模块迁移完成至少满足：
 
 ```bash
-aitest codegen --workspace /path/to/workspace <module> --validate-profile
-aitest codegen --workspace /path/to/workspace <module> --dump-ir
-aitest codegen --workspace /path/to/workspace <module>
-aitest codegen --workspace /path/to/workspace <module> --check
-python3 -m pytest /path/to/workspace/test_workspace/tests/generated --collect-only -q
+aitest codegen --workspace /path/to/workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
+aitest codegen --workspace /path/to/workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --dump-ir
+aitest codegen --workspace /path/to/workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest codegen --workspace /path/to/workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
+aitest run --workspace /path/to/workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
 ```
 
 如果测试环境可用，还应执行：
 
 ```bash
-aitest run --workspace /path/to/workspace <module>
+aitest run --workspace /path/to/workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 ```
 
 完成后检查：

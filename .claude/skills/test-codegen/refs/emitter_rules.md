@@ -2,9 +2,9 @@
 
 ## 文件结构
 
-- `business.md` -> `test_workspace/tests/generated/test_{module}_business.py`
-- `boundary.md` -> `test_workspace/tests/generated/test_{module}_boundary.py`
-- case suite 中的 `{case_file}.md` -> `test_workspace/tests/generated/test_{module}_{suite}_{case_file_stem}.py`
+- legacy 模块 `business.md` -> `test_workspace/tests/generated/test_{module}_business.py`
+- legacy 模块 `boundary.md` -> `test_workspace/tests/generated/test_{module}_boundary.py`
+- target/suite 中的 `{case_file}.md` -> `test_workspace/generated/{target}/test_{module}_{suite}_{case_file_stem}.py`
 
 ## 类和函数命名
 
@@ -16,11 +16,15 @@
 
 场景变量 -> `# SETUP:` 注释 + `setup_{module}(case_id="TC-XXX")` 调用。
 
-fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供。按当前项目的 generated import/profile 机制接线；只有项目采用 `pytest_plugins` 注册时，才需要维护 `conftest.py` 中的 `pytest_plugins` 列表。
+target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{module}.py` 提供，helper 由 `test_workspace/targets/{target}/helpers/` 提供。codegen 根据 `module.yaml.fixture.file/default_fixture` 自动注入 fixture import；target helper 文件存在时优先生成 target helper import。
 
 新增模块时需要：
-1. 创建 `test_workspace/tests/fixtures/{module}.py`
-2. 确认 `codegen_profile_{module}.md` 或 generated pytest 能引用到对应 fixture；如果项目使用 `pytest_plugins`，同步添加插件注册
+1. 创建 `test_workspace/targets/{target}/fixtures/{module}.py`
+2. 创建或更新 `test_workspace/targets/{target}/modules/{module}.yaml`
+3. 创建 `test_workspace/targets/{target}/profiles/profile_{module}.md`
+4. 确认 generated pytest 能引用到 target fixture/helper
+
+legacy 模块模式才使用 `test_workspace/tests/fixtures/{module}.py` 和 `pytest_plugins` 注册。
 
 ## fixture 编写检查清单
 
@@ -85,8 +89,10 @@ fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供。按当前项目
 
 测试调通后编写 module profile 或 suite profile：
 
-- module profile：`test_workspace/tests/fixtures/codegen_profile_{module}.md`，承载 L1 级稳定能力
-- suite profile：`{suite_dir}/codegen_profile_{suite}_suite.md`，只覆盖该 suite 的 case_id
+- module profile：`test_workspace/targets/{target}/profiles/profile_{module}.md`，承载 L1 级稳定能力
+- suite profile：`{suite_dir}/profile_{suite}_suite.md`，只覆盖该 suite 的 case_id
+
+legacy 模块模式继续兼容 `test_workspace/tests/fixtures/codegen_profile_{module}.md` 和 `{suite_dir}/codegen_profile_{suite}_suite.md`。
 
 profile 应包含：
 

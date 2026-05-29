@@ -5,7 +5,7 @@
 核心心智模型：
 
 ```text
-公开文档 -> 知识库 -> Markdown 用例 -> fixture/profile -> generated pytest -> report
+公开文档 -> 知识库 -> Markdown 用例 suite -> target fixture/profile -> generated pytest -> report
 ```
 
 `aitest-kit` 不要求你一开始就写完所有自动化。正确做法是：先接入一个最小模块，跑通闭环，再逐步扩展。
@@ -24,7 +24,7 @@ python3 -m aitest_kit.cli --help
 
 ## 2. 初始化 workspace
 
-推荐把 AITest workspace 放在目标项目下的独立目录：
+推荐创建一个独立的 AITest workspace。它可以放在目标项目下，也可以是单独的测试仓库：
 
 ```bash
 cd /path/to/your_project
@@ -100,40 +100,31 @@ docs/config_schema.md
 
 ```text
 test_workspace/knowledge/                 # L0/L1/L2
-test_workspace/cases/<module>/            # Markdown 用例
-test_workspace/tests/fixtures/<module>.py # fixture 动作库
-test_workspace/tests/fixtures/codegen_profile_<module>.md
+test_workspace/suites/<target>/<suite>/   # Markdown 用例 + suite.yaml + suite profile
+test_workspace/targets/<target>/          # target/module registry、fixture、helper、module profile
 ```
 
-如果是按需求、迭代或临时批次组织用例，也可以使用 suite：
+典型 suite 结构：
 
 ```text
-test_workspace/casesuites/<suite>/aitest_suite.yaml
-test_workspace/casesuites/<suite>/business.md
-test_workspace/casesuites/<suite>/codegen_profile_<suite>_suite.md
+test_workspace/suites/<target>/<suite>/suite.yaml
+test_workspace/suites/<target>/<suite>/business.md
+test_workspace/suites/<target>/<suite>/profile_<suite>_suite.md
 ```
 
 ## 6. 生成 pytest
 
-模块级用例：
+target/suite 用例：
 
 ```bash
-aitest codegen <module> --validate-profile
-aitest codegen <module> --dump-ir
-aitest codegen <module>
-aitest codegen <module> --check
-python3 -m pytest test_workspace/tests/generated --collect-only -q
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --dump-ir
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
 ```
 
-suite 用例：
-
-```bash
-aitest codegen --cases test_workspace/casesuites/<suite> --validate-profile
-aitest codegen --cases test_workspace/casesuites/<suite> --dump-ir
-aitest codegen --cases test_workspace/casesuites/<suite>
-aitest codegen --cases test_workspace/casesuites/<suite> --check
-python3 -m pytest test_workspace/tests/generated --collect-only -q
-```
+legacy 模块模式仍兼容 `aitest codegen <module>` 和 `test_workspace/tests/generated/`，但新项目建议从 `suite.yaml` 开始。
 
 判断结果：
 
@@ -156,7 +147,7 @@ EOF
 然后运行：
 
 ```bash
-AITEST_ENV_FILE=/tmp/your-system-test.env aitest run <module>
+AITEST_ENV_FILE=/tmp/your-system-test.env aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 ```
 
 报告位置：
@@ -210,7 +201,7 @@ python3 -m aitest_kit.cli --help
 
 ### `doctor` 提示没有模块
 
-刚初始化时正常。创建 `test_workspace/cases/<module>/` 和 `test_workspace/tests/fixtures/codegen_profile_<module>.md` 后再跑。
+刚初始化时正常。创建 `test_workspace/targets/<target>/modules/<module>.yaml`、`test_workspace/targets/<target>/profiles/profile_<module>.md` 和至少一个 `test_workspace/suites/<target>/<suite>/suite.yaml` 后再跑。
 
 ### profile 校验失败
 
@@ -221,13 +212,13 @@ python3 -m aitest_kit.cli --help
 运行：
 
 ```bash
-aitest codegen --all
-aitest codegen --all --check
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
 ```
 
 ### 运行测试缺环境变量
 
-fixture 应该明确报出缺少的环境变量名，但不要打印变量值。把变量设置在 shell、CI secret、本地不提交的 `.env`，或通过 `AITEST_ENV_FILE=/path/to/test.env aitest run <module>` 指定的 env 文件中。
+fixture 应该明确报出缺少的环境变量名，但不要打印变量值。把变量设置在 shell、CI secret、本地不提交的 `.env`，或通过 `AITEST_ENV_FILE=/path/to/test.env aitest run --suite-file <suite.yaml>` 指定的 env 文件中。
 
 ## 下一步
 
