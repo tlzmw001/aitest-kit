@@ -106,7 +106,8 @@ aitest_config/aitest.yaml
 - `codegen` / `run` / `report` / `doctor` 的路径读取统一走 workspace config loader。
 - `load_project_config()` 支持从 `aitest_config/aitest.yaml` 的 `codegen` section 读取配置。
 - 如果 `aitest.yaml` 不存在，旧 `config.yaml` + `project_config.yaml` 行为保持不变。
-- 暂不修改模板，不要求现有 workspace 迁移。
+- 第三阶段收口时，根目录和新项目模板均已新增 `aitest.yaml`。
+- 旧 `config.yaml` / `project_config.yaml` 暂不删除，作为 legacy 兼容和 skill 过渡期输入。
 
 `aitest.yaml` 不做扁平大配置，而是按职责分区：
 

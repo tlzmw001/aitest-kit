@@ -290,8 +290,9 @@ case_bodies -> case_flows -> assertion_rules / 默认模板
 aitest_workspace/
 ├── docs/                         # 公开文档和迁移输入
 ├── aitest_config/
-│   ├── config.yaml               # 项目路径、服务、协议等配置
-│   ├── project_config.yaml       # codegen 项目配置
+│   ├── aitest.yaml               # 推荐统一入口：workspace 路径 + codegen 默认规则
+│   ├── config.yaml               # legacy：旧 workspace 路径配置
+│   ├── project_config.yaml       # legacy：旧 codegen 项目配置
 │   ├── schemas/                  # profile JSON Schema
 │   └── refs/                     # 用例格式、断言策略等参考
 ├── test_workspace/

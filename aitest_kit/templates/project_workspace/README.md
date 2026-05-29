@@ -89,6 +89,7 @@ AGENTS.md / CLAUDE.md          # AI 协作说明
 
 | 产物 | 说明 |
 |---|---|
+| `aitest_config/aitest.yaml` | 推荐统一配置入口，包含 workspace 路径和 codegen 默认规则 |
 | `docs/` | 测试规则来源，优先放公开 API/设计文档 |
 | `test_workspace/knowledge/` | 测试知识库，记录当前系统可测试契约 |
 | `test_workspace/suites/` | 推荐 suite 根目录，用于需求、迭代、临时批次 |

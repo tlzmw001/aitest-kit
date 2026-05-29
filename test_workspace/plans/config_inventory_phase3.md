@@ -24,7 +24,7 @@ flowchart TD
     G --> H["generated pytest"]
 ```
 
-当前实际状态是：`config.yaml` + `project_config.yaml` + module profile 是稳定主路径；suite manifest / suite profile 已可用；target/module/task registry 已有 loader，但只完成第一阶段接入，尚未替代 legacy module/all 路径。
+当前实际状态是：`aitest_config/aitest.yaml` 已作为推荐统一入口接入；旧 `config.yaml` + `project_config.yaml` 继续兼容。suite manifest / suite profile 已可用；target/module/task registry 已进入 target-aware suite 主路径，但 legacy module/all 路径仍保留。
 
 ## `aitest_config/config.yaml`
 
@@ -694,6 +694,14 @@ Phase 3-3 已完成第五刀：
 - `load_project_config()` 已支持优先读取 `aitest_config/aitest.yaml` 的 `codegen` section。
 - 旧 `aitest_config/config.yaml` + `aitest_config/project_config.yaml` 继续兼容。
 - 当前不改模板、不迁移真实配置文件，只先建立兼容读取能力。
+
+Phase 3-3 已完成第六刀，第三阶段正式收口：
+
+- 根目录新增 `aitest_config/aitest.yaml`，合并 workspace paths 与 codegen 配置。
+- 新项目模板新增 `aitest_config/aitest.yaml`。
+- `test_workspace/targets/coupon_system/target.yaml` 承接原 `config.yaml` 中描述 coupon_system 的 service/data/protocols/known_limitations。
+- `README.md`、模板 README、`AGENTS.md` 已标记 `aitest.yaml` 为推荐入口。
+- 旧 `config.yaml` / `project_config.yaml` 暂不删除，作为 legacy 兼容和 skill 过渡期输入。
 
 Phase 4 已完成第一刀：
 

@@ -78,11 +78,14 @@
 - `aitest_config/`
   项目级配置目录。
 
+- `aitest_config/aitest.yaml`
+  推荐统一配置入口，包含 workspace 路径和 codegen 默认规则。旧 workspace 中的 `config.yaml` / `project_config.yaml` 继续兼容。
+
 - `aitest_config/config.yaml`
-  skill 路径、服务地址、协议偏好和已知限制等项目配置。
+  legacy 配置：skill 路径、服务地址、协议偏好和已知限制等项目配置。
 
 - `aitest_config/project_config.yaml`
-  codegen 项目配置，包含 helper import 路径、API 路径、变量映射、模块缩写、内置断言规则和模块类型映射。
+  legacy 配置：codegen 项目配置，包含 helper import 路径、API 路径、变量映射、模块缩写、内置断言规则和模块类型映射。
 
 - `.claude/skills/`
   Claude Code Skill 定义。
@@ -236,7 +239,7 @@ AI 的角色是测试工程师，不是被测系统的开发者。
    parser 输出有 errors 时，codegen 终止并打印诊断与修复建议，不生成残缺 pytest。
 
 4. 读取项目配置。
-   `aitest_config/project_config.yaml` 是项目级配置入口；`aitest_kit/codegen/project_config.py` 是 schema/loader，不是项目配置编辑入口。fallback 用于配置缺失或缺字段时兼容，不能随意删除。
+   `aitest_config/aitest.yaml` 是推荐统一配置入口；旧 `config.yaml` / `project_config.yaml` 继续兼容。`aitest_kit/workspace_config.py` 和 `aitest_kit/codegen/project_config.py` 是 loader，不是项目配置编辑入口。fallback 用于配置缺失或缺字段时兼容，不能随意删除。
 
 5. 读取 profile。
    模块模式读取 `test_workspace/tests/fixtures/codegen_profile_{module}.md`；suite 模式读取 `aitest_suite.yaml`，再临时合并 module profile + suite profile。suite profile 必须以 `_suite.md` 结尾。

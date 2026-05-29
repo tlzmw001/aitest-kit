@@ -18,6 +18,7 @@ _WORKSPACE_METADATA = Path(".aitest/workspace.json")
 _METADATA_SCHEMA_VERSION = 1
 
 _MANUAL_EXACT_PATHS = {
+    "aitest_config/aitest.yaml",
     "aitest_config/config.yaml",
     "aitest_config/project_config.yaml",
     "test_workspace/tests/conftest.py",

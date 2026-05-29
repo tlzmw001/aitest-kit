@@ -69,6 +69,7 @@ def test_init_creates_workspace_from_single_package_template(tmp_path):
     assert (target / ".claude" / "skills" / "test-codegen" / "SKILL.md").exists()
     assert (target / ".agents" / "skills" / "test-codegen" / "SKILL.md").exists()
     assert (target / "docs" / ".gitkeep").exists()
+    assert (target / "aitest_config" / "aitest.yaml").exists()
     assert (target / "aitest_config" / "config.yaml").exists()
     assert (target / "aitest_config" / "schemas" / "codegen_profile.schema.json").exists()
     assert (target / "test_workspace" / "targets" / ".gitkeep").exists()

@@ -1,0 +1,138 @@
+# AITest unified workspace config
+# New code should read this file first. Legacy config.yaml/project_config.yaml are kept for compatibility.
+workspace:
+  paths:
+    knowledge_dir: test_workspace/knowledge
+    test_spec: test_workspace/knowledge/TEST_SPEC.md
+    l0_architecture: test_workspace/knowledge/L0_system_architecture.md
+    cases_dir: test_workspace/cases
+    generated_dir: test_workspace/tests/generated
+    fixtures_dir: test_workspace/tests/fixtures
+    reports_dir: test_workspace/reports
+    project_config: aitest_config/project_config.yaml
+    old_cases_dir: cases/old-cases
+    docs_dir: docs
+    refs_dir: aitest_config/refs
+codegen:
+  helper_import: from test_workspace.tests.helpers import http as http_helper
+  grpc_helper_import: from test_workspace.tests.helpers import grpc_ops
+  api_path: /api/v1/recommend
+  helper_call: http_helper.post
+  grpc_helper_call: grpc_ops.recommend
+  var_map:
+    s: resp["results"][0]["score"]
+    cal: resp["results"][0]["calibrated_score"]
+  module_abbrevs:
+    calibration: cal
+    ab_experiment: ab
+    ab_service: abs
+    feature_scoring: feat
+    issuance: issue
+    logging: log
+    rough_ranking: rank
+    scene_routing: route
+    validation_ratelimit: val
+    e2e: e2e
+    discount_policy: dp
+  named_templates:
+  - piecewise_cascade
+  - piecewise_only
+  - skip
+  module_types:
+    standard_recommend:
+      description: 标准推荐接口模块
+    multi_endpoint:
+      description: 多端点服务模块
+      requires:
+      - case_bodies
+    subprocess_capture:
+      description: 需要隔离进程捕获输出
+      requires:
+      - case_bodies
+    isolated_service:
+      description: 需要隔离服务实例
+      requires:
+      - case_bodies
+  modules:
+    calibration:
+      module_type: standard_recommend
+    ab_experiment:
+      module_type: standard_recommend
+      notes: + request_overrides
+    feature_scoring:
+      module_type: standard_recommend
+      notes: + request_overrides
+    e2e:
+      module_type: standard_recommend
+      notes: 端到端链路组合验证
+    issuance:
+      module_type: standard_recommend
+      notes: + case_bodies（多请求/查询）
+    scene_routing:
+      module_type: standard_recommend
+      notes: + request_overrides
+    ab_service:
+      module_type: multi_endpoint
+      notes: 独立 AB 服务，多端点 CRUD
+    logging:
+      module_type: subprocess_capture
+      notes: 需要隔离子进程采集日志
+    rough_ranking:
+      module_type: isolated_service
+      notes: 需要隔离服务 + scoring proxy
+    validation_ratelimit:
+      module_type: isolated_service
+      notes: 限流用例需要隔离服务 + 低 QPS 配置
+    discount_policy:
+      module_type: multi_endpoint
+      notes: discount_system HTTP 多端点：健康检查、策略评估、决策查询/删除
+  default_request:
+    auto_fields:
+      user_id: u_{module_abbrev}_{case_number}
+      reqId: req_{module_abbrev}_{case_number}
+  builtin_assertion_rules:
+  - name: status_code
+    regex: ^response\.(?:body\.)?code\s*==\s*(?P<value>\d+)
+    template: assert resp["code"] == {value}
+  - name: http_status_code
+    regex: ^response\.status_code\s*==\s*(?P<value>\d+)
+    template: assert resp.status_code == {value}
+  - name: http_status_code_short
+    regex: ^status_code\s*==\s*(?P<value>\d+)
+    template: assert resp.status_code == {value}
+  - name: full_body
+    regex: ^response\.body\s*==\s*(?P<value>.+)
+    template: assert resp == {value}
+  - name: coupon_null
+    regex: ^(?:response\.body\.)?coupon\s*==\s*null$
+    template: assert resp["coupon"] is None
+  - name: coupon_top
+    regex: ^(?=.*coupon\.item_id)(?=.*top_result).*$
+    template: 'assert resp["coupon"]["item_id"] == max(resp["results"], key=lambda r: r["score"])["item_id"]'
+  - name: coupon_top_max
+    regex: ^(?=.*coupon)(?=.*item_id)(?=.*max).*$
+    template: 'assert resp["coupon"]["item_id"] == max(resp["results"], key=lambda r: r["score"])["item_id"]'
+  - name: set_match
+    regex: ^set\(response\.(?P<path>.+?)\)\s*==\s*(?P<expected>\{.+\})$
+    template: assert {result_set:path} == {expected}
+  - name: length
+    regex: ^len\((?P<expr>.+?)\)\s*==\s*(?P<n>\d+)$
+    template: assert len({expr}) == {n}
+  - name: linear_cal_with_b
+    regex: ^cal\s*==\s*round\(clamp\((?P<k>[0-9.]+)\s*\*\s*s\s*\+\s*(?P<b>[0-9.]+)\)\s*,\s*4\)
+    template: assert cal == pytest.approx(max(0, min(1, {k} * s + {b})), abs=1e-4)
+  - name: linear_cal_no_b
+    regex: ^cal\s*==\s*round\(clamp\((?P<k>[0-9.]+)\s*\*\s*s\)\s*,\s*4\)
+    template: assert cal == pytest.approx(max(0, min(1, {k} * s)), abs=1e-4)
+  - name: no_cal
+    regex: ^cal\s*==\s*s\b.*$
+    template: assert cal == pytest.approx(s)
+  - name: comparison
+    regex: ^response\.(?:body\.)?(?P<path>\S+)\s*(?P<op>>=|<=|>|<)\s*(?P<value>.+)$
+    template: assert {response_path:path} {op} {value}
+  - name: field_equality
+    regex: ^response\.(?:body\.)?(?P<path>\S+)\s*==\s*(?P<value>.+)$
+    template: assert {response_path:path} == {value}
+targets:
+  coupon_system:
+    config: test_workspace/targets/coupon_system/target.yaml
