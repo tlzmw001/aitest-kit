@@ -94,6 +94,39 @@ def test_doctor_reports_empty_workspace_with_warnings(tmp_path):
     assert "fail=0" in result.output
 
 
+def test_doctor_accepts_single_aitest_yaml_config(tmp_path):
+    target = tmp_path / "project"
+    (target / "aitest_config").mkdir(parents=True)
+    (target / "aitest_config" / "aitest.yaml").write_text(
+        """workspace:
+  paths:
+    cases_dir: test_workspace/cases
+    generated_dir: test_workspace/tests/generated
+    fixtures_dir: test_workspace/tests/fixtures
+    reports_dir: test_workspace/reports
+codegen:
+  module_types:
+    standard_http:
+      description: standard HTTP module
+""",
+        encoding="utf-8",
+    )
+    for path in (
+        "test_workspace/cases",
+        "test_workspace/tests/fixtures",
+        "test_workspace/tests/generated",
+        "test_workspace/results",
+    ):
+        (target / path).mkdir(parents=True)
+
+    result = CliRunner().invoke(main, ["doctor", "--workspace", str(target)])
+
+    assert result.exit_code == 0, result.output
+    assert "[OK] workspace layout" in result.output
+    assert "[OK] project config" in result.output
+    assert "fail=0" in result.output
+
+
 def test_doctor_passes_generated_flow_module(tmp_path):
     target = tmp_path / "project"
     runner = CliRunner()

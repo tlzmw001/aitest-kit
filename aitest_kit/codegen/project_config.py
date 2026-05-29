@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from aitest_kit.workspace_config import load_codegen_config_data
+
 
 @dataclass
 class AssertionRule:
@@ -202,18 +204,12 @@ def fallback_project_config() -> ProjectConfig:
 
 
 def load_project_config(path: str | Path = "aitest_config/project_config.yaml") -> ProjectConfig:
-    config_path = Path(path)
-    if not config_path.exists():
+    raw = load_codegen_config_data(path)
+    if raw is None:
         return fallback_project_config()
 
-    try:
-        import yaml
-        raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        raise RuntimeError(f"无法读取项目 codegen 配置 {config_path}: {exc}") from exc
-
     if not isinstance(raw, dict):
-        raise RuntimeError(f"项目 codegen 配置 {config_path} 必须是 YAML mapping")
+        raise RuntimeError(f"项目 codegen 配置 {path} 必须是 YAML mapping")
 
     return _project_from({**FALLBACK_PROJECT_CONFIG_DATA, **raw})
 

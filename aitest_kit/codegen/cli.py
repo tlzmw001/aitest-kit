@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import click
-import yaml
 
 from aitest_kit.codegen.module_runner import (
     analyze_promotion as run_analyze_promotion,
@@ -24,6 +23,7 @@ from aitest_kit.codegen.project_config import load_project_config
 from aitest_kit.codegen.suite_runner import run_suite_codegen
 from aitest_kit.registry import load_task_context
 from aitest_kit.workspace import push_workspace
+from aitest_kit.workspace_config import load_workspace_paths
 
 
 @dataclass(frozen=True)
@@ -36,26 +36,13 @@ class CodegenPaths:
 
 
 def _load_codegen_paths() -> CodegenPaths:
-    defaults = {
-        "cases_dir": "test_workspace/cases",
-        "generated_dir": "test_workspace/tests/generated",
-        "fixtures_dir": "test_workspace/tests/fixtures",
-        "reports_dir": "test_workspace/reports",
-        "project_config": "aitest_config/project_config.yaml",
-    }
-    config_path = Path("aitest_config/config.yaml")
-    if config_path.exists():
-        cfg = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-        configured = cfg.get("paths", {}) if isinstance(cfg, dict) else {}
-    else:
-        configured = {}
-    paths = {**defaults, **configured}
+    paths = load_workspace_paths()
     return CodegenPaths(
-        cases_dir=Path(paths["cases_dir"]),
-        generated_dir=Path(paths["generated_dir"]),
-        profile_dir=Path(paths["fixtures_dir"]),
-        reports_dir=Path(paths["reports_dir"]),
-        project_config=Path(paths["project_config"]),
+        cases_dir=paths.cases_dir,
+        generated_dir=paths.generated_dir,
+        profile_dir=paths.profile_dir,
+        reports_dir=paths.reports_dir,
+        project_config=paths.project_config,
     )
 
 

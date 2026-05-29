@@ -100,6 +100,14 @@ aitest_config/aitest.yaml
 3. 新模板、新文档、新 skill 只推荐 `aitest.yaml`。
 4. 旧文件继续兼容，避免破坏现有 workspace。
 
+当前第一版已落地兼容 loader：
+
+- 新增 `aitest_kit.workspace_config`。
+- `codegen` / `run` / `report` / `doctor` 的路径读取统一走 workspace config loader。
+- `load_project_config()` 支持从 `aitest_config/aitest.yaml` 的 `codegen` section 读取配置。
+- 如果 `aitest.yaml` 不存在，旧 `config.yaml` + `project_config.yaml` 行为保持不变。
+- 暂不修改模板，不要求现有 workspace 迁移。
+
 `aitest.yaml` 不做扁平大配置，而是按职责分区：
 
 ```yaml

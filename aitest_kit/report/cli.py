@@ -13,7 +13,6 @@ from pathlib import Path
 from uuid import uuid4
 
 import click
-import yaml
 
 from aitest_kit.report.codegen_check import run_codegen_check
 from aitest_kit.report.collector import blocked_result, collect_result
@@ -31,6 +30,7 @@ from aitest_kit.codegen.suite import (
 )
 from aitest_kit.report.task_runner import run_task_command_impl
 from aitest_kit.workspace import push_workspace
+from aitest_kit.workspace_config import load_workspace_paths
 
 
 @dataclass(frozen=True)
@@ -41,19 +41,8 @@ class ReportPaths:
 
 
 def _load_paths() -> ReportPaths:
-    config_path = Path("aitest_config/config.yaml")
-    if config_path.exists():
-        cfg = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-        paths = cfg.get("paths", {}) if isinstance(cfg, dict) else {}
-        generated_dir = Path(paths.get("generated_dir", "test_workspace/tests/generated"))
-        reports_dir = Path(paths.get("reports_dir", "test_workspace/reports"))
-        profile_dir = Path(paths.get("fixtures_dir", "test_workspace/tests/fixtures"))
-        return ReportPaths(generated_dir, reports_dir, profile_dir)
-    return ReportPaths(
-        Path("test_workspace/tests/generated"),
-        Path("test_workspace/reports"),
-        Path("test_workspace/tests/fixtures"),
-    )
+    paths = load_workspace_paths()
+    return ReportPaths(paths.generated_dir, paths.reports_dir, paths.profile_dir)
 
 
 @click.command(

@@ -687,6 +687,14 @@ Phase 3-3 已完成第四刀：
 - 当前 coupon_system/calibration 试点已在 `module.yaml` 声明 `module_type: standard_recommend`。
 - 未声明 `module_type` 时继续走 legacy profile / project_config 兼容，后续统一到 `aitest.yaml` 后再决定是否强制默认 `standard_http`。
 
+Phase 3-3 已完成第五刀：
+
+- 新增统一配置读取模块 `aitest_kit.workspace_config`。
+- `codegen` / `run` / `report` / `doctor` 的 workspace 路径读取统一走该模块。
+- `load_project_config()` 已支持优先读取 `aitest_config/aitest.yaml` 的 `codegen` section。
+- 旧 `aitest_config/config.yaml` + `aitest_config/project_config.yaml` 继续兼容。
+- 当前不改模板、不迁移真实配置文件，只先建立兼容读取能力。
+
 Phase 4 已完成第一刀：
 
 - suite manifest 声明 `target` 且 target registry 存在时，suite codegen/run 使用 target defaults：

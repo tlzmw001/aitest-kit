@@ -10,12 +10,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import click
-import yaml
 
 from aitest_kit.codegen.project_config import load_project_config
 from aitest_kit.codegen.profile_validator import validate_profile_suite
 from aitest_kit.registry import load_module_context, load_suite_context, load_target_context
 from aitest_kit.workspace import push_workspace
+from aitest_kit.workspace_config import has_workspace_config, load_workspace_paths
 
 
 _ENV_PATTERNS = [
@@ -122,8 +122,6 @@ def _doctor_impl(module_name: str | None) -> int:
 
 def _check_layout(results: list[CheckResult]) -> None:
     required = [
-        Path("aitest_config/config.yaml"),
-        Path("aitest_config/project_config.yaml"),
         Path("test_workspace/cases"),
         Path("test_workspace/tests/fixtures"),
         Path("test_workspace/tests/generated"),
@@ -132,6 +130,8 @@ def _check_layout(results: list[CheckResult]) -> None:
         Path("test_workspace/results"),
     ]
     missing_required = [str(path) for path in required if not path.exists()]
+    if not has_workspace_config():
+        missing_required.append("aitest_config/aitest.yaml or legacy config.yaml + project_config.yaml")
     missing_recommended = [str(path) for path in recommended if not path.exists()]
     if missing_required:
         results.append(CheckResult(
@@ -151,12 +151,9 @@ def _check_layout(results: list[CheckResult]) -> None:
 
 
 def _check_project_config(results: list[CheckResult]) -> None:
-    config_path = Path("aitest_config/config.yaml")
-    project_config_path = Path("aitest_config/project_config.yaml")
     try:
-        if config_path.exists():
-            yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-        load_project_config(project_config_path)
+        paths = load_workspace_paths()
+        load_project_config(paths.project_config)
     except Exception as exc:  # noqa: BLE001 - CLI diagnostic should report the concrete loader failure.
         results.append(CheckResult("FAIL", "project config", str(exc)))
         return
@@ -183,7 +180,7 @@ def _check_case_suites(
     if not suite_dirs:
         return
     try:
-        project = load_project_config(Path("aitest_config/project_config.yaml"))
+        project = load_project_config(load_workspace_paths().project_config)
     except Exception as exc:  # noqa: BLE001 - doctor should surface loader failures.
         results.append(CheckResult("FAIL", "case suites", str(exc)))
         return
