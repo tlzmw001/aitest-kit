@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
@@ -22,18 +23,31 @@ from aitest_kit.runtime_variables import (
     is_dotenv_configured,
     load_dotenv_values,
 )
+from aitest_kit.codegen.suite import load_suite_context
 from aitest_kit.workspace import push_workspace
 
 
-def _load_paths() -> tuple[Path, Path]:
+@dataclass(frozen=True)
+class ReportPaths:
+    generated_dir: Path
+    reports_dir: Path
+    profile_dir: Path
+
+
+def _load_paths() -> ReportPaths:
     config_path = Path("aitest_config/config.yaml")
     if config_path.exists():
         cfg = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
         paths = cfg.get("paths", {}) if isinstance(cfg, dict) else {}
         generated_dir = Path(paths.get("generated_dir", "test_workspace/tests/generated"))
         reports_dir = Path(paths.get("reports_dir", "test_workspace/reports"))
-        return generated_dir, reports_dir
-    return Path("test_workspace/tests/generated"), Path("test_workspace/reports")
+        profile_dir = Path(paths.get("fixtures_dir", "test_workspace/tests/fixtures"))
+        return ReportPaths(generated_dir, reports_dir, profile_dir)
+    return ReportPaths(
+        Path("test_workspace/tests/generated"),
+        Path("test_workspace/reports"),
+        Path("test_workspace/tests/fixtures"),
+    )
 
 
 @click.command(
@@ -42,11 +56,15 @@ def _load_paths() -> tuple[Path, Path]:
 )
 @click.option("--include-manual", is_flag=True, help="Include tests marked manual; excluded by default")
 @click.option("--skip-codegen-check", is_flag=True, help="Skip generated freshness check before pytest")
+@click.option("--cases", "cases_path", type=click.Path(file_okay=False, dir_okay=True), help="Run generated tests for one case suite directory")
+@click.option("--module", "module_option", help="Owning module for --cases when no aitest_suite.yaml is present")
 @click.option("--workspace", type=click.Path(file_okay=False, dir_okay=True), help="Run from another AITest workspace root")
 @click.argument("args", nargs=-1, type=click.UNPROCESSED, metavar="[MODULE]... [PYTEST_ARGS]...")
 def run_command(
     include_manual: bool,
     skip_codegen_check: bool,
+    cases_path: str | None,
+    module_option: str | None,
     workspace: str | None,
     args: tuple[str, ...],
 ):
@@ -60,18 +78,45 @@ def run_command(
     """
     try:
         with push_workspace(workspace):
-            _run_command_impl(include_manual, skip_codegen_check, args)
+            _run_command_impl(
+                include_manual,
+                skip_codegen_check,
+                args,
+                cases_path=cases_path,
+                module_override=module_option,
+            )
     except (FileNotFoundError, NotADirectoryError) as exc:
         raise click.ClickException(str(exc)) from exc
 
 
-def _run_command_impl(include_manual: bool, skip_codegen_check: bool, args: tuple[str, ...]) -> None:
+def _run_command_impl(
+    include_manual: bool,
+    skip_codegen_check: bool,
+    args: tuple[str, ...],
+    *,
+    cases_path: str | None = None,
+    module_override: str | None = None,
+) -> None:
     modules, extra_args = _split_args(args)
-    generated_dir, reports_dir = _load_paths()
-    files = _target_files(generated_dir, modules)
-    run_id, run_dir = _create_run_dir(reports_dir)
+    if cases_path and modules:
+        click.echo("Error: --cases cannot be combined with positional modules")
+        raise SystemExit(2)
+    paths = _load_paths()
+    files = _target_files(
+        paths.generated_dir,
+        modules,
+        cases_path=cases_path,
+        module_override=module_override,
+        profile_dir=paths.profile_dir,
+    )
+    run_id, run_dir = _create_run_dir(paths.reports_dir)
 
-    command = "aitest run" + (" " + " ".join(modules) if modules else "")
+    if cases_path:
+        command = "aitest run --cases " + cases_path
+        if module_override:
+            command += " --module " + module_override
+    else:
+        command = "aitest run" + (" " + " ".join(modules) if modules else "")
     manual_policy = "included" if include_manual else "excluded"
     try:
         pytest_env, environment = _pytest_environment()
@@ -85,11 +130,16 @@ def _run_command_impl(include_manual: bool, skip_codegen_check: bool, args: tupl
             blocked_reason="env_file",
             environment=exc.environment,
         )
-        _write_result(run_dir, reports_dir, result)
+        _write_result(run_dir, paths.reports_dir, result)
         click.echo(f"BLOCKED_RUN: {exc}")
         raise SystemExit(10) from exc
 
-    codegen_check = _codegen_check(modules, skip_codegen_check)
+    codegen_check = _codegen_check(
+        modules,
+        skip_codegen_check,
+        cases_path=cases_path,
+        module_override=module_override,
+    )
     if codegen_check["status"] == "failed":
         result = blocked_result(
             run_id=run_id,
@@ -99,7 +149,7 @@ def _run_command_impl(include_manual: bool, skip_codegen_check: bool, args: tupl
             manual_policy=manual_policy,
             environment=environment,
         )
-        _write_result(run_dir, reports_dir, result)
+        _write_result(run_dir, paths.reports_dir, result)
         click.echo(f"BLOCKED_RUN: {codegen_check['message']}")
         raise SystemExit(10)
 
@@ -115,7 +165,7 @@ def _run_command_impl(include_manual: bool, skip_codegen_check: bool, args: tupl
             environment=environment,
         )
         result["summary"]["error"] = 1
-        _write_result(run_dir, reports_dir, result)
+        _write_result(run_dir, paths.reports_dir, result)
         click.echo("No generated test files found.")
         raise SystemExit(5)
 
@@ -146,7 +196,7 @@ def _run_command_impl(include_manual: bool, skip_codegen_check: bool, args: tupl
         codegen_check=codegen_check,
         environment=environment,
     )
-    _write_result(run_dir, reports_dir, result)
+    _write_result(run_dir, paths.reports_dir, result)
     summary = result["summary"]
     click.echo(
         f"Report written: {run_dir / 'report.md'} "
@@ -168,11 +218,11 @@ def report_command(workspace: str | None, run_id: str | None):
 
 
 def _report_command_impl(run_id: str | None) -> None:
-    _, reports_dir = _load_paths()
+    paths = _load_paths()
     result_path = (
-        reports_dir / "runs" / run_id / "result.json"
+        paths.reports_dir / "runs" / run_id / "result.json"
         if run_id
-        else reports_dir / "latest" / "result.json"
+        else paths.reports_dir / "latest" / "result.json"
     )
     if not result_path.exists():
         raise click.ClickException(f"result.json not found: {result_path}")
@@ -244,7 +294,25 @@ def _pytest_environment() -> tuple[dict[str, str], dict]:
     return env, environment
 
 
-def _target_files(generated_dir: Path, modules: list[str]) -> list[Path]:
+def _target_files(
+    generated_dir: Path,
+    modules: list[str],
+    *,
+    cases_path: str | None = None,
+    module_override: str | None = None,
+    profile_dir: Path | None = None,
+) -> list[Path]:
+    if cases_path:
+        context = load_suite_context(
+            cases_path,
+            module_override=module_override,
+            profile_dir=profile_dir or "test_workspace/tests/fixtures",
+        )
+        return [
+            generated_dir / f"test_{context.module}_{context.suite}_{path.stem}.py"
+            for path in context.case_files
+            if context.module and context.suite
+        ]
     if not modules:
         return sorted(generated_dir.glob("test_*.py"))
     files: list[Path] = []
@@ -256,9 +324,23 @@ def _target_files(generated_dir: Path, modules: list[str]) -> list[Path]:
     return files
 
 
-def _codegen_check(modules: list[str], skip: bool) -> dict[str, str]:
+def _codegen_check(
+    modules: list[str],
+    skip: bool,
+    *,
+    cases_path: str | None = None,
+    module_override: str | None = None,
+) -> dict[str, str]:
     if skip:
         return {"status": "skipped", "command": "", "message": "--skip-codegen-check"}
+
+    if cases_path:
+        cmd = [sys.executable, "-m", "aitest_kit.cli", "codegen", "--cases", cases_path]
+        if module_override:
+            cmd.extend(["--module", module_override])
+        cmd.append("--check")
+        completed = subprocess.run(cmd, text=True, capture_output=True)
+        return _check_result(cmd, completed)
 
     if not modules:
         cmd = [sys.executable, "-m", "aitest_kit.cli", "codegen", "--all", "--check"]

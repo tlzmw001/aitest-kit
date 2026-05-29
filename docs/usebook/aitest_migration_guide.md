@@ -374,5 +374,6 @@ aitest run --workspace /path/to/workspace <module>
 ## 十三、相关文档
 
 - [AITest Quickstart](./aitest_quickstart.md)
+- [AITest Workflow Guide](./aitest_workflow_guide.md)
 - [Codegen Profile Guide](./codegen_profile_guide.md)
 - [Codegen Troubleshooting](./codegen_troubleshooting.md)

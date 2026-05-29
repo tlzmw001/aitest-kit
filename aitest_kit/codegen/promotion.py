@@ -39,6 +39,7 @@ class PromotionReport:
     module: str
     total_case_bodies: int
     groups: list[PromotionGroup] = field(default_factory=list)
+    suite: str | None = None
 
 
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -140,12 +141,24 @@ def _signature(target: str, methods: list[str], flags: list[str]) -> str:
     return f"{target}|methods={method_part}|flags={flag_part}"
 
 
-def analyze_case_body_promotion(module: str, profile_path: str | Path) -> PromotionReport:
+def analyze_case_body_promotion(
+    module: str,
+    profile_path: str | Path,
+    *,
+    suite: str | None = None,
+    case_ids: set[str] | None = None,
+) -> PromotionReport:
     """Analyze profile case_bodies and group promotion candidates.
 
     This function is intentionally read-only. It never edits profile YAML.
     """
     bodies = load_profile_case_bodies(profile_path)
+    if case_ids is not None:
+        bodies = {
+            case_id: lines
+            for case_id, lines in bodies.items()
+            if case_id in case_ids
+        }
     case_fixtures = load_profile_case_fixtures(profile_path)
     case_flows = load_profile_case_flows(profile_path)
     object_names = _profile_object_names(case_fixtures, case_flows)
@@ -189,6 +202,7 @@ def analyze_case_body_promotion(module: str, profile_path: str | Path) -> Promot
         module=module,
         total_case_bodies=len(bodies),
         groups=groups,
+        suite=suite,
     )
 
 
@@ -201,9 +215,10 @@ def render_promotion_report_markdown(report: PromotionReport) -> str:
     candidate_groups = [group for group in report.groups if group.candidate]
     keep_groups = [group for group in report.groups if group.target == "keep_case_body"]
     lines = [
-        f"# Codegen Promotion Report: {report.module}",
+        f"# Codegen Promotion Report: {_report_label(report)}",
         "",
         f"- **Module**: `{report.module}`",
+        *([f"- **Suite**: `{report.suite}`"] if report.suite else []),
         f"- **Total case_bodies**: {report.total_case_bodies}",
         f"- **Candidate groups**: {len(candidate_groups)}",
         f"- **Keep groups**: {len(keep_groups)}",
@@ -241,13 +256,14 @@ def render_promotion_patch_markdown(report: PromotionReport) -> str:
     """Render a review-only promotion patch draft."""
     candidate_groups = [group for group in report.groups if group.candidate]
     lines = [
-        f"# Codegen Promotion Patch Draft: {report.module}",
+        f"# Codegen Promotion Patch Draft: {_report_label(report)}",
         "",
         "This file is a review draft. It does not modify the codegen profile.",
         "",
         "## Summary",
         "",
         f"- **Module**: `{report.module}`",
+        *([f"- **Suite**: `{report.suite}`"] if report.suite else []),
         f"- **Candidate groups**: {len(candidate_groups)}",
         "- **Apply policy**: manual review required before editing `codegen_profile`",
         "",
@@ -318,7 +334,7 @@ def write_promotion_report(report: PromotionReport, output_dir: str | Path) -> d
     """Write promotion report Markdown and JSON artifacts."""
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
-    base = out / f"{report.module}_promotion_report"
+    base = out / f"{_report_slug(report)}_promotion_report"
     md_path = base.with_suffix(".md")
     json_path = base.with_suffix(".json")
     md_path.write_text(render_promotion_report_markdown(report) + "\n", encoding="utf-8")
@@ -338,7 +354,7 @@ def write_promotion_patch(
     """Write review-only promotion patch artifacts."""
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
-    base = out / f"{report.module}_promotion_patch"
+    base = out / f"{_report_slug(report)}_promotion_patch"
     md_path = base.with_suffix(".md")
     diff_path = base.with_suffix(".diff")
     md_path.write_text(render_promotion_patch_markdown(report) + "\n", encoding="utf-8")
@@ -347,6 +363,15 @@ def write_promotion_patch(
         encoding="utf-8",
     )
     return {"markdown": md_path, "diff": diff_path}
+
+
+def _report_label(report: PromotionReport) -> str:
+    return f"{report.module}/{report.suite}" if report.suite else report.module
+
+
+def _report_slug(report: PromotionReport) -> str:
+    raw = f"{report.module}_{report.suite}" if report.suite else report.module
+    return re.sub(r"[^A-Za-z0-9_]+", "_", raw).strip("_")
 
 
 def _next_action(group: PromotionGroup) -> str:

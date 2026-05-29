@@ -351,6 +351,7 @@ python3 -m aitest_kit.cli doctor
 
 - [Quickstart](docs/usebook/aitest_quickstart.md) — 跑通最小闭环
 - [Migration Guide](docs/usebook/aitest_migration_guide.md) — 新项目迁移指南
+- [Workflow Guide](docs/usebook/aitest_workflow_guide.md) — 长期协作模型、skill 分工和测试资产维护路线
 - [Profile Guide](docs/usebook/codegen_profile_guide.md) — 编写 module/suite profile
 - [Troubleshooting](docs/usebook/codegen_troubleshooting.md) — codegen 常见问题
 - [Coupon System Full Example](docs/usebook/coupon_system_full_example.md) — 本仓回归资产示例

@@ -144,9 +144,6 @@ def _codegen_impl(
     if explain and all_modules:
         click.echo("Error: --explain requires a single module, not --all")
         sys.exit(2)
-    if cases_path and (explain or promotion_mode or health_report):
-        click.echo("Error: --cases currently supports --validate-profile, --dump-ir, --check, --dry-run, and generation")
-        sys.exit(2)
     if write_report and not (promotion_mode or validate_profile or health_report):
         click.echo("Error: --write-report requires promotion analysis, --validate-profile, or --health-report")
         sys.exit(2)
@@ -172,7 +169,11 @@ def _codegen_impl(
             dry_run=dry_run,
             check=check,
             dump_ir=dump_ir,
+            explain=explain,
+            analyze_promotion=analyze_promotion,
+            suggest_promotion_patch=suggest_promotion_patch,
             validate_profile=validate_profile,
+            health_report=health_report,
             write_report=write_report,
             report_dir=report_dir,
         ))

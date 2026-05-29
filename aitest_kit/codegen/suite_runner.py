@@ -12,9 +12,20 @@ import click
 import yaml
 
 from aitest_kit.codegen.emitter import emit_file
+from aitest_kit.codegen.health import (
+    build_suite_codegen_health_report,
+    codegen_health_to_dict,
+    write_codegen_health_report,
+)
 from aitest_kit.codegen.ir import ir_to_dict
 from aitest_kit.codegen.parser import ParseResult
 from aitest_kit.codegen.planner import build_file_ir
+from aitest_kit.codegen.promotion import (
+    analyze_case_body_promotion,
+    promotion_to_dict,
+    write_promotion_patch,
+    write_promotion_report,
+)
 from aitest_kit.codegen.profile_validator import (
     validate_profile_suite,
     write_profile_validation_report,
@@ -36,7 +47,11 @@ def run_suite_codegen(
     dry_run: bool,
     check: bool,
     dump_ir: bool,
+    explain: str | None,
+    analyze_promotion: bool,
+    suggest_promotion_patch: bool,
     validate_profile: bool,
+    health_report: bool,
     write_report: bool,
     report_dir: str | None,
 ) -> int:
@@ -70,6 +85,19 @@ def run_suite_codegen(
         return _check_suite_consistency(context, paths, project)
     if dump_ir:
         return _dump_suite_ir(context, project)
+    if explain:
+        return _explain_suite_case(context, explain, project)
+    if health_report:
+        return _suite_health_report(context, paths, project, write_report, report_dir)
+    if analyze_promotion or suggest_promotion_patch:
+        return _analyze_suite_promotion(
+            context,
+            paths,
+            write_report=write_report or suggest_promotion_patch,
+            write_patch=suggest_promotion_patch,
+            report_dir=report_dir,
+            echo_yaml=analyze_promotion,
+        )
     if dry_run:
         return _dry_run_suite(context)
     return _generate_suite(context, paths, project)
@@ -145,6 +173,98 @@ def _dump_suite_ir(context: SuiteContext, project: ProjectConfig) -> int:
         ]
     }
     click.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _explain_suite_case(context: SuiteContext, case_id: str, project: ProjectConfig) -> int:
+    for path, parse_result in _parse_suite_files(context):
+        file_ir = build_file_ir(
+            parse_result,
+            path.stem,
+            profile_path=context.runtime_profile,
+            project=project,
+        )
+        for case_ir in file_ir.cases:
+            if case_ir.case_id == case_id:
+                click.echo(yaml.safe_dump(
+                    ir_to_dict(case_ir),
+                    allow_unicode=True,
+                    sort_keys=False,
+                ).rstrip())
+                return 0
+    click.echo(f"Case {case_id} not found in suite {context.suite}")
+    return 1
+
+
+def _suite_health_report(
+    context: SuiteContext,
+    paths: Any,
+    project: ProjectConfig,
+    write_report: bool,
+    report_dir: str | None,
+) -> int:
+    report = build_suite_codegen_health_report(context, project=project)
+    click.echo(yaml.safe_dump(
+        codegen_health_to_dict(report),
+        allow_unicode=True,
+        sort_keys=False,
+    ).rstrip())
+    if write_report:
+        out_dir = Path(report_dir) if report_dir else paths.reports_dir / "codegen" / "latest"
+        written = write_codegen_health_report(report, out_dir)
+        click.echo("Codegen health artifacts written:")
+        for path in written.values():
+            click.echo(f"- {path}")
+    return 1 if report.error_count else 0
+
+
+def _analyze_suite_promotion(
+    context: SuiteContext,
+    paths: Any,
+    *,
+    write_report: bool,
+    write_patch: bool,
+    report_dir: str | None,
+    echo_yaml: bool,
+) -> int:
+    case_ids = {
+        tc.id
+        for _, parse_result in _parse_suite_files(context)
+        for tc in parse_result.cases
+    }
+    report = analyze_case_body_promotion(
+        context.module,
+        context.runtime_profile,
+        suite=context.suite,
+        case_ids=case_ids,
+    )
+    if echo_yaml:
+        click.echo(yaml.safe_dump(
+            {"promotion_reports": [promotion_to_dict(report)]},
+            allow_unicode=True,
+            sort_keys=False,
+        ).rstrip())
+
+    written: list[Path] = []
+    if write_report:
+        out_dir = Path(report_dir) if report_dir else paths.reports_dir / "codegen" / "latest"
+        written.extend(write_promotion_report(report, out_dir).values())
+    if write_patch:
+        out_dir = Path(report_dir) if report_dir else paths.reports_dir / "codegen" / "latest"
+        profile_path = (
+            context.suite_profile_path
+            if context.suite_profile_path.exists()
+            else context.module_profile_path
+        )
+        written.extend(write_promotion_patch(
+            report,
+            out_dir,
+            profile_path=profile_path,
+        ).values())
+    if written:
+        click.echo("Promotion artifacts written:")
+        for path in written:
+            click.echo(f"- {path}")
     return 0
 
 

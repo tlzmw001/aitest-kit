@@ -13,13 +13,16 @@ from aitest_kit.codegen.planner import build_file_ir
 from aitest_kit.codegen.profile_validator import (
     ProfileValidationReport,
     validate_profile_module,
+    validate_profile_suite,
 )
 from aitest_kit.codegen.project_config import load_project_config
+from aitest_kit.codegen.suite import SuiteContext, parse_suite_case_file
 
 
 @dataclass
 class ModuleHealth:
     module: str
+    suite: str | None = None
     case_count: int = 0
     file_count: int = 0
     profile_errors: int = 0
@@ -87,6 +90,24 @@ def build_codegen_health_report(
     return CodegenHealthReport(items)
 
 
+def build_suite_codegen_health_report(
+    context: SuiteContext,
+    *,
+    project: Any | None = None,
+) -> CodegenHealthReport:
+    project = project or load_project_config()
+    validation = validate_profile_suite(
+        context.suite_dir,
+        module=context.module,
+        profile_dir=context.module_profile_path.parent,
+        project=project,
+    )
+    file_irs = _build_suite_file_irs(context, project)
+    return CodegenHealthReport([
+        _module_health(context.module, validation, file_irs, suite=context.suite)
+    ])
+
+
 def codegen_health_to_dict(report: CodegenHealthReport) -> dict[str, Any]:
     return {
         "module_count": report.module_count,
@@ -111,15 +132,17 @@ def render_codegen_health_markdown(report: CodegenHealthReport) -> str:
     ]
     for module in report.modules:
         profile = f"{module.profile_errors}E/{module.profile_warnings}W"
+        module_name = f"{module.module}/{module.suite}" if module.suite else module.module
         lines.append(
-            f"| `{module.module}` | {module.case_count} | {module.maturity} | "
+            f"| `{module_name}` | {module.case_count} | {module.maturity} | "
             f"{module.case_flow_count} | {module.case_body_count} | "
             f"{module.unparsed_count} | {profile} |"
         )
 
     lines.extend(["", "## Strategy Counts", ""])
     for module in report.modules:
-        lines.append(f"### {module.module}")
+        module_name = f"{module.module}/{module.suite}" if module.suite else module.module
+        lines.append(f"### {module_name}")
         lines.append("")
         lines.extend(_counter_lines("strategy", module.strategy_counts))
         lines.extend(_counter_lines("assertion", module.assertion_kind_counts))
@@ -169,13 +192,31 @@ def _build_module_file_irs(
     return file_irs
 
 
+def _build_suite_file_irs(
+    context: SuiteContext,
+    project: Any,
+) -> list[FileIR]:
+    file_irs: list[FileIR] = []
+    for md_path in context.case_files:
+        file_irs.append(build_file_ir(
+            parse_suite_case_file(md_path, context.module),
+            md_path.stem,
+            profile_path=context.runtime_profile,
+            project=project,
+        ))
+    return file_irs
+
+
 def _module_health(
     module: str,
     validation: ProfileValidationReport,
     file_irs: list[FileIR],
+    *,
+    suite: str | None = None,
 ) -> ModuleHealth:
     health = ModuleHealth(
         module=module,
+        suite=suite,
         file_count=len(file_irs),
         profile_errors=len(validation.errors),
         profile_warnings=len(validation.warnings),
@@ -214,7 +255,7 @@ def _maturity_for(health: ModuleHealth) -> str:
 
 
 def _module_health_to_dict(module: ModuleHealth) -> dict[str, Any]:
-    return {
+    result = {
         "module": module.module,
         "case_count": module.case_count,
         "file_count": module.file_count,
@@ -230,6 +271,9 @@ def _module_health_to_dict(module: ModuleHealth) -> dict[str, Any]:
         "assertion_kind_counts": dict(sorted(module.assertion_kind_counts.items())),
         "assertion_resolved_by_counts": dict(sorted(module.assertion_resolved_by_counts.items())),
     }
+    if module.suite:
+        result["suite"] = module.suite
+    return result
 
 
 def _counter_lines(label: str, counter: Counter[str]) -> list[str]:

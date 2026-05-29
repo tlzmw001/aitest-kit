@@ -232,5 +232,6 @@ fixture 应该明确报出缺少的环境变量名，但不要打印变量值。
 ## 下一步
 
 - 新项目完整迁移：见 [AITest Migration Guide](./aitest_migration_guide.md)
+- 长期协作模型、skill 分工和测试资产维护：见 [AITest Workflow Guide](./aitest_workflow_guide.md)
 - profile 编写：见 [Profile Guide](./codegen_profile_guide.md)
 - codegen 排错：见 [Troubleshooting](./codegen_troubleshooting.md)

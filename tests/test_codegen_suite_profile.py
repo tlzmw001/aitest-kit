@@ -112,6 +112,21 @@ def test_codegen_cases_suite_validates_dumps_generates_and_checks(tmp_path):
         assert check.exit_code == 0
         assert "All generated files are up to date." in check.output
 
+        explain = runner.invoke(codegen, ["--cases", str(suite_dir), "--explain", "TC-GW-041"])
+        assert explain.exit_code == 0
+        assert "case_id: TC-GW-041" in explain.output
+        assert "strategy: structured_case_flow" in explain.output
+
+        report_dir = root / "reports"
+        health = runner.invoke(
+            codegen,
+            ["--cases", str(suite_dir), "--health-report", "--write-report", "--report-dir", str(report_dir)],
+        )
+        assert health.exit_code == 0
+        assert "suite: quota_billing_v2" in health.output
+        assert (report_dir / "codegen_health_report.md").exists()
+        assert (report_dir / "codegen_health_report.json").exists()
+
 
 def test_codegen_cases_suite_profile_variables_render_runtime_lookup(tmp_path):
     runner = CliRunner()
@@ -347,3 +362,80 @@ def test_codegen_cases_rejects_generated_source_conflict(tmp_path):
 
         assert result.exit_code == 1
         assert "generated output conflict" in result.output
+
+
+def test_codegen_cases_suite_analyzes_promotion_and_writes_patch(tmp_path):
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
+        root = Path(cwd)
+        _write_module_profile(root)
+        suite_dir = root / "test_workspace" / "casesuites" / "promotion_smoke"
+        suite_dir.mkdir(parents=True, exist_ok=True)
+        (suite_dir / "aitest_suite.yaml").write_text(
+            """module: gateway_api
+suite: promotion_smoke
+case_files:
+  - business.md
+profile: codegen_profile_promotion_smoke_suite.md
+""",
+            encoding="utf-8",
+        )
+        (suite_dir / "business.md").write_text(
+            """# promotion smoke
+
+## 共享配置
+
+**接口**：`GET /health`
+
+---
+
+## 一、重复流程
+
+### TC-GW-071：case body one
+- **优先级**：P1
+- **断言**：`response.status == "ok"`
+
+### TC-GW-072：case body two
+- **优先级**：P1
+- **断言**：`response.status == "ok"`
+
+### TC-GW-073：case body three
+- **优先级**：P1
+- **断言**：`response.status == "ok"`
+""",
+            encoding="utf-8",
+        )
+        (suite_dir / "codegen_profile_promotion_smoke_suite.md").write_text(
+            """```yaml
+profile_scope: case_suite
+parent_module: gateway_api
+suite: promotion_smoke
+case_bodies:
+  TC-GW-071: |
+    resp = client.health()
+    assert resp["status"] == "ok"
+  TC-GW-072: |
+    resp = client.health()
+    assert resp["status"] == "ok"
+  TC-GW-073: |
+    resp = client.health()
+    assert resp["status"] == "ok"
+```
+""",
+            encoding="utf-8",
+        )
+
+        analyze = runner.invoke(codegen, ["--cases", str(suite_dir), "--analyze-promotion"])
+        assert analyze.exit_code == 0
+        assert "suite: promotion_smoke" in analyze.output
+        assert "candidate: true" in analyze.output
+
+        out_dir = root / "promotion-reports"
+        patch = runner.invoke(
+            codegen,
+            ["--cases", str(suite_dir), "--suggest-promotion-patch", "--report-dir", str(out_dir)],
+        )
+        assert patch.exit_code == 0
+        assert "Promotion artifacts written:" in patch.output
+        assert (out_dir / "gateway_api_promotion_smoke_promotion_report.md").exists()
+        assert (out_dir / "gateway_api_promotion_smoke_promotion_patch.md").exists()

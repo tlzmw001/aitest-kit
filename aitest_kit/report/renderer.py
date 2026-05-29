@@ -96,6 +96,14 @@ def _environment_summary(environment: dict[str, Any]) -> list[str]:
 
 
 def _module_section(modules: dict[str, Any]) -> list[str]:
+    categories_seen = {
+        category
+        for categories in modules.values()
+        for category in categories
+    }
+    if categories_seen and not categories_seen <= {"business", "boundary"}:
+        return _dynamic_module_section(modules)
+
     lines = [
         "## 按模块统计",
         "",
@@ -111,6 +119,27 @@ def _module_section(modules: dict[str, Any]) -> list[str]:
         lines.append(
             f"| {module} | {_passed_total(business)} | {_passed_total(boundary)} | {rate} |"
         )
+    lines.append("")
+    return lines
+
+
+def _dynamic_module_section(modules: dict[str, Any]) -> list[str]:
+    lines = [
+        "## 按模块统计",
+        "",
+        "| 模块 | 分类 | 通过 | 失败 | 错误 | skipped | 通过率 |",
+        "|------|------|------|------|------|---------|--------|",
+    ]
+    for module, categories in sorted(modules.items()):
+        for category, bucket in sorted(categories.items()):
+            total = bucket.get("auto_collected", 0)
+            passed = bucket.get("passed", 0)
+            rate = f"{(passed / total * 100):.1f}%" if total else "-"
+            lines.append(
+                f"| {module} | {category} | {passed}/{total} | "
+                f"{bucket.get('failed', 0)} | {bucket.get('error', 0)} | "
+                f"{bucket.get('pytest_skipped', 0)} | {rate} |"
+            )
     lines.append("")
     return lines
 

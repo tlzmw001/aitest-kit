@@ -104,7 +104,12 @@ def _extract_generated_metadata(files: list[Path]) -> dict[str, Any]:
         if not path.exists():
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        codegen_skipped.extend(_module_skipped(tree))
+        for skipped in _module_skipped(tree):
+            skipped = dict(skipped)
+            skipped["suite"] = skipped.get("suite") or _suite_from_source(
+                skipped.get("source") or skipped.get("source_md", "")
+            )
+            codegen_skipped.append(skipped)
         for node in tree.body:
             if not isinstance(node, ast.ClassDef):
                 continue
@@ -115,6 +120,9 @@ def _extract_generated_metadata(files: list[Path]) -> dict[str, Any]:
                 if not meta:
                     continue
                 meta = dict(meta)
+                meta["suite"] = meta.get("suite") or _suite_from_source(
+                    meta.get("source") or meta.get("source_md", "")
+                )
                 is_manual = _is_manual(item) or _meta_has_manual(meta)
                 meta["is_manual"] = is_manual
                 meta["nodeid"] = f"{path.as_posix()}::{node.name}::{item.name}"
@@ -216,6 +224,7 @@ def _case_from_testcase(testcase: ET.Element, meta: dict[str, Any]) -> dict[str,
         "nodeid": nodeid,
         "tc_id": matched.get("tc_id", "UNKNOWN"),
         "module": matched.get("module", "UNKNOWN"),
+        "suite": matched.get("suite") or _suite_from_source(matched.get("source", "")),
         "category": matched.get("category", "UNKNOWN"),
         "source_md": matched.get("source") or matched.get("source_md", ""),
         "meta_source": meta_source,
@@ -363,6 +372,7 @@ def _fallback_meta(classname: str, func_name: str) -> dict[str, Any]:
     return {
         "tc_id": tc_id,
         "module": module,
+        "suite": "",
         "category": category,
         "source": "",
         "title": "",
@@ -380,6 +390,17 @@ def _tc_id_from_func(func_name: str) -> str:
     if len(parts) < 3:
         return "UNKNOWN"
     return "-".join(part.upper() for part in parts)
+
+
+def _suite_from_source(source: str) -> str:
+    parts = Path(source).as_posix().split("/")
+    try:
+        index = parts.index("casesuites")
+    except ValueError:
+        return ""
+    if index + 1 >= len(parts):
+        return ""
+    return parts[index + 1]
 
 
 def _fallback_nodeid(classname: str, func_name: str) -> str:
