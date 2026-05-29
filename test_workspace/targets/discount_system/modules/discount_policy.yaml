@@ -1,0 +1,16 @@
+target: discount_system
+module: discount_policy
+module_type: multi_endpoint
+fixture:
+  file: discount_policy.py
+  default_fixture: setup_discount_policy
+profile:
+  file: profile_discount_policy.md
+helpers: []
+knowledge_refs:
+  l1:
+  - test_workspace/knowledge/L1/discount_policy.md
+registered_suites:
+- suite: discount_policy_smoke
+  manifest: test_workspace/suites/discount_system/discount_policy_smoke/suite.yaml
+  status: active

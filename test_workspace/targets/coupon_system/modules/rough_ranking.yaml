@@ -1,0 +1,19 @@
+target: coupon_system
+module: rough_ranking
+module_type: isolated_service
+fixture:
+  file: rough_ranking.py
+  default_fixture: setup_rough_ranking
+profile:
+  file: profile_rough_ranking.md
+helpers:
+- test_workspace/targets/coupon_system/helpers/grpc_ops.py
+- test_workspace/targets/coupon_system/helpers/http.py
+- test_workspace/targets/coupon_system/helpers/redis_ops.py
+knowledge_refs:
+  l1:
+  - test_workspace/knowledge/L1/rough_ranking.md
+registered_suites:
+- suite: rough_ranking_smoke
+  manifest: test_workspace/suites/coupon_system/rough_ranking_smoke/suite.yaml
+  status: active

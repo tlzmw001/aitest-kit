@@ -237,6 +237,33 @@ case_flows:
     assert any(diag.code == "W504" for diag in report.warnings)
 
 
+def test_profile_validator_allows_declared_fixture_factory_setup(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+default_fixture: setup_gateway_api
+default_object: client
+default_case_setup:
+  call: setup_gateway_api
+  kwargs:
+    case_id: "{case_id}"
+  save_as: client
+case_flows:
+  TC-GW-001:
+    steps:
+      - assert: 'assert True'
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert not any(diag.code == "W504" for diag in report.warnings)
+
+
 def test_profile_validator_checks_module_type_from_module_yaml(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     profile_dir = _write_target(tmp_path, module_type="isolated_service")

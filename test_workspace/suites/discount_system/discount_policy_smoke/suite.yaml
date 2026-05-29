@@ -1,0 +1,10 @@
+target: discount_system
+module: discount_policy
+suite: discount_policy_smoke
+case_files:
+- business.md
+- boundary.md
+profile: profile_discount_policy_smoke_suite.md
+knowledge_refs:
+  l1:
+  - test_workspace/knowledge/L1/discount_policy.md

@@ -103,9 +103,10 @@ def validate_profile_suite(
     suite_request_overrides = _mapping(suite_data, "request_overrides")
     suite_variables = _mapping(suite_data, "variables")
     runtime_case_bodies = _mapping(runtime_data, "case_bodies")
+    case_flow_defaults = case_flow_defaults_from_yaml(runtime_data)
     runtime_case_flows = apply_case_flow_defaults(
         _mapping(runtime_data, "case_flows"),
-        case_flow_defaults_from_yaml(runtime_data),
+        case_flow_defaults,
     )
     runtime_variables = _mapping(runtime_data, "variables")
 
@@ -122,7 +123,7 @@ def validate_profile_suite(
     _validate_case_references(report, "request_overrides", suite_request_overrides)
     _validate_case_references(report, "variables.cases", _variable_cases(suite_variables))
     _warn_feasibility_suspect_strategies(report, suite_case_bodies, suite_case_flows)
-    _warn_fixture_reinvocation(report, runtime_case_flows)
+    _warn_fixture_reinvocation(report, runtime_case_flows, case_flow_defaults.case_setup)
     for message in validate_case_flow_variable_references(runtime_case_flows, runtime_variables):
         _error(report, "E507", message)
     _validate_module_type(report, runtime_data, project_config, runtime_case_bodies, runtime_case_flows)
@@ -334,6 +335,7 @@ def _warn_feasibility_suspect_strategies(
 def _warn_fixture_reinvocation(
     report: ProfileValidationReport,
     case_flows: dict[str, Any],
+    default_case_setup: dict[str, Any] | None = None,
 ) -> None:
     for case_id, flow in case_flows.items():
         if not isinstance(flow, dict):
@@ -348,6 +350,8 @@ def _warn_fixture_reinvocation(
         first_call = first_step.get("call")
         if first_call != fixture:
             continue
+        if _is_declared_factory_setup(first_step, default_case_setup):
+            continue
         _warn(
             report,
             "W504",
@@ -355,6 +359,20 @@ def _warn_fixture_reinvocation(
             "directly, or declare the fixture object as a factory explicitly",
             f"case_flows.{case_id}.steps[0].call",
         )
+
+
+def _is_declared_factory_setup(
+    first_step: dict[str, Any],
+    default_case_setup: dict[str, Any] | None,
+) -> bool:
+    """Return true when a fixture-as-factory call is declared by profile defaults."""
+    if not isinstance(default_case_setup, dict) or not default_case_setup:
+        return False
+    if first_step.get("call") != default_case_setup.get("call"):
+        return False
+    if first_step.get("save_as") != default_case_setup.get("save_as"):
+        return False
+    return True
 
 
 def _validate_module_type(

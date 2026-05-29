@@ -99,3 +99,5 @@ codegen:
 targets:
   coupon_system:
     config: test_workspace/targets/coupon_system/target.yaml
+  discount_system:
+    config: test_workspace/targets/discount_system/target.yaml

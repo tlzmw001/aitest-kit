@@ -1,0 +1,18 @@
+target: coupon_system
+module: e2e
+module_type: multi_endpoint
+fixture:
+  file: e2e.py
+  default_fixture: setup_e2e
+profile:
+  file: profile_e2e.md
+helpers:
+- test_workspace/targets/coupon_system/helpers/grpc_ops.py
+- test_workspace/targets/coupon_system/helpers/http.py
+- test_workspace/targets/coupon_system/helpers/redis_ops.py
+knowledge_refs:
+  l0: test_workspace/knowledge/L0_system_architecture.md
+registered_suites:
+- suite: e2e_smoke
+  manifest: test_workspace/suites/coupon_system/e2e_smoke/suite.yaml
+  status: active
