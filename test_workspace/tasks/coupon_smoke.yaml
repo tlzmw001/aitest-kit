@@ -1,0 +1,13 @@
+schema_version: 1
+name: coupon_smoke
+description: Coupon system smoke suites for target-aware execution.
+defaults:
+  include_manual: false
+  pytest_args:
+    - -q
+units:
+  - name: calibration smoke
+    target: coupon_system
+    module: calibration
+    suite: calibration_smoke
+    suite_file: ../suites/coupon_system/calibration_smoke/suite.yaml

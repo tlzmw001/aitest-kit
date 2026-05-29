@@ -524,7 +524,8 @@ case_files:
 ### 推荐结构
 
 ```yaml
-task: sub2api_regression
+schema_version: 1
+name: sub2api_regression
 
 description: Sub2API 回归任务
 
@@ -556,7 +557,7 @@ units:
 
 `task.yaml` 必填：
 
-- `task`：任务名，用于报告路径、日志显示。
+- `name`：任务名，用于报告路径、日志显示。兼容读取旧字段 `task`。
 - `units`：执行单元列表。
 
 每个 unit 必须二选一：
@@ -568,6 +569,8 @@ units:
 
 第一阶段实现：
 
+- `schema_version: 1`
+- `name`，兼容旧字段 `task`
 - `env_files`
 - `defaults.include_manual`
 - `defaults.pytest_args`
@@ -754,7 +757,7 @@ test_workspace/tests/generated/
 aitest codegen --target sub2api --all
 aitest codegen --target sub2api --suite gateway_api/quota_billing_v2
 aitest codegen --suite-file /path/to/suite.yaml
-aitest codegen --task test_workspace/tasks/sub2api_regression.yaml
+aitest codegen --task-file test_workspace/tasks/sub2api_regression.yaml
 aitest codegen --target sub2api --suite gateway_api/quota_billing_v2 --case TC-GW-041
 ```
 
@@ -764,7 +767,7 @@ aitest codegen --target sub2api --suite gateway_api/quota_billing_v2 --case TC-G
 aitest run --target sub2api --all
 aitest run --target sub2api --suite gateway_api/quota_billing_v2
 aitest run --suite-file /path/to/suite.yaml
-aitest run --task test_workspace/tasks/sub2api_regression.yaml
+aitest run --task-file test_workspace/tasks/sub2api_regression.yaml
 aitest run --target sub2api --suite gateway_api/quota_billing_v2 --case TC-GW-041
 ```
 
@@ -890,9 +893,9 @@ python3 -m aitest_kit.cli doctor --workspace /path/to/dragon/aitest_workspace
 
 ```bash
 aitest codegen --suite-file /path/to/suite.yaml
-aitest codegen --task /path/to/task.yaml
+aitest codegen --task-file /path/to/task.yaml
 aitest run --suite-file /path/to/suite.yaml
-aitest run --task /path/to/task.yaml
+aitest run --task-file /path/to/task.yaml
 ```
 
 第一版 task 范围：
@@ -900,14 +903,14 @@ aitest run --task /path/to/task.yaml
 - 支持 `units[].suite_file`。
 - 支持 `units[].case_ids` 传递到 pytest `-k` 或等价过滤。
 - 暂不支持 `units[].all`。
-- 暂不支持跨 target 聚合报告。
 - 每个 task unit 复用 suite codegen/run 逻辑，避免重写主链路。
+- task run 写入 task 级汇总报告：`test_workspace/reports/tasks/{task}/runs/{run_id}/`。
 
 验收：
 
 - `--suite-file` 可指向任意路径的 `suite.yaml` 或 legacy `aitest_suite.yaml`。
-- `--task` 可逐个执行多个 suite unit。
-- report 里至少保留命令来源；metadata 完整化可在后续 report 阶段继续完善。
+- `--task-file` 可逐个执行多个 suite unit，旧 `--task` 作为兼容别名。
+- report 保留 task、unit、suite 来源，并生成 task 级汇总。
 - 旧 `--cases` 测试继续通过。
 
 验证：

@@ -81,7 +81,8 @@ knowledge_refs:
     task_dir.mkdir(parents=True)
     (task_dir / "sub2api.env").write_text("SUB2API_BASE_URL=http://127.0.0.1\n", encoding="utf-8")
     (task_dir / "release_regression.yaml").write_text(
-        """task: release_regression
+        """schema_version: 1
+name: release_regression
 description: release regression suite
 env_files:
   - sub2api.env

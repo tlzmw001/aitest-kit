@@ -52,6 +52,13 @@ aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
 ```
 
+多个 suite 需要作为一次任务执行时，创建 `test_workspace/tasks/<task>.yaml`：
+
+```bash
+aitest codegen --task-file test_workspace/tasks/<task>.yaml --check
+aitest run --task-file test_workspace/tasks/<task>.yaml
+```
+
 运行测试：
 
 ```bash
@@ -133,6 +140,7 @@ aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
 
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest run --task-file test_workspace/tasks/<task>.yaml
 aitest report
 ```
 

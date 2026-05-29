@@ -64,7 +64,13 @@ def _load_codegen_paths() -> CodegenPaths:
 @click.option("--all", "all_modules", is_flag=True, help="Operate on all modules under test_workspace/cases")
 @click.option("--cases", "cases_path", type=click.Path(file_okay=False, dir_okay=True), help="Operate on one case suite directory")
 @click.option("--suite-file", type=click.Path(file_okay=True, dir_okay=False), help="Operate on one suite manifest file")
-@click.option("--task", "task_file", type=click.Path(file_okay=True, dir_okay=False), help="Operate on suites listed by one task manifest")
+@click.option(
+    "--task-file",
+    "--task",
+    "task_file",
+    type=click.Path(file_okay=True, dir_okay=False),
+    help="Operate on suites listed by one task manifest",
+)
 @click.option("--module", "module_option", help="Owning module for --cases when no aitest_suite.yaml is present")
 @click.option("--dry-run", is_flag=True, help="Parse Markdown only; do not write generated files")
 @click.option("--check", is_flag=True, help="Verify generated pytest matches Markdown/profile/config")
@@ -165,18 +171,21 @@ def _codegen_impl(
 
     suite_sources = [item for item in (cases_path, suite_file, task_file) if item]
     if len(suite_sources) > 1:
-        click.echo("Error: --cases, --suite-file, and --task are mutually exclusive")
+        click.echo("Error: --cases, --suite-file, and --task-file are mutually exclusive")
         sys.exit(2)
     if (suite_file or task_file) and module_option:
         click.echo("Error: --module can only be used with --cases")
         sys.exit(2)
     if (suite_file or task_file) and (module or all_modules):
-        click.echo("Error: --suite-file/--task cannot be combined with positional module or --all")
+        click.echo("Error: --suite-file/--task-file cannot be combined with positional module or --all")
         sys.exit(2)
 
     if task_file:
         if dump_ir or explain or promotion_mode or health_report:
-            click.echo("Error: --task currently supports generation, --check, --dry-run, and --validate-profile")
+            click.echo(
+                "Error: --task-file currently supports generation, --check, "
+                "--dry-run, and --validate-profile"
+            )
             sys.exit(2)
         sys.exit(_run_task_codegen(
             task_file,

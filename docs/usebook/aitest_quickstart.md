@@ -124,6 +124,13 @@ aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
 ```
 
+如果要把多个 suite 作为一次回归或冒烟任务执行，创建 `test_workspace/tasks/<task>.yaml`，然后运行：
+
+```bash
+aitest codegen --task-file test_workspace/tasks/<task>.yaml --check
+aitest run --task-file test_workspace/tasks/<task>.yaml
+```
+
 legacy 模块模式仍兼容 `aitest codegen <module>` 和 `test_workspace/tests/generated/`，但新项目建议从 `suite.yaml` 开始。
 
 判断结果：

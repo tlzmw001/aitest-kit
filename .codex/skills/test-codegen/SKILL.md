@@ -1,9 +1,9 @@
 ---
 name: test-codegen
-description: 从模块 Markdown 用例或 target-aware case suite 生成 pytest，执行 profile gate、Case IR、freshness check，并处理少量 UNPARSED 补写
-when_to_use: 当用户需要将 Markdown 测试用例编译为 pytest、检查 generated 是否过期，或针对某个 case suite 执行 codegen 时
-argument-hint: <target_module>|--suite-file <suite.yaml> [--dry-run|--check|--dump-ir]
-arguments: [target_module, suite_file, dry_run, check, dump_ir]
+description: 从模块 Markdown 用例、target-aware case suite 或 task manifest 生成 pytest，执行 profile gate、Case IR、freshness check，并处理少量 UNPARSED 补写
+when_to_use: 当用户需要将 Markdown 测试用例编译为 pytest、检查 generated 是否过期，或针对某个 case suite / task 执行 codegen 时
+argument-hint: <target_module>|--suite-file <suite.yaml>|--task-file <task.yaml> [--dry-run|--check|--dump-ir]
+arguments: [target_module, suite_file, task_file, dry_run, check, dump_ir]
 user-invocable: true
 allowed-tools: Read Glob Grep Write Edit Bash
 effort: high
@@ -11,7 +11,7 @@ effort: high
 
 # 测试代码生成
 
-将 `$target_module` 模块的 Markdown 用例，或 `--suite-file <suite.yaml>` 指定的 target-aware case suite，编译为 pytest 代码。
+将 `$target_module` 模块的 Markdown 用例、`--suite-file <suite.yaml>` 指定的 target-aware case suite，或 `--task-file <task.yaml>` 指定的一组 suites，编译为 pytest 代码。
 
 当前推荐路径是 target/suite 模式：
 
@@ -31,7 +31,7 @@ test_workspace/suites/{target}/{suite}/
 test_workspace/generated/{target}/
 ```
 
-legacy 模块模式仍兼容 `test_workspace/tests/fixtures` 和 `test_workspace/tests/generated`，但新项目和新增 suite 优先走 `--suite-file`。
+legacy 模块模式仍兼容 `test_workspace/tests/fixtures` 和 `test_workspace/tests/generated`，但新项目和新增 suite 优先走 `--suite-file`；多个 suite 的回归或冒烟任务优先走 `--task-file`。
 
 ## 参考文档
 
@@ -133,6 +133,13 @@ python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --validate
 python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --dump-ir
 python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml
 python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --check
+```
+
+多个 suite 组成任务时：
+
+```bash
+python3 -m aitest_kit.cli codegen --task-file test_workspace/tasks/<task>.yaml --check
+python3 -m aitest_kit.cli run --task-file test_workspace/tasks/<task>.yaml -- --collect-only -q
 ```
 
 ### 新增用例的能力缺口判断
@@ -294,7 +301,7 @@ legacy 模块模式：
 6. `python3 -m pytest test_workspace/tests/generated/test_{module}_*.py --collect-only -q` — 收集检查
 7. 如果模块 fixture 和服务已就绪：`python3 -m pytest test_workspace/tests/generated/test_{module}_*.py -q`
 
-target/suite 模式把前 4 步替换为 `python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml ...`，生成目标文件为 `test_{module}_{suite}_{case_file_stem}.py`，默认位于 `test_workspace/generated/{target}/`。
+target/suite 模式把前 4 步替换为 `python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml ...`，生成目标文件为 `test_{module}_{suite}_{case_file_stem}.py`，默认位于 `test_workspace/generated/{target}/`；多个 suite 组成一次执行任务时使用 `--task-file <task.yaml>`。
 target/suite 模式语法和收集检查：
 
 ```bash

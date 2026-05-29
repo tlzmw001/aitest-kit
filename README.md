@@ -73,6 +73,13 @@ aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
 ```
 
+多个 suite 组成一次回归任务时，用 task 文件编排：
+
+```bash
+aitest codegen --task-file test_workspace/tasks/<task>.yaml --check
+aitest run --task-file test_workspace/tasks/<task>.yaml
+```
+
 ## 适合解决什么问题
 
 - 新项目没有自动化测试，但有开发文档、API 文档或接口定义。
@@ -222,9 +229,11 @@ test_workspace/reports/runs/{run_id}/
 | `aitest codegen <module>` | legacy：生成单个模块 pytest |
 | `aitest codegen --all` | legacy：生成所有模块 pytest |
 | `aitest codegen --suite-file <suite.yaml>` | 生成 target-aware case suite pytest |
+| `aitest codegen --task-file <task.yaml>` | 按 task 中的 suite 列表生成或检查 pytest |
 | `aitest codegen --all --check` | legacy：检查 generated 是否过期 |
 | `aitest run <module>` | legacy：执行模块 generated pytest 并生成结构化报告 |
 | `aitest run --suite-file <suite.yaml>` | 执行一个 suite 并生成结构化报告 |
+| `aitest run --task-file <task.yaml>` | 执行一个 task 并生成 task 级汇总报告 |
 | `aitest report` | 从已有 `result.json` 重新渲染报告 |
 
 运行真实接口测试时，可以通过 env 文件提供服务地址、账号、token 和 API key：

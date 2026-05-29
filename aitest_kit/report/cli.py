@@ -29,8 +29,7 @@ from aitest_kit.codegen.suite import (
     resolve_suite_runtime_paths,
     suite_generated_path,
 )
-from aitest_kit.registry import load_task_context
-from aitest_kit.registry.models import TaskUnit
+from aitest_kit.report.task_runner import run_task_command_impl
 from aitest_kit.workspace import push_workspace
 
 
@@ -65,7 +64,13 @@ def _load_paths() -> ReportPaths:
 @click.option("--skip-codegen-check", is_flag=True, help="Skip generated freshness check before pytest")
 @click.option("--cases", "cases_path", type=click.Path(file_okay=False, dir_okay=True), help="Run generated tests for one case suite directory")
 @click.option("--suite-file", type=click.Path(file_okay=True, dir_okay=False), help="Run generated tests for one suite manifest file")
-@click.option("--task", "task_file", type=click.Path(file_okay=True, dir_okay=False), help="Run generated tests for suites listed by one task manifest")
+@click.option(
+    "--task-file",
+    "--task",
+    "task_file",
+    type=click.Path(file_okay=True, dir_okay=False),
+    help="Run generated tests for suites listed by one task manifest",
+)
 @click.option("--module", "module_option", help="Owning module for --cases when no aitest_suite.yaml is present")
 @click.option("--workspace", type=click.Path(file_okay=False, dir_okay=True), help="Run from another AITest workspace root")
 @click.argument("args", nargs=-1, type=click.UNPROCESSED, metavar="[MODULE]... [PYTEST_ARGS]...")
@@ -116,7 +121,7 @@ def _run_command_impl(
     modules, extra_args = _split_args(args)
     suite_sources = [item for item in (cases_path, suite_file, task_file) if item]
     if len(suite_sources) > 1:
-        click.echo("Error: --cases, --suite-file, and --task are mutually exclusive")
+        click.echo("Error: --cases, --suite-file, and --task-file are mutually exclusive")
         raise SystemExit(2)
     if (suite_file or task_file) and module_override:
         click.echo("Error: --module can only be used with --cases")
@@ -125,7 +130,7 @@ def _run_command_impl(
         click.echo("Error: suite/task run cannot be combined with positional modules")
         raise SystemExit(2)
     if task_file:
-        _run_task_command_impl(
+        run_task_command_impl(
             include_manual,
             skip_codegen_check,
             task_file,
@@ -257,76 +262,6 @@ def _run_command_impl(
         f"(passed={summary['passed']}, failed={summary['failed']}, error={summary['error']})"
     )
     raise SystemExit(completed.returncode)
-
-
-def _run_task_command_impl(
-    include_manual: bool,
-    skip_codegen_check: bool,
-    task_file: str,
-    extra_args: list[str],
-) -> None:
-    task = load_task_context(task_file)
-    if task.diagnostics:
-        click.echo(f"Task: {task.task}")
-        click.echo("Task manifest diagnostics:")
-        for diagnostic in task.diagnostics:
-            click.echo(f"  {diagnostic}")
-        raise SystemExit(1)
-    if not task.units:
-        click.echo(f"Task {task.task} has no units")
-        raise SystemExit(1)
-
-    exit_code = 0
-    click.echo(f"Task: {task.task}")
-    for index, unit in enumerate(task.units, start=1):
-        if unit.all:
-            click.echo(f"\n[{index}] target all is not supported in Phase 2: {unit.target}")
-            exit_code = max(exit_code, 2)
-            continue
-        if unit.suite_file is None:
-            click.echo(f"\n[{index}] task unit requires suite_file in Phase 2")
-            exit_code = max(exit_code, 2)
-            continue
-        unit_args = tuple(
-            task.defaults.pytest_args
-            + unit.pytest_args
-            + extra_args
-            + _case_id_filter_args(unit.case_ids)
-        )
-        unit_include_manual = _unit_include_manual(include_manual, task.defaults.include_manual, unit)
-        label = unit.name or unit.suite or str(unit.suite_file)
-        click.echo(f"\n[{index}] suite_file: {unit.suite_file}")
-        if label:
-            click.echo(f"    unit: {label}")
-        try:
-            _run_command_impl(
-                unit_include_manual,
-                skip_codegen_check,
-                unit_args,
-                suite_file=str(unit.suite_file),
-                env_files=task.env_files,
-            )
-        except SystemExit as exc:
-            code = int(exc.code or 0)
-            if code:
-                exit_code = code
-    raise SystemExit(exit_code)
-
-
-def _unit_include_manual(cli_include_manual: bool, default_include_manual: bool | None, unit: TaskUnit) -> bool:
-    if unit.include_manual is not None:
-        return unit.include_manual
-    if default_include_manual is not None:
-        return default_include_manual
-    return cli_include_manual
-
-
-def _case_id_filter_args(case_ids: list[str]) -> list[str]:
-    if not case_ids:
-        return []
-    terms = [case_id.lower().replace("-", "_") for case_id in case_ids]
-    return ["-k", " or ".join(terms)]
-
 
 @click.command(name="report")
 @click.option("--workspace", type=click.Path(file_okay=False, dir_okay=True), help="Read reports from another AITest workspace root")

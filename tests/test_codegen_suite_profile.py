@@ -176,7 +176,7 @@ units:
             encoding="utf-8",
         )
 
-        check = runner.invoke(codegen, ["--task", str(task_file), "--check"])
+        check = runner.invoke(codegen, ["--task-file", str(task_file), "--check"])
         assert check.exit_code == 0, check.output
         assert "Task: release_regression" in check.output
         assert "All generated files are up to date." in check.output

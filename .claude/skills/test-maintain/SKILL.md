@@ -174,7 +174,7 @@ generated pytest 函数
 - `test-design`：模块/suite、关联 knowledge、需要新增或覆盖的测试维度
 - `test-fix`：case_id、错误描述、期望修正方向
 - `test-scaffold`：target、模块、模式（scaffold-module/scaffold-suite/incremental）、suite_dir、fixture/profile/helper 缺口
-- `test-codegen`：模块或 `--suite-file <suite_dir>/suite.yaml`、是否 check/dump-ir
+- `test-codegen`：模块、`--suite-file <suite_dir>/suite.yaml` 或 `--task-file <task.yaml>`、是否 check/dump-ir
 - `emitter-build`：已验证 pytest、profile、可沉淀模式
 
 不要把本 skill 的完整分析原文原样塞给底层 skill；只传决策所需的最小上下文。
@@ -201,6 +201,13 @@ python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --dump-ir
 python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml
 python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --check
 python3 -m aitest_kit.cli run --suite-file <suite_dir>/suite.yaml -- --collect-only -q
+```
+
+API task 模式：
+
+```bash
+python3 -m aitest_kit.cli codegen --task-file <task.yaml> --check
+python3 -m aitest_kit.cli run --task-file <task.yaml> -- --collect-only -q
 ```
 
 如果真实服务和前置 env 已准备好，再运行：

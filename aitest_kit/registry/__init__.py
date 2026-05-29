@@ -5,8 +5,8 @@ from aitest_kit.registry.loader import (
     load_module_context,
     load_suite_context,
     load_target_context,
-    load_task_context,
 )
+from aitest_kit.registry.task_loader import load_task_context
 from aitest_kit.registry.models import (
     ModuleContext,
     RegisteredSuite,

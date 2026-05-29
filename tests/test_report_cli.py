@@ -254,8 +254,10 @@ units:
         _run_command_impl(False, True, (), task_file=str(task_file))
 
     assert task_exit.value.code == 0
-    task_result = json.loads(result_path.read_text(encoding="utf-8"))
+    task_result_path = tmp_path / "test_workspace" / "reports" / "tasks" / "release_regression" / "latest" / "result.json"
+    task_result = json.loads(task_result_path.read_text(encoding="utf-8"))
     assert task_result["summary"]["passed"] == 1
+    assert task_result["task"]["name"] == "release_regression"
 
 
 def test_run_suite_file_uses_target_generated_and_reports_dirs(tmp_path, monkeypatch):
@@ -435,10 +437,11 @@ units:
         _run_command_impl(False, True, (), task_file=str(task_file))
 
     assert task_exit.value.code == 0
-    result_path = tmp_path / "test_workspace" / "reports" / "latest" / "result.json"
+    result_path = tmp_path / "test_workspace" / "reports" / "tasks" / "task_env" / "latest" / "result.json"
     result = json.loads(result_path.read_text(encoding="utf-8"))
     assert result["summary"]["passed"] == 1
     assert result["summary"]["failed"] == 0
+    assert result["task"]["units"][0]["name"] == "selected"
     assert result["environment"]["env_file"] == str(env_file)
     assert result["environment"]["env_files"] == [str(env_file)]
     assert result["environment"]["env_file_keys"] == ["TASK_TOKEN"]

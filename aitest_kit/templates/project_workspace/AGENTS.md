@@ -61,6 +61,7 @@ aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --
 aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
 aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest run --task-file test_workspace/tasks/<task>.yaml
 aitest report
 ```
 
@@ -126,6 +127,7 @@ aitest report
 aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
 aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
+aitest run --task-file test_workspace/tasks/<task>.yaml -- --collect-only -q
 ```
 
 如服务环境已就绪，再运行对应模块的真实 pytest。
