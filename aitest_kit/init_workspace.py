@@ -18,7 +18,17 @@ from aitest_kit.workspace import init_workspace
 )
 @click.option("--force", is_flag=True, help="Overwrite template-managed workspace files if they already exist.")
 def init_command(target: Path, force: bool) -> None:
-    """Initialize a clean AITest workspace for one target system."""
+    """Initialize a clean AITest workspace for one target system.
+
+    Writes template-managed files such as aitest_config/, test_workspace/,
+    AGENTS.md, CLAUDE.md, and local skill directories into --target.
+
+    \b
+    After init:
+      cd <target>
+      aitest doctor
+      # then create target/module/suite assets before codegen/run
+    """
     try:
         result = init_workspace(target, force=force)
     except FileExistsError as exc:

@@ -18,7 +18,16 @@ _TASK_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 @click.group(name="registry")
 def registry_command() -> None:
-    """Maintain target/module/suite registry wiring."""
+    """Maintain target/module/suite registry wiring.
+
+    \b
+    Use registry commands when a suite should participate in:
+      aitest codegen --target <target> --module <module>
+      aitest run --target <target>
+      aitest run --all
+
+    Direct suite execution with --suite-file does not require registration.
+    """
 
 
 @registry_command.command(name="register-suite")
@@ -41,7 +50,15 @@ def register_suite_command(
     dry_run: bool,
     workspace: str | None,
 ) -> None:
-    """Register one suite under a target module."""
+    """Register one suite under a target module.
+
+    Registration is only needed for module/target/all aggregation. A suite can
+    always be generated or run directly with --suite-file.
+
+    \b
+    Example:
+      aitest registry register-suite --target <target> --module <module> --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+    """
     with push_workspace(workspace):
         _register_suite_impl(
             target=target,
@@ -54,7 +71,10 @@ def register_suite_command(
 
 @click.group(name="task")
 def task_command() -> None:
-    """Maintain task manifests."""
+    """Maintain task manifests.
+
+    A task is an explicit execution list for suites that should run together.
+    """
 
 
 @task_command.command(name="create")
@@ -85,7 +105,15 @@ def task_create_command(
     dry_run: bool,
     workspace: str | None,
 ) -> None:
-    """Create a task manifest from explicit suite files."""
+    """Create a task manifest from explicit suite files.
+
+    A task does not discover suites automatically and does not require the
+    suites to be registered under their modules.
+
+    \b
+    Example:
+      aitest task create --name nightly_demo --suite-file path/to/a/suite.yaml --suite-file path/to/b/suite.yaml
+    """
     with push_workspace(workspace):
         _task_create_impl(
             task_name=task_name,

@@ -13,7 +13,19 @@ from aitest_kit.upgrade_workspace import upgrade_command
 
 @click.group()
 def main():
-    """AI-driven testing toolkit for Markdown cases, codegen, and pytest reports."""
+    """AI-driven testing toolkit for Markdown cases, codegen, and pytest reports.
+
+    \b
+    Command map:
+      init      create a clean AITest workspace skeleton
+      doctor    diagnose workspace, registry, profile, generated pytest
+      codegen   compile Markdown suites/tasks into generated pytest
+      run       execute generated pytest and write structured reports
+      report    re-render report.md from existing result.json
+      registry  wire suites into module/target/all aggregation
+      task      create explicit multi-suite execution manifests
+      upgrade   update template-managed workspace files
+    """
 
 
 main.add_command(codegen)

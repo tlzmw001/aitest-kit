@@ -30,8 +30,8 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 2. **可用 API** — fixture 需要调用的管理接口或数据准备接口
 3. **隔离策略** — 每条用例的数据如何隔离（tmp_path、唯一 user_id、teardown 恢复）
 4. **teardown** — 所有副作用都能恢复（配置、测试数据、外部依赖状态）
-5. **`_CASE_CONFIGS` 结构** — 参考 codegen_profile 的 setup 映射章节
-6. **服务地址** — 从项目专属环境变量读取（如 `DISCOUNT_SYSTEM_BASE_URL`），可兼容 `HTTP_BASE_URL`；不要硬编码端口或 URL
+5. **profile 映射** — case_flows/case_bodies/request_overrides 是否覆盖当前用例
+6. **服务地址** — 从项目专属环境变量读取（如 `SERVICE_BASE_URL` 或 `{TARGET}_BASE_URL`），可兼容 `HTTP_BASE_URL`；不要硬编码端口或 URL
 7. **环境缺失** — 可执行 API 测试缺少服务地址时用 `pytest.fail`，不要用 `pytest.skip` 掩盖环境未配置
 8. **HTTP 客户端** — 使用 `httpx` 时显式指定 `httpx.HTTPTransport()`，避免 macOS/CI 系统代理影响本地 HTTP 测试
 9. **黑盒边界** — fixture 不 import 待测系统内部模块，不读取目标项目源码/内部测试来推断业务规则
@@ -98,7 +98,7 @@ profile 应包含：
 | **请求模板** | 固定字段、差异字段、helper 用法 |
 | **profile variables** | 本 suite/case 使用的账号、token、URL path、非法值等变量面板 |
 | **断言模式** | 断言 -> pytest 映射表 |
-| **setup 映射** | 场景变量 -> _CASE_CONFIGS 映射 |
+| **setup 映射** | 场景变量 -> fixture/case_flow 映射 |
 | **case_bodies / case_flows** | 复杂用例的自定义执行体，或已晋升的结构化多步骤流程 |
 | **已知阻塞项** | 无法自动化的用例及原因 |
 | **调试经验** | 模块特有排错经验 |

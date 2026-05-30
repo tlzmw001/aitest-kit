@@ -46,8 +46,9 @@
 
 | module_type | 基线路线 |
 |-------------|----------|
-| `standard_http` | 默认模板 |
+| `standard_recommend` | 默认模板 |
 | `multi_endpoint` | case_flow |
+| `subprocess_capture` | case_flow |
 | `isolated_service` | case_flow |
 
 ## 逐条 case 路线评估

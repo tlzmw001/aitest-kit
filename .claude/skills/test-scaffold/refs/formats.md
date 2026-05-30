@@ -63,13 +63,13 @@ suite profile 示例：
 variables:
   defaults:
     base_url:
-      env: SUB2API_BASE_URL
+      env: SERVICE_BASE_URL
   cases:
     TC-XXX-001:
       username:
-        env: SUB2API_NORMAL_USER_EMAIL
+        env: TEST_USER_EMAIL
       password:
-        env: SUB2API_NORMAL_USER_PASSWORD
+        env: TEST_USER_PASSWORD
     TC-XXX-010:
       token:
         value: ""

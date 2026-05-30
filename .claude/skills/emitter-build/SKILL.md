@@ -2,8 +2,8 @@
 name: emitter-build
 description: 从已验证 pytest、Case IR 和 profile 中识别可沉淀模式，评估是否晋升为 assertion_rules、case_flows、fixture helper 或 emitter 规则
 when_to_use: 当 generated pytest 已通过，需要复盘重复模式、减少 case_body/flow 重复，或评估是否值得沉淀为确定性生成规则时
-argument-hint: <target_module>|--suite-file <suite.yaml>
-arguments: [target_module, suite_file]
+argument-hint: --suite-file <suite.yaml>|--target <target> --module <module>
+arguments: [suite_file, target, module]
 user-invocable: true
 allowed-tools: Read Glob Grep Write Edit Bash
 effort: high
@@ -11,7 +11,7 @@ effort: high
 
 # Emitter 模板构建
 
-从 `$target_module` 模块或某个 target-aware case suite 的已验证 pytest 代码中识别可沉淀模式，评估是否更新 profile、fixture/helper、`aitest.yaml.codegen` 或 emitter 规则。
+从 `$target/$module` 模块或某个 target-aware case suite 的已验证 pytest 代码中识别可沉淀模式，评估是否更新 profile、fixture/helper、`aitest.yaml.codegen` 或 emitter 规则。
 
 `emitter-build` 的核心职责是把"已经跑通的 AI/人工补写经验"沉淀为确定性模式；不要从未验证的 pytest、失败用例或猜测出的业务语义中提取规则。
 

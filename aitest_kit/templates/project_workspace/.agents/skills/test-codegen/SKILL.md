@@ -107,12 +107,12 @@ Markdown 用例
 如果用户给的是一批独立用例目录，先检查该目录是否有 `suite.yaml`：
 
 ```yaml
-target: sub2api
-module: gateway_api
-suite: quota_billing_v2
+target: your_service
+module: your_module
+suite: smoke_suite
 case_files:
-  - quota_billing_business.md
-profile: profile_quota_billing_v2_suite.md
+  - smoke_business.md
+profile: profile_smoke_suite.md
 ```
 
 规则：

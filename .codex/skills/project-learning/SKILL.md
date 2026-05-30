@@ -2,7 +2,7 @@
 name: project-learning
 description: 以交互式课堂方式带用户学习一个代码项目，按章节讲解架构、模块、函数调用和数据流，并把关键图、代码地图、理解检查和课堂笔记沉淀到项目文档中
 when_to_use: 当用户希望从小白视角学习一个项目、通读代码、理解重要函数/数据流，或要求“交互式学习”“课堂笔记”“写进 lesson/usebook”时
-argument-hint: [project_root] [lesson_dir]
+argument-hint: "[project_root] [lesson_dir]"
 arguments: [project_root, lesson_dir]
 user-invocable: true
 allowed-tools: Read Glob Grep Write Edit Bash
@@ -210,4 +210,3 @@ flowchart TD
 - 多个 lesson 文档。
 - 每节包含图或代码地图。
 - 用户能说明主调用链、关键模块职责、主要数据流和常见调试入口。
-

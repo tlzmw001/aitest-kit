@@ -2,8 +2,8 @@
 name: test-design
 description: 基于测试知识库和测试规范，为指定模块或需求 suite 生成 Markdown 用例和 mismatch 记录
 when_to_use: 当用户需要为某个模块、L2 需求或独立用例 suite 生成/补充测试用例时
-argument-hint: <target_module> [suite_dir]
-arguments: [target_module, suite_dir]
+argument-hint: <target> <module> [suite_dir]
+arguments: [target, module, suite_dir]
 user-invocable: true
 allowed-tools: Read Glob Grep Write Edit Bash
 effort: high
@@ -11,7 +11,7 @@ effort: high
 
 # 测试用例设计
 
-为 `$target_module` 模块或某个 L2 需求 suite 生成 Markdown 测试用例。
+为 `$target` 下的 `$module` 模块，或某个 L2 需求 suite 生成 Markdown 测试用例。
 
 输出目录：`$suite_dir`。优先使用 `test_workspace/suites/{target}/{suite}/` 或用户指定的任意 suite 目录，并在后续 `test-scaffold` / `test-codegen` 中由 `suite.yaml` 绑定 target/module。
 
@@ -24,7 +24,7 @@ effort: high
 
 读取 `aitest_config/aitest.yaml` 获取 workspace 路径、codegen 默认规则和 target/module registry 配置。
 
-如果已知 `$target`，再读 `test_workspace/targets/{target}/target.yaml`，获取公开接口、route/schema 搜索模式、默认 generated/reports 目录等 target 级信息。
+读取 `test_workspace/targets/{target}/target.yaml`（存在时），获取公开接口、route/schema 搜索模式、默认 generated/reports 目录等 target 级信息。
 
 ## 执行流程
 
@@ -38,9 +38,9 @@ effort: high
    - 关注场景列表（生成时必须覆盖）
    - 已知陷阱列表（生成时逐条自检，避免重犯已知错误模式）
 
-   **硬约束**：在模块缩写对照表中查找 `$target_module` 对应的缩写。如果该模块未在表中登记，**停止执行**，提示用户先在 TEST_SPEC 的"模块缩写对照表"中补登记，避免编号冲突。
+   **硬约束**：在模块缩写对照表中查找 `$module` 对应的缩写。如果该模块未在表中登记，**停止执行**，提示用户先在 TEST_SPEC 的"模块缩写对照表"中补登记，避免编号冲突。同一 workspace 存在多个 target 时，仍以 `$target/$module` 作为定位范围。
 
-2. 读 `{paths.l0_architecture}`（L0），从模块索引表中找到 `$target_module` 对应的：
+2. 读 `{paths.l0_architecture}`（L0），从模块索引表中找到 `$module` 对应的：
    - L1 文档路径
    - 关联的 L2 文档路径
 
@@ -85,7 +85,7 @@ effort: high
 
 ### 第三步：第二轮——边界用例（读代码）
 
-1. 通过 Glob/Grep 搜索项目中与 `$target_module` 相关的源代码文件
+1. 通过 Glob/Grep 搜索项目中与 `$target/$module` 相关的源代码文件
 2. 读源代码，识别以下边界场景并生成用例：
    - 降级逻辑（try/except、默认值返回）
    - 类型转换（隐式转换、强制转换）
@@ -130,7 +130,8 @@ Mismatch 输出到 `$suite_dir/mismatch.md`（无则不创建）。
 ```markdown
 ## 用例生成摘要
 
-目标模块：$target_module
+目标：$target
+目标模块：$module
 输出目录：$suite_dir
 
 ### 生成文件

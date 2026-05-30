@@ -2,8 +2,8 @@
 name: test-scaffold
 description: 构建模块级 fixture/module profile 或用例级 suite profile，把 Markdown 用例接入 test-codegen 管线
 when_to_use: 当新模块缺少 fixture/module profile，或已有模块新增一批 Markdown 用例需要生成 suite profile 时
-argument-hint: <target_module> [scaffold-module|scaffold-suite|incremental] [suite_dir]
-arguments: [target_module, mode, suite_dir]
+argument-hint: <target> <module> [scaffold-module|scaffold-suite|incremental] [suite_dir]
+arguments: [target, module, mode, suite_dir]
 user-invocable: true
 allowed-tools: Read Glob Grep Write Edit Bash Agent
 effort: high
@@ -11,7 +11,7 @@ effort: high
 
 # 测试脚手架构建
 
-为 `$target_module` 模块构建 fixture/module profile，或为某个用例目录构建 suite profile，使其能进入 `test-codegen` 管线。
+为 `$target` 下的 `$module` 模块构建 fixture/module profile，或为某个用例目录构建 suite profile，使其能进入 `test-codegen` 管线。
 
 ## 定位
 ```
@@ -116,15 +116,16 @@ python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --check
 ```
 class {Module}Client:
     __init__(base_url, auth_token)     # auth_token: required, 缺失时 fail
-    post_messages(model, messages)     → Response  [auth: yes]
-    get_public_models()                → Response  [auth: no]
-    create_api_key(name)               → Response  [auth: yes, 状态变更: 创建]
-    delete_api_key(key_id)             → Response  [auth: yes, 状态变更: 删除]
+    post_messages(model, messages)     → httpx.Response  [HTTP, auth: yes]
+    get_public_models()                → httpx.Response  [HTTP, auth: no]
+    recommend(request)                 → RecommendReply  [gRPC, auth: no]
+    create_api_key(name)               → httpx.Response  [HTTP, auth: yes, 状态变更: 创建]
+    delete_api_key(key_id)             → httpx.Response  [HTTP, auth: yes, 状态变更: 删除]
 ```
 
 每个方法标注 **auth 需求**（yes/no）和 **状态变更**（创建/修改/删除，有则标，无则省略）。
 
-设计原则：每个端点一个方法，返回 `httpx.Response`，env 驱动不硬编码。首次创建前读其他模块 fixture 参考项目惯例。
+设计原则：每个端点一个方法，HTTP 返回 `httpx.Response`，gRPC 返回 protobuf message，env 驱动不硬编码。首次创建前读其他模块 fixture 参考项目惯例。
 
 **用户确认**：方法粒度、命名、auth 标注。
 

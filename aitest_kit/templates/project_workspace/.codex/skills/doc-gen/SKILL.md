@@ -2,8 +2,8 @@
 name: doc-gen
 description: 从源码和现有文档生成面向测试的设计文档，补全知识库构建所需的输入
 when_to_use: 当项目缺少设计文档或文档不完整，需要从代码中提取设计信息以支撑测试知识库构建时
-argument-hint: <source_dir> [doc_dir] <output_dir> [module_filter]
-arguments: [source_dir, doc_dir, output_dir, module_filter]
+argument-hint: <source_dir> <output_dir> [doc_dir] [module_filter]
+arguments: [source_dir, output_dir, doc_dir, module_filter]
 user-invocable: true
 allowed-tools: Read Glob Grep Write Edit Bash
 effort: high
@@ -11,7 +11,7 @@ effort: high
 
 # 设计文档生成
 
-从 `$source_dir` 的源码和 `$doc_dir` 的现有文档中提取设计信息，生成面向测试的设计文档，输出到 `$output_dir`。
+从 `$source_dir` 的源码和 `$doc_dir` 的现有文档中提取设计信息，生成面向测试的设计文档，输出到 `$output_dir`。`$doc_dir` 未提供时只从源码和公开接口定义提取。
 
 当 `$module_filter` 非空时（逗号分隔），仅分析指定模块。
 

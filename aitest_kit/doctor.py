@@ -33,7 +33,18 @@ class CheckResult:
 @click.command(name="doctor")
 @click.option("--workspace", type=click.Path(file_okay=False, dir_okay=True), help="Check another AITest workspace root")
 def doctor_command(workspace: str | None):
-    """Diagnose workspace layout, codegen gates, and generated pytest collection."""
+    """Diagnose workspace layout, registries, codegen gates, and pytest collection.
+
+    \b
+    Checks:
+      workspace layout
+      project config
+      target/module/suite registry
+      profile gate
+      generated freshness
+      pytest collect
+      fixture environment variable hints
+    """
     try:
         with push_workspace(workspace):
             raise SystemExit(_doctor_impl())

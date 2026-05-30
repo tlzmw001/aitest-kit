@@ -33,9 +33,9 @@ assertion_rules:
       - "field = resp[\"results\"][0][\"your_field\"]"
 
   - pattern: "按某维度分段计算"
-    template: your_named_template
+    template: piecewise_cascade
     params:
-      segments_source: "_CASE_CONFIGS[case_id].segments"
+      segments: [[0.3, 0.5, 0.1], [0.7, 1.0, 0.0]]
 ```
 
 ## case_bodies 提取规则
@@ -78,14 +78,14 @@ assertion_rules:
 ## 晋升 CLI 命令
 
 ```bash
-python3 -m aitest_kit.cli codegen $target_module --validate-profile
-python3 -m aitest_kit.cli codegen $target_module --validate-profile --write-report
-python3 -m aitest_kit.cli codegen $target_module --analyze-promotion --write-report
-python3 -m aitest_kit.cli codegen $target_module --suggest-promotion-patch
+python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> --validate-profile
+python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> --validate-profile --write-report
+python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> --analyze-promotion --write-report
+python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> --suggest-promotion-patch
 python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> --health-report --write-report
 ```
 
-target/suite 模式使用 `python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml ...` 完成同类验证和分析，generated pytest 默认位于 `test_workspace/generated/{target}/`。
+聚合范围使用 `--target <target> --module <module>` 或 `--target <target>` 完成同类验证和分析。generated pytest 默认位于 `test_workspace/generated/{target}/`。
 
 `promotion_report.md/json` 用于解释和工具消费；`promotion_patch.md/diff` 是 review-only 草案，默认不自动修改 profile。
 

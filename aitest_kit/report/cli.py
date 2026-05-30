@@ -85,10 +85,14 @@ def run_command(
 ):
     """Run generated pytest after freshness check and write structured reports.
 
+    \b
     Examples:
-
       aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
-
+      aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --case-id TC-XXX-001
+      aitest run --target <target> --module <module>
+      aitest run --target <target>
+      aitest run --task-file test_workspace/tasks/<task>.yaml
+      AITEST_ENV_FILE=/tmp/test.env aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
       aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- -k boundary
     """
     try:
@@ -329,7 +333,23 @@ def report_command(
     case_ids: tuple[str, ...],
     run_id: str | None,
 ):
-    """Re-render report.md from an existing result.json."""
+    """Re-render report.md from an existing result.json.
+
+    \b
+    Examples:
+      aitest report --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+      aitest report --suite-file test_workspace/suites/<target>/<suite>/suite.yaml <run_id>
+      aitest report --target <target> --module <module>
+      aitest report --task-file test_workspace/tasks/<task>.yaml
+
+    \b
+    Report buckets:
+      suite   -> test_workspace/reports/<target>/<module>/suites/<suite>/
+      case    -> test_workspace/reports/<target>/<module>/cases/<case_id>/
+      module  -> test_workspace/reports/<target>/<module>/module/
+      target  -> test_workspace/reports/<target>/target/
+      task    -> test_workspace/reports/tasks/<task>/
+    """
     try:
         with push_workspace(workspace):
             _report_command_impl(

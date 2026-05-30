@@ -243,20 +243,28 @@ def test_cli_help_matches_workspace_product_flow():
     root_help = runner.invoke(main, ["--help"])
     assert root_help.exit_code == 0
     assert "Markdown cases, codegen, and pytest reports" in root_help.output
+    assert "Command map:" in root_help.output
+    assert "registry  wire suites into module/target/all aggregation" in root_help.output
 
     init_help = runner.invoke(main, ["init", "--help"])
     assert init_help.exit_code == 0
     assert "AITest workspace skeleton" in init_help.output
+    assert "After init:" in init_help.output
+    assert "aitest doctor" in init_help.output
 
     codegen_help = runner.invoke(main, ["codegen", "--help"])
     assert codegen_help.exit_code == 0
-    assert "Markdown test cases" in codegen_help.output
+    assert "Markdown test suites/tasks" in codegen_help.output
     assert "codegen_profile JSON Schema and semantics" in codegen_help.output
     assert "another AITest workspace root" in codegen_help.output
+    assert "Typical suite flow:" in codegen_help.output
+    assert "--check never writes generated pytest" in codegen_help.output
 
     doctor_help = runner.invoke(main, ["doctor", "--help"])
     assert doctor_help.exit_code == 0
-    assert "Diagnose workspace layout" in doctor_help.output
+    assert "Diagnose workspace layout, registries" in doctor_help.output
+    assert "target/module/suite registry" in doctor_help.output
+    assert "fixture environment variable hints" in doctor_help.output
 
     upgrade_help = runner.invoke(main, ["upgrade", "--help"])
     assert upgrade_help.exit_code == 0
@@ -266,10 +274,25 @@ def test_cli_help_matches_workspace_product_flow():
     assert run_help.exit_code == 0
     assert "freshness check" in run_help.output
     assert "another AITest workspace root" in run_help.output
+    assert "AITEST_ENV_FILE=/tmp/test.env" in run_help.output
+    assert "--case-id TC-XXX-001" in run_help.output
 
     report_help = runner.invoke(main, ["report", "--help"])
     assert report_help.exit_code == 0
     assert "existing result.json" in report_help.output
+    assert "Report buckets:" in report_help.output
+    assert "reports/<target>/<module>/suites/<suite>/" in report_help.output
+
+    register_suite_help = runner.invoke(main, ["registry", "register-suite", "--help"])
+    assert register_suite_help.exit_code == 0
+    assert "Registration is only needed" in register_suite_help.output
+    assert "--target <target>" in register_suite_help.output
+
+    task_create_help = runner.invoke(main, ["task", "create", "--help"])
+    assert task_create_help.exit_code == 0
+    assert "explicit suite files" in task_create_help.output
+    assert "does not require" in task_create_help.output
+    assert "registered under their modules" in task_create_help.output
 
 
 def test_upgrade_check_reports_up_to_date_after_init(tmp_path):

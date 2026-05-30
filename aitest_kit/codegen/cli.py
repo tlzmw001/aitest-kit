@@ -98,7 +98,27 @@ def codegen(
     health_report: bool,
     workspace: str | None,
 ):
-    """Compile Markdown test cases into generated pytest files."""
+    """Compile Markdown test suites/tasks into generated pytest files.
+
+    \b
+    Typical suite flow:
+      aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
+      aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --dump-ir
+      aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+      aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
+
+    \b
+    Selector flow:
+      aitest codegen --target <target> --module <module> --check
+      aitest codegen --target <target> --check
+      aitest codegen --task-file test_workspace/tasks/<task>.yaml --check
+
+    \b
+    Notes:
+      --dry-run parses Markdown only.
+      --dump-ir and --explain are suite-level diagnosis tools.
+      --check never writes generated pytest.
+    """
     try:
         with push_workspace(workspace):
             _codegen_impl(
