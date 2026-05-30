@@ -15,7 +15,7 @@ from uuid import uuid4
 import click
 
 from aitest_kit.report.codegen_check import run_codegen_check
-from aitest_kit.report.collector import blocked_result, collect_result
+from aitest_kit.report.collector import blocked_result, collect_result, generated_nodeids_for_case_ids
 from aitest_kit.report.renderer import render_markdown
 from aitest_kit.runtime_variables import (
     ProfileVariableError,
@@ -28,8 +28,14 @@ from aitest_kit.codegen.suite import (
     resolve_suite_runtime_paths,
     suite_generated_path,
 )
-from aitest_kit.report.task_runner import run_task_command_impl
+from aitest_kit.report.task_runner import run_task_command_impl, run_task_context_command_impl
 from aitest_kit.registry import load_task_context
+from aitest_kit.registry.selection import (
+    build_task_context_from_selectors,
+    filter_task_context_by_case_ids,
+    suite_case_report_dir_name,
+    task_report_dir_name,
+)
 from aitest_kit.workspace import push_workspace
 from aitest_kit.workspace_config import load_workspace_paths
 
@@ -60,6 +66,10 @@ def _load_paths() -> ReportPaths:
     type=click.Path(file_okay=True, dir_okay=False),
     help="Run generated tests for suites listed by one task manifest",
 )
+@click.option("--target", help="Run active suites registered under one target")
+@click.option("--module", "module_name", help="Run active suites registered under one module")
+@click.option("--all", "all_suites", is_flag=True, help="Run all active suites in the registry")
+@click.option("--case-id", "case_ids", multiple=True, help="Run one case id; can be repeated")
 @click.option("--workspace", type=click.Path(file_okay=False, dir_okay=True), help="Run from another AITest workspace root")
 @click.argument("args", nargs=-1, type=click.UNPROCESSED, metavar="[PYTEST_ARGS]...")
 def run_command(
@@ -67,6 +77,10 @@ def run_command(
     skip_codegen_check: bool,
     suite_file: str | None,
     task_file: str | None,
+    target: str | None,
+    module_name: str | None,
+    all_suites: bool,
+    case_ids: tuple[str, ...],
     workspace: str | None,
     args: tuple[str, ...],
 ):
@@ -86,6 +100,10 @@ def run_command(
                 args,
                 suite_file=suite_file,
                 task_file=task_file,
+                target=target,
+                module_name=module_name,
+                all_suites=all_suites,
+                case_ids=case_ids,
             )
     except (FileNotFoundError, NotADirectoryError) as exc:
         raise click.ClickException(str(exc)) from exc
@@ -98,14 +116,25 @@ def _run_command_impl(
     *,
     suite_file: str | None = None,
     task_file: str | None = None,
+    target: str | None = None,
+    module_name: str | None = None,
+    all_suites: bool = False,
+    case_ids: tuple[str, ...] = (),
     env_files: list[Path] | None = None,
 ) -> None:
     extra_args = list(args)
     if suite_file and task_file:
         click.echo("Error: --suite-file and --task-file are mutually exclusive")
         raise SystemExit(2)
-    if not suite_file and not task_file:
-        click.echo("Usage: aitest run --suite-file <suite.yaml> [-- PYTEST_ARGS] or aitest run --task-file <task.yaml>")
+    selector_used = bool(target or module_name or all_suites)
+    if selector_used and (suite_file or task_file):
+        click.echo("Error: target/module/all selectors cannot be combined with --suite-file or --task-file")
+        raise SystemExit(2)
+    if not suite_file and not task_file and not selector_used:
+        click.echo(
+            "Usage: aitest run --suite-file <suite.yaml>, --task-file <task.yaml>, "
+            "--target <target> [--module <module>], or --all"
+        )
         raise SystemExit(2)
     if task_file:
         run_task_command_impl(
@@ -113,9 +142,29 @@ def _run_command_impl(
             skip_codegen_check,
             task_file,
             extra_args,
+            case_ids=list(case_ids),
+        )
+        return
+    if selector_used:
+        task, diagnostics = build_task_context_from_selectors(
+            target=target or "",
+            module=module_name or "",
+            all_suites=all_suites,
+            case_ids=case_ids,
+        )
+        if diagnostics or task is None:
+            for diagnostic in diagnostics:
+                click.echo(diagnostic)
+            raise SystemExit(2)
+        run_task_context_command_impl(
+            task,
+            include_manual=include_manual,
+            skip_codegen_check=skip_codegen_check,
+            extra_args=extra_args,
         )
         return
     paths = _load_paths()
+    root_reports_dir = paths.reports_dir
     suite_context = load_suite_context_for_paths(
         suite_file,
         profile_dir=paths.profile_dir,
@@ -128,7 +177,16 @@ def _run_command_impl(
     )
     paths = ReportPaths(
         suite_paths.generated_dir,
-        suite_paths.reports_dir,
+        (
+            root_reports_dir / "tasks" / suite_case_report_dir_name(
+                target=suite_context.target,
+                module=suite_context.module,
+                suite=suite_context.suite,
+                case_ids=case_ids,
+            )
+            if case_ids
+            else suite_paths.reports_dir
+        ),
         suite_paths.profile_dir,
     )
     files = _target_files(
@@ -138,10 +196,13 @@ def _run_command_impl(
     run_id, run_dir = _create_run_dir(paths.reports_dir)
 
     command = "aitest run --suite-file " + suite_file
+    if case_ids:
+        command += "".join(f" --case-id {case_id}" for case_id in case_ids)
     manual_policy = "included" if include_manual else "excluded"
     run_scope = _run_scope_payload(
         suite_context=suite_context,
         suite_file=suite_file,
+        case_ids=case_ids,
     )
     try:
         pytest_env, environment = _pytest_environment(env_files=env_files)
@@ -195,12 +256,19 @@ def _run_command_impl(
         click.echo("No generated test files found.")
         raise SystemExit(5)
 
+    selected_nodeids: list[str] = []
+    if case_ids:
+        selected_nodeids, missing_case_ids = generated_nodeids_for_case_ids(files, list(case_ids))
+        if missing_case_ids:
+            click.echo("Requested case_id(s) not found in generated pytest: " + ", ".join(missing_case_ids))
+            raise SystemExit(5)
+
     junit_path = run_dir / "junit.xml"
     pytest_cmd = [
         sys.executable,
         "-m",
         "pytest",
-        *[str(path) for path in files],
+        *(selected_nodeids or [str(path) for path in files]),
         f"--junitxml={junit_path}",
         "-v",
     ]
@@ -241,17 +309,33 @@ def _run_command_impl(
     type=click.Path(file_okay=True, dir_okay=False),
     help="Read reports for one task manifest",
 )
+@click.option("--target", help="Read reports for one target selector")
+@click.option("--module", "module_name", help="Read reports for one module selector")
+@click.option("--all", "all_suites", is_flag=True, help="Read reports for the all-suites selector")
+@click.option("--case-id", "case_ids", multiple=True, help="Read reports for one case-filtered selector; can be repeated")
 @click.argument("run_id", required=False)
 def report_command(
     workspace: str | None,
     suite_file: str | None,
     task_file: str | None,
+    target: str | None,
+    module_name: str | None,
+    all_suites: bool,
+    case_ids: tuple[str, ...],
     run_id: str | None,
 ):
     """Re-render report.md from an existing result.json."""
     try:
         with push_workspace(workspace):
-            _report_command_impl(run_id, suite_file=suite_file, task_file=task_file)
+            _report_command_impl(
+                run_id,
+                suite_file=suite_file,
+                task_file=task_file,
+                target=target,
+                module_name=module_name,
+                all_suites=all_suites,
+                case_ids=case_ids,
+            )
     except (FileNotFoundError, NotADirectoryError) as exc:
         raise click.ClickException(str(exc)) from exc
 
@@ -261,9 +345,16 @@ def _report_command_impl(
     *,
     suite_file: str | None = None,
     task_file: str | None = None,
+    target: str | None = None,
+    module_name: str | None = None,
+    all_suites: bool = False,
+    case_ids: tuple[str, ...] = (),
 ) -> None:
     if suite_file and task_file:
         raise click.ClickException("--suite-file and --task-file are mutually exclusive")
+    selector_used = bool(target or module_name or all_suites)
+    if selector_used and (suite_file or task_file):
+        raise click.ClickException("target/module/all selectors cannot be combined with --suite-file or --task-file")
     paths = _load_paths()
     reports_dir = paths.reports_dir
     if suite_file:
@@ -277,12 +368,32 @@ def _report_command_impl(
             reports_dir=paths.reports_dir,
             profile_dir=paths.profile_dir,
         )
-        reports_dir = suite_paths.reports_dir
+        reports_dir = (
+            paths.reports_dir / "tasks" / suite_case_report_dir_name(
+                target=suite_context.target,
+                module=suite_context.module,
+                suite=suite_context.suite,
+                case_ids=case_ids,
+            )
+            if case_ids
+            else suite_paths.reports_dir
+        )
     elif task_file:
         task = load_task_context(task_file)
+        if case_ids:
+            task, diagnostics = filter_task_context_by_case_ids(task, case_ids)
+            if diagnostics or task is None:
+                raise click.ClickException("; ".join(diagnostics))
         if task.diagnostics:
             raise click.ClickException("; ".join(task.diagnostics))
         reports_dir = paths.reports_dir / "tasks" / task.task
+    elif selector_used:
+        reports_dir = paths.reports_dir / "tasks" / task_report_dir_name(
+            target=target or "",
+            module=module_name or "",
+            all_suites=all_suites,
+            case_ids=case_ids,
+        )
 
     result_path = (
         reports_dir / "runs" / run_id / "result.json"
@@ -375,11 +486,12 @@ def _run_scope_payload(
     *,
     suite_context,
     suite_file: str | None,
+    case_ids: tuple[str, ...] = (),
 ) -> dict:
     if suite_context is not None:
         suite_manifest = suite_context.manifest_path
         suite_source = suite_manifest or Path(suite_file or "")
-        return {
+        payload = {
             "type": "suite_file",
             "target": suite_context.target,
             "module": suite_context.module,
@@ -388,6 +500,9 @@ def _run_scope_payload(
             "suite_dir": str(suite_context.suite_dir),
             "case_files": [str(path) for path in suite_context.case_files],
         }
+        if case_ids:
+            payload["case_ids"] = list(case_ids)
+        return payload
     return {"type": "unknown"}
 
 

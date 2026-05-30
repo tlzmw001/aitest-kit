@@ -90,6 +90,11 @@ python3 -m aitest_kit.cli codegen --suite-file test_workspace/suites/<target>/<s
 python3 -m aitest_kit.cli codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
 python3 -m aitest_kit.cli codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --health-report --write-report
 python3 -m aitest_kit.cli run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+python3 -m aitest_kit.cli run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --case-id TC-XXX-001
+python3 -m aitest_kit.cli codegen --target <target> --module <module> --check
+python3 -m aitest_kit.cli run --target <target> --module <module>
+python3 -m aitest_kit.cli run --target <target>
+python3 -m aitest_kit.cli run --all
 python3 -m aitest_kit.cli report
 python3 -m compileall aitest_kit/codegen
 python3 -m pytest test_workspace/generated --collect-only -q
@@ -156,7 +161,7 @@ test-codegen
   使用 `test-codegen`，从 Markdown suite 和 profile 生成 `test_workspace/generated/{target}/` 下的 pytest。
 
 - 执行并生成报告：
-  使用 `aitest run --suite-file <suite.yaml>`，默认排除 manual 用例；需要执行 manual 时加 `--include-manual`。报告写入 `test_workspace/reports/`，失败反哺清单用于后续 `test-fix` 或 fixture/profile 修正。
+  使用 `aitest run --suite-file <suite.yaml>`，默认排除 manual 用例；需要执行 manual 时加 `--include-manual`。单 case 调试使用 `--case-id <TC-ID>`。模块、目标系统或全量回归使用 `--target <target> --module <module>`、`--target <target>` 或 `--all`。报告写入 `test_workspace/reports/`，失败反哺清单用于后续 `test-fix` 或 fixture/profile 修正。
 
 - 测试全部通过后：
   使用 `emitter-build` 从已验证的 pytest 提取确定性模板，减少后续 AI 补写比例。
@@ -257,6 +262,20 @@ python3 -m aitest_kit.cli codegen --suite-file <suite.yaml>
 python3 -m aitest_kit.cli run --suite-file <suite.yaml> -- --collect-only -q
 ```
 
+常用选择器维度：
+
+```bash
+python3 -m aitest_kit.cli codegen --target <target> --module <module> --check
+python3 -m aitest_kit.cli run --target <target> --module <module>
+python3 -m aitest_kit.cli report --target <target> --module <module>
+python3 -m aitest_kit.cli codegen --target <target> --check
+python3 -m aitest_kit.cli run --target <target>
+python3 -m aitest_kit.cli report --target <target>
+python3 -m aitest_kit.cli codegen --all --check
+python3 -m aitest_kit.cli run --all
+python3 -m aitest_kit.cli report --all
+```
+
 ## 测试报告流程
 
 `aitest run` 是 generated pytest 的结构化执行入口：
@@ -264,7 +283,7 @@ python3 -m aitest_kit.cli run --suite-file <suite.yaml> -- --collect-only -q
 1. 默认先执行 generated freshness check，确认 Markdown/profile 与 generated pytest 一致；失败时生成 `BLOCKED_RUN` 报告并停止，不执行过期测试。
 2. 默认排除 `@pytest.mark.manual` 用例；报告仍统计 `manual_total`、`manual_executed`、`manual_not_run`。需要执行 manual 时使用 `--include-manual`。
 3. collector 用 generated pytest 中的 `__tc_meta__` 与 JUnit XML 结果关联；`__codegen_skipped__` 统计可行性存疑且未生成 pytest 函数的用例。
-4. 输出 `junit.xml`、`result.json`、`report.md` 到 `test_workspace/reports/runs/{run_id}/`，并同步到 `test_workspace/reports/latest/`。
+4. suite 执行输出 `junit.xml`、`result.json`、`report.md` 到对应 reports bucket 的 `runs/{run_id}/`，并同步到 `latest/`。task、target/module、target/all 和 workspace `--all` 会额外生成 `test_workspace/reports/tasks/{task_or_selector}/latest/` 汇总报告。
 5. report 的反哺清单只做规则化初判；断言失败不自动判定为产品 bug，需人工确认后再记录到 `test_workspace/results/`。
 
 ## codegen 可移植架构

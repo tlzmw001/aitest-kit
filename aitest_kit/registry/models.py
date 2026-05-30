@@ -94,4 +94,5 @@ class TaskContext:
     description: str = ""
     env_files: list[Path] = field(default_factory=list)
     defaults: TaskDefaults = field(default_factory=TaskDefaults)
+    metadata: dict[str, Any] = field(default_factory=dict)
     diagnostics: list[str] = field(default_factory=list)

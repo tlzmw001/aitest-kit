@@ -305,6 +305,199 @@ units:
     assert task_result["task"]["units"][0]["target"] == "sub2api"
 
 
+def test_run_suite_file_supports_case_id_filter(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("AITEST_ENV_FILE", raising=False)
+    suite_dir = tmp_path / "test_workspace" / "suites" / "sub2api" / "case_filter"
+    suite_dir.mkdir(parents=True)
+    suite_file = suite_dir / "suite.yaml"
+    suite_file.write_text(
+        """target: sub2api
+module: gateway_api
+suite: case_filter
+case_files:
+  - business.md
+profile: profile_case_filter_suite.md
+""",
+        encoding="utf-8",
+    )
+    (suite_dir / "business.md").write_text(
+        """# case filter
+
+### TC-GW-041：selected case
+- **优先级**：P0
+- **断言**：`response.status == "ok"`
+
+### TC-GW-0410：not selected prefix collision case
+- **优先级**：P0
+- **断言**：`response.status == "ok"`
+""",
+        encoding="utf-8",
+    )
+    generated = tmp_path / "test_workspace" / "generated"
+    generated.mkdir(parents=True)
+    (generated / "test_gateway_api_case_filter_business.py").write_text(
+        textwrap.dedent(
+            '''
+            class TestGatewayApiCaseFilterBusiness:
+                def test_tc_gw_041(self):
+                    __tc_meta__ = {
+                        "tc_id": "TC-GW-041",
+                        "module": "gateway_api",
+                        "suite": "case_filter",
+                        "category": "business",
+                        "source": "test_workspace/suites/sub2api/case_filter/business.md",
+                        "title": "selected case",
+                        "priority": "P0",
+                        "markers": [],
+                    }
+                    assert True
+
+                def test_tc_gw_0410(self):
+                    __tc_meta__ = {
+                        "tc_id": "TC-GW-0410",
+                        "module": "gateway_api",
+                        "suite": "case_filter",
+                        "category": "business",
+                        "source": "test_workspace/suites/sub2api/case_filter/business.md",
+                        "title": "not selected prefix collision case",
+                        "priority": "P0",
+                        "markers": [],
+                    }
+                    assert False
+
+
+            __codegen_skipped__ = []
+            '''
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        _run_command_impl(False, True, (), suite_file=str(suite_file), case_ids=("TC-GW-041",))
+
+    assert exc_info.value.code == 0
+    result_path = (
+        tmp_path
+        / "test_workspace"
+        / "reports"
+        / "tasks"
+        / "sub2api_gateway_api_case_filter_case_tc_gw_041"
+        / "latest"
+        / "result.json"
+    )
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    assert result["summary"]["passed"] == 1
+    assert result["summary"]["failed"] == 0
+    assert result["command"].endswith("--case-id TC-GW-041")
+    assert result["run_scope"]["case_ids"] == ["TC-GW-041"]
+    assert [case["tc_id"] for case in result["cases"]] == ["TC-GW-041"]
+
+    report_path = result_path.parent / "report.md"
+    report_path.write_text("stale\n", encoding="utf-8")
+    _report_command_impl(None, suite_file=str(suite_file), case_ids=("TC-GW-041",))
+    assert "# 测试执行报告" in report_path.read_text(encoding="utf-8")
+    assert "stale" not in report_path.read_text(encoding="utf-8")
+
+
+def test_run_target_module_selector_and_report(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("AITEST_ENV_FILE", raising=False)
+    target_dir = tmp_path / "test_workspace" / "targets" / "sub2api"
+    module_dir = target_dir / "modules"
+    profile_dir = target_dir / "profiles"
+    module_dir.mkdir(parents=True)
+    profile_dir.mkdir(parents=True)
+    (target_dir / "target.yaml").write_text(
+        """target: sub2api
+defaults:
+  module_dir: test_workspace/targets/sub2api/modules
+  profile_dir: test_workspace/targets/sub2api/profiles
+  generated_dir: test_workspace/generated/sub2api
+  reports_dir: test_workspace/reports/sub2api
+""",
+        encoding="utf-8",
+    )
+    (profile_dir / "profile_gateway_api.md").write_text("```yaml\nmodule_type: multi_endpoint\n```\n", encoding="utf-8")
+    suite_dir = tmp_path / "test_workspace" / "suites" / "sub2api" / "quota_billing_v2"
+    suite_dir.mkdir(parents=True)
+    suite_file = suite_dir / "suite.yaml"
+    suite_file.write_text(
+        """target: sub2api
+module: gateway_api
+suite: quota_billing_v2
+case_files:
+  - business.md
+profile: profile_quota_billing_v2_suite.md
+""",
+        encoding="utf-8",
+    )
+    (suite_dir / "business.md").write_text(
+        """# quota
+
+### TC-GW-041：selector case
+- **优先级**：P0
+- **断言**：`response.status == "ok"`
+""",
+        encoding="utf-8",
+    )
+    (module_dir / "gateway_api.yaml").write_text(
+        f"""target: sub2api
+module: gateway_api
+module_type: multi_endpoint
+profile:
+  file: profile_gateway_api.md
+registered_suites:
+  - suite: quota_billing_v2
+    manifest: {suite_file}
+    status: active
+""",
+        encoding="utf-8",
+    )
+    generated = tmp_path / "test_workspace" / "generated" / "sub2api"
+    generated.mkdir(parents=True)
+    (generated / "test_gateway_api_quota_billing_v2_business.py").write_text(
+        textwrap.dedent(
+            '''
+            class TestGatewayApiQuotaBillingV2Business:
+                def test_tc_gw_041(self):
+                    __tc_meta__ = {
+                        "tc_id": "TC-GW-041",
+                        "module": "gateway_api",
+                        "suite": "quota_billing_v2",
+                        "category": "business",
+                        "source": "test_workspace/suites/sub2api/quota_billing_v2/business.md",
+                        "title": "selector case",
+                        "priority": "P0",
+                        "markers": [],
+                    }
+                    assert True
+
+
+            __codegen_skipped__ = []
+            '''
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        _run_command_impl(False, True, (), target="sub2api", module_name="gateway_api")
+
+    assert exc_info.value.code == 0
+    result_path = tmp_path / "test_workspace" / "reports" / "tasks" / "sub2api_gateway_api" / "latest" / "result.json"
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    assert result["summary"]["passed"] == 1
+    assert result["run_scope"]["type"] == "task"
+    assert result["task"]["name"] == "sub2api_gateway_api"
+    assert result["command"] == "aitest run --target sub2api --module gateway_api"
+
+    report_path = result_path.parent / "report.md"
+    report_path.write_text("stale\n", encoding="utf-8")
+    _report_command_impl(None, target="sub2api", module_name="gateway_api")
+    assert "# 测试执行报告" in report_path.read_text(encoding="utf-8")
+    assert "stale" not in report_path.read_text(encoding="utf-8")
+
+
 def test_run_suite_file_uses_target_generated_and_reports_dirs(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("AITEST_ENV_FILE", raising=False)

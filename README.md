@@ -73,6 +73,16 @@ aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
 ```
 
+常用执行维度也可以直接走 registry：
+
+```bash
+aitest codegen --target <target> --module <module> --check
+aitest run --target <target> --module <module>
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --case-id TC-XXX-001
+aitest run --target <target>
+aitest run --all
+```
+
 多个 suite 组成一次回归任务时，用 task 文件编排：
 
 ```bash
@@ -180,6 +190,31 @@ aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
 ```
 
+可以按不同粒度执行：
+
+```bash
+# 一个 suite
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
+
+# 一个 suite 中的单个 case（run/report 支持；codegen 仍以 suite 为生成单位）
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --case-id TC-XXX-001
+
+# 一个模块下注册的 active suites
+aitest codegen --target <target> --module <module> --check
+aitest run --target <target> --module <module>
+aitest report --target <target> --module <module>
+
+# 一个 target 下全部 active suites
+aitest codegen --target <target> --check
+aitest run --target <target>
+aitest report --target <target>
+
+# registry 中全部 active suites
+aitest codegen --all --check
+aitest run --all
+aitest report --all
+```
+
 从 workspace 外部执行时加：
 
 ```bash
@@ -190,7 +225,7 @@ aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --c
 
 ```bash
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
-aitest report
+aitest report --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 ```
 
 `aitest run` 会先检查 generated pytest 是否过期。如果 Markdown/profile 和 generated pytest 不一致，会生成 `BLOCKED_RUN` 报告并停止，避免执行旧代码。
@@ -200,6 +235,7 @@ aitest report
 ```text
 test_workspace/reports/latest/
 test_workspace/reports/runs/{run_id}/
+test_workspace/reports/tasks/<task_or_selector>/latest/
 ```
 
 核心文件：
@@ -218,9 +254,14 @@ test_workspace/reports/runs/{run_id}/
 | `aitest doctor` | 检查 workspace、profile、generated、collect 和环境变量提示 |
 | `aitest codegen --suite-file <suite.yaml>` | 生成 target-aware case suite pytest |
 | `aitest codegen --task-file <task.yaml>` | 按 task 中的 suite 列表生成或检查 pytest |
+| `aitest codegen --target <target> [--module <module>]` | 按 target 或 target/module registry 生成或检查 pytest |
+| `aitest codegen --all` | 遍历 registry 中全部 active suites |
 | `aitest run --suite-file <suite.yaml>` | 执行一个 suite 并生成结构化报告 |
+| `aitest run --suite-file <suite.yaml> --case-id <TC-ID>` | 只执行一个 suite 中指定 case |
 | `aitest run --task-file <task.yaml>` | 执行一个 task 并生成 task 级汇总报告 |
-| `aitest report` | 从已有 `result.json` 重新渲染报告 |
+| `aitest run --target <target> [--module <module>]` | 执行 target 或 target/module 下注册的 active suites |
+| `aitest run --all` | 执行 registry 中全部 active suites |
+| `aitest report --suite-file/--task-file/--target/--all ...` | 从已有 `result.json` 重新渲染对应维度报告 |
 
 运行真实接口测试时，可以通过 env 文件提供服务地址、账号、token 和 API key：
 
@@ -330,6 +371,8 @@ python3 -m pip install -e ".[dev,server]"
 python3 -m pytest tests -q
 python3 -m aitest_kit.cli codegen --suite-file test_workspace/suites/coupon_system/calibration_smoke/suite.yaml --validate-profile
 python3 -m aitest_kit.cli codegen --suite-file test_workspace/suites/coupon_system/calibration_smoke/suite.yaml --check
+python3 -m aitest_kit.cli codegen --target coupon_system --module calibration --check
+python3 -m aitest_kit.cli run --target coupon_system --module calibration -- --collect-only -q
 python3 -m aitest_kit.cli doctor
 ```
 

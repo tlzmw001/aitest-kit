@@ -10,6 +10,8 @@ import click
 from aitest_kit.codegen.project_config import load_project_config
 from aitest_kit.codegen.suite_runner import run_suite_codegen
 from aitest_kit.registry import load_task_context
+from aitest_kit.registry.models import TaskContext
+from aitest_kit.registry.selection import build_task_context_from_selectors
 from aitest_kit.workspace import push_workspace
 from aitest_kit.workspace_config import load_workspace_paths
 
@@ -41,6 +43,9 @@ def _load_codegen_paths() -> CodegenPaths:
     type=click.Path(file_okay=True, dir_okay=False),
     help="Operate on suites listed by one task manifest",
 )
+@click.option("--target", help="Operate on active suites registered under one target")
+@click.option("--module", "module_name", help="Operate on active suites registered under one module")
+@click.option("--all", "all_suites", is_flag=True, help="Operate on all active suites in the registry")
 @click.option("--dry-run", is_flag=True, help="Parse Markdown only; do not write generated files")
 @click.option("--check", is_flag=True, help="Verify generated pytest matches Markdown/profile/config")
 @click.option("--dump-ir", is_flag=True, help="Print Case IR as JSON without generating files")
@@ -55,6 +60,9 @@ def _load_codegen_paths() -> CodegenPaths:
 def codegen(
     suite_file: str | None,
     task_file: str | None,
+    target: str | None,
+    module_name: str | None,
+    all_suites: bool,
     dry_run: bool,
     check: bool,
     dump_ir: bool,
@@ -73,6 +81,9 @@ def codegen(
             _codegen_impl(
                 suite_file,
                 task_file,
+                target,
+                module_name,
+                all_suites,
                 dry_run,
                 check,
                 dump_ir,
@@ -91,6 +102,9 @@ def codegen(
 def _codegen_impl(
     suite_file: str | None,
     task_file: str | None,
+    target: str | None,
+    module_name: str | None,
+    all_suites: bool,
     dry_run: bool,
     check: bool,
     dump_ir: bool,
@@ -126,6 +140,10 @@ def _codegen_impl(
     if suite_file and task_file:
         click.echo("Error: --suite-file and --task-file are mutually exclusive")
         sys.exit(2)
+    selector_used = bool(target or module_name or all_suites)
+    if selector_used and (suite_file or task_file):
+        click.echo("Error: target/module/all selectors cannot be combined with --suite-file or --task-file")
+        sys.exit(2)
 
     if task_file:
         if dump_ir or explain or promotion_mode or health_report:
@@ -136,6 +154,33 @@ def _codegen_impl(
             sys.exit(2)
         sys.exit(_run_task_codegen(
             task_file,
+            paths=paths,
+            project=project,
+            dry_run=dry_run,
+            check=check,
+            validate_profile=validate_profile,
+            write_report=write_report,
+            report_dir=report_dir,
+        ))
+
+    if selector_used:
+        if dump_ir or explain or promotion_mode or health_report:
+            click.echo(
+                "Error: target/module/all selectors currently support generation, "
+                "--check, --dry-run, and --validate-profile"
+            )
+            sys.exit(2)
+        task, diagnostics = build_task_context_from_selectors(
+            target=target or "",
+            module=module_name or "",
+            all_suites=all_suites,
+        )
+        if diagnostics or task is None:
+            for diagnostic in diagnostics:
+                click.echo(diagnostic)
+            sys.exit(2)
+        sys.exit(_run_task_context_codegen(
+            task,
             paths=paths,
             project=project,
             dry_run=dry_run,
@@ -162,7 +207,10 @@ def _codegen_impl(
             report_dir=report_dir,
         ))
 
-    click.echo("Usage: aitest codegen --suite-file <suite.yaml> or aitest codegen --task-file <task.yaml>")
+    click.echo(
+        "Usage: aitest codegen --suite-file <suite.yaml>, "
+        "--task-file <task.yaml>, --target <target> [--module <module>], or --all"
+    )
     sys.exit(1)
 
 
@@ -178,6 +226,29 @@ def _run_task_codegen(
     report_dir: str | None,
 ) -> int:
     task = load_task_context(task_file)
+    return _run_task_context_codegen(
+        task,
+        paths=paths,
+        project=project,
+        dry_run=dry_run,
+        check=check,
+        validate_profile=validate_profile,
+        write_report=write_report,
+        report_dir=report_dir,
+    )
+
+
+def _run_task_context_codegen(
+    task: TaskContext,
+    *,
+    paths: CodegenPaths,
+    project,
+    dry_run: bool,
+    check: bool,
+    validate_profile: bool,
+    write_report: bool,
+    report_dir: str | None,
+) -> int:
     if task.diagnostics:
         click.echo(f"Task: {task.task}")
         click.echo("Task manifest diagnostics:")

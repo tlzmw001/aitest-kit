@@ -60,17 +60,17 @@ AITest 的测试资产按层组织：
 |---|---|---|
 | 公开文档 / API 契约 | `docs/` | 描述系统公开行为、接口、字段、错误码、业务规则 |
 | 测试知识库 | `test_workspace/knowledge/` | 把原始文档转成可测试契约 |
-| Markdown 用例 | `test_workspace/suites/{target}/{suite}/`，legacy `test_workspace/cases/` | 人类可 review 的测试设计源文件 |
+| Markdown 用例 | `test_workspace/suites/{target}/{suite}/` | 人类可 review 的测试设计源文件 |
 | fixture/helper | `test_workspace/targets/{target}/fixtures/`、`helpers/` | 提供测试动作库、读取运行变量、管理 setup/cleanup |
 | profile | `test_workspace/targets/{target}/profiles/profile_{module}.md`、`profile_{suite}_suite.md` | 指导 codegen 如何把用例接到 fixture |
 | Case IR | `aitest codegen --dump-ir` | parser 和 renderer 之间的可检查中间表示 |
-| generated pytest | `test_workspace/generated/{target}/`，legacy `test_workspace/tests/generated/` | 编译产物，由 codegen 生成 |
+| generated pytest | `test_workspace/generated/{target}/` | 编译产物，由 codegen 生成 |
 | report | `test_workspace/reports/` | 测试执行结果和失败分流 |
 | results | `test_workspace/results/` | 已确认的待测系统问题记录 |
 
 ## 3. 不要直接修改 generated pytest
 
-`test_workspace/generated/{target}/` 和 legacy `test_workspace/tests/generated/` 下的 pytest 是编译产物，不是长期维护源文件。
+`test_workspace/generated/{target}/` 下的 pytest 是编译产物，不是长期维护源文件。
 
 如果生成结果不对，应回到对应源头修改：
 
@@ -79,7 +79,7 @@ AITest 的测试资产按层组织：
 | 用例表达错 | Markdown case |
 | 执行步骤错 | module profile 或 suite profile |
 | 动作能力缺失 | fixture/client/helper |
-| 默认生成规则错 | `aitest_config/project_config.yaml` 或 codegen |
+| 默认生成规则错 | `aitest_config/aitest.yaml` 或 codegen |
 | profile 校验规则不足 | profile schema / profile validator |
 | 报告分类错 | report collector / classifier |
 

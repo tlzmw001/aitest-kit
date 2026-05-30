@@ -74,6 +74,34 @@ def collect_result(
     return result
 
 
+def generated_nodeids_for_case_ids(
+    generated_files: list[str | Path],
+    case_ids: list[str],
+) -> tuple[list[str], list[str]]:
+    """Return exact pytest nodeids for requested tc_id values in generated files."""
+    requested = [case_id for case_id in case_ids if case_id]
+    if not requested:
+        return [], []
+
+    meta = _extract_generated_metadata([Path(path) for path in generated_files])
+    by_tc_id: dict[str, list[str]] = defaultdict(list)
+    for item in meta["by_full_key"].values():
+        tc_id = str(item.get("tc_id") or "")
+        nodeid = str(item.get("nodeid") or "")
+        if tc_id and nodeid:
+            by_tc_id[tc_id].append(nodeid)
+
+    nodeids: list[str] = []
+    missing: list[str] = []
+    for case_id in requested:
+        matches = sorted(by_tc_id.get(case_id, []))
+        if not matches:
+            missing.append(case_id)
+            continue
+        nodeids.extend(matches)
+    return nodeids, missing
+
+
 def blocked_result(
     *,
     run_id: str,
@@ -110,6 +138,8 @@ def _run_scope_fields(run_scope: dict[str, Any] | None) -> dict[str, Any]:
             fields[key] = str(normalized.get(key) or "")
     if "case_files" in normalized:
         fields["case_files"] = [str(item) for item in normalized.get("case_files") or []]
+    if "case_ids" in normalized:
+        fields["case_ids"] = [str(item) for item in normalized.get("case_ids") or []]
     return fields
 
 

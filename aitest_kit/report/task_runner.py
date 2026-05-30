@@ -15,6 +15,7 @@ from aitest_kit.codegen.suite import (
 )
 from aitest_kit.registry import load_task_context
 from aitest_kit.registry.models import TaskContext, TaskUnit
+from aitest_kit.registry.selection import filter_task_context_by_case_ids, suite_case_report_dir_name
 
 
 def run_task_command_impl(
@@ -22,11 +23,36 @@ def run_task_command_impl(
     skip_codegen_check: bool,
     task_file: str,
     extra_args: list[str],
+    case_ids: list[str] | None = None,
 ) -> None:
     """Run each suite unit in a task, then write a task-level aggregate report."""
+    task = load_task_context(task_file)
+    if case_ids:
+        task, filter_diagnostics = filter_task_context_by_case_ids(task, case_ids)
+        if filter_diagnostics or task is None:
+            click.echo(f"Task: {task_file}")
+            click.echo("Task selector diagnostics:")
+            for diagnostic in filter_diagnostics:
+                click.echo(f"  {diagnostic}")
+            raise SystemExit(2)
+    run_task_context_command_impl(
+        task,
+        include_manual=include_manual,
+        skip_codegen_check=skip_codegen_check,
+        extra_args=extra_args,
+    )
+
+
+def run_task_context_command_impl(
+    task: TaskContext,
+    *,
+    include_manual: bool,
+    skip_codegen_check: bool,
+    extra_args: list[str],
+) -> None:
+    """Run a pre-resolved task context and write a task-level aggregate report."""
     from aitest_kit.report.cli import _create_run_dir, _load_paths, _run_command_impl, _write_result
 
-    task = load_task_context(task_file)
     if task.diagnostics:
         click.echo(f"Task: {task.task}")
         click.echo("Task manifest diagnostics:")
@@ -92,7 +118,6 @@ def _run_task_unit(
         task.defaults.pytest_args
         + unit.pytest_args
         + extra_args
-        + _case_id_filter_args(unit.case_ids)
     )
     unit_include_manual = _unit_include_manual(include_manual, task.defaults.include_manual, unit)
     label = unit.name or unit.suite or str(unit.suite_file)
@@ -106,6 +131,7 @@ def _run_task_unit(
             skip_codegen_check,
             unit_args,
             suite_file=str(unit.suite_file),
+            case_ids=tuple(unit.case_ids),
             env_files=task.env_files,
         )
         code = 0
@@ -136,7 +162,15 @@ def _read_unit_latest_result(unit: TaskUnit) -> dict[str, Any] | None:
         reports_dir=paths.reports_dir,
         profile_dir=paths.profile_dir,
     )
-    result_path = runtime_paths.reports_dir / "latest" / "result.json"
+    reports_dir = runtime_paths.reports_dir
+    if unit.case_ids:
+        reports_dir = paths.reports_dir / "tasks" / suite_case_report_dir_name(
+            target=context.target,
+            module=context.module,
+            suite=context.suite,
+            case_ids=unit.case_ids,
+        )
+    result_path = reports_dir / "latest" / "result.json"
     if not result_path.exists():
         return None
     return json.loads(result_path.read_text(encoding="utf-8"))
@@ -181,12 +215,16 @@ def _task_result(
         "task_file": str(task.task_path),
         "units": units,
     }
+    if task.metadata.get("selector"):
+        run_scope["selector"] = task.metadata["selector"]
+    if task.metadata.get("case_ids"):
+        run_scope["case_ids"] = task.metadata["case_ids"]
     return {
         "run_id": run_id,
         "status": "COMPLETED" if exit_code == 0 else "FAILED_RUN",
         "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
         "duration_seconds": duration_seconds,
-        "command": f"aitest run --task-file {task.task_path}",
+        "command": _task_command(task),
         "task_file": str(task.task_path),
         "run_scope": run_scope,
         "project_config_version": unit_results[0].get("project_config_version", "missing") if unit_results else "missing",
@@ -208,6 +246,28 @@ def _task_result(
         "cases": cases,
         "codegen_skipped_cases": skipped,
     }
+
+
+def _task_command(task: TaskContext) -> str:
+    selector = task.metadata.get("selector") if isinstance(task.metadata, dict) else None
+    if isinstance(selector, dict):
+        parts = ["aitest", "run"]
+        if selector.get("all_suites"):
+            parts.append("--all")
+        target = selector.get("target")
+        module = selector.get("module")
+        if target:
+            parts.extend(["--target", str(target)])
+        if module:
+            parts.extend(["--module", str(module)])
+        for case_id in selector.get("case_ids") or []:
+            parts.extend(["--case-id", str(case_id)])
+        return " ".join(parts)
+
+    parts = ["aitest", "run", "--task-file", str(task.task_path)]
+    for case_id in task.metadata.get("case_ids", []) if isinstance(task.metadata, dict) else []:
+        parts.extend(["--case-id", str(case_id)])
+    return " ".join(parts)
 
 
 def _empty_summary(duration_seconds: float) -> dict[str, Any]:
@@ -328,10 +388,3 @@ def _unit_include_manual(cli_include_manual: bool, default_include_manual: bool 
     if default_include_manual is not None:
         return default_include_manual
     return cli_include_manual
-
-
-def _case_id_filter_args(case_ids: list[str]) -> list[str]:
-    if not case_ids:
-        return []
-    terms = [case_id.lower().replace("-", "_") for case_id in case_ids]
-    return ["-k", " or ".join(terms)]

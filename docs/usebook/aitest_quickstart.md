@@ -57,10 +57,10 @@ aitest doctor
 刚初始化时没有模块是正常的。你会看到类似提示：
 
 ```text
-No modules found under the configured cases directory.
+No targets or suites found in this workspace.
 ```
 
-这不是失败，只表示还没有 `test_workspace/cases/<module>/` 和对应 profile。
+这不是失败，只表示还没有 `test_workspace/targets/<target>/` registry 和 `test_workspace/suites/<target>/<suite>/` 用例。
 
 ## 4. 放入文档
 
@@ -131,7 +131,22 @@ aitest codegen --task-file test_workspace/tasks/<task>.yaml --check
 aitest run --task-file test_workspace/tasks/<task>.yaml
 ```
 
-legacy 模块模式仍兼容 `aitest codegen <module>` 和 `test_workspace/tests/generated/`，但新项目建议从 `suite.yaml` 开始。
+如果 suite 已注册到 target/module registry，也可以按模块、target 或全量维度执行：
+
+```bash
+aitest codegen --target <target> --module <module> --check
+aitest run --target <target> --module <module>
+aitest codegen --target <target> --check
+aitest run --target <target>
+aitest codegen --all --check
+aitest run --all
+```
+
+单 case 调试只影响执行和报告，不改变 codegen 的 suite 生成单位：
+
+```bash
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --case-id TC-XXX-001
+```
 
 判断结果：
 
@@ -163,6 +178,7 @@ AITEST_ENV_FILE=/tmp/your-system-test.env aitest run --suite-file test_workspace
 test_workspace/reports/latest/report.md
 test_workspace/reports/latest/result.json
 test_workspace/reports/latest/junit.xml
+test_workspace/reports/tasks/<task_or_selector>/latest/report.md
 ```
 
 `aitest run` 会先做 generated freshness check。如果 Markdown/profile 已经变了但 pytest 没重新生成，会写出 `BLOCKED_RUN` 报告并停止，避免执行旧测试。

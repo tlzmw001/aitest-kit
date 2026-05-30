@@ -16,13 +16,32 @@ from aitest_kit.codegen.suite import (
 def _write_module_profile(root: Path) -> None:
     target_dir = root / "test_workspace" / "targets" / "sub2api"
     profile_dir = target_dir / "profiles"
+    module_dir = target_dir / "modules"
     profile_dir.mkdir(parents=True, exist_ok=True)
+    module_dir.mkdir(parents=True, exist_ok=True)
     (target_dir / "target.yaml").write_text(
         """target: sub2api
 defaults:
+  module_dir: test_workspace/targets/sub2api/modules
   profile_dir: test_workspace/targets/sub2api/profiles
   generated_dir: test_workspace/generated/sub2api
   reports_dir: test_workspace/reports/sub2api
+""",
+        encoding="utf-8",
+    )
+    (module_dir / "gateway_api.yaml").write_text(
+        """target: sub2api
+module: gateway_api
+module_type: multi_endpoint
+fixture:
+  file: gateway_api.py
+  default_fixture: setup_gateway_api
+profile:
+  file: profile_gateway_api.md
+registered_suites:
+  - suite: quota_billing_v2
+    manifest: test_workspace/suites/sub2api/quota_billing_v2/suite.yaml
+    status: active
 """,
         encoding="utf-8",
     )
@@ -191,6 +210,63 @@ units:
         assert check.exit_code == 0, check.output
         assert "Task: release_regression" in check.output
         assert "All generated files are up to date." in check.output
+
+
+def test_codegen_target_module_and_all_selectors_reuse_registered_suites(tmp_path):
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
+        root = Path(cwd)
+        _write_module_profile(root)
+        suite_dir = _write_suite(root)
+
+        generate = runner.invoke(codegen, ["--target", "sub2api", "--module", "gateway_api"])
+        assert generate.exit_code == 0, generate.output
+        assert "Task: sub2api_gateway_api" in generate.output
+        assert str(suite_dir / "suite.yaml") in generate.output
+
+        module_check = runner.invoke(codegen, ["--module", "gateway_api", "--check"])
+        assert module_check.exit_code == 0, module_check.output
+        assert "All generated files are up to date." in module_check.output
+
+        target_check = runner.invoke(codegen, ["--target", "sub2api", "--check"])
+        assert target_check.exit_code == 0, target_check.output
+        assert "Task: sub2api_all" in target_check.output
+
+        all_check = runner.invoke(codegen, ["--all", "--check"])
+        assert all_check.exit_code == 0, all_check.output
+        assert "Task: all" in all_check.output
+
+
+def test_codegen_all_and_module_discover_targets_yaml_registry(tmp_path):
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
+        root = Path(cwd)
+        _write_module_profile(root)
+        (root / "test_workspace" / "targets" / "sub2api" / "target.yaml").unlink()
+        config_dir = root / "aitest_config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "targets.yaml").write_text(
+            """targets:
+  sub2api:
+    target: sub2api
+    defaults:
+      module_dir: test_workspace/targets/sub2api/modules
+      profile_dir: test_workspace/targets/sub2api/profiles
+      generated_dir: test_workspace/generated/sub2api
+      reports_dir: test_workspace/reports/sub2api
+""",
+            encoding="utf-8",
+        )
+        _write_suite(root)
+
+        all_generate = runner.invoke(codegen, ["--all"])
+        assert all_generate.exit_code == 0, all_generate.output
+        assert "Task: all" in all_generate.output
+
+        module_check = runner.invoke(codegen, ["--module", "gateway_api", "--check"])
+        assert module_check.exit_code == 0, module_check.output
+        assert "Task: gateway_api" in module_check.output
+        assert "All generated files are up to date." in module_check.output
 
 
 def test_suite_generated_path_uses_shared_naming_rule(tmp_path):

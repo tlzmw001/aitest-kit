@@ -4,8 +4,6 @@
 
 独立 case suite 在用例目录旁放 `profile_{suite}_suite.md`。module profile 放 L1 稳定能力，路径通常是 `test_workspace/targets/{target}/profiles/profile_{module}.md`；suite profile 跟随用例批次，优先放本批用例的 `variables`、`case_flows`、`case_bodies` 和 `request_overrides`。
 
-legacy workspace 仍兼容 `test_workspace/tests/fixtures/codegen_profile_{module}.md` 和 `codegen_profile_{suite}_suite.md`，但新项目优先使用 target/suite 命名。
-
 profile 文件必须包含一个 YAML 代码块：
 
 ~~~markdown
@@ -20,7 +18,7 @@ profile 会先经过 JSON Schema 和语义校验。校验失败时，普通 code
 
 ## module_type
 
-`module_type` 是必填字段，取值来自 `aitest_config/project_config.yaml` 的 `module_types`。
+`module_type` 是必填字段，取值来自 `aitest_config/aitest.yaml` 的 `codegen.module_types`。
 
 模板 workspace 默认包含：
 
@@ -72,7 +70,7 @@ assertion_rules:
 匹配优先级：
 
 ```text
-profile assertion_rules > project_config builtin_assertion_rules > named_templates
+profile assertion_rules > aitest.yaml builtin_assertion_rules > named_templates
 ```
 
 适用：
@@ -115,7 +113,7 @@ base_url = require_env("SUB2API_BASE_URL")
 这样缺失 env 会在报告中归类为 `PRECONDITION_MISSING`，而不是普通 fixture error。变量可以通过以下方式提供：
 
 ```bash
-AITEST_ENV_FILE=/tmp/sub2api-test.env aitest run gateway_api
+AITEST_ENV_FILE=/tmp/sub2api-test.env aitest run --target sub2api --module gateway_api
 ```
 
 优先级保持一致：真实 shell 环境变量优先，dotenv 文件只补缺失变量。显式设置 `AITEST_ENV_FILE` 但文件不存在时，本次运行会生成 `BLOCKED_RUN`，不会继续执行 pytest。
@@ -244,7 +242,7 @@ case_bodies:
 不建议长期滥用。稳定后应优先晋升为：
 
 ```text
-case_bodies -> case_flows -> assertion_rules / project_config builtin rules
+case_bodies -> case_flows -> assertion_rules / aitest.yaml builtin rules
 ```
 
 ## strategy 优先级
@@ -282,4 +280,4 @@ v0.1 中，以下内容按稳定契约维护：
 - promotion patch 的具体文件格式
 - `aitest_kit.codegen` 内部 Python API
 
-迁移新项目时，不要把内部 Python API 当成扩展点；优先通过 Markdown、profile、fixture、helper 和 `project_config.yaml` 表达规则。
+迁移新项目时，不要把内部 Python API 当成扩展点；优先通过 Markdown、profile、fixture、helper 和 `aitest.yaml` 表达规则。

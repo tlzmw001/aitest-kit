@@ -28,8 +28,7 @@ AITest 当前不拆分 `aitest_kit` 与 workspace 协议仓库。框架代码、
 
 迁移新项目时，优先改：
 
-- `aitest_config/config.yaml`
-- `aitest_config/project_config.yaml`
+- `aitest_config/aitest.yaml`
 - `test_workspace/targets/{target}/target.yaml`
 - `test_workspace/targets/{target}/modules/{module}.yaml`
 - `test_workspace/targets/{target}/fixtures/{module}.py`
@@ -86,7 +85,7 @@ test_workspace/
 aitest codegen --workspace /path/to/your_project/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
 aitest codegen --workspace /path/to/your_project/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 aitest run --workspace /path/to/your_project/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
-aitest report --workspace /path/to/your_project/aitest_workspace
+aitest report --workspace /path/to/your_project/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 ```
 
 ## 三、升级已有 workspace
@@ -200,11 +199,10 @@ Markdown 用例必须满足：
 优先修改：
 
 ```text
-aitest_config/config.yaml
-aitest_config/project_config.yaml
+aitest_config/aitest.yaml
 ```
 
-其中 `project_config.yaml` 是 codegen 适配的核心。它决定：
+其中 `aitest.yaml` 是 workspace 和 codegen 适配的统一入口。它决定：
 
 - generated pytest 的 helper import。
 - 默认 API 路径。
@@ -219,7 +217,7 @@ aitest_config/project_config.yaml
 
 ```text
 框架层：parser / planner / renderer / CLI / 通用 helpers
-项目配置层：config.yaml / project_config.yaml
+项目配置层：aitest.yaml
 target/module/suite 层：target.yaml / module.yaml / fixture / helper / profile / Markdown suite
 ```
 
@@ -288,6 +286,21 @@ cd /path/to/your_project/aitest_workspace
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
 ```
 
+完成 suite 注册后，也可以用 registry 维度检查更大的范围：
+
+```bash
+aitest codegen --workspace /path/to/your_project/aitest_workspace --target <target> --module <module> --check
+aitest run --workspace /path/to/your_project/aitest_workspace --target <target> --module <module> -- --collect-only -q
+aitest codegen --workspace /path/to/your_project/aitest_workspace --target <target> --check
+aitest run --workspace /path/to/your_project/aitest_workspace --target <target> -- --collect-only -q
+```
+
+单 case 调试使用 `--case-id`，不改变 suite 作为 codegen 最小生成单位的约定：
+
+```bash
+aitest run --workspace /path/to/your_project/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --case-id TC-XXX-001
+```
+
 如果必须从其他目录执行，需要显式设置：
 
 ```bash
@@ -321,6 +334,7 @@ AITEST_ENV_FILE=/tmp/your-project-test.env aitest run --workspace /path/to/your_
 ```text
 test_workspace/reports/latest/
 test_workspace/reports/runs/{run_id}/
+test_workspace/reports/tasks/<task_or_selector>/latest/
 ```
 
 核心产物：

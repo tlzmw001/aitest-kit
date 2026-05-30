@@ -9,13 +9,9 @@ coupon_system/          # 待测系统：智能优惠券推荐策略服务（Fas
 docs/                   # 开发文档输入目录（skill 的输入源）
 test_workspace/         # AI 生成内容的工作目录
   knowledge/            #   测试知识库（L0/L1/L2 + TEST_SPEC）
-  cases/                #   测试用例（Markdown，按模块分目录）
-  casesuites/           #   可选：按 L2/迭代批次组织的独立用例 suite
-  tests/                #   pytest 测试代码
-    conftest.py         #     全局 session fixtures
-    fixtures/           #     模块 fixture（每模块一个 .py + codegen_profile.md）
-    helpers/            #     HTTP/Redis 等测试工具函数
-    generated/          #     codegen 生成的 pytest 文件（编译产物）
+  suites/               #   suite 用例（Markdown + suite.yaml + suite profile）
+  targets/              #   target/module registry、fixture、helper、module profile
+  generated/            #   codegen 生成的 pytest 文件（编译产物）
   reports/              #   测试执行报告（运行产物，不入库）
   results/              #   待测系统 bug 记录
   plans/                #   方案文档
@@ -63,12 +59,16 @@ pytest tests/
 
 # 执行 generated 测试并生成结构化报告
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
-aitest report
+aitest report --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --case-id TC-XXX-001
+aitest run --target <target> --module <module>
+aitest run --target <target>
+aitest run --all
 
 # 初始化并操作独立新项目 workspace
 aitest init --target /path/to/your_project
 aitest codegen --workspace /path/to/your_project --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
-aitest run --workspace /path/to/your_project --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest run --workspace /path/to/your_project --target <target>
 ```
 
 ## 技术栈
@@ -169,6 +169,17 @@ aitest codegen --suite-file <suite.yaml> --health-report --write-report
 # 晋升分析
 aitest codegen --suite-file <suite.yaml> --analyze-promotion --write-report
 aitest codegen --suite-file <suite.yaml> --suggest-promotion-patch
+
+# registry 选择器
+aitest codegen --target <target> --module <module> --check
+aitest run --target <target> --module <module>
+aitest report --target <target> --module <module>
+aitest codegen --target <target> --check
+aitest run --target <target>
+aitest report --target <target>
+aitest codegen --all --check
+aitest run --all
+aitest report --all
 ```
 
 ### 使用指引
@@ -178,7 +189,7 @@ aitest codegen --suite-file <suite.yaml> --suggest-promotion-patch
 - **新模块缺 fixture/profile**：`/test-scaffold`（构建 target/module fixture + module profile，再接 suite profile）
 - **用例出错**：`/test-fix`（修用例 + 记 TEST_SPEC 陷阱 + 更新 skill）
 - **生成 pytest**：`/test-codegen --suite-file <suite.yaml>`
-- **执行并报告**：`aitest run --suite-file <suite.yaml>`，默认排除 manual；需要时加 `--include-manual`
+- **执行并报告**：`aitest run --suite-file <suite.yaml>`，默认排除 manual；需要时加 `--include-manual`。单 case 调试用 `--case-id <TC-ID>`；模块、target、全量回归用 `--target <target> --module <module>`、`--target <target>` 或 `--all`
 - **只想看文档质量**：`/doc-review`
 
 ### 关键约定
@@ -197,7 +208,7 @@ aitest codegen --suite-file <suite.yaml> --suggest-promotion-patch
 1. **freshness check** — `aitest run` 默认先检查 generated pytest 是否与 Markdown/profile 一致；失败时生成 `BLOCKED_RUN` 报告并停止。
 2. **pytest 执行** — 默认追加 `-m "not manual"`；`--include-manual` 才执行 manual 用例。
 3. **metadata join** — generated pytest 中的 `__tc_meta__` 连接 JUnit XML 结果；`__codegen_skipped__` 记录未生成 pytest 函数的可行性存疑用例。
-4. **结果落盘** — 输出 `junit.xml`、`result.json`、`report.md` 到 `test_workspace/reports/runs/{run_id}/`，并同步到 `latest/`。
+4. **结果落盘** — suite 执行输出 `junit.xml`、`result.json`、`report.md` 到对应 reports bucket 的 `runs/{run_id}/`，并同步到 `latest/`；task、target/module、target/all 和 workspace `--all` 会额外生成 `test_workspace/reports/tasks/{task_or_selector}/latest/` 汇总报告。
 5. **反哺清单** — 报告按环境、fixture/codegen、断言失败、未知问题生成下一步处理建议。
 
 ## 测试执行注意事项
