@@ -16,17 +16,22 @@ from aitest_kit.codegen.project_config import (
 )
 
 
+_DEFAULT_BASE_REQUEST = object()
+
+
 def _parse_result(
     cases: list[TestCase],
-    base_request_http: dict | None = None,
+    base_request_http: dict | None | object = _DEFAULT_BASE_REQUEST,
     common_assertions: list[str] | None = None,
     variables: dict[str, str] | None = None,
 ) -> ParseResult:
+    if base_request_http is _DEFAULT_BASE_REQUEST:
+        base_request_http = {"user_id": "", "reqId": ""}
     return ParseResult(
         module="demo",
         source_file="test_workspace/suites/demo_target/demo_suite/business.md",
         shared_config=SharedConfig(
-            base_request_http=base_request_http or {"user_id": "", "reqId": ""},
+            base_request_http=base_request_http,
             common_assertions=common_assertions or [],
             variables=variables or {},
         ),
@@ -154,6 +159,27 @@ case_flows:
         )
         case_ir = _case(file_ir, "TC-DEMO-001")
         assert case_ir.strategy == "manual"
+
+    def test_manual_does_not_require_default_request_plan(self, tmp_path):
+        tc = TestCase(
+            id="TC-DEMO-001",
+            title="纯人工检查监控",
+            priority="P1",
+            markers=["[manual]"],
+            section="人工",
+        )
+        file_ir = build_file_ir(
+            _parse_result([tc], base_request_http=None),
+            "business",
+            project=DEFAULT_PROJECT,
+        )
+        case_ir = _case(file_ir, "TC-DEMO-001")
+        assert case_ir.strategy == "manual"
+        assert case_ir.fixtures == []
+        assert case_ir.setup_call is None
+        assert case_ir.request is None
+        assert case_ir.call is None
+        assert case_ir.diagnostics == []
 
     def test_grpc_overrides_http(self, tmp_path):
         tc = TestCase(

@@ -79,6 +79,8 @@ __codegen_skipped__ = [
     assert result["summary"]["codegen_skipped"] == 1
     assert result["modules"]["demo"]["business"]["manual_total"] == 1
     assert result["modules"]["demo"]["business"]["manual_not_run"] == 1
+    assert result["manual_cases"][0]["tc_id"] == "TC-DEMO-002"
+    assert result["manual_cases"][0]["title"] == "manual"
     assert result["codegen_skipped_cases"][0]["tc_id"] == "TC-DEMO-003"
 
 

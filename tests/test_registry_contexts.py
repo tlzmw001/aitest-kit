@@ -155,6 +155,75 @@ units:
     assert task.units[0].allow_risk == ["may_bill"]
 
 
+def test_registry_loads_registered_suite_from_string_manifest(tmp_path):
+    workspace, suite_file = _registry_workspace_with_suite(
+        tmp_path,
+        registered_suites=f"""registered_suites:
+  - {suite_file_placeholder()}
+""",
+    )
+
+    target = load_target_context("sub2api", workspace_root=workspace)
+    module = load_module_context(target, "gateway_api")
+
+    assert module.diagnostics == []
+    assert module.registered_suites[0].suite == "quota_billing_v2"
+    assert module.registered_suites[0].manifest == suite_file
+    assert module.registered_suites[0].status == "active"
+
+
+def test_registry_derives_registered_suite_name_from_mapping_manifest(tmp_path):
+    workspace, suite_file = _registry_workspace_with_suite(
+        tmp_path,
+        registered_suites=f"""registered_suites:
+  - manifest: {suite_file_placeholder()}
+    status: paused
+""",
+    )
+
+    target = load_target_context("sub2api", workspace_root=workspace)
+    module = load_module_context(target, "gateway_api")
+
+    assert module.diagnostics == []
+    assert module.registered_suites[0].suite == "quota_billing_v2"
+    assert module.registered_suites[0].manifest == suite_file
+    assert module.registered_suites[0].status == "paused"
+
+
+def test_registry_reports_registered_suite_name_mismatch(tmp_path):
+    workspace, _ = _registry_workspace_with_suite(
+        tmp_path,
+        registered_suites=f"""registered_suites:
+  - suite: wrong_suite
+    manifest: {suite_file_placeholder()}
+""",
+    )
+
+    target = load_target_context("sub2api", workspace_root=workspace)
+    module = load_module_context(target, "gateway_api")
+
+    assert any("does not match manifest suite quota_billing_v2" in diagnostic for diagnostic in module.diagnostics)
+
+
+def test_registry_keeps_explicit_suite_even_if_manifest_is_created_later(tmp_path):
+    workspace, _ = _registry_workspace_with_suite(
+        tmp_path,
+        registered_suites="""registered_suites:
+  - suite: future_suite
+    manifest: test_workspace/suites/sub2api/future_suite/suite.yaml
+""",
+    )
+
+    target = load_target_context("sub2api", workspace_root=workspace)
+    module = load_module_context(target, "gateway_api")
+
+    assert module.diagnostics == []
+    assert module.registered_suites[0].suite == "future_suite"
+    assert module.registered_suites[0].manifest == (
+        workspace / "test_workspace" / "suites" / "sub2api" / "future_suite" / "suite.yaml"
+    )
+
+
 def test_registry_loads_target_from_central_targets_yaml(tmp_path):
     workspace = tmp_path / "aitest_project"
     config_dir = workspace / "aitest_config"
@@ -247,3 +316,56 @@ profile: profile_smoke_suite.md
     assert context.manifest_path == suite_dir / "suite.yaml"
     assert context.profile_path == suite_dir / "profile_smoke_suite.md"
     assert context.case_files == [suite_dir / "business.md"]
+
+
+def suite_file_placeholder() -> str:
+    return "test_workspace/suites/sub2api/quota_billing_v2/suite.yaml"
+
+
+def _registry_workspace_with_suite(tmp_path, *, registered_suites: str):
+    workspace = tmp_path / "aitest_project"
+    target_dir = workspace / "test_workspace" / "targets" / "sub2api"
+    (target_dir / "modules").mkdir(parents=True)
+    (target_dir / "fixtures").mkdir()
+    (target_dir / "profiles").mkdir()
+    (target_dir / "target.yaml").write_text(
+        """target: sub2api
+defaults:
+  module_dir: test_workspace/targets/sub2api/modules
+  fixture_dir: test_workspace/targets/sub2api/fixtures
+  profile_dir: test_workspace/targets/sub2api/profiles
+  suite_dir: test_workspace/suites/sub2api
+  generated_dir: test_workspace/generated/sub2api
+  reports_dir: test_workspace/reports/sub2api
+""",
+        encoding="utf-8",
+    )
+    (target_dir / "modules" / "gateway_api.yaml").write_text(
+        f"""target: sub2api
+module: gateway_api
+module_type: multi_endpoint
+fixture:
+  file: gateway_api.py
+  default_fixture: setup_gateway_api
+profile:
+  file: profile_gateway_api.md
+{registered_suites}""",
+        encoding="utf-8",
+    )
+
+    suite_dir = workspace / "test_workspace" / "suites" / "sub2api" / "quota_billing_v2"
+    suite_dir.mkdir(parents=True)
+    (suite_dir / "business.md").write_text("# business\n", encoding="utf-8")
+    (suite_dir / "profile_quota_billing_v2_suite.md").write_text("# profile\n", encoding="utf-8")
+    suite_file = suite_dir / "suite.yaml"
+    suite_file.write_text(
+        """target: sub2api
+module: gateway_api
+suite: quota_billing_v2
+case_files:
+  - business.md
+profile: profile_quota_billing_v2_suite.md
+""",
+        encoding="utf-8",
+    )
+    return workspace, suite_file

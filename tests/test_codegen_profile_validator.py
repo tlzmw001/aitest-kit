@@ -213,6 +213,94 @@ case_flows:
     assert any(diag.code == "W503" for diag in report.warnings)
 
 
+def test_profile_validator_allows_pure_manual_without_base_request_or_profile_entry(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        marker="[manual]",
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert not any(diag.code == "E506" for diag in report.errors)
+
+
+def test_profile_validator_warns_manual_comment_only_case_flow(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        marker="[manual]",
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+case_flows:
+  TC-GW-001:
+    steps:
+      - comment: 人工检查监控指标是否增加
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any(diag.code == "W505" for diag in report.warnings)
+    assert not any(diag.code == "E527" for diag in report.errors)
+
+
+def test_profile_validator_allows_semi_automated_manual_case_flow(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        marker="[manual]",
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+case_flows:
+  TC-GW-001:
+    fixture: setup_gateway_api
+    object: client
+    steps:
+      - call: client.trigger
+        save_as: resp
+      - comment: 人工检查监控指标是否增加
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert not any(diag.code == "W505" for diag in report.warnings)
+    assert report.errors == []
+
+
+def test_profile_validator_rejects_non_manual_comment_only_case_flow(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+case_flows:
+  TC-GW-001:
+    steps:
+      - comment: TODO 后续补真实调用
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any(diag.code == "E527" for diag in report.errors)
+
+
 def test_profile_validator_warns_fixture_reinvocation(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     profile_dir = _write_target(tmp_path)
@@ -235,6 +323,86 @@ case_flows:
     report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
 
     assert any(diag.code == "W504" for diag in report.warnings)
+
+
+def test_profile_validator_allows_case_flow_description_metadata(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+case_flows:
+  TC-GW-001:
+    fixture: setup_gateway_api
+    object: client
+    description: login and query current user
+    steps:
+      - call: client.health
+        save_as: resp
+      - assert: 'assert resp.status_code == 200'
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert report.errors == []
+
+
+def test_profile_validator_rejects_suite_case_flow_in_module_profile(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(
+        tmp_path,
+        module_profile="""module_type: standard_http
+case_flows:
+  TC-GW-001:
+    fixture: setup_gateway_api
+    object: client
+    steps:
+      - assert: 'assert True'
+""",
+    )
+    suite_dir = _write_suite(
+        tmp_path,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any(diag.code == "E526" for diag in report.errors)
+    assert any("suite profile, not the module profile" in diag.message for diag in report.errors)
+    assert any(diag.source == "case_flows" for diag in report.errors)
+
+
+def test_profile_validator_rejects_suite_variables_cases_in_module_profile(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(
+        tmp_path,
+        module_profile="""module_type: standard_http
+variables:
+  cases:
+    TC-GW-001:
+      token:
+        env: DEMO_TOKEN
+""",
+    )
+    suite_dir = _write_suite(
+        tmp_path,
+        with_base_request=True,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any(diag.code == "E526" for diag in report.errors)
+    assert any(diag.source == "variables.cases" for diag in report.errors)
 
 
 def test_profile_validator_allows_declared_fixture_factory_setup(tmp_path, monkeypatch):

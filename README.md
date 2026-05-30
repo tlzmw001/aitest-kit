@@ -52,6 +52,8 @@ test_workspace/        # 知识库、Markdown 用例、fixture、profile、gener
 AGENTS.md / CLAUDE.md  # AI 协作说明
 ```
 
+配置文件的完整写法见 `aitest_config/refs/config-files.md`。新建 target、module、suite、profile 或 task 时，优先按这份手册判断字段归属。
+
 ### 3. 体检
 
 ```bash
@@ -178,6 +180,8 @@ profile 负责：
 - 用 `case_flows` 描述稳定多步骤流程。
 - 用 `case_bodies` 保留复杂逃生通道。
 
+配置边界：`profile_{module}.md` 只放 L1 级稳定能力；`profile_{suite}_suite.md` 放具体 TC-ID 绑定的 `variables.cases/case_flows/case_bodies/request_overrides/case_fixtures`。详细示例见 `aitest_config/refs/config-files.md`。
+
 ### 4. Codegen
 
 日常门禁顺序：
@@ -244,6 +248,22 @@ aitest registry register-suite \
   --target <target> \
   --module <module> \
   --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+```
+
+如果手写 `module.yaml`，`registered_suites` 推荐使用 suite manifest 路径简写：
+
+```yaml
+registered_suites:
+  - test_workspace/suites/<target>/<suite>/suite.yaml
+```
+
+需要声明非 active 状态时再使用完整格式：
+
+```yaml
+registered_suites:
+  - suite: <suite>
+    manifest: test_workspace/suites/<target>/<suite>/suite.yaml
+    status: paused
 ```
 
 如果要创建一个显式任务清单：

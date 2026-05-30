@@ -91,3 +91,42 @@ def test_render_markdown_includes_suite_scope():
     assert "- **Module**：gateway_api" in text
     assert "- **Suite**：quota_billing_v2" in text
     assert "- **Suite 文件**：external_suites/demo/suite.yaml" in text
+
+
+def test_render_markdown_lists_manual_cases():
+    result = {
+        "run_id": "run",
+        "status": "COMPLETED",
+        "timestamp": "2026-05-27T00:00:00+08:00",
+        "duration_seconds": 1.0,
+        "command": "aitest run --suite-file external_suites/demo/suite.yaml",
+        "codegen_check": {"status": "passed"},
+        "manual_policy": "excluded",
+        "summary": {
+            "passed": 0,
+            "failed": 0,
+            "error": 0,
+            "pytest_skipped": 0,
+            "auto_collected": 0,
+            "manual_total": 1,
+            "manual_executed": 0,
+            "manual_not_run": 1,
+            "codegen_skipped": 0,
+        },
+        "modules": {},
+        "cases": [],
+        "manual_cases": [
+            {
+                "tc_id": "TC-DEMO-001",
+                "module": "demo",
+                "suite": "smoke",
+                "title": "人工检查监控",
+            }
+        ],
+        "codegen_skipped_cases": [],
+    }
+
+    text = render_markdown(result)
+
+    assert "## Manual 用例" in text
+    assert "TC-DEMO-001：人工检查监控（demo/smoke）" in text

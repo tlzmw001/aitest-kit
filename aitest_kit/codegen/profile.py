@@ -372,10 +372,14 @@ def validate_case_flows(
             errors.append(f"{prefix}: flow must be a mapping")
             continue
 
-        allowed_flow_keys = {"fixture", "object", "steps"}
+        allowed_flow_keys = {"fixture", "object", "description", "steps"}
         for key in flow:
             if key not in allowed_flow_keys:
                 errors.append(f"{prefix}: unknown field {key}")
+
+        description = flow.get("description")
+        if description is not None and not isinstance(description, str):
+            errors.append(f"{prefix}.description: must be a string")
 
         fixture = flow.get("fixture")
         if not isinstance(fixture, str) or not fixture.strip():

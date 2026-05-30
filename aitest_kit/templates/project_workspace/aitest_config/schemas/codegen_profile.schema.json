@@ -204,6 +204,9 @@
         "object": {
           "$ref": "#/$defs/identifier"
         },
+        "description": {
+          "type": "string"
+        },
         "steps": {
           "type": "array",
           "minItems": 1,

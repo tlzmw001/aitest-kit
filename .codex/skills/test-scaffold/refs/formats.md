@@ -143,6 +143,7 @@ assertion_rules:
 
 case_flows:
   TC-XXX-001:
+    description: 登录后查询当前用户信息
     steps:
       - call: case.method_name
         kwargs:
@@ -166,7 +167,10 @@ case_bodies:
 - `default_fixture/default_object/default_case_setup` 用于减少每条 `case_flow` 重复 setup。
 - `default_case_setup` 只在同一批 flow 都需要同一个 factory call 时写；普通 client fixture 不写。
 - 单条 `case_flow` 仍可显式声明 `fixture` 或 `object` 覆盖默认值。
+- 单条 `case_flow` 顶层可写 `description` 作为 profile 可读性 metadata；它不会进入 generated pytest。需要生成代码注释时，用 step 的 `comment`。
+- 非 manual 用例的 `case_flow` 至少包含一个 `call` 或 `assert`；纯人工 `[manual]` 不写 flow，半自动 manual 才写带 `call/assert` 的 flow。
 - `{case_id}` 会由 codegen 替换成当前用例 ID。
+- module profile 只放 L1 稳定能力；具体 TC-ID 绑定的 `case_flows/case_bodies/request_overrides/case_fixtures/variables.cases` 必须写在 suite profile。
 
 ## Fixture 代码结构
 

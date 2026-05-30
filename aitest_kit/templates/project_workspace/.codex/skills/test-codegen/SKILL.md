@@ -92,6 +92,7 @@ Markdown 用例
 ## 前置：读取 codegen profile
 
 检查 `suite.yaml`，再根据其中的 `target/module` 读取 `test_workspace/targets/{target}/modules/{module}.yaml`、target module profile 和 suite profile。
+如果需要判断配置字段应该写在哪一层，优先读取 `aitest_config/refs/config-files.md`。
 
 **如果存在**，emitter 会自动加载其中的 YAML 规则段。AI 补写时也应参考 profile 中的断言模式、请求模板、setup 映射。
 
@@ -177,8 +178,9 @@ python3 -m aitest_kit.cli run --task-file test_workspace/tasks/<task>.yaml -- --
 2. 创建或修正 `<suite_dir>/suite.yaml`，不要把 suite profile 索引写回 module profile。
 3. 读取 module fixture 的 client 方法签名，只使用已存在的方法。
 4. 逐条 case 选择 `variables`、`case_flow`、`request_overrides`、`skipped/manual`；不要生成 case_id 分发表。
-5. 对可行性存疑 case，保持 skipped，不要为了覆盖率强行写可执行 flow。
-6. 生成 `<suite_dir>/profile_{suite}_suite.md` 后立即跑 suite 级 profile gate 和 dump-ir。
+5. 对 `[manual]` 先分纯人工和半自动：纯人工不写 profile entry；能自动触发动作或稳定断言的半自动 manual 才写 `case_flow/case_body`，并保留 manual marker。
+6. 对可行性存疑 case，保持 skipped，不要为了覆盖率强行写可执行 flow。
+7. 生成 `<suite_dir>/profile_{suite}_suite.md` 后立即跑 suite 级 profile gate 和 dump-ir。
 
 ## 前置：运行 parser
 
@@ -198,7 +200,7 @@ Case IR 第一版应覆盖以下 strategy：
 | `default_http` | 标准 HTTP 单接口 |
 | `default_grpc` | 场景变量标注 gRPC 的标准单接口 |
 | `custom_case_body` | profile 中存在 `case_bodies[case_id]` |
-| `manual` | marker 包含 manual |
+| `manual` | marker 包含 manual，且没有可自动执行的 profile entry |
 | `skipped` | marker 包含可行性存疑 |
 | `structured_case_flow` | profile 中存在 `case_flows[case_id]` |
 

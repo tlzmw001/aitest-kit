@@ -61,6 +61,22 @@ aitest registry register-suite \
   --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 ```
 
+手写 `module.yaml` 时，`registered_suites` 可以直接写 suite manifest 路径：
+
+```yaml
+registered_suites:
+  - test_workspace/suites/<target>/<suite>/suite.yaml
+```
+
+需要声明非 active 状态时再使用完整格式：
+
+```yaml
+registered_suites:
+  - suite: <suite>
+    manifest: test_workspace/suites/<target>/<suite>/suite.yaml
+    status: paused
+```
+
 如果需要维护一组明确的回归 suite，可以创建 task：
 
 ```bash
@@ -101,11 +117,14 @@ test_workspace/
 AGENTS.md / CLAUDE.md          # AI 协作说明
 ```
 
+配置文件完整写法见 `aitest_config/refs/config-files.md`。新建 target、module、suite、profile 或 task 时，优先按这份手册判断字段归属。
+
 ## 关键产物
 
 | 产物 | 说明 |
 |---|---|
 | `aitest_config/aitest.yaml` | 推荐统一配置入口，包含 workspace 路径和 codegen 默认规则 |
+| `aitest_config/refs/config-files.md` | 配置文件手册，说明 target/module/suite/profile/task/env 写法和字段归属 |
 | `docs/` | 测试规则来源，优先放公开 API/设计文档 |
 | `test_workspace/knowledge/` | 测试知识库，记录当前系统可测试契约 |
 | `test_workspace/suites/` | 推荐 suite 根目录，用于需求、迭代、临时批次 |
@@ -144,6 +163,8 @@ test_workspace/suites/<target>/<suite>/profile_<suite>_suite.md
 ```
 
 suite profile 跟随用例目录，module profile 保留模块级稳定能力。
+
+具体规则：`profile_{module}.md` 只放 L1 稳定能力；`profile_{suite}_suite.md` 放具体 TC-ID 绑定的 `variables.cases/case_flows/case_bodies/request_overrides/case_fixtures`。更多示例见 `aitest_config/refs/config-files.md`。
 
 ## 常用命令
 

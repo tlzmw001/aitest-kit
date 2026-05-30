@@ -87,6 +87,43 @@ def test_registry_register_suite_rejects_same_suite_different_manifest(tmp_path)
     assert "different manifest" in second.output
 
 
+def test_registry_register_suite_normalizes_existing_string_entry(tmp_path):
+    workspace, suite_file = _workspace_with_suite(tmp_path)
+    module_path = workspace / "test_workspace" / "targets" / "demo_target" / "modules" / "demo_module.yaml"
+    module_data = _read_yaml(module_path)
+    module_data["registered_suites"] = [
+        "test_workspace/suites/demo_target/demo_smoke/suite.yaml",
+    ]
+    module_path.write_text(yaml.safe_dump(module_data, sort_keys=False), encoding="utf-8")
+    runner = CliRunner()
+
+    result = runner.invoke(
+        main,
+        [
+            "registry",
+            "register-suite",
+            "--workspace",
+            str(workspace),
+            "--target",
+            "demo_target",
+            "--module",
+            "demo_module",
+            "--suite-file",
+            str(suite_file),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    module_data = _read_yaml(module_path)
+    assert module_data["registered_suites"] == [
+        {
+            "suite": "demo_smoke",
+            "manifest": "test_workspace/suites/demo_target/demo_smoke/suite.yaml",
+            "status": "active",
+        }
+    ]
+
+
 def test_registry_register_suite_rejects_target_module_mismatch(tmp_path):
     workspace, suite_file = _workspace_with_suite(tmp_path, suite_target="other_target")
     runner = CliRunner()

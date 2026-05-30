@@ -86,7 +86,8 @@ aitest report
 - 测试知识库是测试设计主输入，不要长期绕过知识层直接写 pytest。
 - Markdown 用例是源数据；generated pytest 是编译产物。
 - `profile_{module}.md` 位于 `test_workspace/targets/{target}/profiles/`；`profile_{suite}_suite.md` 跟随具体用例 suite。
-- suite 只有注册到 `module.yaml.registered_suites` 后，才会进入 `--module`、`--target`、`--all` 聚合入口；注册使用 `aitest registry register-suite`。
+- 配置文件写法以 `aitest_config/refs/config-files.md` 为准；新建或修改 target/module/suite/profile/task/env 配置前先确认字段归属。
+- suite 只有注册到 `module.yaml.registered_suites` 后，才会进入 `--module`、`--target`、`--all` 聚合入口；注册使用 `aitest registry register-suite`。手写 `registered_suites` 时推荐直接写 suite manifest 路径字符串；需要 `status` 时再写 `{suite, manifest, status}` mapping。
 - 生成代码不手改为长期资产；优先改 Markdown、profile、fixture、helper 或配置后重新生成。
 - 配置、端口、URL、凭证都走环境变量或配置文件，不硬编码。
 - 不放宽断言、不 skip 失败用例、不伪造成功响应。

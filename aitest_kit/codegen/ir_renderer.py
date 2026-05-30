@@ -270,6 +270,22 @@ def _render_case_flow(
     return lines, unparsed, diagnostics
 
 
+def _render_manual_body(case_ir: CaseIR, tc: TestCase, ctx: EmitContext) -> list[str]:
+    lines: list[str] = []
+    lines.append("    @pytest.mark.manual")
+    signature = ", ".join(["self", *case_ir.fixtures])
+    lines.append(f"    def {tc_func_name(case_ir.case_id)}({signature}):")
+    lines.append(f'        """{case_ir.case_id}：{case_ir.title}"""')
+    lines.extend(render_assignment("__tc_meta__", _case_meta(tc, ctx), indent=2))
+    lines.extend(_render_setup_comments(tc))
+
+    for assertion in case_ir.assertions:
+        for cl in assertion.code_lines:
+            lines.append(f"        {cl}")
+    lines.append('        pytest.skip("manual check required")')
+    return lines
+
+
 def _profile_variable_specs(case_ir: CaseIR) -> dict[str, dict[str, Any]]:
     specs: dict[str, dict[str, Any]] = {}
     for item in case_ir.profile_variables:
@@ -342,6 +358,8 @@ def _render_test_function(
         return _render_custom_body(case_ir, tc, ctx), [], []
     if case_ir.strategy == "structured_case_flow":
         return _render_case_flow(case_ir, tc, ctx)
+    if case_ir.strategy == "manual":
+        return _render_manual_body(case_ir, tc, ctx), [], []
     return _render_default_body(case_ir, tc, ctx)
 
 

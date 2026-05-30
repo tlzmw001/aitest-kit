@@ -52,6 +52,8 @@ test_workspace/        # knowledge base, cases, fixtures, profiles, generated py
 AGENTS.md / CLAUDE.md  # AI collaboration guidance
 ```
 
+For all configuration file formats, see `aitest_config/refs/config-files.md`. Use it as the source of truth when creating targets, modules, suites, profiles, or tasks.
+
 ### 3. Health Check
 
 ```bash
@@ -155,9 +157,33 @@ test_workspace/targets/{target}/helpers/
 test_workspace/targets/{target}/profiles/profile_{module}.md
 ```
 
+Suites can run directly with `--suite-file`. To include a suite in `--module`, `--target`, or `--all` aggregation, register it with:
+
+```bash
+aitest registry register-suite --target <target> --module <module> --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+```
+
+When editing `module.yaml` manually, `registered_suites` can use the suite manifest path shorthand:
+
+```yaml
+registered_suites:
+  - test_workspace/suites/<target>/<suite>/suite.yaml
+```
+
+Use the full mapping only when you need a non-active status:
+
+```yaml
+registered_suites:
+  - suite: <suite>
+    manifest: test_workspace/suites/<target>/<suite>/suite.yaml
+    status: paused
+```
+
 Fixtures are action libraries: clients, public API calls, setup, cleanup, and reusable test actions.
 
 Profiles configure deterministic generation: `module_type`, `variables`, `request_overrides`, `assertion_rules`, `case_flows`, and `case_bodies`.
+
+Configuration boundary: `profile_{module}.md` keeps L1-level stable capabilities; `profile_{suite}_suite.md` keeps TC-ID-bound `variables.cases`, `case_flows`, `case_bodies`, `request_overrides`, and `case_fixtures`. See `aitest_config/refs/config-files.md` for examples.
 
 ### Codegen
 

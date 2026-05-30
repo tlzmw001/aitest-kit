@@ -28,6 +28,8 @@
 
 ## case_flow 规则
 
+- 单条 case_flow 顶层可写 `description` 作为 profile 可读性 metadata；step 里的说明用 `comment`
+- `case_flow` 必须代表可执行流程。非 manual 用例至少包含一个 `call` 或 `assert`；纯人工 `[manual]` 不写 flow，半自动 manual 才写带 `call/assert` 的 flow
 - steps 只用 `call` / `assign` / `assert` / `comment`
 - `assert` 以 `assert ` 开头，是可执行 Python
 - 不塞 if/loop/try，复杂逻辑下沉到 fixture/helper

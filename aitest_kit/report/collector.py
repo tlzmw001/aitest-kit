@@ -43,6 +43,7 @@ def collect_result(
 
     manual_total = sum(1 for item in meta["by_full_key"].values() if item["is_manual"])
     manual_executed = sum(1 for item in cases if item.get("is_manual"))
+    manual_cases = _manual_cases(list(meta["by_full_key"].values()))
     codegen_skipped_cases = list(meta["codegen_skipped"])
 
     summary = _summary(cases)
@@ -68,10 +69,30 @@ def collect_result(
         "summary": summary,
         "modules": _module_summary(cases, codegen_skipped_cases, list(meta["by_full_key"].values())),
         "cases": cases,
+        "manual_cases": manual_cases,
         "codegen_skipped_cases": codegen_skipped_cases,
     }
     result.update(_run_scope_fields(run_scope))
     return result
+
+
+def _manual_cases(all_meta: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    cases = []
+    for item in all_meta:
+        if not item.get("is_manual"):
+            continue
+        cases.append({
+            "tc_id": item.get("tc_id", ""),
+            "module": item.get("module", ""),
+            "suite": item.get("suite", ""),
+            "category": item.get("category", ""),
+            "source_md": item.get("source") or item.get("source_md", ""),
+            "title": item.get("title", ""),
+            "priority": item.get("priority", ""),
+            "markers": item.get("markers", []),
+            "nodeid": item.get("nodeid", ""),
+        })
+    return sorted(cases, key=lambda item: (item["module"], item["suite"], item["tc_id"]))
 
 
 def generated_nodeids_for_case_ids(

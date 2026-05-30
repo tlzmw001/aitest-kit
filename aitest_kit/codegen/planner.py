@@ -105,6 +105,8 @@ def _fixtures_for(
         if isinstance(fixture, str) and fixture:
             return [fixture], f"profile.case_flows.{tc.id}.fixture"
         return [], f"profile.case_flows.{tc.id}.fixture"
+    if strategy == "manual":
+        return [], "manual marker"
     if protocol == "grpc":
         return ["grpc_target", f"setup_{module}"], "default gRPC fixtures"
     return ["http_base_url", f"setup_{module}"], "default HTTP fixtures"
@@ -151,7 +153,7 @@ def _request_for(
     project: ProjectConfig,
     request_overrides: dict[str, dict[str, Any]],
 ) -> RequestIR | None:
-    if strategy in {"skipped", "custom_case_body", "structured_case_flow"}:
+    if strategy in {"skipped", "custom_case_body", "structured_case_flow", "manual"}:
         return None
 
     overrides = {
@@ -169,7 +171,7 @@ def _request_for(
 
 
 def _call_for(strategy: str, protocol: str, project: ProjectConfig) -> CallIR | None:
-    if strategy in {"skipped", "custom_case_body", "structured_case_flow"}:
+    if strategy in {"skipped", "custom_case_body", "structured_case_flow", "manual"}:
         return None
     if protocol == "grpc":
         return CallIR(helper=project.grpc_helper_call, target="grpc_target")
@@ -283,7 +285,7 @@ def _assertions_for(
 
 def _case_diagnostics(case_ir: CaseIR, has_http_body: bool) -> list[DiagnosticIR]:
     diagnostics: list[DiagnosticIR] = []
-    if case_ir.strategy in {"default_http", "default_grpc", "manual"} and not has_http_body:
+    if case_ir.strategy in {"default_http", "default_grpc"} and not has_http_body:
         diagnostics.append(DiagnosticIR(
             code="E202",
             layer="planner",
@@ -439,7 +441,7 @@ def build_file_ir(
             fixtures=fixtures,
             setup_call=(
                 SetupCallIR(name=f"setup_{parse_result.module}", kwargs={"case_id": tc.id})
-                if strategy in {"default_http", "default_grpc", "manual"}
+                if strategy in {"default_http", "default_grpc"}
                 else None
             ),
             request=request,

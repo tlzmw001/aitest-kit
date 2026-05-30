@@ -316,22 +316,89 @@ def _registered_suites(
         return []
     suites: list[RegisteredSuite] = []
     for index, item in enumerate(raw):
-        if not isinstance(item, dict):
-            diagnostics.append(f"E712: registered_suites[{index}] must be a mapping")
-            continue
-        suite = item.get("suite")
+        registered = _registered_suite(target_context, item, index, diagnostics)
+        if registered is not None:
+            suites.append(registered)
+    return suites
+
+
+def _registered_suite(
+    target_context: TargetContext,
+    item: Any,
+    index: int,
+    diagnostics: list[str],
+) -> RegisteredSuite | None:
+    if isinstance(item, str):
         manifest = resolve_path(
-            item.get("manifest"),
+            item,
             base_dir=target_context.workspace_root,
             diagnostics=diagnostics,
-            field=f"registered_suites[{index}].manifest",
+            field=f"registered_suites[{index}]",
         )
-        if not isinstance(suite, str) or not suite.strip() or manifest is None:
-            diagnostics.append(f"E712: registered_suites[{index}] requires suite and manifest")
-            continue
-        status = item.get("status", "active")
-        suites.append(RegisteredSuite(suite=suite, manifest=manifest, status=str(status)))
-    return suites
+        if manifest is None:
+            return None
+        suite = _suite_name_from_manifest(target_context, manifest, index, diagnostics)
+        if not suite:
+            return None
+        return RegisteredSuite(suite=suite, manifest=manifest, status="active")
+
+    if not isinstance(item, dict):
+        diagnostics.append(
+            f"E712: registered_suites[{index}] must be a suite.yaml path string or a mapping"
+        )
+        return None
+
+    manifest = resolve_path(
+        item.get("manifest"),
+        base_dir=target_context.workspace_root,
+        diagnostics=diagnostics,
+        field=f"registered_suites[{index}].manifest",
+    )
+    if manifest is None:
+        diagnostics.append(f"E712: registered_suites[{index}] requires manifest")
+        return None
+
+    suite = item.get("suite")
+    if isinstance(suite, str) and suite.strip():
+        suite_name = suite.strip()
+        if manifest.exists():
+            manifest_suite = _suite_name_from_manifest(target_context, manifest, index, diagnostics)
+        else:
+            manifest_suite = ""
+        if manifest_suite and manifest_suite != suite_name:
+            diagnostics.append(
+                f"E712: registered_suites[{index}].suite {suite_name} "
+                f"does not match manifest suite {manifest_suite}"
+            )
+            return None
+    else:
+        manifest_suite = _suite_name_from_manifest(target_context, manifest, index, diagnostics)
+        if not manifest_suite:
+            diagnostics.append(f"E712: registered_suites[{index}] requires suite or readable manifest")
+            return None
+        suite_name = manifest_suite
+
+    status = item.get("status", "active")
+    return RegisteredSuite(suite=suite_name, manifest=manifest, status=str(status))
+
+
+def _suite_name_from_manifest(
+    target_context: TargetContext,
+    manifest: Path,
+    index: int,
+    diagnostics: list[str],
+) -> str:
+    if not manifest.exists():
+        diagnostics.append(f"E712: registered_suites[{index}] suite manifest not found: {manifest}")
+        return ""
+    suite = load_suite_context(manifest, workspace_root=target_context.workspace_root)
+    if suite.diagnostics:
+        diagnostics.append(
+            f"E712: registered_suites[{index}] invalid suite manifest: "
+            + "; ".join(suite.diagnostics)
+        )
+        return ""
+    return suite.suite
 
 
 def _suite_manifest_path(suite_file: str | Path, diagnostics: list[str]) -> Path:

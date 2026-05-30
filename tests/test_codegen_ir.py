@@ -139,6 +139,39 @@ def test_emitter_reports_unparsed_common_assertions(tmp_path):
     assert result.unparsed == [("TC-DEMO-001", "共享断言暂不可解析")]
 
 
+def test_emitter_renders_pure_manual_without_base_request(tmp_path):
+    parse_result = ParseResult(
+        module="demo",
+        source_file="test_workspace/suites/demo/demo_suite/manual.md",
+        shared_config=SharedConfig(base_request_http=None),
+        cases=[
+            ParsedTestCase(
+                id="TC-DEMO-001",
+                title="人工检查监控",
+                priority="P1",
+                markers=["[manual]"],
+                assertions=["人工检查监控指标是否增加"],
+                section="人工",
+            )
+        ],
+    )
+
+    result = emit_file(
+        parse_result,
+        "business",
+        output_dir=tmp_path,
+        project=load_project_config(),
+    )
+
+    assert result.diagnostics == []
+    assert result.manual_count == 1
+    text = (tmp_path / "test_demo_business.py").read_text(encoding="utf-8")
+    assert "@pytest.mark.manual" in text
+    assert "# MANUAL CHECK: 人工检查监控指标是否增加" in text
+    assert 'pytest.skip("manual check required")' in text
+    assert "_req(" not in text
+
+
 def test_module_type_requirement_accepts_case_flows(tmp_path):
     profile_path = tmp_path / "profile_demo_suite.md"
     _write_profile(
@@ -269,6 +302,36 @@ def test_case_flow_profile_validation_accepts_assign_step():
     })
 
     assert errors == []
+
+
+def test_case_flow_profile_validation_accepts_description_metadata():
+    errors = validate_case_flows({
+        "TC-DEMO-001": {
+            "fixture": "setup_demo",
+            "object": "client",
+            "description": "login and query current user",
+            "steps": [
+                {"call": "client.login", "save_as": "login_resp"},
+                {"assert": "assert login_resp.status_code == 200"},
+            ],
+        }
+    })
+
+    assert errors == []
+
+
+def test_case_flow_profile_validation_rejects_non_string_description():
+    errors = validate_case_flows({
+        "TC-DEMO-001": {
+            "fixture": "setup_demo",
+            "description": {"text": "not allowed"},
+            "steps": [
+                {"assert": "assert True"},
+            ],
+        }
+    })
+
+    assert any("description: must be a string" in error for error in errors)
 
 
 def test_case_flow_defaults_expand_fixture_object_and_setup_step(tmp_path):

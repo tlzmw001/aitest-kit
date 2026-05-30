@@ -64,9 +64,10 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 ## case_body 与 case_flow
 
 - `case_bodies` 是复杂场景的逃生通道，适合多端点、多请求、副作用、日志、隔离服务、并发等默认模板难以覆盖的用例。
-- `case_flows` 是已验证且结构稳定的 `case_bodies` 晋升形态，适合"调用 helper -> 保存结果 -> 派生变量 -> 观察副作用 -> 断言/注释"这类重复多步骤流程；当前支持 `call`、`assign`、`assert`、`comment` 四类 step。
+- `case_flows` 是已验证且结构稳定的 `case_bodies` 晋升形态，适合"调用 helper -> 保存结果 -> 派生变量 -> 观察副作用 -> 断言/注释"这类重复多步骤流程；当前支持 `call`、`assign`、`assert`、`comment` 四类 step。单条 flow 顶层可写 `description` 作为 profile metadata，不进入 generated pytest；需要生成代码注释时使用 `comment` step。
 - 同一个 case_id 不允许同时出现在 `case_bodies` 和 `case_flows`；正式晋升为 `case_flow` 时必须删除旧 `case_body`，否则 codegen 会报错。
 - `case_flow` 的 `assert` step 必须写成可执行 Python 断言，例如 `assert resp["code"] == 0`；裸表达式如 `` `resp == ERR` `` 会被 profile 校验拒绝。
+- `case_flow` 表示可执行流程，至少应包含 `call` 或 `assert`。非 manual 用例不能写只有 `comment/assign` 的 flow；纯人工 `[manual]` 不写 flow，半自动 manual 才写带 `call/assert` 的 flow，并保留 manual marker。
 - `case_flow` 的 `args/kwargs` 可以用 `{var: name}` 引用 profile `variables`；变量来源只支持 `env` 或 `value`，`env` 可从进程环境变量、当前工作目录 `.env` 或 `AITEST_ENV_FILE` 指定文件读取；缺 env 时运行失败且只显示 env 名。
 - profile 顶层可以写 `default_fixture`、`default_object`、`default_case_setup`，用于给多条 `case_flows` 统一补 fixture/object/factory setup；`default_case_setup.kwargs.case_id: "{case_id}"` 会替换为当前用例 ID。
 - 如果 `case_flow` 自身没有 `fixture`，必须能从 `default_fixture` 得到；单条 flow 显式 `fixture/object` 时覆盖顶层默认值。
@@ -78,7 +79,7 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 
 ## 标记处理
 
-- `[manual]` -> `@pytest.mark.manual` + 断言为注释
+- `[manual]` 纯人工 -> 不要求 profile 覆盖，生成 `@pytest.mark.manual` + manual 注释；半自动 manual -> 使用真实 `case_flow/case_body` 并保留 manual marker
 - `[!可行性存疑: ...]` -> 跳过不生成，末尾 `# SKIPPED:`
 
 ## 后续：编写 codegen profile
@@ -87,6 +88,7 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 
 - module profile：`test_workspace/targets/{target}/profiles/profile_{module}.md`，承载 L1 级稳定能力
 - suite profile：`{suite_dir}/profile_{suite}_suite.md`，只覆盖该 suite 的 case_id
+- `case_flows/case_bodies/request_overrides/case_fixtures/variables.cases` 是 TC-ID 绑定配置，必须写入 suite profile；如果写到 module profile 且引用当前 suite 的 case_id，profile gate 会报错。
 
 profile 应包含：
 

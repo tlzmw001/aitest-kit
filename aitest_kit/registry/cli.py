@@ -167,25 +167,31 @@ def _register_suite_impl(
         raise click.ClickException("module registered_suites must be a list")
 
     manifest_value = _relative_to_workspace(suite_context.manifest_path, root)
-    existing_index = _registered_suite_index(existing, suite_context.suite)
+    existing_index = _registered_suite_index(existing, suite_context.suite, root)
     changed = False
+    desired_entry = {
+        "suite": suite_context.suite,
+        "manifest": manifest_value,
+        "status": status,
+    }
     if existing_index is None:
-        existing.append({
-            "suite": suite_context.suite,
-            "manifest": manifest_value,
-            "status": status,
-        })
+        existing.append(desired_entry)
         changed = True
     else:
         item = existing[existing_index]
-        registered_manifest = _resolve_manifest_value(item.get("manifest"), root)
+        if isinstance(item, str):
+            registered_manifest = _resolve_manifest_value(item, root)
+            registered_status = "active"
+        else:
+            registered_manifest = _resolve_manifest_value(item.get("manifest"), root)
+            registered_status = str(item.get("status", "active"))
         if registered_manifest != suite_context.manifest_path.resolve(strict=False):
             raise click.ClickException(
                 "suite is already registered with a different manifest: "
-                f"{item.get('manifest')}"
+                f"{item if isinstance(item, str) else item.get('manifest')}"
             )
-        if str(item.get("status", "active")) != status:
-            item["status"] = status
+        if not isinstance(item, dict) or item != desired_entry or registered_status != status:
+            existing[existing_index] = desired_entry
             changed = True
 
     module_data["registered_suites"] = existing
@@ -290,13 +296,29 @@ def _load_valid_suite(suite_file: str, root: Path) -> Any:
     return suite
 
 
-def _registered_suite_index(items: list[Any], suite_name: str) -> int | None:
+def _registered_suite_index(items: list[Any], suite_name: str, root: Path) -> int | None:
     for index, item in enumerate(items):
-        if not isinstance(item, dict):
-            raise click.ClickException(f"registered_suites[{index}] must be a mapping")
-        if item.get("suite") == suite_name:
+        if _registered_suite_name(item, root, index) == suite_name:
             return index
     return None
+
+
+def _registered_suite_name(item: Any, root: Path, index: int) -> str:
+    if isinstance(item, dict):
+        suite = item.get("suite")
+        if isinstance(suite, str) and suite.strip():
+            return suite.strip()
+        manifest = item.get("manifest")
+    elif isinstance(item, str):
+        manifest = item
+    else:
+        raise click.ClickException(
+            f"registered_suites[{index}] must be a suite.yaml path string or a mapping"
+        )
+
+    suite_context = load_suite_context(_resolve_manifest_value(manifest, root), workspace_root=root)
+    _raise_diagnostics(suite_context.diagnostics)
+    return suite_context.suite
 
 
 def _resolve_manifest_value(value: Any, root: Path) -> Path:

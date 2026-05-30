@@ -51,6 +51,7 @@ def render_markdown(result: dict[str, Any]) -> str:
         f"| codegen skipped | {summary.get('codegen_skipped', 0)} |",
         "",
     ])
+    lines.extend(_manual_section(result.get("manual_cases", [])))
     lines.extend(_module_section(result.get("modules", {})))
     lines.extend(_failure_sections(result.get("cases", [])))
     lines.extend(_feedback_section(result))
@@ -111,6 +112,21 @@ def _environment_summary(environment: dict[str, Any]) -> list[str]:
         f"- **Env 文件**：{env_file}（{loaded}）",
         f"- **Env 变量名**：{key_text}",
     ]
+
+
+def _manual_section(manual_cases: list[dict[str, Any]]) -> list[str]:
+    lines = ["## Manual 用例", ""]
+    if not manual_cases:
+        lines.append("- 无")
+        lines.append("")
+        return lines
+    for item in manual_cases:
+        lines.append(
+            f"- {item.get('tc_id')}：{item.get('title', '')}"
+            f"（{item.get('module', '')}/{item.get('suite', '')}）"
+        )
+    lines.append("")
+    return lines
 
 
 def _module_section(modules: dict[str, Any]) -> list[str]:

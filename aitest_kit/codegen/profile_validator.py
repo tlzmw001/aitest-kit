@@ -84,6 +84,7 @@ def validate_profile_suite(
         if module_data is not None:
             _validate_profile_schema(report, module_data)
             _validate_top_level_shape(report, module_data)
+            _validate_module_profile_scope(report, module_data)
 
     suite_data = {}
     if context.suite_profile_path.exists():
@@ -123,6 +124,8 @@ def validate_profile_suite(
     _validate_case_references(report, "request_overrides", suite_request_overrides)
     _validate_case_references(report, "variables.cases", _variable_cases(suite_variables))
     _warn_feasibility_suspect_strategies(report, suite_case_bodies, suite_case_flows)
+    _warn_manual_comment_only_flows(report, suite_case_flows)
+    _validate_non_manual_executable_flows(report, suite_case_flows)
     _warn_fixture_reinvocation(report, runtime_case_flows, case_flow_defaults.case_setup)
     for message in validate_case_flow_variable_references(runtime_case_flows, runtime_variables):
         _error(report, "E507", message)
@@ -288,6 +291,49 @@ def _validate_case_references(
             _error(report, "E505", "case id does not exist in suite markdown cases", source)
 
 
+def _validate_module_profile_scope(
+    report: ProfileValidationReport,
+    module_data: dict[str, Any],
+) -> None:
+    case_scoped_sections = (
+        "case_bodies",
+        "case_flows",
+        "case_fixtures",
+        "request_overrides",
+    )
+    for section in case_scoped_sections:
+        values = _mapping(module_data, section)
+        _validate_module_profile_case_scoped_section(report, section, values)
+
+    variables = _mapping(module_data, "variables")
+    _validate_module_profile_case_scoped_section(
+        report,
+        "variables.cases",
+        _variable_cases(variables),
+    )
+
+
+def _validate_module_profile_case_scoped_section(
+    report: ProfileValidationReport,
+    section: str,
+    values: dict[str, Any],
+) -> None:
+    suite_case_ids = sorted(
+        case_id
+        for case_id in values
+        if isinstance(case_id, str) and case_id in report.case_ids
+    )
+    if not suite_case_ids:
+        return
+    _error(
+        report,
+        "E526",
+        "suite-specific case-scoped profile entries must be defined in the suite "
+        f"profile, not the module profile: {', '.join(suite_case_ids)}",
+        section,
+    )
+
+
 def _validate_suite_default_coverage(
     report: ProfileValidationReport,
     context: Any,
@@ -302,6 +348,8 @@ def _validate_suite_default_coverage(
                 continue
             if any("可行性存疑" in marker for marker in tc.markers):
                 continue
+            if any("manual" in marker.lower() for marker in tc.markers):
+                continue
             if parse_result.shared_config.base_request_http is None:
                 _error(
                     report,
@@ -310,6 +358,26 @@ def _validate_suite_default_coverage(
                     f"default_http without shared base_request_http: {tc.id}",
                     str(md_path),
                 )
+
+
+def _case_has_marker(report: ProfileValidationReport, case_id: str, marker_name: str) -> bool:
+    marker_name = marker_name.lower()
+    return any(
+        marker_name in marker.lower()
+        for marker in report.case_markers.get(case_id, [])
+    )
+
+
+def _case_flow_has_call_or_assert(flow: Any) -> bool:
+    if not isinstance(flow, dict):
+        return False
+    steps = flow.get("steps")
+    if not isinstance(steps, list):
+        return False
+    return any(
+        isinstance(step, dict) and ("call" in step or "assert" in step)
+        for step in steps
+    )
 
 
 def _warn_feasibility_suspect_strategies(
@@ -329,6 +397,45 @@ def _warn_feasibility_suspect_strategies(
             "case is marked [!可行性存疑] in Markdown but profile maps it to executable "
             f"{strategy}; prefer leaving it skipped until feasibility is confirmed",
             f"{strategy}.{case_id}",
+        )
+
+
+def _warn_manual_comment_only_flows(
+    report: ProfileValidationReport,
+    case_flows: dict[str, Any],
+) -> None:
+    for case_id, flow in case_flows.items():
+        if not isinstance(case_id, str) or case_id not in report.case_ids:
+            continue
+        if not _case_has_marker(report, case_id, "manual"):
+            continue
+        if _case_flow_has_call_or_assert(flow):
+            continue
+        _warn(
+            report,
+            "W505",
+            "manual case has comment-only case_flow; omit the case_flow unless it "
+            "performs real automated setup or assertions",
+            f"case_flows.{case_id}",
+        )
+
+
+def _validate_non_manual_executable_flows(
+    report: ProfileValidationReport,
+    case_flows: dict[str, Any],
+) -> None:
+    for case_id, flow in case_flows.items():
+        if not isinstance(case_id, str) or case_id not in report.case_ids:
+            continue
+        if _case_has_marker(report, case_id, "manual"):
+            continue
+        if _case_flow_has_call_or_assert(flow):
+            continue
+        _error(
+            report,
+            "E527",
+            "non-manual case_flow must contain at least one call or assert step",
+            f"case_flows.{case_id}",
         )
 
 

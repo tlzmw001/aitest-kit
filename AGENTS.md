@@ -185,11 +185,14 @@ test-codegen
 - workspace 模板只有一个来源。
   `aitest_kit/templates/project_workspace/` 是 `aitest init` 使用的唯一模板源；不要维护第二份顶层模板副本。
 
+- 配置文件写法以 `aitest_config/refs/config-files.md` 为准。
+  新建或修改 `aitest.yaml`、`target.yaml`、`module.yaml`、`suite.yaml`、module profile、suite profile、task 或 env 配置前，先按该手册确认字段归属。
+
 - 测试用例按 suite 组织。
   L2/迭代批次放到任意 suite 目录，并用 `suite.yaml` 声明 `target`、`module`、`suite`、`case_files` 和 suite profile。
 
 - suite 注册是聚合执行入口。
-  单个 suite 可直接用 `--suite-file` 执行；只有通过 `aitest registry register-suite` 写入 `module.yaml.registered_suites` 的 active suite，才会进入 `--module`、`--target` 和 `--all`。
+  单个 suite 可直接用 `--suite-file` 执行；只有通过 `aitest registry register-suite` 写入 `module.yaml.registered_suites` 的 active suite，才会进入 `--module`、`--target` 和 `--all`。手写 `registered_suites` 时推荐直接写 suite manifest 路径字符串；需要 `status` 时再写 `{suite, manifest, status}` mapping。
 
 - 模块 fixture 按 target/module 拆分。
   模块逻辑放到 `test_workspace/targets/{target}/fixtures/{module}.py`，由 `modules/{module}.yaml` 注册。

@@ -199,8 +199,9 @@ aitest report --all
 - 测试知识库是用例设计的唯一输入源，不绕过知识库直接写用例
 - Markdown 用例是唯一数据源，test-codegen 生成 pytest 代码执行
 - TEST_SPEC 是所有 skill 的行为准则，经验教训统一沉淀在此
+- 配置文件写法以 `aitest_config/refs/config-files.md` 为准；新建或修改 target/module/suite/profile/task/env 配置前先确认字段归属
 - 用例存放在 suite 目录，用 `suite.yaml` 绑定 target/module
-- 单 suite 可直接通过 `--suite-file` 执行；进入 `--module`、`--target`、`--all` 聚合前，必须用 `aitest registry register-suite` 注册到对应 module
+- 单 suite 可直接通过 `--suite-file` 执行；进入 `--module`、`--target`、`--all` 聚合前，必须用 `aitest registry register-suite` 注册到对应 module；手写 `registered_suites` 时推荐直接写 suite manifest 路径字符串，需要 `status` 时再写 `{suite, manifest, status}` mapping
 - 模块 fixture 按 target/module 拆分到 `test_workspace/targets/{target}/fixtures/{module}.py`
 - module profile 存放在 `test_workspace/targets/{target}/profiles/profile_{module}.md`；suite profile 跟随用例目录，命名为 `profile_{suite}_suite.md`
 - 测试执行报告写入 `test_workspace/reports/`，属于运行产物，不提交；待测系统 bug 仍记录到 `test_workspace/results/`

@@ -39,7 +39,8 @@ test_workspace/
 
 - `test_workspace/suites/{target}/{suite}/` 存放 Markdown 源用例和 suite profile；`suite.yaml` 绑定 target/module。
 - `test_workspace/targets/{target}/` 存放 target/module registry、fixture、helper 和 module profile。
-- suite 可直接通过 `--suite-file` 执行；要进入 module/target/all 聚合入口，使用 `aitest registry register-suite` 注册到 module。
+- 配置文件写法以 `aitest_config/refs/config-files.md` 为准；新建或修改 target/module/suite/profile/task/env 配置前先确认字段归属。
+- suite 可直接通过 `--suite-file` 执行；要进入 module/target/all 聚合入口，使用 `aitest registry register-suite` 注册到 module。手写 `registered_suites` 时推荐直接写 suite manifest 路径字符串；需要 `status` 时再写 `{suite, manifest, status}` mapping。
 - `test_workspace/generated/{target}/` 存放 codegen 生成的 pytest 文件，视为编译产物。
 - `test_workspace/results/` 记录已确认的待测系统 bug 或重要发现。
 - `test_workspace/reports/` 存放测试执行报告。

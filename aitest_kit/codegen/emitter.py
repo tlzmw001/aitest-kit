@@ -154,6 +154,7 @@ def emit_file(
         uncovered = [
             tc.id for tc in parse_result.cases
             if not any("可行性存疑" in m for m in tc.markers)
+            and not any("manual" in m.lower() for m in tc.markers)
             and tc.id not in ctx.case_bodies
             and tc.id not in case_flows
         ]
