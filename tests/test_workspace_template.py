@@ -14,26 +14,69 @@ def test_repo_does_not_keep_legacy_root_template_copy():
 
 
 def _write_demo_module(workspace: Path) -> None:
-    case_dir = workspace / "test_workspace" / "cases" / "demo"
-    case_dir.mkdir(parents=True, exist_ok=True)
-    (case_dir / "business.md").write_text(
+    target_dir = workspace / "test_workspace" / "targets" / "demo_target"
+    module_dir = target_dir / "modules"
+    fixture_dir = target_dir / "fixtures"
+    profile_dir = target_dir / "profiles"
+    suite_dir = workspace / "test_workspace" / "suites" / "demo_target" / "demo_smoke"
+    module_dir.mkdir(parents=True, exist_ok=True)
+    fixture_dir.mkdir(parents=True, exist_ok=True)
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    suite_dir.mkdir(parents=True, exist_ok=True)
+
+    (target_dir / "target.yaml").write_text(
+        """target: demo_target
+defaults:
+  module_dir: test_workspace/targets/demo_target/modules
+  fixture_dir: test_workspace/targets/demo_target/fixtures
+  profile_dir: test_workspace/targets/demo_target/profiles
+  suite_dir: test_workspace/suites/demo_target
+  generated_dir: test_workspace/generated/demo_target
+  reports_dir: test_workspace/reports/demo_target
+""",
+        encoding="utf-8",
+    )
+    (module_dir / "demo.yaml").write_text(
+        """target: demo_target
+module: demo
+module_type: standard_http
+fixture:
+  file: demo.py
+  default_fixture: setup_demo
+profile:
+  file: profile_demo.md
+registered_suites:
+  - suite: demo_smoke
+    manifest: test_workspace/suites/demo_target/demo_smoke/suite.yaml
+    status: active
+""",
+        encoding="utf-8",
+    )
+    (fixture_dir / "demo.py").write_text(
+        """import pytest
+
+
+class DemoClient:
+    def health(self):
+        return {"code": 0}
+
+
+@pytest.fixture
+def setup_demo():
+    return DemoClient()
+""",
+        encoding="utf-8",
+    )
+    (profile_dir / "profile_demo.md").write_text(
+        "```yaml\nmodule_type: standard_http\n```\n",
+        encoding="utf-8",
+    )
+    (suite_dir / "business.md").write_text(
         """# demo 业务测试用例
 
 ## 共享配置
 
-**接口**：`POST /demo`
-
-**基础请求体（HTTP）**：
-
-```json
-{
-  "user_id": "u_default",
-  "reqId": "req_default",
-  "value": 1
-}
-```
-
-**通用断言**：`response.code == 0`
+**接口**：`GET /health`
 
 ---
 
@@ -45,13 +88,30 @@ def _write_demo_module(workspace: Path) -> None:
 """,
         encoding="utf-8",
     )
-
-    fixture_dir = workspace / "test_workspace" / "tests" / "fixtures"
-    fixture_dir.mkdir(parents=True, exist_ok=True)
-    (fixture_dir / "codegen_profile_demo.md").write_text(
+    (suite_dir / "profile_demo_smoke_suite.md").write_text(
         """```yaml
-module_type: standard_http
+profile_scope: case_suite
+parent_module: demo
+suite: demo_smoke
+case_flows:
+  TC-DEMO-001:
+    fixture: setup_demo
+    object: client
+    steps:
+      - call: client.health
+        save_as: resp
+      - assert: 'assert resp["code"] == 0'
 ```
+""",
+        encoding="utf-8",
+    )
+    (suite_dir / "suite.yaml").write_text(
+        """target: demo_target
+module: demo
+suite: demo_smoke
+case_files:
+  - business.md
+profile: profile_demo_smoke_suite.md
 """,
         encoding="utf-8",
     )
@@ -69,9 +129,16 @@ def test_init_creates_workspace_from_single_package_template(tmp_path):
     assert (target / ".claude" / "skills" / "test-codegen" / "SKILL.md").exists()
     assert (target / ".agents" / "skills" / "test-codegen" / "SKILL.md").exists()
     assert (target / "docs" / ".gitkeep").exists()
-    assert (target / "aitest_config" / "config.yaml").exists()
+    assert (target / "aitest_config" / "aitest.yaml").exists()
     assert (target / "aitest_config" / "schemas" / "codegen_profile.schema.json").exists()
-    assert (target / "test_workspace" / "tests" / "helpers" / "http.py").exists()
+    assert (target / "test_workspace" / "targets" / ".gitkeep").exists()
+    assert (target / "test_workspace" / "suites" / ".gitkeep").exists()
+    assert (target / "test_workspace" / "generated" / ".gitkeep").exists()
+    assert (target / "test_workspace" / "tasks" / ".gitkeep").exists()
+    assert not (target / "aitest_config" / "config.yaml").exists()
+    assert not (target / "aitest_config" / "project_config.yaml").exists()
+    assert not (target / "test_workspace" / "casesuites").exists()
+    assert not (target / "test_workspace" / "tests" / "fixtures").exists()
     metadata = target / ".aitest" / "workspace.json"
     assert metadata.exists()
     manifest = json.loads(metadata.read_text(encoding="utf-8"))
@@ -94,6 +161,29 @@ def test_init_refuses_to_overwrite_template_managed_files(tmp_path):
     assert (target / "README.md").read_text(encoding="utf-8") == "keep me\n"
 
 
+def test_init_accepts_existing_template_parent_directory(tmp_path):
+    target = tmp_path / "project"
+    (target / ".claude").mkdir(parents=True)
+
+    result = CliRunner().invoke(main, ["init", "--target", str(target)])
+
+    assert result.exit_code == 0
+    assert (target / ".claude" / "skills" / "test-codegen" / "SKILL.md").exists()
+
+
+def test_init_reports_file_blocking_template_directory(tmp_path):
+    target = tmp_path / "project"
+    target.mkdir()
+    (target / ".claude").write_text("not a directory\n", encoding="utf-8")
+
+    result = CliRunner().invoke(main, ["init", "--target", str(target)])
+
+    assert result.exit_code != 0
+    assert "target contains file(s) where AITest needs directories: .claude" in result.output
+    assert "Traceback" not in result.output
+    assert (target / ".claude").read_text(encoding="utf-8") == "not a directory\n"
+
+
 def test_init_force_overwrites_template_managed_files(tmp_path):
     target = tmp_path / "project"
     target.mkdir()
@@ -114,37 +204,37 @@ def test_codegen_uses_workspace_for_profile_gate_and_generated_output(tmp_path):
     init_result = runner.invoke(main, ["init", "--target", str(target)])
     assert init_result.exit_code == 0
     _write_demo_module(target)
+    suite_file = target / "test_workspace" / "suites" / "demo_target" / "demo_smoke" / "suite.yaml"
 
-    validate = runner.invoke(main, ["codegen", "demo", "--workspace", str(target), "--validate-profile"])
+    validate = runner.invoke(main, ["codegen", "--suite-file", str(suite_file), "--workspace", str(target), "--validate-profile"])
     assert validate.exit_code == 0
-    assert "Profile validation summary: modules=1, errors=0, warnings=0" in validate.output
+    assert "Profile validation summary: suites=1, errors=0, warnings=0" in validate.output
 
-    generate = runner.invoke(main, ["codegen", "demo", "--workspace", str(target)])
+    generate = runner.invoke(main, ["codegen", "--suite-file", str(suite_file), "--workspace", str(target)])
     assert generate.exit_code == 0
-    generated = target / "test_workspace" / "tests" / "generated" / "test_demo_business.py"
+    generated = target / "test_workspace" / "generated" / "demo_target" / "test_demo_demo_smoke_business.py"
     assert generated.exists()
-    assert not Path("test_workspace/tests/generated/test_demo_business.py").exists()
+    assert not Path("test_workspace/generated/demo_target/test_demo_demo_smoke_business.py").exists()
 
 
 def test_workspace_option_reports_missing_directory():
-    result = CliRunner().invoke(main, ["codegen", "--all", "--workspace", "/path/does/not/exist"])
+    result = CliRunner().invoke(main, ["codegen", "--suite-file", "suite.yaml", "--workspace", "/path/does/not/exist"])
 
     assert result.exit_code != 0
     assert "workspace does not exist" in result.output
 
 
-def test_empty_workspace_validate_profile_gives_next_step(tmp_path):
+def test_empty_workspace_doctor_gives_next_step(tmp_path):
     target = tmp_path / "project"
     runner = CliRunner()
     init_result = runner.invoke(main, ["init", "--target", str(target)])
     assert init_result.exit_code == 0
 
-    result = runner.invoke(main, ["codegen", "--all", "--workspace", str(target), "--validate-profile"])
+    result = runner.invoke(main, ["doctor", "--workspace", str(target)])
 
     assert result.exit_code == 0
-    assert "No modules found under the configured cases directory." in result.output
-    assert "Next step: create test_workspace/cases/<module>/business.md" in result.output
-    assert "Profile validation summary: modules=0, errors=0, warnings=0" in result.output
+    assert "[INFO] target registry: no target registry entries found" in result.output
+    assert "fail=0" in result.output
 
 
 def test_cli_help_matches_workspace_product_flow():
@@ -153,20 +243,28 @@ def test_cli_help_matches_workspace_product_flow():
     root_help = runner.invoke(main, ["--help"])
     assert root_help.exit_code == 0
     assert "Markdown cases, codegen, and pytest reports" in root_help.output
+    assert "Command map:" in root_help.output
+    assert "registry  wire suites into module/target/all aggregation" in root_help.output
 
     init_help = runner.invoke(main, ["init", "--help"])
     assert init_help.exit_code == 0
     assert "AITest workspace skeleton" in init_help.output
+    assert "After init:" in init_help.output
+    assert "aitest doctor" in init_help.output
 
     codegen_help = runner.invoke(main, ["codegen", "--help"])
     assert codegen_help.exit_code == 0
-    assert "Markdown test cases" in codegen_help.output
+    assert "Markdown test suites/tasks" in codegen_help.output
     assert "codegen_profile JSON Schema and semantics" in codegen_help.output
     assert "another AITest workspace root" in codegen_help.output
+    assert "Typical suite flow:" in codegen_help.output
+    assert "--check never writes generated pytest" in codegen_help.output
 
     doctor_help = runner.invoke(main, ["doctor", "--help"])
     assert doctor_help.exit_code == 0
-    assert "Diagnose workspace layout" in doctor_help.output
+    assert "Diagnose workspace layout, registries" in doctor_help.output
+    assert "target/module/suite registry" in doctor_help.output
+    assert "fixture environment variable hints" in doctor_help.output
 
     upgrade_help = runner.invoke(main, ["upgrade", "--help"])
     assert upgrade_help.exit_code == 0
@@ -176,10 +274,25 @@ def test_cli_help_matches_workspace_product_flow():
     assert run_help.exit_code == 0
     assert "freshness check" in run_help.output
     assert "another AITest workspace root" in run_help.output
+    assert "AITEST_ENV_FILE=/tmp/test.env" in run_help.output
+    assert "--case-id TC-XXX-001" in run_help.output
 
     report_help = runner.invoke(main, ["report", "--help"])
     assert report_help.exit_code == 0
     assert "existing result.json" in report_help.output
+    assert "Report buckets:" in report_help.output
+    assert "reports/<target>/<module>/suites/<suite>/" in report_help.output
+
+    register_suite_help = runner.invoke(main, ["registry", "register-suite", "--help"])
+    assert register_suite_help.exit_code == 0
+    assert "Registration is only needed" in register_suite_help.output
+    assert "--target <target>" in register_suite_help.output
+
+    task_create_help = runner.invoke(main, ["task", "create", "--help"])
+    assert task_create_help.exit_code == 0
+    assert "explicit suite files" in task_create_help.output
+    assert "does not require" in task_create_help.output
+    assert "registered under their modules" in task_create_help.output
 
 
 def test_upgrade_check_reports_up_to_date_after_init(tmp_path):

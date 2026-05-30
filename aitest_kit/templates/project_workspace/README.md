@@ -5,7 +5,7 @@
 核心流程：
 
 ```text
-docs -> knowledge -> cases -> fixture/profile -> generated pytest -> report
+docs -> knowledge -> suite cases -> target fixture/profile -> generated pytest -> report
 ```
 
 ## 3 分钟开始
@@ -45,17 +45,42 @@ docs/config_schema.md
 生成后再执行：
 
 ```bash
-aitest codegen <module> --validate-profile
-aitest codegen <module> --dump-ir
-aitest codegen <module>
-aitest codegen <module> --check
-python3 -m pytest test_workspace/tests/generated --collect-only -q
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --dump-ir
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
+```
+
+单个 suite 可以直接通过 `--suite-file` 运行；如果希望它进入 module、target 或 all 聚合入口，注册到 module：
+
+```bash
+aitest registry register-suite \
+  --target <target> \
+  --module <module> \
+  --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+```
+
+如果需要维护一组明确的回归 suite，可以创建 task：
+
+```bash
+aitest task create \
+  --name nightly_gateway \
+  --suite-file test_workspace/suites/<target>/<suite1>/suite.yaml \
+  --suite-file test_workspace/suites/<target>/<suite2>/suite.yaml
+```
+
+多个 suite 需要作为一次任务执行时，创建 `test_workspace/tasks/<task>.yaml`：
+
+```bash
+aitest codegen --task-file test_workspace/tasks/<task>.yaml --check
+aitest run --task-file test_workspace/tasks/<task>.yaml
 ```
 
 运行测试：
 
 ```bash
-aitest run <module>
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 ```
 
 ## 目录结构
@@ -65,12 +90,9 @@ docs/                         # 公开 API 文档、设计文档、OpenAPI/proto
 aitest_config/                 # 项目配置、codegen 配置、schema、refs
 test_workspace/
   knowledge/                   # L0/L1/L2 + TEST_SPEC
-  cases/                       # 模块级 Markdown 用例
-  casesuites/                  # 可选：按 L2/迭代组织的独立 suite
-  tests/
-    fixtures/                  # fixture 动作库 + module profile
-    generated/                 # codegen 生成的 pytest
-    helpers/                   # HTTP/gRPC/Redis helpers
+  targets/                     # 按目标系统组织 fixture/helper/module profile
+  suites/                      # 按目标系统组织独立 suite
+  generated/                   # 按目标系统保存 generated pytest
   reports/                     # aitest run 生成的报告
   results/                     # 已确认待测系统 bug 记录
 .codex/skills/                 # Codex skills
@@ -83,14 +105,15 @@ AGENTS.md / CLAUDE.md          # AI 协作说明
 
 | 产物 | 说明 |
 |---|---|
+| `aitest_config/aitest.yaml` | 推荐统一配置入口，包含 workspace 路径和 codegen 默认规则 |
 | `docs/` | 测试规则来源，优先放公开 API/设计文档 |
 | `test_workspace/knowledge/` | 测试知识库，记录当前系统可测试契约 |
-| `test_workspace/cases/` | Markdown 用例，是测试设计源文件 |
-| `test_workspace/casesuites/` | 可选，用于需求、迭代、临时批次 |
-| `test_workspace/tests/fixtures/{module}.py` | 模块 fixture，封装公开 API 调用和测试动作 |
-| `test_workspace/tests/fixtures/codegen_profile_{module}.md` | 模块 profile，配置稳定生成规则 |
-| `codegen_profile_{suite}_suite.md` | suite profile，跟随某批用例 |
-| `test_workspace/tests/generated/` | generated pytest，视为编译产物 |
+| `test_workspace/suites/` | 推荐 suite 根目录，用于需求、迭代、临时批次 |
+| `test_workspace/targets/` | 推荐 target 根目录，用于目标系统级 fixture/profile/知识索引 |
+| `test_workspace/targets/{target}/fixtures/{module}.py` | target 模块 fixture，封装公开 API 调用和测试动作 |
+| `test_workspace/targets/{target}/profiles/profile_{module}.md` | target module profile，配置稳定生成规则 |
+| `profile_{suite}_suite.md` | suite profile，跟随某批用例 |
+| `test_workspace/generated/` | 推荐 generated pytest 输出根目录 |
 | `test_workspace/reports/` | 执行报告 |
 | `test_workspace/results/` | 已确认的待测系统 bug |
 
@@ -106,23 +129,18 @@ AGENTS.md / CLAUDE.md          # AI 协作说明
 | 测试失败需要分流 | `aitest run` + `test-fix` |
 | 稳定模式需要沉淀 | `emitter-build` |
 
-## 模块和 suite
+## target、module 和 suite
 
-模块级用例放在：
-
-```text
-test_workspace/cases/<module>/business.md
-test_workspace/cases/<module>/boundary.md
-test_workspace/tests/fixtures/<module>.py
-test_workspace/tests/fixtures/codegen_profile_<module>.md
-```
-
-suite 用例适合按 L2 需求、迭代或临时批次组织：
+suite 用例适合按 L2 需求、迭代或临时批次组织。推荐布局：
 
 ```text
-test_workspace/casesuites/<suite>/aitest_suite.yaml
-test_workspace/casesuites/<suite>/business.md
-test_workspace/casesuites/<suite>/codegen_profile_<suite>_suite.md
+test_workspace/targets/<target>/target.yaml
+test_workspace/targets/<target>/modules/<module>.yaml
+test_workspace/targets/<target>/fixtures/<module>.py
+test_workspace/targets/<target>/profiles/profile_<module>.md
+test_workspace/suites/<target>/<suite>/suite.yaml
+test_workspace/suites/<target>/<suite>/business.md
+test_workspace/suites/<target>/<suite>/profile_<suite>_suite.md
 ```
 
 suite profile 跟随用例目录，module profile 保留模块级稳定能力。
@@ -132,22 +150,20 @@ suite profile 跟随用例目录，module profile 保留模块级稳定能力。
 ```bash
 aitest doctor
 
-aitest codegen --all --validate-profile
-aitest codegen --all --dump-ir
-aitest codegen --all
-aitest codegen --all --check
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --dump-ir
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
 
-aitest codegen --cases test_workspace/casesuites/<suite> --validate-profile
-aitest codegen --cases test_workspace/casesuites/<suite>
-
-aitest run <module>
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest run --task-file test_workspace/tasks/<task>.yaml
 aitest report
 ```
 
 运行真实接口测试时，可以通过本地不提交的 env 文件提供服务地址、账号、token 和 API key：
 
 ```bash
-AITEST_ENV_FILE=/tmp/your-system-test.env aitest run <module>
+AITEST_ENV_FILE=/tmp/your-system-test.env aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 ```
 
 `aitest run` 会把 env 文件注入 pytest 子进程；报告只记录变量名，不记录变量值。真实 shell 环境变量优先于 env 文件。

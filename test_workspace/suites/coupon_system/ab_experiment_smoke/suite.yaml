@@ -1,0 +1,10 @@
+target: coupon_system
+module: ab_experiment
+suite: ab_experiment_smoke
+case_files:
+- business.md
+- boundary.md
+profile: profile_ab_experiment_smoke_suite.md
+knowledge_refs:
+  l1:
+  - test_workspace/knowledge/L1/ab_experiment.md

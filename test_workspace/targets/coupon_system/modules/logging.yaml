@@ -1,0 +1,19 @@
+target: coupon_system
+module: logging
+module_type: subprocess_capture
+fixture:
+  file: logging.py
+  default_fixture: setup_logging
+profile:
+  file: profile_logging.md
+helpers:
+- test_workspace/targets/coupon_system/helpers/grpc_ops.py
+- test_workspace/targets/coupon_system/helpers/http.py
+- test_workspace/targets/coupon_system/helpers/redis_ops.py
+knowledge_refs:
+  l1:
+  - test_workspace/knowledge/L1/logging.md
+registered_suites:
+- suite: logging_smoke
+  manifest: test_workspace/suites/coupon_system/logging_smoke/suite.yaml
+  status: active

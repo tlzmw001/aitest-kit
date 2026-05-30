@@ -29,7 +29,7 @@ def upgrade_command(
     apply_changes: bool,
     force_file: tuple[str, ...],
 ) -> None:
-    """Upgrade template-managed files in an existing AITest workspace."""
+    """Upgrade template-managed files and report layout migration hints."""
     if check_only and apply_changes:
         raise click.ClickException("Use either --check or --apply, not both.")
 

@@ -1,0 +1,18 @@
+target: coupon_system
+module: calibration
+module_type: standard_recommend
+fixture:
+  file: calibration.py
+  default_fixture: setup_calibration
+profile:
+  file: profile_calibration.md
+helpers:
+  - test_workspace/targets/coupon_system/helpers/http.py
+  - test_workspace/targets/coupon_system/helpers/grpc_ops.py
+knowledge_refs:
+  l1:
+    - test_workspace/knowledge/L1/calibration.md
+registered_suites:
+  - suite: calibration_smoke
+    manifest: test_workspace/suites/coupon_system/calibration_smoke/suite.yaml
+    status: active

@@ -60,17 +60,17 @@ AITest 的测试资产按层组织：
 |---|---|---|
 | 公开文档 / API 契约 | `docs/` | 描述系统公开行为、接口、字段、错误码、业务规则 |
 | 测试知识库 | `test_workspace/knowledge/` | 把原始文档转成可测试契约 |
-| Markdown 用例 | `test_workspace/cases/` 或 `test_workspace/casesuites/` | 人类可 review 的测试设计源文件 |
-| fixture | `test_workspace/tests/fixtures/{module}.py` | 提供测试动作库、读取运行变量、管理 setup/cleanup |
-| profile | `codegen_profile_*.md` | 指导 codegen 如何把用例接到 fixture |
+| Markdown 用例 | `test_workspace/suites/{target}/{suite}/` | 人类可 review 的测试设计源文件 |
+| fixture/helper | `test_workspace/targets/{target}/fixtures/`、`helpers/` | 提供测试动作库、读取运行变量、管理 setup/cleanup |
+| profile | `test_workspace/targets/{target}/profiles/profile_{module}.md`、`profile_{suite}_suite.md` | 指导 codegen 如何把用例接到 fixture |
 | Case IR | `aitest codegen --dump-ir` | parser 和 renderer 之间的可检查中间表示 |
-| generated pytest | `test_workspace/tests/generated/` | 编译产物，由 codegen 生成 |
+| generated pytest | `test_workspace/generated/{target}/` | 编译产物，由 codegen 生成 |
 | report | `test_workspace/reports/` | 测试执行结果和失败分流 |
 | results | `test_workspace/results/` | 已确认的待测系统问题记录 |
 
 ## 3. 不要直接修改 generated pytest
 
-`test_workspace/tests/generated/` 下的 pytest 是编译产物，不是长期维护源文件。
+`test_workspace/generated/{target}/` 下的 pytest 是编译产物，不是长期维护源文件。
 
 如果生成结果不对，应回到对应源头修改：
 
@@ -79,7 +79,7 @@ AITest 的测试资产按层组织：
 | 用例表达错 | Markdown case |
 | 执行步骤错 | module profile 或 suite profile |
 | 动作能力缺失 | fixture/client/helper |
-| 默认生成规则错 | `aitest_config/project_config.yaml` 或 codegen |
+| 默认生成规则错 | `aitest_config/aitest.yaml` 或 codegen |
 | profile 校验规则不足 | profile schema / profile validator |
 | 报告分类错 | report collector / classifier |
 
@@ -165,13 +165,13 @@ skill 做 AI 工作流：
    生成 L0/L1/L2。
 
 5. test-design
-   为 target_module 或 example_suite 生成 Markdown 用例。
+   为 target/module 下的需求 suite 生成 Markdown 用例。
 
 6. 人工 review
    确认用例是否测了真实语义，断言是否可观测，前置条件是否可复现。
 
 7. test-scaffold
-   生成 fixture/client/profile。
+   生成 target/module registry、fixture/client/helper、module profile 和 suite profile。
 
 8. test-codegen
    运行 validate-profile、dump-ir、codegen、check、collect-only。
@@ -189,12 +189,12 @@ skill 做 AI 工作流：
 不要从初始化直接跳到手写 pytest。允许 AI 在初期探索，但最终应回到：
 
 ```text
-Markdown -> fixture/profile -> Case IR -> generated pytest
+Markdown suite -> target fixture/profile -> Case IR -> generated pytest
 ```
 
 ## 7. 现有模块新增用例
 
-如果已有 `target_module`，现在新增一批 `example_suite` 用例，需要先判断 fixture 动作是否够用。
+如果已有 target/module，现在新增一批 suite 用例，需要先判断 fixture 动作是否够用。
 
 如果动作已经足够，例如已有：
 
@@ -363,7 +363,7 @@ AI 可以生成初稿，但这些判断必须由人 review：
 ```text
 1. 先选一个模块或一条主链路。
 2. 先生成少量高价值 Markdown 用例。
-3. 先完成 fixture/profile 最小动作库。
+3. 先完成 target fixture/profile 最小动作库。
 4. 先跑通 validate-profile / dump-ir / codegen / check / collect-only。
 5. 再连接真实服务执行 aitest run。
 6. 根据 report 做失败分流。

@@ -67,10 +67,20 @@ doc-review -> knowledge-build -> test-design -> test-scaffold -> test-codegen ->
 If Markdown cases and profiles already exist:
 
 ```bash
-aitest codegen --all --validate-profile
-aitest codegen --all
-aitest codegen --all --check
-python3 -m pytest test_workspace/tests/generated --collect-only -q
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
+```
+
+Common registry-backed scopes:
+
+```bash
+aitest codegen --target <target> --module <module> --check
+aitest run --target <target> --module <module>
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --case-id TC-XXX-001
+aitest run --target <target>
+aitest run --all
 ```
 
 ## What It Is For
@@ -125,19 +135,12 @@ Unknown behavior should be marked as `[?]` instead of guessed.
 
 ### Markdown Cases
 
-Module-level cases:
+Target-aware suite cases:
 
 ```text
-test_workspace/cases/{module}/business.md
-test_workspace/cases/{module}/boundary.md
-```
-
-Optional suite-level cases:
-
-```text
-test_workspace/casesuites/{suite}/aitest_suite.yaml
-test_workspace/casesuites/{suite}/business.md
-test_workspace/casesuites/{suite}/codegen_profile_{suite}_suite.md
+test_workspace/suites/{target}/{suite}/suite.yaml
+test_workspace/suites/{target}/{suite}/business.md
+test_workspace/suites/{target}/{suite}/profile_{suite}_suite.md
 ```
 
 Markdown cases are the reviewable source of test design.
@@ -145,8 +148,11 @@ Markdown cases are the reviewable source of test design.
 ### Fixtures and Profiles
 
 ```text
-test_workspace/tests/fixtures/{module}.py
-test_workspace/tests/fixtures/codegen_profile_{module}.md
+test_workspace/targets/{target}/target.yaml
+test_workspace/targets/{target}/modules/{module}.yaml
+test_workspace/targets/{target}/fixtures/{module}.py
+test_workspace/targets/{target}/helpers/
+test_workspace/targets/{target}/profiles/profile_{module}.md
 ```
 
 Fixtures are action libraries: clients, public API calls, setup, cleanup, and reusable test actions.
@@ -156,42 +162,52 @@ Profiles configure deterministic generation: `module_type`, `variables`, `reques
 ### Codegen
 
 ```bash
-aitest codegen --all --validate-profile
-aitest codegen --all --dump-ir
-aitest codegen --all
-aitest codegen --all --check
-python3 -m pytest test_workspace/tests/generated --collect-only -q
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --dump-ir
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
 ```
 
-Single module:
+Codegen modes:
 
-```bash
-aitest codegen <module> --validate-profile
-aitest codegen <module> --dump-ir
-aitest codegen <module> --explain TC-XXX-001
-aitest codegen <module>
-aitest codegen <module> --check
-```
+| Command | Requires profile gate | Writes generated pytest | Purpose |
+|---|---:|---:|---|
+| `--dry-run` | No | No | Parse Markdown only; useful before scaffold/profile is complete |
+| `--validate-profile` | It is the gate | No | Validate profile JSON Schema, case id alignment, and case_flow/case_body semantics |
+| `--check` | Yes | No | Regenerate into a tmpdir and diff against existing generated pytest |
+| `--dump-ir` | Yes | No | Print suite Case IR JSON for strategy, fixture, request, and assertion tracing |
+| `--explain <TC-ID>` | Yes | No | Print IR details for one case |
+| `--health-report` | Yes | No, unless `--write-report` is used | Report codegen health, maturity, and stabilization signals |
+| `--analyze-promotion` | Yes | No, unless `--write-report` is used | Analyze current suite profile case_bodies promotion candidates |
+| no mode flag | Yes | Yes | Generate pytest |
+
+Diagnostic modes have different scopes. `--dump-ir` and `--explain` operate on one `--suite-file` for precise suite/case debugging. `--health-report` and `--analyze-promotion` support `--suite-file`, `--target <target> --module <module>`, and `--target <target>` for module/target aggregation. `--suggest-promotion-patch` remains suite-only to avoid producing broad patch drafts that are hard to review safely.
 
 From outside the workspace:
 
 ```bash
-aitest codegen --workspace /path/to/aitest_workspace --all --validate-profile
+aitest codegen --workspace /path/to/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
 ```
 
 ### Run and Report
 
 ```bash
-aitest run <module>
-aitest report
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest report --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 ```
 
 Reports are written to:
 
 ```text
-test_workspace/reports/latest/
-test_workspace/reports/runs/{run_id}/
+test_workspace/reports/<target>/<module>/suites/<suite>/latest/
+test_workspace/reports/<target>/<module>/cases/<case_id>/latest/
+test_workspace/reports/<target>/<module>/module/latest/
+test_workspace/reports/<target>/target/latest/
+test_workspace/reports/tasks/<task_name>/latest/
 ```
+
+Every report bucket keeps historical `runs/{run_id}/` entries and a `latest/` copy. Aggregate runs such as task, target, and module store suite-unit details under the same run id in `units/`, so one command does not create multiple unrelated top-level run ids.
 
 `aitest run` checks generated freshness before executing pytest. If Markdown/profile changed but generated pytest was not refreshed, it writes a `BLOCKED_RUN` report and stops.
 
@@ -203,17 +219,23 @@ test_workspace/reports/runs/{run_id}/
 | `aitest upgrade --workspace <dir> --check` | Check whether copied workspace assets need updates |
 | `aitest upgrade --workspace <dir> --apply` | Apply safe template upgrades |
 | `aitest doctor` | Check layout, profiles, generated freshness, collect, and env hints |
-| `aitest codegen <module>` | Generate pytest for one module |
-| `aitest codegen --all` | Generate pytest for all modules |
-| `aitest codegen --cases <suite_dir>` | Generate pytest for a case suite |
-| `aitest codegen --all --check` | Check generated freshness |
-| `aitest run <module>` | Run generated pytest and write structured reports |
-| `aitest report` | Re-render report from an existing `result.json` |
+| `aitest registry register-suite --target <target> --module <module> --suite-file <suite.yaml>` | Register a suite into a module aggregate entry |
+| `aitest task create --name <task> --suite-file <suite.yaml>...` | Create a task manifest from explicit suite files |
+| `aitest codegen --suite-file <suite.yaml>` | Generate pytest for one target-aware suite |
+| `aitest codegen --task-file <task.yaml>` | Generate or check suites listed by a task |
+| `aitest codegen --target <target> [--module <module>]` | Generate or check registry suites for one target or module |
+| `aitest codegen --all` | Iterate all active suites in the registry |
+| `aitest run --suite-file <suite.yaml>` | Run one suite and write structured reports |
+| `aitest run --suite-file <suite.yaml> --case-id <TC-ID>` | Run one case from a suite |
+| `aitest run --task-file <task.yaml>` | Run a task and write an aggregate task report |
+| `aitest run --target <target> [--module <module>]` | Run active suites for one target or module |
+| `aitest run --all` | Run all active suites in the registry |
+| `aitest report --suite-file/--task-file/--target/--all ...` | Re-render report for that scope |
 
 For real API tests, provide service URLs, accounts, tokens, and API keys through a local env file:
 
 ```bash
-AITEST_ENV_FILE=/tmp/your-system-test.env aitest run <module>
+AITEST_ENV_FILE=/tmp/your-system-test.env aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 ```
 
 `aitest run` injects that env file into the pytest subprocess. Reports record environment variable names only, never values. Real shell environment variables take precedence over the env file.
@@ -282,8 +304,10 @@ cd aitest-kit
 python3 -m pip install -e ".[dev,server]"
 
 python3 -m pytest tests -q
-python3 -m aitest_kit.cli codegen --all --validate-profile
-python3 -m aitest_kit.cli codegen --all --check
+python3 -m aitest_kit.cli codegen --suite-file test_workspace/suites/coupon_system/calibration_smoke/suite.yaml --validate-profile
+python3 -m aitest_kit.cli codegen --suite-file test_workspace/suites/coupon_system/calibration_smoke/suite.yaml --check
+python3 -m aitest_kit.cli codegen --target coupon_system --module calibration --check
+python3 -m aitest_kit.cli run --target coupon_system --module calibration -- --collect-only -q
 python3 -m aitest_kit.cli doctor
 ```
 

@@ -312,7 +312,7 @@ def render_promotion_patch_diff(report: PromotionReport, profile_path: str | Pat
     The diff is intentionally a review note, not an auto-applicable profile rewrite.
     """
     candidate_groups = [group for group in report.groups if group.candidate]
-    profile = Path(profile_path).as_posix() if profile_path else f"codegen_profile_{report.module}.md"
+    profile = Path(profile_path).as_posix() if profile_path else f"profile_{report.module}.md"
     if not candidate_groups:
         return "# No profile diff generated: no safe case_flow promotion candidates in this run.\n"
 

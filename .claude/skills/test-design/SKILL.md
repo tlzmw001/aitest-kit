@@ -2,8 +2,8 @@
 name: test-design
 description: 基于测试知识库和测试规范，为指定模块或需求 suite 生成 Markdown 用例和 mismatch 记录
 when_to_use: 当用户需要为某个模块、L2 需求或独立用例 suite 生成/补充测试用例时
-argument-hint: <target_module> [cases_dir|suite_dir]
-arguments: [target_module, cases_dir]
+argument-hint: <target> <module> [suite_dir]
+arguments: [target, module, suite_dir]
 user-invocable: true
 allowed-tools: Read Glob Grep Write Edit Bash
 effort: high
@@ -11,15 +11,20 @@ effort: high
 
 # 测试用例设计
 
-为 `$target_module` 模块或某个 L2 需求 suite 生成 Markdown 测试用例。
+为 `$target` 下的 `$module` 模块，或某个 L2 需求 suite 生成 Markdown 测试用例。
 
-输出目录：`$cases_dir`（未指定时，从 `aitest_config/config.yaml` 读取 `paths.cases_dir`，默认 `{cases_dir}/$target_module/`）。如果用户明确指定 L2/suite 目录，则用该目录承载本批用例；未指定时询问用户确认后再创建。
+输出目录：`$suite_dir`。优先使用 `test_workspace/suites/{target}/{suite}/` 或用户指定的任意 suite 目录，并在后续 `test-scaffold` / `test-codegen` 中由 `suite.yaml` 绑定 target/module。
 
 ## 前置：读取项目配置
 
-读 `aitest_config/config.yaml`，获取：
-- `paths.*` — 知识库、用例、文档等目录路径；`paths.old_cases_dir` 如未配置则跳过旧用例搜索
-- `service.*` — 路由装饰器模式、Schema 校验模式（如项目配置了这些模式，第二轮使用）
+优先读 `aitest_config/aitest.yaml`，获取：
+- `workspace.paths.*` — 知识库、用例、suite、文档等目录路径
+- `targets.registry` / `modules.registry` — 已登记 target/module 的位置
+- `codegen.*` — 模块缩写、断言规则、默认请求字段等 codegen 约束
+
+读取 `aitest_config/aitest.yaml` 获取 workspace 路径、codegen 默认规则和 target/module registry 配置。
+
+读取 `test_workspace/targets/{target}/target.yaml`（存在时），获取公开接口、route/schema 搜索模式、默认 generated/reports 目录等 target 级信息。
 
 ## 执行流程
 
@@ -33,9 +38,9 @@ effort: high
    - 关注场景列表（生成时必须覆盖）
    - 已知陷阱列表（生成时逐条自检，避免重犯已知错误模式）
 
-   **硬约束**：在模块缩写对照表中查找 `$target_module` 对应的缩写。如果该模块未在表中登记，**停止执行**，提示用户先在 TEST_SPEC 的"模块缩写对照表"中补登记，避免编号冲突。
+   **硬约束**：在模块缩写对照表中查找 `$module` 对应的缩写。如果该模块未在表中登记，**停止执行**，提示用户先在 TEST_SPEC 的"模块缩写对照表"中补登记，避免编号冲突。同一 workspace 存在多个 target 时，仍以 `$target/$module` 作为定位范围。
 
-2. 读 `{paths.l0_architecture}`（L0），从模块索引表中找到 `$target_module` 对应的：
+2. 读 `{paths.l0_architecture}`（L0），从模块索引表中找到 `$module` 对应的：
    - L1 文档路径
    - 关联的 L2 文档路径
 
@@ -53,8 +58,7 @@ effort: high
    - "已有测试覆盖"章节
 
 5. 搜索已有用例，确定编号起点：
-   - 搜索 `{paths.cases_dir}/$target_module/` 下已有用例文件
-   - 如果配置了 `{paths.old_cases_dir}`，搜索其中相关旧用例；未配置时跳过
+   - 新结构优先搜索已指定 suite 目录、`test_workspace/suites/` 中绑定该 module 的 suite，以及 `aitest.yaml.workspace.paths.suites_dir`
    - 找到该模块缩写的最大 TC 序号，新用例从 +1 开始
 
 6. 读 `aitest_config/refs/assertion-strategy.md`，建立断言策略（结构断言 / 关系断言 / 不可程序化断言的选择标准）
@@ -77,11 +81,11 @@ effort: high
 
 **接口覆盖**：查看 L1 "接口"章节，确认模块暴露的接口类型（HTTP / gRPC / 两者）。两种接口都有时，共享配置必须列出两种接口，每个功能场景必须生成 HTTP 和 gRPC 两组用例（可共享场景变量，仅接口和请求格式不同）。
 
-**输出格式**：默认输出到 `$cases_dir/business.md`；如果用户指定需求 suite，可输出为 `{suite_name}_business.md` 等带语义的文件名。按 `aitest_config/refs/case-format.md` 的"共享配置 + 精简用例"格式。每条用例只写 **优先级 / 场景变量 / 断言** 三个字段（有特殊状态时加 **标记** 字段）。场景变量必须写成 `key：value` 条目列表，`[manual]`、`[!可行性存疑]` 等标记写在独立的标记字段，不内联到场景变量或断言中。
+**输出格式**：默认输出到 `$suite_dir/business.md`；如果用户指定需求 suite，可输出为 `{suite_name}_business.md` 等带语义的文件名。按 `aitest_config/refs/case-format.md` 的"共享配置 + 精简用例"格式。每条用例只写 **优先级 / 场景变量 / 断言** 三个字段（有特殊状态时加 **标记** 字段）。场景变量必须写成 `key：value` 条目列表，`[manual]`、`[!可行性存疑]` 等标记写在独立的标记字段，不内联到场景变量或断言中。test-design 只产出 Markdown 用例，不写 `suite.yaml` 和 suite profile；这些由 `test-scaffold` / `test-codegen` 接线。
 
 ### 第三步：第二轮——边界用例（读代码）
 
-1. 通过 Glob/Grep 搜索项目中与 `$target_module` 相关的源代码文件
+1. 通过 Glob/Grep 搜索项目中与 `$target/$module` 相关的源代码文件
 2. 读源代码，识别以下边界场景并生成用例：
    - 降级逻辑（try/except、默认值返回）
    - 类型转换（隐式转换、强制转换）
@@ -89,17 +93,17 @@ effort: high
    - 精度处理（round、截断）
    - 未在知识库中记录的条件分支
 3. 校验第一轮用例的可行性：
-   - **HTTP 路由校验**：如果 `config.yaml` 声明了 `service.route_patterns`，按该模式搜索路由；否则以文档、OpenAPI/proto 或用户指定入口为准，必要时标 `[!可行性存疑]`
-   - **请求体 Schema 校验**：如果 `config.yaml` 声明了 `service.schema_patterns`，按该模式搜索 Schema；否则读取 OpenAPI/proto/JSON Schema 等公开接口定义，逐字段核对请求体（必填字段必须存在，嵌套结构也要检查）
+   - **HTTP 路由校验**：如果 `target.yaml` 声明了 `service.route_patterns`，按该模式搜索路由；否则以文档、OpenAPI/proto 或用户指定入口为准，必要时标 `[!可行性存疑]`
+   - **请求体 Schema 校验**：如果 `target.yaml` 声明了 `service.schema_patterns`，按该模式搜索 Schema；否则读取 OpenAPI/proto/JSON Schema 等公开接口定义，逐字段核对请求体（必填字段必须存在，嵌套结构也要检查）
    - 前置条件是否可通过代码构造
    - 输入格式是否与代码接口匹配
    - 补全标注了 `[!请求体待补全]` 的用例
    - 有问题的用例追加标注 `[!可行性存疑: 原因]`
-4. 发现规格与实现不一致时 → **不修改第一轮用例**，按 `aitest_config/refs/mismatch-format.md` 新建 mismatch 记录。如果 `$cases_dir/mismatch.md` 已存在，新条目**追加在文件末尾，不删除/覆盖已有条目**，编号从已有最大序号 +1 继续
+4. 发现规格与实现不一致时 → **不修改第一轮用例**，按 `aitest_config/refs/mismatch-format.md` 新建 mismatch 记录。如果 `$suite_dir/mismatch.md` 已存在，新条目**追加在文件末尾，不删除/覆盖已有条目**，编号从已有最大序号 +1 继续
 5. 第一轮中标记 `TBD-需确认` 的预期结果，如果代码能给出答案，在 business.md 中更新并标注来源
 
-默认输出到 `$cases_dir/boundary.md`，使用与 business.md 相同的共享配置格式；suite 模式可使用 `{suite_name}_boundary.md` 等带语义的文件名。
-Mismatch 输出到 `$cases_dir/mismatch.md`（无则不创建）。
+默认输出到 `$suite_dir/boundary.md`，使用与 business.md 相同的共享配置格式；suite 模式可使用 `{suite_name}_boundary.md` 等带语义的文件名。
+Mismatch 输出到 `$suite_dir/mismatch.md`（无则不创建）。
 
 ### 第四步：覆盖变更与知识库刷新
 
@@ -126,8 +130,9 @@ Mismatch 输出到 `$cases_dir/mismatch.md`（无则不创建）。
 ```markdown
 ## 用例生成摘要
 
-目标模块：$target_module
-输出目录：$cases_dir
+目标：$target
+目标模块：$module
+输出目录：$suite_dir
 
 ### 生成文件
 | 文件 | 用例数 | 类型 |
@@ -162,7 +167,7 @@ Mismatch 输出到 `$cases_dir/mismatch.md`（无则不创建）。
 
 ## 增量模式
 
-当 `$cases_dir` 下已有 business.md 或 boundary.md 时，**先询问用户选择处理方式**：
+当 `$suite_dir` 下已有 business.md 或 boundary.md 时，**先询问用户选择处理方式**：
 
 - **追加新用例**：识别已覆盖场景，追加新用例到末尾
 - **重新生成**：把已有文件备份为 `*.md.bak`，从零生成全部用例

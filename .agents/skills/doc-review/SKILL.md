@@ -2,7 +2,7 @@
 name: doc-review
 description: 从测试视角审查设计文档的完整性与精炼度，检查 API 定义、错误处理、配置格式、业务规则、跨文档一致性等维度
 when_to_use: 当用户希望检查设计文档是否足够完整，能支撑测试团队编写和执行用例
-argument-hint: [doc-directory]
+argument-hint: [doc_dir]
 arguments: [doc_dir]
 user-invocable: true
 allowed-tools: Read Glob Grep
@@ -11,7 +11,7 @@ effort: high
 
 # 设计文档审查
 
-审查 `$doc_dir` 目录下的设计文档，从测试视角评估其完整性和精炼度。
+审查 `$doc_dir` 目录下的设计文档，从测试视角评估其完整性和精炼度。未传 `$doc_dir` 时，默认审查当前 workspace 的 `docs/` 目录。
 
 ## 审查流程
 

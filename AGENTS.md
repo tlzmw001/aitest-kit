@@ -39,26 +39,14 @@
 - `test_workspace/knowledge/`
   测试知识库目录，包含 L0/L1/L2 以及 `TEST_SPEC` 等内容。
 
-- `test_workspace/cases/`
-  Markdown 测试用例目录。测试用例按模块组织，是 codegen 和 pytest 生成前的核心设计产物。
+- `test_workspace/targets/`
+  按目标系统组织 target/module registry、模块 fixture、helper 和 module profile。
 
-- `test_workspace/casesuites/`
-  可选的独立用例批次目录。适合按 L2 需求、迭代或临时测试批次组织用例，并通过 `aitest_suite.yaml` 绑定到某个 L1 模块。
+- `test_workspace/suites/`
+  按目标系统组织独立 suite；suite 通过 `suite.yaml` 绑定 target/module。
 
-- `test_workspace/tests/`
-  pytest 测试代码目录。
-
-- `test_workspace/tests/conftest.py`
-  全局 session fixtures 与 pytest 插件注册。
-
-- `test_workspace/tests/fixtures/`
-  模块级 fixture 与 `codegen_profile_{module}.md`。每个模块一份 fixture，一份 profile。
-
-- `test_workspace/tests/helpers/`
-  HTTP、Redis、gRPC 等测试 helper。
-
-- `test_workspace/tests/generated/`
-  codegen 生成的 pytest 文件，视为编译产物。
+- `test_workspace/generated/`
+  按目标系统保存 codegen 生成的 pytest 文件，视为编译产物。
 
 - `test_workspace/reports/`
   测试执行报告目录，包含 `result.json`、`report.md` 和 JUnit XML。该目录是运行产物，不入库。
@@ -78,11 +66,8 @@
 - `aitest_config/`
   项目级配置目录。
 
-- `aitest_config/config.yaml`
-  skill 路径、服务地址、协议偏好和已知限制等项目配置。
-
-- `aitest_config/project_config.yaml`
-  codegen 项目配置，包含 helper import 路径、API 路径、变量映射、模块缩写、内置断言规则和模块类型映射。
+- `aitest_config/aitest.yaml`
+  统一配置入口，包含 workspace 路径和 codegen 默认规则。
 
 - `.claude/skills/`
   Claude Code Skill 定义。
@@ -101,13 +86,20 @@
 pip install -e ".[dev,server]"
 python -m coupon_system.main
 python3 -m aitest_kit.cli init --target /path/to/your_project
-python3 -m aitest_kit.cli codegen --all --validate-profile
-python3 -m aitest_kit.cli codegen --all --check
-python3 -m aitest_kit.cli codegen --all --health-report --write-report
-python3 -m aitest_kit.cli run calibration
+python3 -m aitest_kit.cli codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
+python3 -m aitest_kit.cli codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
+python3 -m aitest_kit.cli codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --health-report --write-report
+python3 -m aitest_kit.cli registry register-suite --target <target> --module <module> --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+python3 -m aitest_kit.cli task create --name <task_name> --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+python3 -m aitest_kit.cli run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+python3 -m aitest_kit.cli run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --case-id TC-XXX-001
+python3 -m aitest_kit.cli codegen --target <target> --module <module> --check
+python3 -m aitest_kit.cli run --target <target> --module <module>
+python3 -m aitest_kit.cli run --target <target>
+python3 -m aitest_kit.cli run --all
 python3 -m aitest_kit.cli report
 python3 -m compileall aitest_kit/codegen
-python3 -m pytest test_workspace/tests/generated
+python3 -m pytest test_workspace/generated --collect-only -q
 ```
 
 ## 技术栈
@@ -168,10 +160,10 @@ test-codegen
   优先使用 `test-fix` 修正用例，并把教训沉淀到 `TEST_SPEC`、profile 或相关 workflow 说明里。
 
 - 生成 pytest：
-  使用 `test-codegen`，从 Markdown 用例和 profile 生成 `test_workspace/tests/generated/` 下的 pytest。
+  使用 `test-codegen`，从 Markdown suite 和 profile 生成 `test_workspace/generated/{target}/` 下的 pytest。
 
 - 执行并生成报告：
-  使用 `aitest run <模块名>`，默认排除 manual 用例；需要执行 manual 时加 `--include-manual`。报告写入 `test_workspace/reports/`，失败反哺清单用于后续 `test-fix` 或 fixture/profile 修正。
+  使用 `aitest run --suite-file <suite.yaml>`，默认排除 manual 用例；需要执行 manual 时加 `--include-manual`。单 case 调试使用 `--case-id <TC-ID>`。模块、目标系统或全量回归使用 `--target <target> --module <module>`、`--target <target>` 或 `--all`。报告写入 `test_workspace/reports/`，失败反哺清单用于后续 `test-fix` 或 fixture/profile 修正。
 
 - 测试全部通过后：
   使用 `emitter-build` 从已验证的 pytest 提取确定性模板，减少后续 AI 补写比例。
@@ -193,17 +185,20 @@ test-codegen
 - workspace 模板只有一个来源。
   `aitest_kit/templates/project_workspace/` 是 `aitest init` 使用的唯一模板源；不要维护第二份顶层模板副本。
 
-- 测试用例默认按模块组织，也允许按 suite 组织。
-  模块级默认输出到 `test_workspace/cases/{模块名}/`；L2/迭代批次可放到任意 suite 目录，并用 `aitest_suite.yaml` 声明 `module`、`suite`、`case_files` 和 suite profile。
+- 测试用例按 suite 组织。
+  L2/迭代批次放到任意 suite 目录，并用 `suite.yaml` 声明 `target`、`module`、`suite`、`case_files` 和 suite profile。
 
-- 模块 fixture 按模块拆分。
-  `test_workspace/tests/conftest.py` 只放全局 fixture 和插件注册；模块逻辑放到 `test_workspace/tests/fixtures/{module}.py`。
+- suite 注册是聚合执行入口。
+  单个 suite 可直接用 `--suite-file` 执行；只有通过 `aitest registry register-suite` 写入 `module.yaml.registered_suites` 的 active suite，才会进入 `--module`、`--target` 和 `--all`。
+
+- 模块 fixture 按 target/module 拆分。
+  模块逻辑放到 `test_workspace/targets/{target}/fixtures/{module}.py`，由 `modules/{module}.yaml` 注册。
 
 - module profile 与 fixture 同目录，suite profile 跟随用例目录。
-  `test_workspace/tests/fixtures/codegen_profile_{module}.md` 放 L1 稳定能力；`codegen_profile_{suite}_suite.md` 放该批用例的 `case_flows/case_bodies/request_overrides`。
+  `test_workspace/targets/{target}/profiles/profile_{module}.md` 放 L1 稳定能力；`profile_{suite}_suite.md` 放该批用例的 `case_flows/case_bodies/request_overrides`。
 
 - 生成的 pytest 是编译产物。
-  优先修改 Markdown 用例、profile、fixture、emitter 或 project_config，再重新生成；不要把生成文件当作长期手写源文件。
+  优先修改 Markdown 用例、profile、fixture、emitter 或 `aitest.yaml`，再重新生成；不要把生成文件当作长期手写源文件。
 
 - 待测系统 bug 记录到 `test_workspace/results/`。
   不跳过、不放宽断言、不伪造成功响应。等待系统修复后重新执行验证。
@@ -236,19 +231,19 @@ AI 的角色是测试工程师，不是被测系统的开发者。
    parser 输出有 errors 时，codegen 终止并打印诊断与修复建议，不生成残缺 pytest。
 
 4. 读取项目配置。
-   `aitest_config/project_config.yaml` 是项目级配置入口；`aitest_kit/codegen/project_config.py` 是 schema/loader，不是项目配置编辑入口。fallback 用于配置缺失或缺字段时兼容，不能随意删除。
+   `aitest_config/aitest.yaml` 是统一配置入口；`aitest_kit/workspace_config.py` 和 `aitest_kit/codegen/project_config.py` 是 loader，不是项目配置编辑入口。
 
 5. 读取 profile。
-   模块模式读取 `test_workspace/tests/fixtures/codegen_profile_{module}.md`；suite 模式读取 `aitest_suite.yaml`，再临时合并 module profile + suite profile。suite profile 必须以 `_suite.md` 结尾。
+   读取 `suite.yaml`，再临时合并 module profile + suite profile。suite profile 必须以 `_suite.md` 结尾。
 
 6. Case IR planner 生成计划。
-   `aitest_kit/codegen/planner.py` 结合 ParseResult、project_config 和 profile 选择 `default_http`、`default_grpc`、`structured_case_flow`、`custom_case_body`、`manual` 或 `skipped`，并记录 source_trace。
+   `aitest_kit/codegen/planner.py` 结合 ParseResult、`aitest.yaml` 和 runtime profile 选择 `default_http`、`default_grpc`、`structured_case_flow`、`custom_case_body`、`manual` 或 `skipped`，并记录 source_trace。
 
 7. emitter/IR renderer 生成 pytest。
-   `aitest_kit/codegen/emitter.py` 负责装载、诊断和落盘，`aitest_kit/codegen/ir_renderer.py` 负责确定性渲染 `.py`。断言匹配优先级为 `profile assertion_rules > project_config builtin_assertion_rules > named_templates`。
+   `aitest_kit/codegen/emitter.py` 负责装载、诊断和落盘，`aitest_kit/codegen/ir_renderer.py` 负责确定性渲染 `.py`。断言匹配优先级为 `profile assertion_rules > aitest.yaml builtin_assertion_rules > named_templates`。
 
 8. module_type 校验。
-   profile 声明的模块类型必须满足 `project_config` 中该类型的 `requires` 字段；需要 `case_bodies` 的类型可由 `case_bodies` 或 `case_flows` 满足。
+   module.yaml/profile 声明的模块类型必须满足 `aitest.yaml` 中该类型的 `requires` 字段；需要 `case_bodies` 的类型可由 `case_bodies` 或 `case_flows` 满足。
 
 9. 生成后验证。
    执行 AST 校验和未定义名检测，避免 `_req` 等关键名缺失。
@@ -257,19 +252,33 @@ AI 的角色是测试工程师，不是被测系统的开发者。
    emitter 输出的 `# UNPARSED ASSERTION:` 由 AI 翻译为可执行断言；UNPARSED 为 0 时跳过。
 
 11. 端到端验证。
-   运行对应生成测试，必要时运行全量 `test_workspace/tests/generated/`。
+   运行对应生成测试，必要时运行 `test_workspace/generated/` 的收集检查。
 
 12. 经验沉淀。
-    调试经验写入 `codegen_profile_{module}.md`、`TEST_SPEC` 或 skill；测试稳定通过后再使用 `emitter-build` 提取新规则。
+    调试经验写入 profile、`TEST_SPEC` 或 skill；测试稳定通过后再使用 `emitter-build` 提取新规则。
 
 日常 codegen 门禁顺序：
 
 ```bash
-python3 -m aitest_kit.cli codegen --all --validate-profile
-python3 -m aitest_kit.cli codegen --all --dump-ir
+python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> --validate-profile
+python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> --dump-ir
+python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> --check
+python3 -m aitest_kit.cli codegen --suite-file <suite.yaml>
+python3 -m aitest_kit.cli run --suite-file <suite.yaml> -- --collect-only -q
+```
+
+常用选择器维度：
+
+```bash
+python3 -m aitest_kit.cli codegen --target <target> --module <module> --check
+python3 -m aitest_kit.cli run --target <target> --module <module>
+python3 -m aitest_kit.cli report --target <target> --module <module>
+python3 -m aitest_kit.cli codegen --target <target> --check
+python3 -m aitest_kit.cli run --target <target>
+python3 -m aitest_kit.cli report --target <target>
 python3 -m aitest_kit.cli codegen --all --check
-python3 -m aitest_kit.cli codegen --all
-python3 -m pytest test_workspace/tests/generated --collect-only -q
+python3 -m aitest_kit.cli run --all
+python3 -m aitest_kit.cli report --all
 ```
 
 ## 测试报告流程
@@ -279,7 +288,7 @@ python3 -m pytest test_workspace/tests/generated --collect-only -q
 1. 默认先执行 generated freshness check，确认 Markdown/profile 与 generated pytest 一致；失败时生成 `BLOCKED_RUN` 报告并停止，不执行过期测试。
 2. 默认排除 `@pytest.mark.manual` 用例；报告仍统计 `manual_total`、`manual_executed`、`manual_not_run`。需要执行 manual 时使用 `--include-manual`。
 3. collector 用 generated pytest 中的 `__tc_meta__` 与 JUnit XML 结果关联；`__codegen_skipped__` 统计可行性存疑且未生成 pytest 函数的用例。
-4. 输出 `junit.xml`、`result.json`、`report.md` 到 `test_workspace/reports/runs/{run_id}/`，并同步到 `test_workspace/reports/latest/`。
+4. suite 执行输出 `junit.xml`、`result.json`、`report.md` 到 `test_workspace/reports/{target}/{module}/suites/{suite}/` 的 `runs/{run_id}/`，并同步到 `latest/`。case 执行写入 `{target}/{module}/cases/{case_id}/`；module、target、task、all 聚合执行写入对应聚合 bucket，并把 suite unit 明细保存到同一个 run_id 的 `units/` 目录。
 5. report 的反哺清单只做规则化初判；断言失败不自动判定为产品 bug，需人工确认后再记录到 `test_workspace/results/`。
 
 ## codegen 可移植架构
@@ -295,17 +304,17 @@ codegen 管线分三层，换项目时只改配置层，不改框架层：
   - skill 框架模板
 
 项目配置层（换项目重写，YAML 格式）
-  - aitest_config/config.yaml
-  - aitest_config/project_config.yaml
+  - aitest_config/aitest.yaml
+  - target/module registry
   - 项目专属 helper 或 protobuf 封装
 
 模块配置层（每模块一份）
-  - test_workspace/tests/fixtures/codegen_profile_{module}.md
-  - test_workspace/tests/fixtures/{module}.py
+  - test_workspace/targets/{target}/profiles/profile_{module}.md
+  - test_workspace/targets/{target}/fixtures/{module}.py
 
 用例批次层（按 L2/迭代批次，可选）
-  - aitest_suite.yaml
-  - codegen_profile_{suite}_suite.md
+  - suite.yaml
+  - profile_{suite}_suite.md
 ```
 
 ## AI 与代码生成边界
@@ -315,7 +324,7 @@ codegen 管线分三层，换项目时只改配置层，不改框架层：
 - AI 可以做：理解新项目业务、生成初版 Markdown/profile、解释失败原因、判断已验证 body 是否值得晋升、补写少量 UNPARSED。
 - 代码必须做：Markdown 解析、profile JSON Schema/语义校验、case_id 对齐、IR strategy 选择、请求体合并、默认断言生成、case_flow 渲染、generated freshness check。
 - 普通 codegen、`--check`、`--dump-ir`、`--explain` 和 promotion 分析必须先通过 profile gate；格式错误不进入 IR/emitter。
-- 稳定模式优先沉淀到 `project_config.yaml`、`codegen_profile_{module}.md`、fixture/helper 或 `case_flows`，不要长期依赖 AI 重写同类 pytest。
+- 稳定模式优先沉淀到 `aitest.yaml`、profile、fixture/helper 或 `case_flows`，不要长期依赖 AI 重写同类 pytest。
 - `case_bodies` 是复杂场景逃生通道，不是默认路线；并发、进程、文件生命周期、mock、Remote SDK 生命周期等复杂控制流可以保留。
 
 ## module_type 分类

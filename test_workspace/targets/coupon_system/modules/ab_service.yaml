@@ -1,0 +1,19 @@
+target: coupon_system
+module: ab_service
+module_type: multi_endpoint
+fixture:
+  file: ab_service.py
+  default_fixture: setup_ab_service
+profile:
+  file: profile_ab_service.md
+helpers:
+- test_workspace/targets/coupon_system/helpers/grpc_ops.py
+- test_workspace/targets/coupon_system/helpers/http.py
+- test_workspace/targets/coupon_system/helpers/redis_ops.py
+knowledge_refs:
+  l1:
+  - test_workspace/knowledge/L1/ab_service.md
+registered_suites:
+- suite: ab_service_smoke
+  manifest: test_workspace/suites/coupon_system/ab_service_smoke/suite.yaml
+  status: active

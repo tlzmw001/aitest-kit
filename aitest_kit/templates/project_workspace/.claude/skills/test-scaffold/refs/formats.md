@@ -63,13 +63,13 @@ suite profile 示例：
 variables:
   defaults:
     base_url:
-      env: SUB2API_BASE_URL
+      env: SERVICE_BASE_URL
   cases:
     TC-XXX-001:
       username:
-        env: SUB2API_NORMAL_USER_EMAIL
+        env: TEST_USER_EMAIL
       password:
-        env: SUB2API_NORMAL_USER_PASSWORD
+        env: TEST_USER_PASSWORD
     TC-XXX-010:
       token:
         value: ""
@@ -108,7 +108,7 @@ variables:
 ```yaml
 module_type: {type}
 extra_imports:
-  - "from test_workspace.tests.fixtures.{module} import setup_{module}"
+  - "from test_workspace.targets.{target}.fixtures.{module} import setup_{module}"
 
 default_fixture: setup_{module}
 default_object: client_factory
@@ -193,15 +193,19 @@ def setup_{module}() -> {Module}Client:
 ```markdown
 ## test-scaffold 摘要
 
+target：{target}
 模块：{module}
 模式：full / incremental
 module_type：{type}
 
 创建/修改文件：
-- fixtures/{module}.py — Client 类 + setup fixture
-- codegen_profile_{module}.md — profile
+- test_workspace/targets/{target}/target.yaml — target 默认目录
+- test_workspace/targets/{target}/modules/{module}.yaml — module registry
+- test_workspace/targets/{target}/fixtures/{module}.py — Client 类 + setup fixture
+- test_workspace/targets/{target}/profiles/profile_{module}.md — module profile
+- {suite_dir}/suite.yaml — suite manifest（suite 模式）
+- {suite_dir}/profile_{suite}_suite.md — suite profile（suite 模式）
 - api_map_{module}.md — API 面 + env 契约 + 可行性判定
-- conftest.py — pytest_plugins 注册（如需）
 
 Client 方法：
 - {method_name}({params}) [auth: yes/no]
@@ -225,6 +229,6 @@ Client 方法：
 - collect: {N} / {可执行 case 数}
 
 下一步：
-- 配置环境变量后执行 `aitest run {module}`
-- 或调用 `/test-codegen {module}` 处理 UNPARSED（如有）
+- 配置环境变量后执行 `aitest run --suite-file <suite_dir>/suite.yaml`
+- 或调用 `/test-codegen --suite-file <suite_dir>/suite.yaml` 处理 UNPARSED（如有）
 ```

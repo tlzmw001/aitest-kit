@@ -75,7 +75,7 @@ uses: pypa/gh-action-pypi-publish@release/v1
    python3 -m pytest tests -q
    python3 -m aitest_kit.cli codegen --all --validate-profile
    python3 -m aitest_kit.cli codegen --all --check
-   python3 -m pytest test_workspace/tests/generated --collect-only -q
+   python3 -m aitest_kit.cli run --all -- --collect-only -q
    ```
 
 3. 构建并检查发布产物。

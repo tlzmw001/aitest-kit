@@ -1,0 +1,10 @@
+target: coupon_system
+module: rough_ranking
+suite: rough_ranking_smoke
+case_files:
+- business.md
+- boundary.md
+profile: profile_rough_ranking_smoke_suite.md
+knowledge_refs:
+  l1:
+  - test_workspace/knowledge/L1/rough_ranking.md

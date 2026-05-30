@@ -33,10 +33,9 @@ coupon_system/                         # 待测优惠券推荐系统
 ab_experiment_sdk/                     # AB 实验服务和 SDK
 docs/                                  # 开发文档和使用说明
 test_workspace/knowledge/              # 测试知识库
-test_workspace/cases/                  # Markdown 用例
-test_workspace/tests/fixtures/         # 模块 fixture 和 codegen profile
-test_workspace/tests/generated/        # generated pytest
-test_workspace/tests/helpers/          # HTTP/gRPC/Redis helper
+test_workspace/suites/coupon_system/   # suite Markdown 用例和 suite profile
+test_workspace/targets/coupon_system/  # 模块 fixture、helper 和 module profile
+test_workspace/generated/coupon_system/# generated pytest
 test_workspace/reports/                # aitest run 输出
 test_workspace/results/                # 已确认的待测系统 bug 记录
 ```
@@ -82,10 +81,10 @@ env AB_SERVICE_URL=http://127.0.0.1:8100 \
 在仓库根目录执行：
 
 ```bash
-python3 -m aitest_kit.cli codegen --all --validate-profile
-python3 -m aitest_kit.cli codegen --all --dump-ir
-python3 -m aitest_kit.cli codegen --all --check
-python3 -m pytest test_workspace/tests/generated --collect-only -q
+python3 -m aitest_kit.cli codegen --target coupon_system --validate-profile
+python3 -m aitest_kit.cli codegen --suite-file test_workspace/suites/coupon_system/calibration_smoke/suite.yaml --dump-ir
+python3 -m aitest_kit.cli codegen --target coupon_system --check
+python3 -m aitest_kit.cli run --target coupon_system -- --collect-only -q
 ```
 
 这些命令分别验证：
@@ -97,11 +96,14 @@ python3 -m pytest test_workspace/tests/generated --collect-only -q
 
 ## 六、运行测试和报告
 
-服务启动后，可以按模块运行：
+服务启动后，可以按 suite、模块、target 或全量运行：
 
 ```bash
-python3 -m aitest_kit.cli run calibration
-python3 -m aitest_kit.cli run ab_service
+python3 -m aitest_kit.cli run --suite-file test_workspace/suites/coupon_system/calibration_smoke/suite.yaml
+python3 -m aitest_kit.cli run --suite-file test_workspace/suites/coupon_system/calibration_smoke/suite.yaml --case-id TC-CAL-001
+python3 -m aitest_kit.cli run --target coupon_system --module calibration
+python3 -m aitest_kit.cli run --target coupon_system
+python3 -m aitest_kit.cli run --all
 ```
 
 报告输出：
@@ -110,6 +112,7 @@ python3 -m aitest_kit.cli run ab_service
 test_workspace/reports/latest/result.json
 test_workspace/reports/latest/report.md
 test_workspace/reports/latest/junit.xml
+test_workspace/reports/tasks/<task_or_selector>/latest/report.md
 ```
 
 如果 generated pytest 过期，`aitest run` 会生成 `BLOCKED_RUN` 报告并停止，避免执行旧测试。
@@ -123,10 +126,10 @@ test_workspace/reports/latest/junit.xml
 相关文件：
 
 ```text
-test_workspace/cases/calibration/
-test_workspace/tests/fixtures/codegen_profile_calibration.md
-test_workspace/tests/fixtures/calibration.py
-test_workspace/tests/generated/test_calibration_business.py
+test_workspace/suites/coupon_system/calibration_smoke/
+test_workspace/targets/coupon_system/profiles/profile_calibration.md
+test_workspace/targets/coupon_system/fixtures/calibration.py
+test_workspace/generated/coupon_system/test_calibration_calibration_smoke_business.py
 ```
 
 它展示：
@@ -164,7 +167,7 @@ test_workspace/tests/generated/test_calibration_business.py
 ## 八、如何解读 health report
 
 ```bash
-python3 -m aitest_kit.cli codegen --all --health-report --write-report
+python3 -m aitest_kit.cli codegen --suite-file test_workspace/suites/coupon_system/calibration_smoke/suite.yaml --health-report --write-report
 ```
 
 关注：
@@ -182,7 +185,7 @@ health report 是治理工具，不是为了把所有模块都强行推到同一
 | 现象 | 优先判断 | 处理方式 |
 |---|---|---|
 | `Connection refused` | 服务未启动或端口不对 | 按 `service_startup.md` 启动依赖 |
-| generated stale | Markdown/profile/config 改了但未重新生成 | 运行 `aitest codegen --all` |
+| generated stale | Markdown/profile/config 改了但未重新生成 | 运行 `aitest codegen --suite-file <suite.yaml>` 或 `aitest codegen --target <target>` |
 | profile gate failed | profile 格式或 case_id 引用错误 | 修 profile，不进入 renderer |
 | `UNPARSED ASSERTION` | 断言无法确定性翻译 | 先分流：Markdown 表达、用例问题、缺规则、不可观测 |
 | `assert isinstance(resp, dict)` | 弱断言 | 补业务断言或改成 `case_flow` |

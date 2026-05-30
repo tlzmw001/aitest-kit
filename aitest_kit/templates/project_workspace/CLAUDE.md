@@ -20,17 +20,14 @@
 
 ```text
 aitest_config/
-  config.yaml
-  project_config.yaml
+  aitest.yaml
   refs/
   schemas/
 test_workspace/
   knowledge/
-  cases/
-  tests/
-    fixtures/
-    generated/
-    helpers/
+  targets/
+  suites/
+  generated/
   reports/
   results/
 .claude/skills/
@@ -40,9 +37,10 @@ test_workspace/
 
 关键约定：
 
-- `test_workspace/cases/` 存放按模块组织的 Markdown 源用例；`test_workspace/casesuites/` 可存放按 L2/迭代批次组织的独立 suite。
-- `test_workspace/tests/generated/` 存放 codegen 生成的 pytest 文件，视为编译产物。
-- `test_workspace/tests/fixtures/` 存放模块 fixture 和 `codegen_profile_{module}.md`；suite profile 跟随用例目录并以 `_suite.md` 结尾。
+- `test_workspace/suites/{target}/{suite}/` 存放 Markdown 源用例和 suite profile；`suite.yaml` 绑定 target/module。
+- `test_workspace/targets/{target}/` 存放 target/module registry、fixture、helper 和 module profile。
+- suite 可直接通过 `--suite-file` 执行；要进入 module/target/all 聚合入口，使用 `aitest registry register-suite` 注册到 module。
+- `test_workspace/generated/{target}/` 存放 codegen 生成的 pytest 文件，视为编译产物。
 - `test_workspace/results/` 记录已确认的待测系统 bug 或重要发现。
 - `test_workspace/reports/` 存放测试执行报告。
 
@@ -51,13 +49,14 @@ test_workspace/
 在工作区根目录下执行：
 
 ```bash
-aitest codegen --all --validate-profile
-aitest codegen --all --dump-ir
-aitest codegen --all --check
-aitest codegen --all
-aitest run <module>
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --dump-ir
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest registry register-suite --target <target> --module <module> --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest task create --name <task_name> --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 aitest report
-python3 -m pytest test_workspace/tests/generated --collect-only -q
 ```
 
 从其他目录执行时，追加 `--workspace /path/to/workspace`。
@@ -67,7 +66,7 @@ python3 -m pytest test_workspace/tests/generated --collect-only -q
 1. Profile 校验是普通生成、`--check`、`--dump-ir`、`--explain` 和晋升分析的硬门禁。
 2. Parser 诊断报错时必须阻断生成。
 3. Case IR 解释策略选择的原因，不应发明业务事实。
-4. 断言匹配优先级：profile 规则 > project_config 内置规则 > 命名模板。
+4. 断言匹配优先级：profile 规则 > `aitest.yaml` 内置规则 > 命名模板。
 5. 生成的 pytest 应通过修改 Markdown/profile/config/fixture/helper 输入来刷新，而非长期手动编辑。
 
 ## Skill 路由
@@ -98,7 +97,7 @@ python3 -m pytest test_workspace/tests/generated --collect-only -q
 声称工作完成前，运行相关验证命令并报告结果。codegen 相关的修改，优先运行：
 
 ```bash
-aitest codegen --all --validate-profile
-aitest codegen --all --check
-python3 -m pytest test_workspace/tests/generated --collect-only -q
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
 ```

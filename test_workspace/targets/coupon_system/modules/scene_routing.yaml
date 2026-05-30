@@ -1,0 +1,19 @@
+target: coupon_system
+module: scene_routing
+module_type: standard_recommend
+fixture:
+  file: scene_routing.py
+  default_fixture: setup_scene_routing
+profile:
+  file: profile_scene_routing.md
+helpers:
+- test_workspace/targets/coupon_system/helpers/grpc_ops.py
+- test_workspace/targets/coupon_system/helpers/http.py
+- test_workspace/targets/coupon_system/helpers/redis_ops.py
+knowledge_refs:
+  l1:
+  - test_workspace/knowledge/L1/scene_routing.md
+registered_suites:
+- suite: scene_routing_smoke
+  manifest: test_workspace/suites/coupon_system/scene_routing_smoke/suite.yaml
+  status: active

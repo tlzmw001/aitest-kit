@@ -9,7 +9,7 @@ from aitest_kit.codegen.project_config import DEFAULT_PROJECT
 def _single_case_ir(tc: TestCase):
     result = ParseResult(
         module="demo",
-        source_file="test_workspace/cases/demo/business.md",
+        source_file="test_workspace/suites/demo_target/demo_suite/business.md",
         shared_config=SharedConfig(base_request_http={"user_id": "", "reqId": ""}),
         cases=[tc],
     )

@@ -1,7 +1,6 @@
 """Workspace diagnostics for aitest-kit."""
 from __future__ import annotations
 
-import ast
 import os
 import re
 import subprocess
@@ -10,11 +9,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import click
-import yaml
 
 from aitest_kit.codegen.project_config import load_project_config
 from aitest_kit.codegen.profile_validator import validate_profile_suite
+from aitest_kit.registry import load_module_context, load_suite_context, load_target_context
 from aitest_kit.workspace import push_workspace
+from aitest_kit.workspace_config import has_workspace_config, load_workspace_paths
 
 
 _ENV_PATTERNS = [
@@ -32,17 +32,27 @@ class CheckResult:
 
 @click.command(name="doctor")
 @click.option("--workspace", type=click.Path(file_okay=False, dir_okay=True), help="Check another AITest workspace root")
-@click.option("--module", "module_name", help="Check one module instead of all discovered modules")
-def doctor_command(workspace: str | None, module_name: str | None):
-    """Diagnose workspace layout, codegen gates, and generated pytest collection."""
+def doctor_command(workspace: str | None):
+    """Diagnose workspace layout, registries, codegen gates, and pytest collection.
+
+    \b
+    Checks:
+      workspace layout
+      project config
+      target/module/suite registry
+      profile gate
+      generated freshness
+      pytest collect
+      fixture environment variable hints
+    """
     try:
         with push_workspace(workspace):
-            raise SystemExit(_doctor_impl(module_name))
+            raise SystemExit(_doctor_impl())
     except (FileNotFoundError, NotADirectoryError) as exc:
         raise click.ClickException(str(exc)) from exc
 
 
-def _doctor_impl(module_name: str | None) -> int:
+def _doctor_impl() -> int:
     workspace = Path.cwd()
     results: list[CheckResult] = []
 
@@ -52,32 +62,33 @@ def _doctor_impl(module_name: str | None) -> int:
 
     _check_layout(results)
     _check_project_config(results)
-    modules = _discover_modules(Path("test_workspace/cases"))
-    selected_modules = _select_modules(modules, module_name, results)
-    fixture_dir = Path("test_workspace/tests/fixtures")
-    env_vars = _scan_env_vars(fixture_dir)
-    _check_fixture_registration(results, fixture_dir, Path("test_workspace/tests/conftest.py"))
-    _check_case_suites(results, Path("test_workspace/casesuites"), fixture_dir)
+    paths = load_workspace_paths()
+    suite_dirs = _discover_case_suites(Path("test_workspace/suites"))
+    env_vars = _scan_env_vars(Path("test_workspace/targets"))
+    _check_case_suites(results, suite_dirs, paths.profile_dir)
+    _check_target_registry(results, Path("test_workspace/targets"))
 
-    if selected_modules:
-        _run_command_check(
+    if suite_dirs:
+        _run_suite_codegen_checks(
             results,
             "profile gate",
-            [sys.executable, "-m", "aitest_kit.cli", "codegen", *_module_args(selected_modules), "--validate-profile"],
+            suite_dirs,
+            "--validate-profile",
         )
-        _run_command_check(
+        _run_suite_codegen_checks(
             results,
             "generated freshness",
-            [sys.executable, "-m", "aitest_kit.cli", "codegen", *_module_args(selected_modules), "--check"],
+            suite_dirs,
+            "--check",
         )
-    elif module_name is None:
+    else:
         results.append(CheckResult(
             "WARN",
-            "modules",
-            "no modules found under test_workspace/cases",
+            "case suites",
+            "no suite.yaml files found under test_workspace/suites",
         ))
 
-    generated_files = _generated_files(selected_modules)
+    generated_files = _generated_files(paths.generated_dir)
     if generated_files:
         _run_command_check(
             results,
@@ -120,16 +131,16 @@ def _doctor_impl(module_name: str | None) -> int:
 
 def _check_layout(results: list[CheckResult]) -> None:
     required = [
-        Path("aitest_config/config.yaml"),
-        Path("aitest_config/project_config.yaml"),
-        Path("test_workspace/cases"),
-        Path("test_workspace/tests/fixtures"),
-        Path("test_workspace/tests/generated"),
+        Path("test_workspace/targets"),
+        Path("test_workspace/suites"),
+        Path("test_workspace/generated"),
     ]
     recommended = [
         Path("test_workspace/results"),
     ]
     missing_required = [str(path) for path in required if not path.exists()]
+    if not has_workspace_config():
+        missing_required.append("aitest_config/aitest.yaml")
     missing_recommended = [str(path) for path in recommended if not path.exists()]
     if missing_required:
         results.append(CheckResult(
@@ -149,39 +160,24 @@ def _check_layout(results: list[CheckResult]) -> None:
 
 
 def _check_project_config(results: list[CheckResult]) -> None:
-    config_path = Path("aitest_config/config.yaml")
-    project_config_path = Path("aitest_config/project_config.yaml")
     try:
-        if config_path.exists():
-            yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-        load_project_config(project_config_path)
+        paths = load_workspace_paths()
+        load_project_config(paths.project_config)
     except Exception as exc:  # noqa: BLE001 - CLI diagnostic should report the concrete loader failure.
         results.append(CheckResult("FAIL", "project config", str(exc)))
         return
     results.append(CheckResult("OK", "project config", "config files load successfully"))
 
 
-def _discover_modules(cases_dir: Path) -> list[str]:
-    if not cases_dir.exists():
-        return []
-    return sorted(
-        path.name for path in cases_dir.iterdir()
-        if path.is_dir()
-        and not path.name.startswith(".")
-        and ((path / "business.md").exists() or (path / "boundary.md").exists())
-    )
-
-
 def _check_case_suites(
     results: list[CheckResult],
-    suites_dir: Path,
-    fixture_dir: Path,
+    suite_dirs: list[Path],
+    profile_dir: Path,
 ) -> None:
-    suite_dirs = _discover_case_suites(suites_dir)
     if not suite_dirs:
         return
     try:
-        project = load_project_config(Path("aitest_config/project_config.yaml"))
+        project = load_project_config(load_workspace_paths().project_config)
     except Exception as exc:  # noqa: BLE001 - doctor should surface loader failures.
         results.append(CheckResult("FAIL", "case suites", str(exc)))
         return
@@ -189,7 +185,8 @@ def _check_case_suites(
     failures: list[str] = []
     warnings: list[str] = []
     for suite_dir in suite_dirs:
-        report = validate_profile_suite(suite_dir, profile_dir=fixture_dir, project=project)
+        manifest = suite_dir / "suite.yaml"
+        report = validate_profile_suite(manifest, profile_dir=profile_dir, project=project)
         if report.errors:
             first = report.errors[0].format()
             failures.append(f"{suite_dir}: {len(report.errors)} error(s), first={first}")
@@ -207,47 +204,78 @@ def _check_case_suites(
 def _discover_case_suites(suites_dir: Path) -> list[Path]:
     if not suites_dir.exists():
         return []
-    result: list[Path] = []
-    for path in sorted(suites_dir.iterdir()):
-        if not path.is_dir() or path.name.startswith("."):
+    return sorted(path.parent for path in suites_dir.rglob("suite.yaml"))
+
+
+def _check_target_registry(results: list[CheckResult], targets_dir: Path) -> None:
+    target_files = sorted(targets_dir.glob("*/target.yaml"))
+    if not target_files:
+        results.append(CheckResult("INFO", "target registry", "no target registry entries found"))
+        return
+
+    failures: list[str] = []
+    warnings: list[str] = []
+    module_count = 0
+    suite_count = 0
+    for target_file in target_files:
+        target = load_target_context(target_file)
+        if target.diagnostics:
+            failures.append(f"{target_file}: {_diagnostic_summary(target.diagnostics)}")
             continue
-        has_suite_marker = (
-            (path / "aitest_suite.yaml").exists()
-            or any(path.glob("codegen_profile_*_suite.md"))
-        )
-        if has_suite_marker:
-            result.append(path)
-    return result
+        if not target.defaults.module_dir.exists():
+            warnings.append(f"{target.target}: module_dir not found: {target.defaults.module_dir}")
+            continue
+        module_files = sorted(target.defaults.module_dir.glob("*.yaml"))
+        if not module_files:
+            warnings.append(f"{target.target}: no module registry files under {target.defaults.module_dir}")
+            continue
+        for module_file in module_files:
+            module_count += 1
+            module = load_module_context(target, module_file)
+            if module.diagnostics:
+                failures.append(f"{module_file}: {_diagnostic_summary(module.diagnostics)}")
+                continue
+            if module.fixture_path and not module.fixture_path.exists():
+                failures.append(f"{module_file}: fixture not found: {module.fixture_path}")
+            if module.profile_path and not module.profile_path.exists():
+                failures.append(f"{module_file}: profile not found: {module.profile_path}")
+            for registered in module.registered_suites:
+                suite_count += 1
+                if registered.status != "active":
+                    continue
+                if not registered.manifest.exists():
+                    failures.append(f"{module_file}: suite manifest not found: {registered.manifest}")
+                    continue
+                suite = load_suite_context(registered.manifest)
+                if suite.diagnostics:
+                    failures.append(f"{registered.manifest}: {_diagnostic_summary(suite.diagnostics)}")
+                    continue
+                if suite.target != target.target or suite.module != module.module:
+                    failures.append(
+                        f"{registered.manifest}: suite target/module "
+                        f"{suite.target}/{suite.module} does not match "
+                        f"{target.target}/{module.module}"
+                    )
+                for case_file in suite.case_files:
+                    if not case_file.exists():
+                        failures.append(f"{registered.manifest}: case file not found: {case_file}")
+                if not suite.profile_path.exists():
+                    failures.append(f"{registered.manifest}: suite profile not found: {suite.profile_path}")
 
-
-def _select_modules(
-    modules: list[str],
-    module_name: str | None,
-    results: list[CheckResult],
-) -> list[str]:
-    if module_name is None:
-        if modules:
-            results.append(CheckResult(
-                "OK",
-                "modules",
-                f"found {len(modules)} module(s): " + ", ".join(modules),
-            ))
-        return modules
-    if module_name not in modules:
+    if failures:
+        results.append(CheckResult("FAIL", "target registry", "; ".join(failures[:4])))
+    elif warnings:
+        results.append(CheckResult("WARN", "target registry", "; ".join(warnings[:4])))
+    else:
         results.append(CheckResult(
-            "FAIL",
-            "modules",
-            f"module not found under test_workspace/cases: {module_name}",
+            "OK",
+            "target registry",
+            f"{len(target_files)} target(s), {module_count} module(s), {suite_count} registered suite(s) valid",
         ))
-        return []
-    results.append(CheckResult("OK", "modules", f"found module: {module_name}"))
-    return [module_name]
 
 
-def _module_args(modules: list[str]) -> list[str]:
-    if len(modules) == 1:
-        return [modules[0]]
-    return ["--all"]
+def _diagnostic_summary(diagnostics: list[str]) -> str:
+    return "; ".join(diagnostics[:3])
 
 
 def _run_command_check(
@@ -276,117 +304,55 @@ def _run_command_check(
     ))
 
 
-def _generated_files(modules: list[str]) -> list[Path]:
-    generated_dir = Path("test_workspace/tests/generated")
+def _run_suite_codegen_checks(
+    results: list[CheckResult],
+    name: str,
+    suite_dirs: list[Path],
+    mode: str,
+) -> None:
+    failures: list[str] = []
+    for suite_dir in suite_dirs:
+        manifest = suite_dir / "suite.yaml"
+        command = [
+            sys.executable,
+            "-m",
+            "aitest_kit.cli",
+            "codegen",
+            "--suite-file",
+            str(manifest),
+            mode,
+        ]
+        env = dict(os.environ)
+        package_root = str(Path(__file__).resolve().parents[1])
+        existing_pythonpath = env.get("PYTHONPATH")
+        env["PYTHONPATH"] = (
+            package_root if not existing_pythonpath
+            else package_root + os.pathsep + existing_pythonpath
+        )
+        completed = subprocess.run(command, text=True, capture_output=True, env=env)
+        if completed.returncode:
+            output = (completed.stdout + completed.stderr).strip()
+            if len(output) > 300:
+                output = output[:300].rstrip() + " ..."
+            failures.append(f"{manifest}: {output or 'failed'}")
+    if failures:
+        results.append(CheckResult("FAIL", name, "; ".join(failures[:3])))
+    else:
+        results.append(CheckResult("OK", name, f"{len(suite_dirs)} suite(s) passed"))
+
+
+def _generated_files(generated_dir: Path) -> list[Path]:
     if not generated_dir.exists():
         return []
-    if not modules:
-        return sorted(generated_dir.glob("test_*.py"))
-    files: list[Path] = []
-    for module in modules:
-        for category in ("business", "boundary"):
-            path = generated_dir / f"test_{module}_{category}.py"
-            if path.exists():
-                files.append(path)
-    return files
+    return sorted(generated_dir.rglob("test_*.py"))
 
 
 def _scan_env_vars(fixture_dir: Path) -> set[str]:
     env_vars: set[str] = set()
     if not fixture_dir.exists():
         return env_vars
-    for path in fixture_dir.glob("*.py"):
+    for path in fixture_dir.rglob("*.py"):
         text = path.read_text(encoding="utf-8")
         for pattern in _ENV_PATTERNS:
             env_vars.update(pattern.findall(text))
     return env_vars
-
-
-def _check_fixture_registration(
-    results: list[CheckResult],
-    fixture_dir: Path,
-    conftest_path: Path,
-) -> None:
-    fixture_modules = _discover_fixture_modules(fixture_dir)
-    if not fixture_modules:
-        results.append(CheckResult(
-            "INFO",
-            "fixture registration",
-            "no module fixture files detected",
-        ))
-        return
-
-    if not conftest_path.exists():
-        results.append(CheckResult(
-            "WARN",
-            "fixture registration",
-            f"{conftest_path} not found; expected pytest_plugins registration for "
-            + ", ".join(f"test_workspace.tests.fixtures.{module}" for module in fixture_modules),
-        ))
-        return
-
-    registered = _load_pytest_plugins(conftest_path)
-    expected = {f"test_workspace.tests.fixtures.{module}" for module in fixture_modules}
-    missing = sorted(expected - registered)
-    if missing:
-        results.append(CheckResult(
-            "WARN",
-            "fixture registration",
-            "missing pytest_plugins entries: " + ", ".join(missing),
-        ))
-        return
-
-    results.append(CheckResult(
-        "OK",
-        "fixture registration",
-        f"{len(fixture_modules)} fixture module(s) registered",
-    ))
-
-
-def _discover_fixture_modules(fixture_dir: Path) -> list[str]:
-    if not fixture_dir.exists():
-        return []
-    modules: list[str] = []
-    for path in sorted(fixture_dir.glob("*.py")):
-        if path.name == "__init__.py":
-            continue
-        module = path.stem
-        text = path.read_text(encoding="utf-8")
-        if re.search(
-            rf"^\s*def\s+setup_{re.escape(module)}\s*\(",
-            text,
-            re.MULTILINE,
-        ):
-            modules.append(module)
-    return modules
-
-
-def _load_pytest_plugins(conftest_path: Path) -> set[str]:
-    try:
-        tree = ast.parse(conftest_path.read_text(encoding="utf-8"))
-    except SyntaxError:
-        return set()
-
-    plugins: set[str] = set()
-    for node in tree.body:
-        value: ast.AST | None = None
-        if isinstance(node, ast.Assign):
-            if any(
-                isinstance(target, ast.Name) and target.id == "pytest_plugins"
-                for target in node.targets
-            ):
-                value = node.value
-        elif isinstance(node, ast.AnnAssign):
-            if isinstance(node.target, ast.Name) and node.target.id == "pytest_plugins":
-                value = node.value
-        if value is None:
-            continue
-        try:
-            parsed = ast.literal_eval(value)
-        except (ValueError, TypeError):
-            continue
-        if isinstance(parsed, str):
-            plugins.add(parsed)
-        elif isinstance(parsed, (list, tuple, set)):
-            plugins.update(item for item in parsed if isinstance(item, str))
-    return plugins

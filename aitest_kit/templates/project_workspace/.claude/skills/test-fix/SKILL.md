@@ -2,8 +2,8 @@
 name: test-fix
 description: 修正测试用例错误，记录陷阱到 TEST_SPEC，并判断是否为 skill 级系统性问题——若是则定位并更新对应 skill
 when_to_use: 当用户发现测试用例有错误（评审发现或执行失败），需要修正用例并记录经验时
-argument-hint: <case_id> <error_description>
-arguments: [case_id, error_description]
+argument-hint: <case_id> <error_description> [suite_file]
+arguments: [case_id, error_description, suite_file]
 user-invocable: true
 allowed-tools: Read Glob Grep Write Edit
 effort: high
@@ -11,23 +11,24 @@ effort: high
 
 # 测试用例修正
 
-修正用例 `$case_id`，错误描述：`$error_description`。
+修正用例 `$case_id`，错误描述：`$error_description`。如果提供 `$suite_file`，优先只在该 suite 中定位；如果未提供且同一 case_id 匹配多处，停止并要求用户指定 suite。
 
 ## 前置：读取项目配置
 
-读 `aitest_config/config.yaml`，获取 `paths.*`（知识库、用例等目录路径；`paths.old_cases_dir` 如未配置则跳过旧用例搜索）。
+读 `aitest_config/aitest.yaml`，获取 `workspace.paths.*`、target/module registry 和 codegen 配置。
 
 ## 执行流程
 
 ### 第一步：定位用例
 
-1. 从 `$case_id` 中提取模块缩写（如 TC-MOD-013 → MOD）
+1. 从 `$case_id` 中提取模块缩写（如 TC-ROUTE-013 → ROUTE）
 2. 查 `{paths.test_spec}` 的模块缩写对照表，确定模块名
 3. 在以下位置搜索该用例：
-   - `{paths.cases_dir}/{模块名}/business.md`
-   - `{paths.cases_dir}/{模块名}/boundary.md`
-   - 如果配置了 `{paths.old_cases_dir}`，搜索其中相关旧用例；未配置时跳过
-4. 读取该用例的完整内容和上下文（前后用例、关联的知识库文档）
+   - `$suite_file` 指定的 suite 及其 `case_files`
+   - 已知 suite 目录或 `suite.yaml` 声明的 `case_files`
+   - `test_workspace/suites/` 中绑定该 module 的 suite
+4. 如果同一 `$case_id` 匹配多个 suite，停止并要求用户指定 `$suite_file`
+5. 读取该用例的完整内容和上下文（前后用例、关联的知识库文档）
 
 ### 第二步：分析错误
 

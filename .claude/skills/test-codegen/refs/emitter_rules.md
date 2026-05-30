@@ -2,9 +2,7 @@
 
 ## 文件结构
 
-- `business.md` -> `test_workspace/tests/generated/test_{module}_business.py`
-- `boundary.md` -> `test_workspace/tests/generated/test_{module}_boundary.py`
-- case suite 中的 `{case_file}.md` -> `test_workspace/tests/generated/test_{module}_{suite}_{case_file_stem}.py`
+- target/suite 中的 `{case_file}.md` -> `test_workspace/generated/{target}/test_{module}_{suite}_{case_file_stem}.py`
 
 ## 类和函数命名
 
@@ -16,11 +14,13 @@
 
 场景变量 -> `# SETUP:` 注释 + `setup_{module}(case_id="TC-XXX")` 调用。
 
-fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供。按当前项目的 generated import/profile 机制接线；只有项目采用 `pytest_plugins` 注册时，才需要维护 `conftest.py` 中的 `pytest_plugins` 列表。
+target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{module}.py` 提供，helper 由 `test_workspace/targets/{target}/helpers/` 提供。codegen 根据 `module.yaml.fixture.file/default_fixture` 自动注入 fixture import；target helper 文件存在时优先生成 target helper import。
 
 新增模块时需要：
-1. 创建 `test_workspace/tests/fixtures/{module}.py`
-2. 确认 `codegen_profile_{module}.md` 或 generated pytest 能引用到对应 fixture；如果项目使用 `pytest_plugins`，同步添加插件注册
+1. 创建 `test_workspace/targets/{target}/fixtures/{module}.py`
+2. 创建或更新 `test_workspace/targets/{target}/modules/{module}.yaml`
+3. 创建 `test_workspace/targets/{target}/profiles/profile_{module}.md`
+4. 确认 generated pytest 能引用到 target fixture/helper
 
 ## fixture 编写检查清单
 
@@ -30,15 +30,15 @@ fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供。按当前项目
 2. **可用 API** — fixture 需要调用的管理接口或数据准备接口
 3. **隔离策略** — 每条用例的数据如何隔离（tmp_path、唯一 user_id、teardown 恢复）
 4. **teardown** — 所有副作用都能恢复（配置、测试数据、外部依赖状态）
-5. **`_CASE_CONFIGS` 结构** — 参考 codegen_profile 的 setup 映射章节
-6. **服务地址** — 从项目专属环境变量读取（如 `DISCOUNT_SYSTEM_BASE_URL`），可兼容 `HTTP_BASE_URL`；不要硬编码端口或 URL
+5. **profile 映射** — case_flows/case_bodies/request_overrides 是否覆盖当前用例
+6. **服务地址** — 从项目专属环境变量读取（如 `SERVICE_BASE_URL` 或 `{TARGET}_BASE_URL`），可兼容 `HTTP_BASE_URL`；不要硬编码端口或 URL
 7. **环境缺失** — 可执行 API 测试缺少服务地址时用 `pytest.fail`，不要用 `pytest.skip` 掩盖环境未配置
 8. **HTTP 客户端** — 使用 `httpx` 时显式指定 `httpx.HTTPTransport()`，避免 macOS/CI 系统代理影响本地 HTTP 测试
 9. **黑盒边界** — fixture 不 import 待测系统内部模块，不读取目标项目源码/内部测试来推断业务规则
 
 ## 断言生成
 
-断言匹配优先级：profile assertion_rules > project_config builtin_assertion_rules > named_templates。
+断言匹配优先级：profile assertion_rules > `aitest.yaml.codegen.builtin_assertion_rules` > named_templates。
 
 通用断言模式（框架内置）：
 
@@ -51,7 +51,7 @@ fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供。按当前项目
 | `[manual]` 标记 | `# MANUAL CHECK: {原文}` |
 | 无法翻译 | `# UNPARSED ASSERTION: {原文}` |
 
-项目专属断言模式见 `aitest_config/project_config.yaml` 的 `builtin_assertion_rules`。
+项目专属断言模式见 `aitest_config/aitest.yaml` 的 `codegen.builtin_assertion_rules`。
 
 `round(..., 4)` -> `pytest.approx(..., abs=1e-4)`。`clamp(x)` -> `max(0, min(1, x))`。
 
@@ -85,8 +85,8 @@ fixture 由 `test_workspace/tests/fixtures/{module}.py` 提供。按当前项目
 
 测试调通后编写 module profile 或 suite profile：
 
-- module profile：`test_workspace/tests/fixtures/codegen_profile_{module}.md`，承载 L1 级稳定能力
-- suite profile：`{suite_dir}/codegen_profile_{suite}_suite.md`，只覆盖该 suite 的 case_id
+- module profile：`test_workspace/targets/{target}/profiles/profile_{module}.md`，承载 L1 级稳定能力
+- suite profile：`{suite_dir}/profile_{suite}_suite.md`，只覆盖该 suite 的 case_id
 
 profile 应包含：
 
@@ -98,13 +98,13 @@ profile 应包含：
 | **请求模板** | 固定字段、差异字段、helper 用法 |
 | **profile variables** | 本 suite/case 使用的账号、token、URL path、非法值等变量面板 |
 | **断言模式** | 断言 -> pytest 映射表 |
-| **setup 映射** | 场景变量 -> _CASE_CONFIGS 映射 |
+| **setup 映射** | 场景变量 -> fixture/case_flow 映射 |
 | **case_bodies / case_flows** | 复杂用例的自定义执行体，或已晋升的结构化多步骤流程 |
 | **已知阻塞项** | 无法自动化的用例及原因 |
 | **调试经验** | 模块特有排错经验 |
 | **emitter 规则** | YAML code block，模块特有断言规则 |
 
-参考已有模块的 codegen_profile 作为结构模板。
+参考已有模块的 profile 作为结构模板。
 
 ## 后续：emitter-build
 

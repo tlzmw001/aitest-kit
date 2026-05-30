@@ -34,7 +34,7 @@ python3 -m aitest_kit.cli --help
 
 ### 2. 初始化一个测试工作区
 
-推荐把 AITest workspace 放在目标项目下的独立目录：
+推荐创建一个独立的 AITest workspace。它可以放在目标项目下，也可以单独建一个测试仓库；对接多个服务时，更推荐单独维护测试项目。
 
 ```bash
 cd /path/to/your_project
@@ -67,10 +67,27 @@ doc-review -> knowledge-build -> test-design -> test-scaffold -> test-codegen ->
 如果你已经有 Markdown 用例和 profile，可以直接跑：
 
 ```bash
-aitest codegen --all --validate-profile
-aitest codegen --all
-aitest codegen --all --check
-python3 -m pytest test_workspace/tests/generated --collect-only -q
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
+```
+
+常用执行维度也可以直接走 registry：
+
+```bash
+aitest codegen --target <target> --module <module> --check
+aitest run --target <target> --module <module>
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --case-id TC-XXX-001
+aitest run --target <target>
+aitest run --all
+```
+
+多个 suite 组成一次回归任务时，用 task 文件编排：
+
+```bash
+aitest codegen --task-file test_workspace/tasks/<task>.yaml --check
+aitest run --task-file test_workspace/tasks/<task>.yaml
 ```
 
 ## 适合解决什么问题
@@ -128,16 +145,9 @@ docs/config_schema.md
 用例是人类可 review 的测试设计源文件：
 
 ```text
-test_workspace/cases/{module}/business.md
-test_workspace/cases/{module}/boundary.md
-```
-
-也可以按需求批次组织独立 suite：
-
-```text
-test_workspace/casesuites/{suite}/aitest_suite.yaml
-test_workspace/casesuites/{suite}/business.md
-test_workspace/casesuites/{suite}/codegen_profile_{suite}_suite.md
+test_workspace/suites/{target}/{suite}/suite.yaml
+test_workspace/suites/{target}/{suite}/business.md
+test_workspace/suites/{target}/{suite}/profile_{suite}_suite.md
 ```
 
 用例由 `/test-design` 生成或修订，人工 review 后进入 codegen。
@@ -147,8 +157,11 @@ test_workspace/casesuites/{suite}/codegen_profile_{suite}_suite.md
 fixture 是测试动作库，profile 是 codegen 配置。
 
 ```text
-test_workspace/tests/fixtures/{module}.py
-test_workspace/tests/fixtures/codegen_profile_{module}.md
+test_workspace/targets/{target}/target.yaml
+test_workspace/targets/{target}/modules/{module}.yaml
+test_workspace/targets/{target}/fixtures/{module}.py
+test_workspace/targets/{target}/helpers/
+test_workspace/targets/{target}/profiles/profile_{module}.md
 ```
 
 fixture 负责：
@@ -170,21 +183,51 @@ profile 负责：
 日常门禁顺序：
 
 ```bash
-aitest codegen --all --validate-profile
-aitest codegen --all --dump-ir
-aitest codegen --all
-aitest codegen --all --check
-python3 -m pytest test_workspace/tests/generated --collect-only -q
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --dump-ir
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
 ```
 
-常用单模块命令：
+codegen 模式说明：
+
+| 命令 | 是否需要 profile gate | 是否写 generated | 用途 |
+|---|---:|---:|---|
+| `--dry-run` | 否 | 否 | 只解析 Markdown，用于 scaffold/profile 完成前检查用例格式 |
+| `--validate-profile` | 自身就是校验 | 否 | 校验 profile JSON Schema、case_id 对齐、case_flow/case_body 语义 |
+| `--check` | 是 | 否 | 临时重新生成到 tmpdir，与已有 generated pytest 做 diff |
+| `--dump-ir` | 是 | 否 | 输出 suite 的 Case IR JSON，定位 strategy、fixture、request、assertion 来源 |
+| `--explain <TC-ID>` | 是 | 否 | 输出单条 case 的 IR 解释 |
+| `--health-report` | 是 | 否，除非加 `--write-report` | 输出 codegen 健康度、成熟度和待沉淀信号 |
+| `--analyze-promotion` | 是 | 否，除非加 `--write-report` | 分析当前 suite profile 中 `case_bodies` 的晋升机会 |
+| 无特殊参数 | 是 | 是 | 正式生成 pytest |
+
+诊断入口的粒度不同：`--dump-ir`、`--explain` 只支持 `--suite-file`，用于精确排查单个 suite 或单条 case；`--health-report`、`--analyze-promotion` 支持 `--suite-file`、`--target <target> --module <module>` 和 `--target <target>`，用于聚合查看模块或目标系统的生成健康度和晋升候选。`--suggest-promotion-patch` 仍只支持 `--suite-file`，避免批量生成难以 review 的 patch 草案。
+
+可以按不同粒度执行：
 
 ```bash
-aitest codegen <module> --validate-profile
-aitest codegen <module> --dump-ir
-aitest codegen <module> --explain TC-XXX-001
-aitest codegen <module>
-aitest codegen <module> --check
+# 一个 suite
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
+
+# 一个 suite 中的单个 case（run/report 支持；codegen 仍以 suite 为生成单位）
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --case-id TC-XXX-001
+
+# 一个模块下注册的 active suites
+aitest codegen --target <target> --module <module> --check
+aitest run --target <target> --module <module>
+aitest report --target <target> --module <module>
+
+# 一个 target 下全部 active suites
+aitest codegen --target <target> --check
+aitest run --target <target>
+aitest report --target <target>
+
+# registry 中全部 active suites
+aitest codegen --all --check
+aitest run --all
+aitest report --all
 ```
 
 从 workspace 外部执行时加：
@@ -193,11 +236,30 @@ aitest codegen <module> --check
 --workspace /path/to/aitest_workspace
 ```
 
+suite 可以直接通过 `--suite-file` 运行；只有注册到 `module.yaml.registered_suites`
+后，才会进入 `--module`、`--target`、`--all` 聚合入口。注册使用：
+
+```bash
+aitest registry register-suite \
+  --target <target> \
+  --module <module> \
+  --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+```
+
+如果要创建一个显式任务清单：
+
+```bash
+aitest task create \
+  --name nightly_gateway \
+  --suite-file test_workspace/suites/<target>/<suite1>/suite.yaml \
+  --suite-file test_workspace/suites/<target>/<suite2>/suite.yaml
+```
+
 ### 5. 执行和报告
 
 ```bash
-aitest run <module>
-aitest report
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest report --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 ```
 
 `aitest run` 会先检查 generated pytest 是否过期。如果 Markdown/profile 和 generated pytest 不一致，会生成 `BLOCKED_RUN` 报告并停止，避免执行旧代码。
@@ -205,9 +267,14 @@ aitest report
 报告输出：
 
 ```text
-test_workspace/reports/latest/
-test_workspace/reports/runs/{run_id}/
+test_workspace/reports/<target>/<module>/suites/<suite>/latest/
+test_workspace/reports/<target>/<module>/cases/<case_id>/latest/
+test_workspace/reports/<target>/<module>/module/latest/
+test_workspace/reports/<target>/target/latest/
+test_workspace/reports/tasks/<task_name>/latest/
 ```
+
+每个报告 bucket 都保留 `runs/{run_id}/` 历史记录和 `latest/` 最近一次结果。task、target、module 等聚合执行会把 suite 明细放到同一个 run_id 下的 `units/` 目录，避免一次命令产生多个难以关联的顶层 run_id。
 
 核心文件：
 
@@ -223,17 +290,23 @@ test_workspace/reports/runs/{run_id}/
 | `aitest upgrade --workspace <dir> --check` | 检查已初始化 workspace 是否需要同步新版模板 |
 | `aitest upgrade --workspace <dir> --apply` | 安全应用可自动合并的模板升级 |
 | `aitest doctor` | 检查 workspace、profile、generated、collect 和环境变量提示 |
-| `aitest codegen <module>` | 生成单个模块 pytest |
-| `aitest codegen --all` | 生成所有模块 pytest |
-| `aitest codegen --cases <suite_dir>` | 生成独立 case suite pytest |
-| `aitest codegen --all --check` | 检查 generated 是否过期 |
-| `aitest run <module>` | 执行 generated pytest 并生成结构化报告 |
-| `aitest report` | 从已有 `result.json` 重新渲染报告 |
+| `aitest registry register-suite --target <target> --module <module> --suite-file <suite.yaml>` | 把 suite 安全注册到 module 聚合入口 |
+| `aitest task create --name <task> --suite-file <suite.yaml>...` | 从明确 suite 清单创建 task manifest |
+| `aitest codegen --suite-file <suite.yaml>` | 生成 target-aware case suite pytest |
+| `aitest codegen --task-file <task.yaml>` | 按 task 中的 suite 列表生成或检查 pytest |
+| `aitest codegen --target <target> [--module <module>]` | 按 target 或 target/module registry 生成或检查 pytest |
+| `aitest codegen --all` | 遍历 registry 中全部 active suites |
+| `aitest run --suite-file <suite.yaml>` | 执行一个 suite 并生成结构化报告 |
+| `aitest run --suite-file <suite.yaml> --case-id <TC-ID>` | 只执行一个 suite 中指定 case |
+| `aitest run --task-file <task.yaml>` | 执行一个 task 并生成 task 级汇总报告 |
+| `aitest run --target <target> [--module <module>]` | 执行 target 或 target/module 下注册的 active suites |
+| `aitest run --all` | 执行 registry 中全部 active suites |
+| `aitest report --suite-file/--task-file/--target/--all ...` | 从已有 `result.json` 重新渲染对应维度报告 |
 
 运行真实接口测试时，可以通过 env 文件提供服务地址、账号、token 和 API key：
 
 ```bash
-AITEST_ENV_FILE=/tmp/your-system-test.env aitest run <module>
+AITEST_ENV_FILE=/tmp/your-system-test.env aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 ```
 
 `aitest run` 会把 env 文件注入 pytest 子进程；报告只记录变量名，不记录变量值。真实 shell 环境变量优先于 env 文件。
@@ -284,18 +357,14 @@ case_bodies -> case_flows -> assertion_rules / 默认模板
 aitest_workspace/
 ├── docs/                         # 公开文档和迁移输入
 ├── aitest_config/
-│   ├── config.yaml               # 项目路径、服务、协议等配置
-│   ├── project_config.yaml       # codegen 项目配置
+│   ├── aitest.yaml               # 推荐统一入口：workspace 路径 + codegen 默认规则
 │   ├── schemas/                  # profile JSON Schema
 │   └── refs/                     # 用例格式、断言策略等参考
 ├── test_workspace/
 │   ├── knowledge/                # L0/L1/L2 + TEST_SPEC
-│   ├── cases/                    # 模块级 Markdown 用例
-│   ├── casesuites/               # 可选：按需求/迭代组织的 suite
-│   ├── tests/
-│   │   ├── fixtures/             # fixture + codegen profile
-│   │   ├── generated/            # 生成的 pytest，视为编译产物
-│   │   └── helpers/              # HTTP/gRPC/Redis helpers
+│   ├── suites/                   # 按 target/suite 组织 Markdown 用例
+│   ├── targets/                  # target/module fixture、helper、profile
+│   ├── generated/                # 按 target 分桶的 generated pytest
 │   ├── reports/                  # 运行报告
 │   └── results/                  # 已确认待测系统 bug 记录
 ├── .codex/skills/
@@ -340,8 +409,10 @@ cd aitest-kit
 python3 -m pip install -e ".[dev,server]"
 
 python3 -m pytest tests -q
-python3 -m aitest_kit.cli codegen --all --validate-profile
-python3 -m aitest_kit.cli codegen --all --check
+python3 -m aitest_kit.cli codegen --suite-file test_workspace/suites/coupon_system/calibration_smoke/suite.yaml --validate-profile
+python3 -m aitest_kit.cli codegen --suite-file test_workspace/suites/coupon_system/calibration_smoke/suite.yaml --check
+python3 -m aitest_kit.cli codegen --target coupon_system --module calibration --check
+python3 -m aitest_kit.cli run --target coupon_system --module calibration -- --collect-only -q
 python3 -m aitest_kit.cli doctor
 ```
 

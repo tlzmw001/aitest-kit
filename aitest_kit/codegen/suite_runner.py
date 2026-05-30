@@ -31,17 +31,20 @@ from aitest_kit.codegen.profile_validator import (
     write_profile_validation_report,
 )
 from aitest_kit.codegen.project_config import ProjectConfig
-from aitest_kit.codegen.suite import SuiteContext, load_suite_context, parse_suite_case_file
-
-
-def _suite_output_file_type(context: SuiteContext, case_path: Path) -> str:
-    return f"{context.suite}_{case_path.stem}"
+from aitest_kit.codegen.suite import (
+    SuiteContext,
+    load_suite_context_for_paths,
+    parse_suite_case_file,
+    resolve_suite_runtime_paths,
+    suite_generated_path,
+    suite_output_file_type,
+)
+from aitest_kit.codegen.suite_target import project_config_for_suite_target
 
 
 def run_suite_codegen(
     cases_path: str,
     *,
-    module_override: str | None,
     paths: Any,
     project: ProjectConfig,
     dry_run: bool,
@@ -56,51 +59,57 @@ def run_suite_codegen(
     report_dir: str | None,
 ) -> int:
     """Run codegen in case-suite mode."""
+    context = load_suite_context_for_paths(
+        cases_path,
+        profile_dir=paths.profile_dir,
+    )
+    runtime_paths = resolve_suite_runtime_paths(
+        context,
+        generated_dir=paths.generated_dir,
+        reports_dir=paths.reports_dir,
+        profile_dir=paths.profile_dir,
+    )
+    suite_project = project_config_for_suite_target(context, project)
     if validate_profile:
         report = validate_profile_suite(
             cases_path,
-            module=module_override,
-            profile_dir=paths.profile_dir,
-            project=project,
+            profile_dir=runtime_paths.profile_dir,
+            project=suite_project,
         )
         _print_suite_validation(report)
         if write_report:
-            out_dir = Path(report_dir) if report_dir else paths.reports_dir / "codegen" / "latest"
+            out_dir = Path(report_dir) if report_dir else runtime_paths.reports_dir / "codegen" / "latest"
             written = write_profile_validation_report(report, out_dir)
             click.echo("Profile validation artifacts written:")
             for path in written.values():
                 click.echo(f"- {path}")
         return 1 if report.errors else 0
 
-    gate_result = _suite_profile_gate(cases_path, module_override, paths, project)
+    if dry_run:
+        return _dry_run_suite(context)
+
+    gate_result = _suite_profile_gate(cases_path, runtime_paths, suite_project)
     if gate_result:
         return gate_result
 
-    context = load_suite_context(
-        cases_path,
-        module_override=module_override,
-        profile_dir=paths.profile_dir,
-    )
     if check:
-        return _check_suite_consistency(context, paths, project)
+        return _check_suite_consistency(context, runtime_paths, suite_project)
     if dump_ir:
-        return _dump_suite_ir(context, project)
+        return _dump_suite_ir(context, suite_project)
     if explain:
-        return _explain_suite_case(context, explain, project)
+        return _explain_suite_case(context, explain, suite_project)
     if health_report:
-        return _suite_health_report(context, paths, project, write_report, report_dir)
+        return _suite_health_report(context, runtime_paths, suite_project, write_report, report_dir)
     if analyze_promotion or suggest_promotion_patch:
         return _analyze_suite_promotion(
             context,
-            paths,
+            runtime_paths,
             write_report=write_report or suggest_promotion_patch,
             write_patch=suggest_promotion_patch,
             report_dir=report_dir,
             echo_yaml=analyze_promotion,
         )
-    if dry_run:
-        return _dry_run_suite(context)
-    return _generate_suite(context, paths, project)
+    return _generate_suite(context, runtime_paths, suite_project)
 
 
 def _print_suite_validation(report: Any) -> None:
@@ -123,13 +132,11 @@ def _print_suite_validation(report: Any) -> None:
 
 def _suite_profile_gate(
     cases_path: str,
-    module_override: str | None,
     paths: Any,
     project: ProjectConfig,
 ) -> int:
     report = validate_profile_suite(
         cases_path,
-        module=module_override,
         profile_dir=paths.profile_dir,
         project=project,
     )
@@ -143,7 +150,7 @@ def _suite_profile_gate(
     click.echo(f"\nSuite: {report.suite}")
     for diag in report.errors:
         click.echo(f"  {diag.format()}")
-    click.echo("\nRun `aitest codegen --cases <dir> --validate-profile --write-report` for artifacts.")
+    click.echo("\nRun `aitest codegen --suite-file <suite.yaml> --validate-profile --write-report` for artifacts.")
     return 1
 
 
@@ -303,7 +310,7 @@ def _generate_suite(context: SuiteContext, paths: Any, project: ProjectConfig) -
             output_dir=paths.generated_dir,
             fixture_dir=paths.profile_dir,
             project=project,
-            output_file_type=_suite_output_file_type(context, path),
+            output_file_type=suite_output_file_type(context, path),
         )
         click.echo(f"\n  {result.output_path}")
         if result.diagnostics:
@@ -340,7 +347,7 @@ def _check_suite_consistency(
     stale_count = 0
     blocked_count = 0
     target_files = {
-        f"test_{context.module}_{_suite_output_file_type(context, path)}.py": path
+        suite_generated_path(paths.generated_dir, context, path).name: path
         for path in context.case_files
     }
     for fname, source_path in sorted(target_files.items()):
@@ -360,7 +367,7 @@ def _check_suite_consistency(
                 output_dir=tmp_path,
                 fixture_dir=paths.profile_dir,
                 project=project,
-                output_file_type=_suite_output_file_type(context, path),
+                output_file_type=suite_output_file_type(context, path),
             )
             if result.diagnostics:
                 click.echo(f"[BLOCKED] {Path(result.output_path).name}")
@@ -399,7 +406,8 @@ def _check_suite_consistency(
     if stale_count:
         if blocked_count:
             click.echo(f"\n{blocked_count} file(s) blocked by diagnostics.")
-        click.echo(f"\n{stale_count} file(s) stale. Run `aitest codegen --cases {context.suite_dir}` to update.")
+        manifest = context.manifest_path or (context.suite_dir / "suite.yaml")
+        click.echo(f"\n{stale_count} file(s) stale. Run `aitest codegen --suite-file {manifest}` to update.")
         return 1
     click.echo("All generated files are up to date.")
     return 0

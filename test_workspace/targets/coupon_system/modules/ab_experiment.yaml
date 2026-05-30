@@ -1,0 +1,19 @@
+target: coupon_system
+module: ab_experiment
+module_type: standard_recommend
+fixture:
+  file: ab_experiment.py
+  default_fixture: setup_ab_experiment
+profile:
+  file: profile_ab_experiment.md
+helpers:
+- test_workspace/targets/coupon_system/helpers/grpc_ops.py
+- test_workspace/targets/coupon_system/helpers/http.py
+- test_workspace/targets/coupon_system/helpers/redis_ops.py
+knowledge_refs:
+  l1:
+  - test_workspace/knowledge/L1/ab_experiment.md
+registered_suites:
+- suite: ab_experiment_smoke
+  manifest: test_workspace/suites/coupon_system/ab_experiment_smoke/suite.yaml
+  status: active

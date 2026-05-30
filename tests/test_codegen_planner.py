@@ -24,7 +24,7 @@ def _parse_result(
 ) -> ParseResult:
     return ParseResult(
         module="demo",
-        source_file="test_workspace/cases/demo/business.md",
+        source_file="test_workspace/suites/demo_target/demo_suite/business.md",
         shared_config=SharedConfig(
             base_request_http=base_request_http or {"user_id": "", "reqId": ""},
             common_assertions=common_assertions or [],
@@ -50,7 +50,7 @@ class TestStrategyPriority:
     """Verify strategy priority: skipped > custom_case_body > structured_case_flow > manual > default_grpc > default_http."""
 
     def test_skipped_overrides_everything(self, tmp_path):
-        profile_path = tmp_path / "codegen_profile_demo.md"
+        profile_path = tmp_path / "profile_demo_suite.md"
         profile_path.write_text(
             """```yaml
 case_bodies:
@@ -79,7 +79,7 @@ case_bodies:
         assert case_ir.skip_reason == "[!可行性存疑: 服务未部署]"
 
     def test_case_body_overrides_case_flow(self, tmp_path):
-        profile_path = tmp_path / "codegen_profile_demo.md"
+        profile_path = tmp_path / "profile_demo_suite.md"
         profile_path.write_text(
             """```yaml
 case_bodies:
@@ -107,7 +107,7 @@ case_bodies:
         assert case_ir.strategy == "custom_case_body"
 
     def test_case_flow_overrides_manual_and_grpc(self, tmp_path):
-        profile_path = tmp_path / "codegen_profile_demo.md"
+        profile_path = tmp_path / "profile_demo_suite.md"
         profile_path.write_text(
             """```yaml
 case_flows:
@@ -197,7 +197,7 @@ case_flows:
 class TestProtocolDetection:
 
     def test_custom_case_body_protocol_is_custom(self, tmp_path):
-        profile_path = tmp_path / "codegen_profile_demo.md"
+        profile_path = tmp_path / "profile_demo_suite.md"
         profile_path.write_text(
             """```yaml
 case_bodies:
@@ -217,7 +217,7 @@ case_bodies:
         assert _case(file_ir, "TC-DEMO-001").protocol == "custom"
 
     def test_structured_case_flow_protocol_is_flow(self, tmp_path):
-        profile_path = tmp_path / "codegen_profile_demo.md"
+        profile_path = tmp_path / "profile_demo_suite.md"
         profile_path.write_text(
             """```yaml
 case_flows:
@@ -278,7 +278,7 @@ class TestFixtureSelection:
         assert _case(file_ir, "TC-DEMO-001").fixtures == ["grpc_target", "setup_demo"]
 
     def test_case_flow_uses_flow_fixture(self, tmp_path):
-        profile_path = tmp_path / "codegen_profile_demo.md"
+        profile_path = tmp_path / "profile_demo_suite.md"
         profile_path.write_text(
             """```yaml
 case_flows:
@@ -302,7 +302,7 @@ case_flows:
         assert _case(file_ir, "TC-DEMO-001").fixtures == ["custom_fixture"]
 
     def test_case_body_uses_case_fixtures_override(self, tmp_path):
-        profile_path = tmp_path / "codegen_profile_demo.md"
+        profile_path = tmp_path / "profile_demo_suite.md"
         profile_path.write_text(
             """```yaml
 case_bodies:
@@ -352,7 +352,7 @@ class TestSourceTrace:
         assert case_ir.source_trace["strategy"].source == "default"
 
     def test_case_body_strategy_trace(self, tmp_path):
-        profile_path = tmp_path / "codegen_profile_demo.md"
+        profile_path = tmp_path / "profile_demo_suite.md"
         profile_path.write_text(
             """```yaml
 case_bodies:
@@ -374,7 +374,7 @@ case_bodies:
         assert "profile.case_bodies" in case_ir.source_trace["strategy"].source
 
     def test_request_overrides_trace(self, tmp_path):
-        profile_path = tmp_path / "codegen_profile_demo.md"
+        profile_path = tmp_path / "profile_demo_suite.md"
         profile_path.write_text(
             """```yaml
 request_overrides:
@@ -412,7 +412,7 @@ class TestDiagnostics:
     def test_parser_errors_propagate_to_file_ir(self):
         parse_result = ParseResult(
             module="demo",
-            source_file="test_workspace/cases/demo/business.md",
+            source_file="test_workspace/suites/demo_target/demo_suite/business.md",
             shared_config=SharedConfig(),
             cases=[],
             errors=["E001: invalid JSON in request body"],
@@ -424,7 +424,7 @@ class TestDiagnostics:
         tc = TestCase(id="TC-DEMO-001", title="no request", priority="P1", section="diag")
         parse_result = ParseResult(
             module="demo",
-            source_file="test_workspace/cases/demo/business.md",
+            source_file="test_workspace/suites/demo_target/demo_suite/business.md",
             shared_config=SharedConfig(base_request_http=None),
             cases=[tc],
         )
@@ -433,7 +433,7 @@ class TestDiagnostics:
         assert any(d.code == "E202" for d in case_ir.diagnostics)
 
     def test_case_flow_covered_case_no_e202(self, tmp_path):
-        profile_path = tmp_path / "codegen_profile_demo.md"
+        profile_path = tmp_path / "profile_demo_suite.md"
         profile_path.write_text(
             """```yaml
 case_flows:
@@ -450,7 +450,7 @@ case_flows:
         tc = TestCase(id="TC-DEMO-001", title="flow", priority="P1", section="diag")
         parse_result = ParseResult(
             module="demo",
-            source_file="test_workspace/cases/demo/business.md",
+            source_file="test_workspace/suites/demo_target/demo_suite/business.md",
             shared_config=SharedConfig(base_request_http=None),
             cases=[tc],
         )
@@ -483,7 +483,7 @@ class TestRequestIR:
         assert case_ir.request.overrides == {}
 
     def test_request_overrides_merge(self, tmp_path):
-        profile_path = tmp_path / "codegen_profile_demo.md"
+        profile_path = tmp_path / "profile_demo_suite.md"
         profile_path.write_text(
             """```yaml
 request_overrides:
@@ -509,7 +509,7 @@ request_overrides:
         }
 
     def test_no_request_for_case_body(self, tmp_path):
-        profile_path = tmp_path / "codegen_profile_demo.md"
+        profile_path = tmp_path / "profile_demo_suite.md"
         profile_path.write_text(
             """```yaml
 case_bodies:
@@ -529,7 +529,7 @@ case_bodies:
         assert _case(file_ir, "TC-DEMO-001").request is None
 
     def test_no_request_for_case_flow(self, tmp_path):
-        profile_path = tmp_path / "codegen_profile_demo.md"
+        profile_path = tmp_path / "profile_demo_suite.md"
         profile_path.write_text(
             """```yaml
 case_flows:

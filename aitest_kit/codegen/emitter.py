@@ -10,14 +10,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from aitest_kit.codegen.ir_renderer import EmitContext, render_file_from_ir
-from aitest_kit.codegen.parser import ParseResult, parse_case_file
+from aitest_kit.codegen.module_type import (
+    resolve_module_type,
+    validate_module_type_requirements,
+)
+from aitest_kit.codegen.parser import ParseResult
 from aitest_kit.codegen.planner import build_file_ir
 from aitest_kit.codegen.profile import (
     load_profile_case_bodies,
     load_profile_case_fixtures,
     load_profile_case_flows,
     load_profile_extra_imports,
-    load_profile_module_type,
+    load_profile_yaml,
     load_profile_request_overrides,
     load_profile_rules,
     RuntimeProfile,
@@ -42,34 +46,12 @@ class EmitResult:
     diagnostics: list[str] = field(default_factory=list)
 
 
-def _module_type_diagnostics(
-    module_type: str | None,
-    project: ProjectConfig,
-    case_bodies: dict[str, list[str]],
-    case_flows: dict[str, dict],
-) -> list[str]:
-    if not module_type:
-        return []
-
-    module_type_cfg = project.module_types.get(module_type)
-    if module_type_cfg is None:
-        return [f"E003: codegen_profile 声明了未知 module_type={module_type}"]
-
-    diagnostics: list[str] = []
-    for required in module_type_cfg.get("requires", []):
-        if required == "case_bodies" and not (case_bodies or case_flows):
-            diagnostics.append(
-                f"E004: module_type={module_type} 要求 codegen_profile 提供 case_bodies 或 case_flows"
-            )
-    return diagnostics
-
-
 def emit_file(
     parse_result: ParseResult,
     file_type: str,
     profile_path: str | Path | None = None,
-    output_dir: str | Path = "test_workspace/tests/generated",
-    fixture_dir: str | Path = "test_workspace/tests/fixtures",
+    output_dir: str | Path = "test_workspace/generated",
+    fixture_dir: str | Path = "test_workspace/targets",
     project: ProjectConfig | None = None,
     output_file_type: str | None = None,
 ) -> EmitResult:
@@ -78,7 +60,7 @@ def emit_file(
     Args:
         parse_result: Output from parser.parse_case_file()
         file_type: "business" or "boundary"
-        profile_path: Path to codegen_profile_{module}.md (optional)
+        profile_path: Path to the runtime profile (optional)
         output_dir: Directory for generated .py files
     """
     module = parse_result.module
@@ -119,7 +101,7 @@ def emit_file(
     case_fixtures = load_profile_case_fixtures(profile_path) if profile_path else {}
     case_bodies = load_profile_case_bodies(profile_path) if profile_path else {}
     case_flows = load_profile_case_flows(profile_path) if profile_path else {}
-    module_type = load_profile_module_type(profile_path) if profile_path else None
+    profile_data = load_profile_yaml(profile_path) if profile_path else {}
     proj = project or DEFAULT_PROJECT
 
     ctx = EmitContext(
@@ -147,7 +129,17 @@ def emit_file(
             diagnostics=list(parse_result.errors),
         )
 
-    module_type_errors = _module_type_diagnostics(module_type, proj, case_bodies, case_flows)
+    module_type_resolution = resolve_module_type(module, profile_data, proj)
+    module_type_errors = [
+        f"{diag.code}: {diag.message}"
+        for diag in validate_module_type_requirements(
+            module_type_resolution,
+            proj,
+            profile_data,
+            case_bodies,
+            case_flows,
+        )
+    ]
     if module_type_errors:
         return EmitResult(
             output_path=str(output_path),
@@ -217,43 +209,6 @@ def emit_file(
         manual_count=rendered.manual_count,
     )
 
-
-# ---------------------------------------------------------------------------
-# CLI entry
-# ---------------------------------------------------------------------------
-
-def emit_module(
-    module: str,
-    cases_dir: str | Path = "test_workspace/cases",
-    output_dir: str | Path = "test_workspace/tests/generated",
-    profile_dir: str | Path = "test_workspace/tests/fixtures",
-    project: ProjectConfig | None = None,
-) -> list[EmitResult]:
-    """Emit all files for a module. Returns list of EmitResult."""
-    cases_dir = Path(cases_dir)
-    profile_path = Path(profile_dir) / f"codegen_profile_{module}.md"
-    if not profile_path.exists():
-        profile_path = None
-
-    results = []
-    for file_type in ("business", "boundary"):
-        md_path = cases_dir / module / f"{file_type}.md"
-        if not md_path.exists():
-            continue
-        parse_result = parse_case_file(str(md_path))
-        result = emit_file(
-            parse_result,
-            file_type,
-            profile_path=profile_path,
-            output_dir=output_dir,
-            fixture_dir=profile_dir,
-            project=project,
-        )
-        results.append(result)
-
-    return results
-
-
 def _generated_source_path(output_path: Path) -> str | None:
     try:
         first_line = output_path.read_text(encoding="utf-8").splitlines()[0]
@@ -263,29 +218,3 @@ def _generated_source_path(output_path: Path) -> str | None:
     if not first_line.startswith(prefix):
         return None
     return first_line[len(prefix):]
-
-
-if __name__ == "__main__":
-    import sys
-    if len(sys.argv) < 2:
-        print("Usage: python -m aitest_kit.codegen.emitter <module>")
-        sys.exit(1)
-
-    module = sys.argv[1]
-    results = emit_module(module)
-    for r in results:
-        print(f"\n{r.output_path}")
-        print(f"  Cases: {r.case_count}")
-        print(f"  Manual: {r.manual_count}")
-        print(f"  Skipped: {len(r.skipped)}")
-        if r.skipped:
-            for tc_id, reason in r.skipped:
-                print(f"    {tc_id}: {reason}")
-        print(f"  Unparsed: {len(r.unparsed)}")
-        if r.unparsed:
-            for tc_id, text in r.unparsed:
-                print(f"    {tc_id}: {text}")
-        if r.diagnostics:
-            print(f"  Diagnostics: {len(r.diagnostics)}")
-            for diag in r.diagnostics:
-                print(f"    {diag}")

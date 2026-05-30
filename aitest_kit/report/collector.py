@@ -14,7 +14,7 @@ from aitest_kit.report.classifier import classify_failure
 from aitest_kit.report.sanitizer import sanitize_message, traceback_summary
 
 
-def project_config_version(path: str | Path = "aitest_config/project_config.yaml") -> str:
+def project_config_version(path: str | Path = "aitest_config/aitest.yaml") -> str:
     config_path = Path(path)
     if not config_path.exists():
         return "missing"
@@ -34,6 +34,7 @@ def collect_result(
     codegen_check: dict[str, str] | None = None,
     environment: dict[str, Any] | None = None,
     status: str = "COMPLETED",
+    run_scope: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the Phase 3 result.json payload."""
     files = [Path(p) for p in generated_files]
@@ -54,7 +55,7 @@ def collect_result(
         "duration_seconds": duration_seconds,
     })
 
-    return {
+    result = {
         "run_id": run_id,
         "status": status,
         "timestamp": timestamp or datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -69,6 +70,36 @@ def collect_result(
         "cases": cases,
         "codegen_skipped_cases": codegen_skipped_cases,
     }
+    result.update(_run_scope_fields(run_scope))
+    return result
+
+
+def generated_nodeids_for_case_ids(
+    generated_files: list[str | Path],
+    case_ids: list[str],
+) -> tuple[list[str], list[str]]:
+    """Return exact pytest nodeids for requested tc_id values in generated files."""
+    requested = [case_id for case_id in case_ids if case_id]
+    if not requested:
+        return [], []
+
+    meta = _extract_generated_metadata([Path(path) for path in generated_files])
+    by_tc_id: dict[str, list[str]] = defaultdict(list)
+    for item in meta["by_full_key"].values():
+        tc_id = str(item.get("tc_id") or "")
+        nodeid = str(item.get("nodeid") or "")
+        if tc_id and nodeid:
+            by_tc_id[tc_id].append(nodeid)
+
+    nodeids: list[str] = []
+    missing: list[str] = []
+    for case_id in requested:
+        matches = sorted(by_tc_id.get(case_id, []))
+        if not matches:
+            missing.append(case_id)
+            continue
+        nodeids.extend(matches)
+    return nodeids, missing
 
 
 def blocked_result(
@@ -80,6 +111,7 @@ def blocked_result(
     manual_policy: str = "excluded",
     blocked_reason: str = "codegen_check",
     environment: dict[str, Any] | None = None,
+    run_scope: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     result = collect_result(
         junit_path=None,
@@ -90,9 +122,25 @@ def blocked_result(
         codegen_check=codegen_check,
         environment=environment,
         status="BLOCKED_RUN",
+        run_scope=run_scope,
     )
     result["blocked_reason"] = blocked_reason
     return result
+
+
+def _run_scope_fields(run_scope: dict[str, Any] | None) -> dict[str, Any]:
+    if not run_scope:
+        return {}
+    normalized = dict(run_scope)
+    fields: dict[str, Any] = {"run_scope": normalized}
+    for key in ("target", "module", "suite", "suite_file", "suite_dir", "task_file", "task"):
+        if key in normalized:
+            fields[key] = str(normalized.get(key) or "")
+    if "case_files" in normalized:
+        fields["case_files"] = [str(item) for item in normalized.get("case_files") or []]
+    if "case_ids" in normalized:
+        fields["case_ids"] = [str(item) for item in normalized.get("case_ids") or []]
+    return fields
 
 
 def _extract_generated_metadata(files: list[Path]) -> dict[str, Any]:
