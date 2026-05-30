@@ -4,7 +4,6 @@ suite: ab_service_smoke
 case_files:
 - business.md
 - boundary.md
-profile: profile_ab_service_smoke_suite.md
 knowledge_refs:
   l1:
   - test_workspace/knowledge/L1/ab_service.md

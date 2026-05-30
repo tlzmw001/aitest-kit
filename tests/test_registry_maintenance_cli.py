@@ -239,8 +239,6 @@ module_type: multi_endpoint
 fixture:
   file: demo_module.py
   default_fixture: setup_demo_module
-profile:
-  file: profile_demo_module.md
 registered_suites: []
 """,
         encoding="utf-8",
@@ -272,7 +270,6 @@ module: demo_module
 suite: {suite_name}
 case_files:
   - business.md
-profile: profile_{suite_name}_suite.md
 """,
         encoding="utf-8",
     )

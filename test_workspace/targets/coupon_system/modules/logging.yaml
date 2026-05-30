@@ -4,8 +4,6 @@ module_type: subprocess_capture
 fixture:
   file: logging.py
   default_fixture: setup_logging
-profile:
-  file: profile_logging.md
 helpers:
 - test_workspace/targets/coupon_system/helpers/grpc_ops.py
 - test_workspace/targets/coupon_system/helpers/http.py

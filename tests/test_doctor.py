@@ -86,7 +86,6 @@ module: demo
 suite: demo_smoke
 case_files:
   - smoke.md
-profile: profile_demo_smoke_suite.md
 """,
         encoding="utf-8",
     )
@@ -169,8 +168,6 @@ module_type: standard_http
 fixture:
   file: demo.py
   default_fixture: setup_demo
-profile:
-  file: profile_demo.md
 registered_suites:
   - suite: demo_smoke
     manifest: test_workspace/suites/demo_target/demo_smoke/suite.yaml
@@ -198,7 +195,6 @@ module: demo
 suite: demo_smoke
 case_files:
   - business.md
-profile: profile_demo_smoke_suite.md
 """,
         encoding="utf-8",
     )

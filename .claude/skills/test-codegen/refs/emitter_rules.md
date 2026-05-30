@@ -6,13 +6,23 @@
 
 ## 类和函数命名
 
-- 类名：`Test{Module}Business`（模块名首字母大写 + Business/Boundary）
+- 类名由 `module_class_name(module, file_type)` 生成。
+- suite 模式下 `file_type = {suite}_{case_file_stem}`，因此类名会包含 module、suite 和 case file stem。
+- 示例：`gateway_api` + `quota_billing_v2` + `quota_billing_business.md` -> `TestGatewayApiQuotaBillingV2QuotaBillingBusiness`。
+- 旧模块直连模式类名：`Test{Module}Business` 或 `Test{Module}Boundary`，仅用于兼容说明。
 - 函数名：`test_tc_mod_001`（TC ID 小写，连字符转下划线）
 - docstring：`"""TC-MOD-001：{title}"""`
 
 ## setup 处理
 
-场景变量 -> `# SETUP:` 注释 + `setup_{module}(case_id="TC-XXX")` 调用。
+setup 不再默认等价于 `setup_{module}(case_id=...)`。当前优先级：
+
+1. suite/module profile 中的 `case_flows` / `case_bodies`
+2. `default_fixture` / `default_object` / `default_case_setup`
+3. module registry 的 `fixture.file` / `fixture.default_fixture`
+4. 对无法结构化执行的场景变量，保留 `# SETUP:` 注释或转入 profile 映射
+
+只有项目 fixture 明确提供 `setup_{module}` 且 profile 显式使用时，才生成对应调用。
 
 target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{module}.py` 提供，helper 由 `test_workspace/targets/{target}/helpers/` 提供。codegen 根据 `module.yaml.fixture.file/default_fixture` 自动注入 fixture import；target helper 文件存在时优先生成 target helper import。
 

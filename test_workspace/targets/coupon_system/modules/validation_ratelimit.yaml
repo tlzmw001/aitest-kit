@@ -4,8 +4,6 @@ module_type: isolated_service
 fixture:
   file: validation_ratelimit.py
   default_fixture: setup_validation_ratelimit
-profile:
-  file: profile_validation_ratelimit.md
 helpers:
 - test_workspace/targets/coupon_system/helpers/grpc_ops.py
 - test_workspace/targets/coupon_system/helpers/http.py

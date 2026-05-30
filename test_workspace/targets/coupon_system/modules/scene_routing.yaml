@@ -4,8 +4,6 @@ module_type: standard_recommend
 fixture:
   file: scene_routing.py
   default_fixture: setup_scene_routing
-profile:
-  file: profile_scene_routing.md
 helpers:
 - test_workspace/targets/coupon_system/helpers/grpc_ops.py
 - test_workspace/targets/coupon_system/helpers/http.py

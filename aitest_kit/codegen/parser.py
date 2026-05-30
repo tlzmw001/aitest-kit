@@ -1,6 +1,6 @@
 """Deterministic Markdown test case parser.
 
-Extracts SharedConfig + TestCase list from business.md / boundary.md files.
+Extracts SharedConfig + TestCase list from Markdown case files listed by a suite.
 """
 from __future__ import annotations
 
@@ -127,7 +127,7 @@ def _format_json_error(field_name: str, message: str | None) -> str:
     detail = message or "未知 JSON 解析错误"
     return (
         f"E001: {field_name}不是合法 JSON — {detail}。修复：将模板占位符替换为合法 JSON 默认值，"
-        "case 级差异放到 codegen_profile 的 request_overrides"
+        "默认请求差异放到 suite profile 的 request_overrides；多步骤流程放到 case_flows"
     )
 
 

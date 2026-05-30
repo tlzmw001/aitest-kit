@@ -54,7 +54,7 @@ class TestAbExperimentBoundary:
     # ── 二、白名单容错 ──
 
     @pytest.mark.manual
-    def test_tc_ab_012(self, http_base_url, setup_ab_experiment):
+    def test_tc_ab_012(self):
         """TC-AB-012：白名单 strategy_id 无效时降级 hash 分流"""
         __tc_meta__ = {
             "tc_id": "TC-AB-012",
@@ -68,11 +68,9 @@ class TestAbExperimentBoundary:
         # SETUP: 协议：HTTP
         # SETUP: 接口调用：PUT /api/v1/ab/whitelist/u_ab_invalid_white，body 为 {"strategy_map":{"coarse_rank_exp_game":"not_exists_strategy"}}
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_ab_invalid_white"、reqId="req-ab-012"
-        setup_ab_experiment(case_id="TC-AB-012")
-
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_ab_012", "reqId": "req_ab_012"}))
         # MANUAL CHECK: exp["coarse_rank_exp_game"] != "not_exists_strategy"
         # MANUAL CHECK: AB 服务日志包含 ab_sdk whitelist invalid
+        pytest.skip("manual check required")
 
 
 # TODO: setup_ab_experiment fixture 需要手写实现（→ tests/fixtures/ab_experiment.py）

@@ -4,8 +4,6 @@ module_type: multi_endpoint
 fixture:
   file: discount_policy.py
   default_fixture: setup_discount_policy
-profile:
-  file: profile_discount_policy.md
 helpers: []
 knowledge_refs:
   l1:

@@ -12,7 +12,7 @@ test_workspace/targets/{target}/target.yaml
   一个目标系统的默认目录、文档引用、知识库引用
 
 test_workspace/targets/{target}/modules/{module}.yaml
-  一个模块的 fixture/profile 注册、module_type、registered_suites
+  一个模块的 fixture 注册、module_type、registered_suites
 
 test_workspace/targets/{target}/profiles/profile_{module}.md
   module profile，放 L1 级稳定生成能力
@@ -45,10 +45,10 @@ test_workspace/tasks/{task}.yaml
 | target 默认目录 | `target.yaml` 或 `aitest.yaml.targets` | suite.yaml |
 | module 的 fixture 文件 | `modules/{module}.yaml.fixture.file` | suite.yaml |
 | module 的默认 fixture 名 | `modules/{module}.yaml.fixture.default_fixture` | suite.yaml |
-| module profile 路径 | `modules/{module}.yaml.profile.file` | suite.yaml |
+| module profile 路径 | 约定路径 `test_workspace/targets/{target}/profiles/profile_{module}.md` | `module.yaml`、suite.yaml |
 | suite 属于哪个 target/module | `suite.yaml` | profile YAML |
 | suite 包含哪些 Markdown 文件 | `suite.yaml.case_files` | module profile |
-| suite profile 文件名 | `suite.yaml.profile` | module profile |
+| suite profile 路径 | 约定路径 `{suite_dir}/profile_{suite}_suite.md` | `suite.yaml`、module profile |
 | `case_flows` | suite profile | module profile |
 | `case_bodies` | suite profile | module profile |
 | `request_overrides` | suite profile | module profile |
@@ -130,7 +130,7 @@ defaults:
 
 ## `modules/{module}.yaml`
 
-职责：描述某个 module 属于哪个 target，注册 fixture、module profile 和 active suites，使 `--module`、`--target`、`--all` 能发现它们。
+职责：描述某个 module 属于哪个 target，注册 fixture 和 active suites，使 `--module`、`--target`、`--all` 能发现它们。module profile 不在这里配置路径，固定读取 `test_workspace/targets/{target}/profiles/profile_{module}.md`。
 
 ```yaml
 target: your_service
@@ -139,8 +139,6 @@ module_type: multi_endpoint
 fixture:
   file: gateway_api.py
   default_fixture: setup_gateway_api
-profile:
-  file: profile_gateway_api.md
 registered_suites:
   - test_workspace/suites/your_service/gateway_smoke/suite.yaml
 ```
@@ -215,7 +213,7 @@ variables:
 
 ## `suite.yaml`
 
-职责：把一批 Markdown 用例绑定到 target/module/suite，声明 suite profile 文件和 Markdown case files。
+职责：把一批 Markdown 用例绑定到 target/module/suite，并声明 Markdown case files。suite profile 不在这里配置路径，固定读取 `{suite_dir}/profile_{suite}_suite.md`。
 
 ```yaml
 target: your_service
@@ -224,7 +222,6 @@ suite: gateway_smoke
 case_files:
   - business.md
   - boundary.md
-profile: profile_gateway_smoke_suite.md
 knowledge_refs:
   l2:
     - test_workspace/knowledge/L2/gateway_smoke.md
@@ -235,9 +232,9 @@ knowledge_refs:
 - `case_files` 只推荐写相对 `suite.yaml` 所在目录的路径，例如 `business.md`。
 - 不要写 `test_workspace/suites/.../business.md`。
 - 不要写系统绝对路径。
-- `suite.yaml` 只放 suite 元数据，不放 fixture、helper、case_flow、执行参数。
+- `suite.yaml` 只放 suite 元数据，不放 fixture、helper、case_flow、profile 路径或执行参数。
 
-不要把 `fixture`、`case_flows`、`case_bodies`、`variables`、`env_file`、`pytest_args` 写入 `suite.yaml`；这些内容分别属于 module profile、suite profile 或 task manifest。
+不要把 `profile`、`fixture`、`case_flows`、`case_bodies`、`variables`、`env_file`、`pytest_args` 写入 `suite.yaml`；这些内容分别属于约定路径、module profile、suite profile 或 task manifest。
 
 ## suite profile
 
@@ -445,7 +442,7 @@ steps:
     kwargs: {}
 ```
 
-### suite profile 文件名缺少 `_suite.md`
+### 在配置文件中手写 profile 路径
 
 错误：
 
@@ -455,9 +452,9 @@ profile: profile_gateway_smoke.md
 
 正确：
 
-```yaml
-profile: profile_gateway_smoke_suite.md
-```
+- module profile 固定放在 `test_workspace/targets/{target}/profiles/profile_{module}.md`。
+- suite profile 固定放在 `{suite_dir}/profile_{suite}_suite.md`。
+- `module.yaml` 和 `suite.yaml` 都不要写 `profile` 字段。
 
 ### 把执行参数写进 `suite.yaml`
 

@@ -4,8 +4,6 @@ module_type: standard_recommend
 fixture:
   file: feature_scoring.py
   default_fixture: setup_feature_scoring
-profile:
-  file: profile_feature_scoring.md
 helpers:
 - test_workspace/targets/coupon_system/helpers/grpc_ops.py
 - test_workspace/targets/coupon_system/helpers/http.py

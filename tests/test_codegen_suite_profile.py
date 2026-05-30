@@ -36,8 +36,6 @@ module_type: multi_endpoint
 fixture:
   file: gateway_api.py
   default_fixture: setup_gateway_api
-profile:
-  file: profile_gateway_api.md
 registered_suites:
   - suite: quota_billing_v2
     manifest: test_workspace/suites/sub2api/quota_billing_v2/suite.yaml
@@ -75,7 +73,6 @@ module: gateway_api
 suite: quota_billing_v2
 case_files:
   - quota_billing_business.md
-profile: {profile_name}
 """,
             encoding="utf-8",
         )
@@ -289,7 +286,6 @@ module: gateway_api
 suite: quota_billing_v2
 case_files:
   - quota_billing_business.md
-profile: profile_quota_billing_v2_suite.md
 """,
             encoding="utf-8",
         )
@@ -425,7 +421,6 @@ module: gateway_api
 suite: quota_billing_v2
 case_files:
   - quota_billing_business.md
-profile: profile_quota_billing_v2_suite.md
 """,
         encoding="utf-8",
     )
@@ -452,7 +447,6 @@ def test_suite_yaml_requires_explicit_target_and_case_files(tmp_path):
         suite_file.write_text(
             """module: gateway_api
 suite: quota_billing_v2
-profile: profile_quota_billing_v2_suite.md
 """,
             encoding="utf-8",
         )
@@ -478,7 +472,6 @@ module: gateway_api
 suite: quota_billing_v2
 case_files:
   - quota_billing_business.md
-profile: profile_quota_billing_v2_suite.md
 case_flows: {}
 env_file: .env.test
 """,
@@ -511,17 +504,27 @@ def test_codegen_cases_requires_suite_yaml(tmp_path):
         assert "suite.yaml requires case_files" in result.output
 
 
-def test_codegen_cases_rejects_suite_profile_filename_without_suite_suffix(tmp_path):
+def test_codegen_cases_rejects_suite_manifest_profile_field(tmp_path):
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
         root = Path(cwd)
         _write_module_profile(root)
-        suite_dir = _write_suite(root, profile_name="profile.md")
+        suite_dir = _write_suite(root)
+        (suite_dir / "suite.yaml").write_text(
+            """target: sub2api
+module: gateway_api
+suite: quota_billing_v2
+case_files:
+  - quota_billing_business.md
+profile: profile_quota_billing_v2_suite.md
+""",
+            encoding="utf-8",
+        )
 
         result = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml"), "--validate-profile"])
 
         assert result.exit_code == 1
-        assert "filename must end with _suite.md" in result.output
+        assert "suite.yaml must not contain generation or execution fields: profile" in result.output
 
 
 def test_codegen_cases_rejects_unknown_suite_case_reference(tmp_path):
@@ -569,7 +572,6 @@ module: gateway_api
 suite: promotion_smoke
 case_files:
   - business.md
-profile: profile_promotion_smoke_suite.md
 """,
             encoding="utf-8",
         )

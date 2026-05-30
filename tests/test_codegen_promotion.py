@@ -34,8 +34,6 @@ module_type: multi_endpoint
 fixture:
   file: gateway_api.py
   default_fixture: setup_gateway_api
-profile:
-  file: profile_gateway_api.md
 """,
         encoding="utf-8",
     )
@@ -55,7 +53,6 @@ module: gateway_api
 suite: gateway_smoke
 case_files:
   - business.md
-profile: profile_gateway_smoke_suite.md
 """,
         encoding="utf-8",
     )

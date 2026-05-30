@@ -30,9 +30,7 @@ test_workspace/
   generated/
   reports/
   results/
-.claude/skills/
-.codex/skills/
-.agents/skills/
+skills/
 ```
 
 关键约定：
@@ -72,6 +70,13 @@ aitest report
 
 ## Skill 路由
 
+`skills/` 是 agent-neutral 的 AITest skill 源目录。使用 Claude Code 时先安装到 `.claude/skills/`：
+
+```bash
+mkdir -p .claude/skills
+cp -R skills/. .claude/skills/
+```
+
 任务匹配时使用本地 skill：
 
 - `.claude/skills/doc-review/SKILL.md`
@@ -81,9 +86,10 @@ aitest report
 - `.claude/skills/test-scaffold/SKILL.md`
 - `.claude/skills/test-codegen/SKILL.md`
 - `.claude/skills/test-fix/SKILL.md`
+- `.claude/skills/test-maintain/SKILL.md`
 - `.claude/skills/emitter-build/SKILL.md`
 
-如果同时维护 Codex 或 agents 工作流，保持 `.claude/skills/`、`.codex/skills/` 和 `.agents/skills/` 语义一致。
+如果同时维护 Codex 或 agents 工作流，先更新 `skills/`，再复制到对应隐藏目录。
 
 ## 安全规则
 

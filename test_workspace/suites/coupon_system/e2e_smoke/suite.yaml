@@ -4,7 +4,6 @@ suite: e2e_smoke
 case_files:
 - business.md
 - boundary.md
-profile: profile_e2e_smoke_suite.md
 knowledge_refs:
   l0:
   - test_workspace/knowledge/L0_system_architecture.md

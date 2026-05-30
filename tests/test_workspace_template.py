@@ -43,8 +43,6 @@ module_type: standard_http
 fixture:
   file: demo.py
   default_fixture: setup_demo
-profile:
-  file: profile_demo.md
 registered_suites:
   - suite: demo_smoke
     manifest: test_workspace/suites/demo_target/demo_smoke/suite.yaml
@@ -111,7 +109,6 @@ module: demo
 suite: demo_smoke
 case_files:
   - business.md
-profile: profile_demo_smoke_suite.md
 """,
         encoding="utf-8",
     )
@@ -125,9 +122,11 @@ def test_init_creates_workspace_from_single_package_template(tmp_path):
     assert (target / "README.md").exists()
     assert (target / "AGENTS.md").exists()
     assert (target / "CLAUDE.md").exists()
-    assert (target / ".codex" / "skills" / "test-codegen" / "SKILL.md").exists()
-    assert (target / ".claude" / "skills" / "test-codegen" / "SKILL.md").exists()
-    assert (target / ".agents" / "skills" / "test-codegen" / "SKILL.md").exists()
+    assert (target / "skills" / "README.md").exists()
+    assert (target / "skills" / "test-codegen" / "SKILL.md").exists()
+    assert not (target / ".codex" / "skills").exists()
+    assert not (target / ".claude" / "skills").exists()
+    assert not (target / ".agents" / "skills").exists()
     assert (target / "docs" / ".gitkeep").exists()
     assert (target / "aitest_config" / "aitest.yaml").exists()
     assert (target / "aitest_config" / "schemas" / "codegen_profile.schema.json").exists()
@@ -168,20 +167,22 @@ def test_init_accepts_existing_template_parent_directory(tmp_path):
     result = CliRunner().invoke(main, ["init", "--target", str(target)])
 
     assert result.exit_code == 0
-    assert (target / ".claude" / "skills" / "test-codegen" / "SKILL.md").exists()
+    assert (target / ".claude").is_dir()
+    assert not (target / ".claude" / "skills").exists()
+    assert (target / "skills" / "test-codegen" / "SKILL.md").exists()
 
 
 def test_init_reports_file_blocking_template_directory(tmp_path):
     target = tmp_path / "project"
     target.mkdir()
-    (target / ".claude").write_text("not a directory\n", encoding="utf-8")
+    (target / "skills").write_text("not a directory\n", encoding="utf-8")
 
     result = CliRunner().invoke(main, ["init", "--target", str(target)])
 
     assert result.exit_code != 0
-    assert "target contains file(s) where AITest needs directories: .claude" in result.output
+    assert "target contains file(s) where AITest needs directories: skills" in result.output
     assert "Traceback" not in result.output
-    assert (target / ".claude").read_text(encoding="utf-8") == "not a directory\n"
+    assert (target / "skills").read_text(encoding="utf-8") == "not a directory\n"
 
 
 def test_init_force_overwrites_template_managed_files(tmp_path):
@@ -313,13 +314,13 @@ def test_upgrade_apply_restores_missing_safe_template_file(tmp_path):
     target = tmp_path / "project"
     runner = CliRunner()
     assert runner.invoke(main, ["init", "--target", str(target)]).exit_code == 0
-    skill = target / ".codex" / "skills" / "test-codegen" / "SKILL.md"
+    skill = target / "skills" / "test-codegen" / "SKILL.md"
     skill.unlink()
 
     result = runner.invoke(main, ["upgrade", "--workspace", str(target), "--apply"])
 
     assert result.exit_code == 0
-    assert "[NEW] .codex/skills/test-codegen/SKILL.md" in result.output
+    assert "[NEW] skills/test-codegen/SKILL.md" in result.output
     assert "created=1" in result.output
     assert skill.exists()
 

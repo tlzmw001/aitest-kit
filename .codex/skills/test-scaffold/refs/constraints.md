@@ -7,14 +7,16 @@
 3. **不做 case_id 分发** — 不生成 `run_case(case_id)` / `assert_case(case_id, resp)` 分发 dict
 4. **不 import 待测系统内部模块**
 5. **不硬编码 URL、端口、API key、密码**
+6. **registry L3 接线** — `module.yaml.fixture.file/default_fixture` 必须存在，且 `default_fixture` 符号可 import
 
 ## 测试数据分类
 
 | 类别 | 处理方式 | 示例 |
 |------|---------|------|
 | 凭证类 | env var + `require_env()` fail-fast | token, password, API key |
+| case 级凭证/资源 | suite profile `variables.cases` + `{var: name}` | 不同账号、token、key_id |
 | 唯一资源 | 动态生成（uuid/timestamp） | email, name, request_id |
-| 非法输入 | 可固定 | 不存在的模型名 |
+| 非法输入 | `value` 固定值 | 不存在的模型名、空 token |
 | 业务输入 | 可固定，注明来源 | 日期窗口、模型名 |
 
 ## Fixture 注入一致性
@@ -53,6 +55,8 @@
 | `subprocess_capture` | case_flow |
 | `isolated_service` | case_flow |
 
+module_type 是能力门禁，不替代逐 case 路线判断。配置中写 `requires: case_bodies` 时，实际含义是该模块需要可执行 strategy；优先使用 `case_flow`，只有条件分支、循环、mock、并发等场景才保留 `case_body`。
+
 ## 逐条 case 路线评估
 
 1. 默认模板够吗？→ 只需 request_overrides
@@ -80,21 +84,25 @@ python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml
 # 5. 一致性校验
 python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --check
 
-# 6. 语法 + 收集
+# 6. 语法 + suite 收集
 python3 -m compileall test_workspace/generated/{target}
 python3 -m aitest_kit.cli run --suite-file <suite_dir>/suite.yaml -- --collect-only -q
+
+# 7. 已注册 suite 的 selector 接线
+python3 -m aitest_kit.cli codegen --target <target> --module <module> --check
+python3 -m aitest_kit.cli run --target <target> --module <module> -- --collect-only -q
 ```
 
-使用 `python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> ...`；多个 suite 用 `--task-file`。
+使用 `python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> ...`；多个 suite 用 `--task-file`。`aitest run -- --collect-only` 会写入 reports/latest，这是验证 run/report 接线的一部分。
 
 | 命令 | 预期 | 失败时 |
 |------|------|--------|
-| collect（suite） | fixture 被发现 | 检查 module.yaml fixture 声明和 generated import |
 | `--validate-profile` | 无 ERROR | 修 profile YAML |
 | `--dump-ir` | strategy 符合 Step 6 路线 | 修 case_flow/case_body 映射 |
 | `codegen` | 生成 .py | 检查 import 路径 |
 | `--check` | 无 stale | 重新 codegen |
 | compileall | 无语法错误 | 修 Python 片段 |
-| collect（模块） | 数量 = 可执行 case 数 | 检查 fixture 注册和 import |
+| collect（suite） | 数量 = 可执行 case 数 | 检查 fixture 注册、generated import 和 manual/skipped 分类 |
+| collect（module selector） | 已注册 suite 被发现 | 检查 module.yaml registered_suites、fixture 声明和 target defaults |
 
-collect 预期数量 = 总 case - skipped - manual，不追求最大化。
+collect 预期数量 = 总 case - skipped - pure manual，不追求最大化。半自动 manual 可以生成可执行 flow/body，但默认执行仍会被 manual marker 排除，除非用户显式 `--include-manual`。

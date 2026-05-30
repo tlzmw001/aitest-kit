@@ -111,10 +111,21 @@ test_workspace/
   generated/                   # 按目标系统保存 generated pytest
   reports/                     # aitest run 生成的报告
   results/                     # 已确认待测系统 bug 记录
-.codex/skills/                 # Codex skills
-.claude/skills/                # Claude Code skills
-.agents/skills/                # agents workflow skills
+skills/                        # agent-neutral AITest skills，按需复制到 .codex/.claude/.agents
 AGENTS.md / CLAUDE.md          # AI 协作说明
+```
+
+安装到当前 AI 编程环境：
+
+```bash
+# Codex
+mkdir -p .codex/skills && cp -R skills/. .codex/skills/
+
+# Claude Code
+mkdir -p .claude/skills && cp -R skills/. .claude/skills/
+
+# agents workflow
+mkdir -p .agents/skills && cp -R skills/. .agents/skills/
 ```
 
 配置文件完整写法见 `aitest_config/refs/config-files.md`。新建 target、module、suite、profile 或 task 时，优先按这份手册判断字段归属。

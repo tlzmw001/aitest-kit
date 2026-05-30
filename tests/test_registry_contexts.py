@@ -50,8 +50,6 @@ knowledge_refs:
 fixture:
   file: gateway_api.py
   default_fixture: setup_gateway_api
-profile:
-  file: profile_gateway_api.md
 registered_suites:
   - suite: quota_billing_v2
     manifest: external_suites/sub2api/quota_billing_v2/suite.yaml
@@ -70,7 +68,6 @@ module: gateway_api
 suite: quota_billing_v2
 case_files:
   - business.md
-profile: profile_quota_billing_v2_suite.md
 knowledge_refs:
   l2:
     - ${SUB2API_KNOWLEDGE}/L2/quota_billing_v2.md
@@ -305,7 +302,6 @@ module: calibration
 suite: smoke
 case_files:
   - business.md
-profile: profile_smoke_suite.md
 """,
         encoding="utf-8",
     )
@@ -316,6 +312,61 @@ profile: profile_smoke_suite.md
     assert context.manifest_path == suite_dir / "suite.yaml"
     assert context.profile_path == suite_dir / "profile_smoke_suite.md"
     assert context.case_files == [suite_dir / "business.md"]
+
+
+def test_registry_rejects_module_profile_field(tmp_path):
+    workspace, _ = _registry_workspace_with_suite(tmp_path, registered_suites="registered_suites: []\n")
+    module_file = (
+        workspace / "test_workspace" / "targets" / "sub2api" / "modules" / "gateway_api.yaml"
+    )
+    module_file.write_text(
+        """target: sub2api
+module: gateway_api
+module_type: multi_endpoint
+fixture:
+  file: gateway_api.py
+  default_fixture: setup_gateway_api
+profile:
+  file: profile_gateway_api.md
+registered_suites: []
+""",
+        encoding="utf-8",
+    )
+
+    target = load_target_context("sub2api", workspace_root=workspace)
+    module = load_module_context(target, "gateway_api")
+
+    assert any("module.yaml must not contain profile" in diagnostic for diagnostic in module.diagnostics)
+    assert module.profile_path == (
+        workspace / "test_workspace" / "targets" / "sub2api" / "profiles" / "profile_gateway_api.md"
+    )
+
+
+def test_registry_rejects_suite_manifest_profile_field(tmp_path):
+    workspace, suite_file = _registry_workspace_with_suite(
+        tmp_path,
+        registered_suites=f"""registered_suites:
+  - {suite_file_placeholder()}
+""",
+    )
+    suite_file.write_text(
+        """target: sub2api
+module: gateway_api
+suite: quota_billing_v2
+case_files:
+  - business.md
+profile: profile_quota_billing_v2_suite.md
+""",
+        encoding="utf-8",
+    )
+
+    suite = load_suite_context(suite_file, workspace_root=workspace)
+
+    assert any(
+        "suite manifest must not contain generation or execution fields: profile" in diagnostic
+        for diagnostic in suite.diagnostics
+    )
+    assert suite.profile_path == suite_file.parent / "profile_quota_billing_v2_suite.md"
 
 
 def suite_file_placeholder() -> str:
@@ -347,8 +398,6 @@ module_type: multi_endpoint
 fixture:
   file: gateway_api.py
   default_fixture: setup_gateway_api
-profile:
-  file: profile_gateway_api.md
 {registered_suites}""",
         encoding="utf-8",
     )
@@ -364,7 +413,6 @@ module: gateway_api
 suite: quota_billing_v2
 case_files:
   - business.md
-profile: profile_quota_billing_v2_suite.md
 """,
         encoding="utf-8",
     )

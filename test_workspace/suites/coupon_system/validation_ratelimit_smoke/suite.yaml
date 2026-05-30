@@ -4,7 +4,6 @@ suite: validation_ratelimit_smoke
 case_files:
 - business.md
 - boundary.md
-profile: profile_validation_ratelimit_smoke_suite.md
 knowledge_refs:
   l1:
   - test_workspace/knowledge/L1/validation_ratelimit.md

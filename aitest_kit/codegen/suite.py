@@ -13,7 +13,6 @@ from aitest_kit.codegen.profile import (
     load_profile_yaml,
     merge_profile_yaml,
     preferred_module_profile_path,
-    resolve_module_profile_path,
 )
 
 
@@ -95,6 +94,7 @@ def _case_files_from_manifest(
 
 
 _FORBIDDEN_SUITE_MANIFEST_FIELDS = {
+    "profile",
     "fixture",
     "fixtures",
     "helper",
@@ -183,20 +183,14 @@ def load_suite_context(
     if not case_files and not diagnostics:
         diagnostics.append(f"E614: no Markdown case files found in {suite_dir}")
 
-    profile_name = manifest.get("profile") or _default_suite_profile_name(suite_dir, suite)
-    if not isinstance(profile_name, str) or not profile_name.strip():
-        diagnostics.append("E610: suite manifest profile must be a string")
-        profile_name = _default_suite_profile_name(suite_dir, suite)
+    profile_name = _default_suite_profile_name(suite)
     suite_profile_path = suite_dir / profile_name
     if suite_profile_path.exists() and not suite_profile_path.name.endswith("_suite.md"):
         diagnostics.append(
             f"E612: suite profile filename must end with _suite.md: {suite_profile_path.name}"
         )
 
-    module_profile_path = (
-        resolve_module_profile_path(profile_dir, module)
-        or preferred_module_profile_path(profile_dir, module)
-    )
+    module_profile_path = preferred_module_profile_path(profile_dir, module)
     if module and not module_profile_path.exists():
         diagnostics.append(f"E611: module profile not found: {module_profile_path}")
 
@@ -387,7 +381,7 @@ def _manifest_path_for_dir(suite_dir: Path) -> Path:
     return suite_dir / "suite.yaml"
 
 
-def _default_suite_profile_name(suite_dir: Path, suite: str) -> str:
+def _default_suite_profile_name(suite: str) -> str:
     return f"profile_{suite}_suite.md"
 
 

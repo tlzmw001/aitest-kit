@@ -48,7 +48,7 @@ The workspace contains:
 docs/                 # public API docs, design docs, OpenAPI/proto files
 aitest_config/         # project config, codegen config, schemas, refs
 test_workspace/        # knowledge base, cases, fixtures, profiles, generated pytest, reports
-.codex/.claude/.agents # AI skills
+skills/                # agent-neutral AI skills, copy to .codex/.claude/.agents as needed
 AGENTS.md / CLAUDE.md  # AI collaboration guidance
 ```
 
@@ -268,7 +268,18 @@ AITEST_ENV_FILE=/tmp/your-system-test.env aitest run --suite-file test_workspace
 
 ## AI Skills
 
-The workspace includes `.codex`, `.claude`, and `.agents` skills:
+The workspace includes one agent-neutral `skills/` directory. Copy it to the agent directory you use:
+
+```bash
+# Codex
+mkdir -p .codex/skills && cp -R skills/. .codex/skills/
+
+# Claude Code
+mkdir -p .claude/skills && cp -R skills/. .claude/skills/
+
+# agents workflow
+mkdir -p .agents/skills && cp -R skills/. .agents/skills/
+```
 
 | Skill | Use Case |
 |---|---|

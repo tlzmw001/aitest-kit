@@ -176,7 +176,6 @@ module: gateway_api
 suite: login_smoke
 case_files:
   - business.md
-profile: profile_login_smoke_suite.md
 ```
 
 Markdown 用例必须满足：

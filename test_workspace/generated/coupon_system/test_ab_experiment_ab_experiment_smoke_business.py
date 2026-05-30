@@ -163,7 +163,7 @@ class TestAbExperimentBusiness:
     # ── 四、异常场景 ──
 
     @pytest.mark.manual
-    def test_tc_ab_009(self, http_base_url, setup_ab_experiment):
+    def test_tc_ab_009(self):
         """TC-AB-009：实验名不存在时静默跳过"""
         __tc_meta__ = {
             "tc_id": "TC-AB-009",
@@ -177,12 +177,10 @@ class TestAbExperimentBusiness:
         # SETUP: 协议：HTTP
         # SETUP: 前置操作：测试环境将 scene_id=1001 的实验映射设为 ["coarse_rank_exp_game","not_exists_exp"]
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_ab_unknown_exp"、scene_name="game"、device="mobile"、external=0
-        setup_ab_experiment(case_id="TC-AB-009")
-
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_ab_unknown_exp", "reqId": "req-ab-009", "scene_name": "game", "device": "mobile", "external": 0}))
         # MANUAL CHECK: response.body.code == 0
         # MANUAL CHECK: exp 不包含 not_exists_exp
         # MANUAL CHECK: 应用日志包含 ab_sdk unknown experiment: not_exists_exp
+        pytest.skip("manual check required")
 
 
 # TODO: setup_ab_experiment fixture 需要手写实现（→ tests/fixtures/ab_experiment.py）

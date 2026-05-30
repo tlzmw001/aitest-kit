@@ -1,9 +1,9 @@
 ---
 name: test-codegen
-description: 从 target-aware case suite 或 task manifest 生成 pytest，执行 profile gate、Case IR、freshness check，并处理少量 UNPARSED 补写
-when_to_use: 当用户需要将 Markdown 测试用例编译为 pytest、检查 generated 是否过期，或针对某个 case suite / task 执行 codegen 时
-argument-hint: --suite-file <suite.yaml>|--task-file <task.yaml> [--dry-run|--check|--dump-ir]
-arguments: [suite_file, task_file, dry_run, check, dump_ir]
+description: 从 target-aware case suite、task manifest 或 target/module/all selector 生成 pytest，执行 profile gate、Case IR、freshness check，并处理少量 UNPARSED 补写
+when_to_use: 当用户需要将 Markdown 测试用例编译为 pytest、检查 generated 是否过期，或针对 suite/task/module/target/all 维度执行 codegen 时
+argument-hint: --suite-file <suite.yaml>|--task-file <task.yaml>|--target <target> [--module <module>]|--all [--dry-run|--check|--validate-profile|--dump-ir|--explain|--health-report|--analyze-promotion]
+arguments: [suite_file, task_file, target, module, all, dry_run, check, validate_profile, dump_ir, explain, health_report, analyze_promotion, write_report, suggest_promotion_patch]
 user-invocable: true
 allowed-tools: Read Glob Grep Write Edit Bash
 effort: high
@@ -11,9 +11,18 @@ effort: high
 
 # 测试代码生成
 
-将 `--suite-file <suite.yaml>` 指定的 target-aware case suite，或 `--task-file <task.yaml>` 指定的一组 suites，编译为 pytest 代码。
+将 Markdown case suite、task manifest 或 registry selector 编译为 pytest 代码。
 
-当前唯一主路径是 target/suite 模式：
+codegen 支持四类入口：
+
+- `--suite-file <suite.yaml>`：精确处理一个 suite，是诊断能力最完整的入口。
+- `--task-file <task.yaml>`：处理 task manifest 中声明的一组 suite，适合回归或冒烟任务。
+- `--target <target> [--module <module>]`：从 target/module registry 中发现 active registered suites，适合模块级或目标系统级批量 codegen。
+- `--all`：从 registry 中发现全部 active suites，适合全量回归前批量 check/codegen。
+
+`--case-id` 不是 codegen 入口。单 case 调试属于 `aitest run/report --case-id`，codegen 仍以 suite case file 为生成单位。
+
+主路径仍是 target-aware suite 结构：
 
 ```text
 test_workspace/targets/{target}/
@@ -31,7 +40,7 @@ test_workspace/suites/{target}/{suite}/
 test_workspace/generated/{target}/
 ```
 
-单个 suite 使用 `--suite-file`；多个 suite 的回归或冒烟任务使用 `--task-file`。
+单个 suite 使用 `--suite-file`；多个 suite 的回归或冒烟任务使用 `--task-file`、`--target`、`--target --module` 或 `--all`。
 
 ## 参考文档
 
@@ -113,14 +122,13 @@ module: your_module
 suite: smoke_suite
 case_files:
   - smoke_business.md
-profile: profile_smoke_suite.md
 ```
 
 规则：
 
 1. target 存在时，module profile 从 `test_workspace/targets/{target}/profiles/profile_{module}.md` 读取，放 L1 级稳定能力。
 2. suite profile 跟用例目录走，文件名必须以 `_suite.md` 结尾，放本批用例的 `variables/case_flows/case_bodies/request_overrides`。
-3. `suite.yaml` 只放 `target/module/suite/case_files/profile/knowledge_refs`，不要放 fixture、helper、case_flow、执行参数。
+3. `suite.yaml` 只放 `target/module/suite/case_files/knowledge_refs`，不要放 profile、fixture、helper、case_flow、执行参数。
 4. 生成文件名为 `test_{module}_{suite}_{case_file_stem}.py`；拆分 pytest 文件由用户先拆分 Markdown 文件决定。
 5. generated pytest 输出到 target 默认目录，通常是 `test_workspace/generated/{target}/`。
 6. 如果 target registry 不存在，先切到 `test-scaffold` 补齐 target/module registry，不要回退到旧模块路径。
@@ -137,9 +145,60 @@ python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --check
 多个 suite 组成任务时：
 
 ```bash
+python3 -m aitest_kit.cli codegen --task-file test_workspace/tasks/<task>.yaml --validate-profile
 python3 -m aitest_kit.cli codegen --task-file test_workspace/tasks/<task>.yaml --check
 python3 -m aitest_kit.cli run --task-file test_workspace/tasks/<task>.yaml -- --collect-only -q
 ```
+
+### selector 模式能力边界
+
+| 入口 | 生成 | `--check` | `--dry-run` | `--validate-profile` | `--dump-ir` | `--explain` | `--health-report` | `--analyze-promotion` |
+|------|------|-----------|-------------|----------------------|-------------|-------------|-------------------|-----------------------|
+| `--suite-file` | 支持 | 支持 | 支持 | 支持 | 支持 | 支持 | 支持 | 支持 |
+| `--task-file` | 支持 | 支持 | 支持 | 支持 | 不支持 | 不支持 | 不支持 | 不支持 |
+| `--target --module` | 支持 | 支持 | 支持 | 支持 | 不支持 | 不支持 | 支持 | 支持 |
+| `--target` | 支持 | 支持 | 支持 | 支持 | 不支持 | 不支持 | 支持 | 支持 |
+| `--all` | 支持 | 支持 | 支持 | 支持 | 不支持 | 不支持 | 不支持 | 不支持 |
+
+规则：
+
+1. `--dump-ir` 和 `--explain` 是 suite 级诊断工具，只用于 `--suite-file`。
+2. `--health-report` 和 `--analyze-promotion` 支持 suite/module/target，不支持 task/all。
+3. `--suggest-promotion-patch` 只用于 suite 级 promotion review，不用于 selector 聚合模式。
+4. `--case-id` 不属于 codegen selector。需要单 case 执行时使用 `aitest run --suite-file <suite.yaml> --case-id <TC-ID>`。
+
+常用 selector 命令：
+
+```bash
+# module 级
+python3 -m aitest_kit.cli codegen --target <target> --module <module> --validate-profile
+python3 -m aitest_kit.cli codegen --target <target> --module <module> --check
+python3 -m aitest_kit.cli codegen --target <target> --module <module> --health-report --write-report
+python3 -m aitest_kit.cli codegen --target <target> --module <module> --analyze-promotion --write-report
+
+# target 级
+python3 -m aitest_kit.cli codegen --target <target> --validate-profile
+python3 -m aitest_kit.cli codegen --target <target> --check
+python3 -m aitest_kit.cli codegen --target <target> --health-report --write-report
+python3 -m aitest_kit.cli codegen --target <target> --analyze-promotion --write-report
+
+# task 级
+python3 -m aitest_kit.cli codegen --task-file test_workspace/tasks/<task>.yaml --validate-profile
+python3 -m aitest_kit.cli codegen --task-file test_workspace/tasks/<task>.yaml --check
+
+# all
+python3 -m aitest_kit.cli codegen --all --validate-profile
+python3 -m aitest_kit.cli codegen --all --check
+```
+
+task / module / target / all 是聚合执行维度：
+
+- `aitest run --task-file <task.yaml>` 写入 `test_workspace/reports/tasks/{task}/...`
+- `aitest run --target <target> --module <module>` 写入 module 聚合 bucket
+- `aitest run --target <target>` 写入 target 聚合 bucket
+- `aitest run --all` 写入 all 聚合 bucket
+
+聚合运行不会更新每个 suite 自己的 `latest/`。`aitest report` 重渲染时必须使用同一 selector，不能默认去 suite bucket 或旧顶层 latest。
 
 ### 新增用例的能力缺口判断
 
@@ -264,12 +323,26 @@ python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --check
 
 ## 第三步：验证
 
-生成目标文件为 `test_{module}_{suite}_{case_file_stem}.py`，默认位于 `test_workspace/generated/{target}/`；多个 suite 组成一次执行任务时使用 `--task-file <task.yaml>`。
-语法和收集检查：
+生成目标文件为 `test_{module}_{suite}_{case_file_stem}.py`，默认位于 `test_workspace/generated/{target}/`；多个 suite 组成一次执行任务时使用 `--task-file <task.yaml>`、`--target`、`--target --module` 或 `--all`。
+
+suite 语法和收集检查：
 
 ```bash
 python3 -m compileall test_workspace/targets/{target}/fixtures/{module}.py test_workspace/generated/{target}
 python3 -m aitest_kit.cli run --suite-file <suite_dir>/suite.yaml -- --collect-only -q
+```
+
+module/target/all 收集检查：
+
+```bash
+python3 -m aitest_kit.cli codegen --target <target> --module <module> --check
+python3 -m aitest_kit.cli run --target <target> --module <module> -- --collect-only -q
+
+python3 -m aitest_kit.cli codegen --target <target> --check
+python3 -m aitest_kit.cli run --target <target> -- --collect-only -q
+
+python3 -m aitest_kit.cli codegen --all --check
+python3 -m aitest_kit.cli run --all -- --collect-only -q
 ```
 
 ## 质量要求

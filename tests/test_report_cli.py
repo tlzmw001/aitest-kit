@@ -60,7 +60,6 @@ module: demo
 suite: demo_smoke
 case_files:
   - business.md
-profile: profile_demo_smoke_suite.md
 """,
         encoding="utf-8",
     )
@@ -122,7 +121,6 @@ module: demo
 suite: demo_smoke
 case_files:
   - business.md
-profile: profile_demo_smoke_suite.md
 """,
         encoding="utf-8",
     )
@@ -154,7 +152,6 @@ module: gateway_api
 suite: quota_billing_v2
 case_files:
   - quota_billing_business.md
-profile: profile_quota_billing_v2_suite.md
 """,
         encoding="utf-8",
     )
@@ -232,7 +229,6 @@ module: gateway_api
 suite: quota_billing_v2
 case_files:
   - quota_billing_business.md
-profile: profile_quota_billing_v2_suite.md
 """,
         encoding="utf-8",
     )
@@ -341,7 +337,6 @@ module: gateway_api
 suite: case_filter
 case_files:
   - business.md
-profile: profile_case_filter_suite.md
 """,
         encoding="utf-8",
     )
@@ -438,7 +433,6 @@ module: gateway_api
 suite: passthrough
 case_files:
   - business.md
-profile: profile_passthrough_suite.md
 """,
         encoding="utf-8",
     )
@@ -532,7 +526,6 @@ module: gateway_api
 suite: quota_billing_v2
 case_files:
   - business.md
-profile: profile_quota_billing_v2_suite.md
 """,
         encoding="utf-8",
     )
@@ -549,8 +542,6 @@ profile: profile_quota_billing_v2_suite.md
         f"""target: sub2api
 module: gateway_api
 module_type: multi_endpoint
-profile:
-  file: profile_gateway_api.md
 registered_suites:
   - suite: quota_billing_v2
     manifest: {suite_file}
@@ -662,7 +653,6 @@ module: gateway_api
 suite: passthrough
 case_files:
   - business.md
-profile: profile_passthrough_suite.md
 """,
         encoding="utf-8",
     )
@@ -679,8 +669,6 @@ profile: profile_passthrough_suite.md
         f"""target: sub2api
 module: gateway_api
 module_type: multi_endpoint
-profile:
-  file: profile_gateway_api.md
 registered_suites:
   - suite: passthrough
     manifest: {suite_file}
@@ -838,7 +826,6 @@ module: gateway_api
 suite: task_env_smoke
 case_files:
   - business.md
-profile: profile_task_env_smoke_suite.md
 """,
         encoding="utf-8",
     )

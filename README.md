@@ -48,7 +48,7 @@ cd ./aitest_workspace
 docs/                 # 放公开 API 文档、设计文档、OpenAPI/proto 等
 aitest_config/         # 项目配置、codegen 配置、schema
 test_workspace/        # 知识库、Markdown 用例、fixture、profile、generated pytest、报告
-.codex/.claude/.agents # AI skills
+skills/                # agent-neutral AI skills，按需复制到 .codex/.claude/.agents
 AGENTS.md / CLAUDE.md  # AI 协作说明
 ```
 
@@ -333,7 +333,18 @@ AITEST_ENV_FILE=/tmp/your-system-test.env aitest run --suite-file test_workspace
 
 ## AI Skills 速查
 
-AITest workspace 会内置 `.codex`、`.claude`、`.agents` 三套 skills，适配不同 AI 编程环境。
+AITest workspace 会内置一份 agent-neutral 的 `skills/` 目录。根据当前 AI 编程环境复制到对应目录：
+
+```bash
+# Codex
+mkdir -p .codex/skills && cp -R skills/. .codex/skills/
+
+# Claude Code
+mkdir -p .claude/skills && cp -R skills/. .claude/skills/
+
+# agents workflow
+mkdir -p .agents/skills && cp -R skills/. .agents/skills/
+```
 
 | Skill | 什么时候用 |
 |---|---|
@@ -387,9 +398,7 @@ aitest_workspace/
 │   ├── generated/                # 按 target 分桶的 generated pytest
 │   ├── reports/                  # 运行报告
 │   └── results/                  # 已确认待测系统 bug 记录
-├── .codex/skills/
-├── .claude/skills/
-├── .agents/skills/
+├── skills/                       # agent-neutral AITest skills
 ├── AGENTS.md
 └── CLAUDE.md
 ```

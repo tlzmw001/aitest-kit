@@ -110,7 +110,6 @@ module: gateway_api
 suite: quota_billing_v2
 case_files:
   - quota_billing_business.md
-profile: profile_quota_billing_v2_suite.md
 """,
             encoding="utf-8",
         )
@@ -160,8 +159,6 @@ module_type: multi_endpoint
 fixture:
   file: gateway_api.py
   default_fixture: setup_gateway_api
-profile:
-  file: profile_gateway_api.md
 """,
             encoding="utf-8",
         )
@@ -194,7 +191,6 @@ module: gateway_api
 suite: quota_billing_v2
 case_files:
   - quota_billing_business.md
-profile: profile_quota_billing_v2_suite.md
 """,
             encoding="utf-8",
         )
@@ -229,7 +225,6 @@ module: gateway_api
 suite: login_smoke
 case_files:
   - business.md
-profile: profile_login_smoke_suite.md
 """,
             encoding="utf-8",
         )
@@ -351,7 +346,6 @@ module: gateway_api
 suite: factory_smoke
 case_files:
   - business.md
-profile: profile_factory_smoke_suite.md
 """,
             encoding="utf-8",
         )

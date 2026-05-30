@@ -109,7 +109,7 @@ def load_suite_context(
     suite = _required_string(data, "suite", diagnostics) or manifest_path.parent.name
 
     case_files = _suite_case_files(data, manifest_path, diagnostics)
-    profile_path = _suite_profile_path(data, manifest_path, suite, diagnostics)
+    profile_path = _suite_profile_path(manifest_path, suite)
     knowledge_refs = _resolve_mapping(data.get("knowledge_refs", {}), root, diagnostics, "knowledge_refs")
 
     return SuiteManifestContext(
@@ -269,23 +269,12 @@ def _module_profile(
     module: str,
     diagnostics: list[str],
 ) -> Path | None:
-    raw = data.get("profile", {})
-    if isinstance(raw, str):
-        file_value = raw
-    elif isinstance(raw, dict):
-        file_value = raw.get("file")
-    elif raw:
-        diagnostics.append("E711: module profile must be a string or mapping")
-        file_value = None
-    else:
-        file_value = f"profile_{module}.md"
-    return resolve_named_path(
-        file_value,
-        default_dir=target_context.defaults.profile_dir,
-        workspace_root=target_context.workspace_root,
-        diagnostics=diagnostics,
-        field="profile.file",
-    )
+    if "profile" in data:
+        diagnostics.append(
+            "E711: module.yaml must not contain profile; "
+            f"use canonical module profile path profile_{module}.md"
+        )
+    return (target_context.defaults.profile_dir / f"profile_{module}.md").resolve(strict=False)
 
 
 def _module_helpers(
@@ -438,23 +427,14 @@ def _suite_case_files(
 
 
 def _suite_profile_path(
-    data: dict[str, Any],
     manifest_path: Path,
     suite: str,
-    diagnostics: list[str],
 ) -> Path:
-    profile = data.get("profile")
-    if profile is None:
-        profile = f"profile_{suite}_suite.md"
-    return resolve_path(
-        profile,
-        base_dir=manifest_path.parent,
-        diagnostics=diagnostics,
-        field="profile",
-    ) or (manifest_path.parent / f"profile_{suite}_suite.md").resolve(strict=False)
+    return (manifest_path.parent / f"profile_{suite}_suite.md").resolve(strict=False)
 
 
 _FORBIDDEN_SUITE_MANIFEST_FIELDS = {
+    "profile",
     "fixture",
     "fixtures",
     "helper",

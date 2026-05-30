@@ -5,6 +5,8 @@
 ```markdown
 # API Map: {module}
 
+path: test_workspace/targets/{target}/api_maps/api_map_{module}.md
+
 ## 端点
 
 | Method | Path | 认证 | 用途 |
@@ -50,11 +52,14 @@
 ```
 
 分类规则：
+- 连接/认证等模块级必需 env 写入 fixture，并用 `require_env()` fail-fast
+- case 级账号、token、资源 ID 写入 suite profile `variables.cases`
 - 认证类 env（token、API key、password）：默认 required，除非 case 明确测试"缺失认证"
 - 资源标识类 env（key_id、user_id）：required
 - 连接类 env（BASE_URL）：始终 required
 - 可选功能 env：optional，注明缺失行为
 - 同一模块不同 case 需要不同账号、token、URL path、非法值时，优先进入 suite profile `variables`，不要让 fixture 按 case_id 分发
+- 负向输入使用 `value`，不要用缺失 env 表达
 - `variables` 第一版只支持 `env` 和 `value` 两种来源；`env` 会先读进程环境变量，缺失时读当前工作目录 `.env` 或 `AITEST_ENV_FILE` 指定文件；不打印 env 值
 
 suite profile 示例：
@@ -96,9 +101,17 @@ variables:
 ```markdown
 ## 自动化可行性判定
 
-可执行：TC-XXX-001, TC-XXX-002, TC-XXX-003, ...
-可行性存疑（保持 skipped）：TC-XXX-008
-  原因：注册邮箱不可重复且无删除 API
+| case_id | automation_status | reason_type | required_capability | cleanup_strategy | evidence_ref | resume_condition |
+|---------|-------------------|-------------|---------------------|------------------|--------------|------------------|
+| TC-XXX-001 | auto_executable | none | public API | no state change | api_map | already executable |
+| TC-XXX-008 | skipped_infeasible | no_cleanup | delete user API | none | case precondition | cleanup API or disposable test resource available |
+
+automation_status 取值：
+- auto_executable
+- manual_pure
+- manual_semi_auto
+- skipped_infeasible
+- blocked_by_known_issue
 ```
 
 ## Profile YAML 结构
@@ -113,8 +126,8 @@ extra_imports:
 default_fixture: setup_{module}
 default_object: client_factory
 
-# 当每条 case_flow 都需要同一个 factory/setup 时使用。
-# 如果 setup_{module} 直接返回 client，不需要 default_case_setup。
+# 当 fixture 返回 factory，且每条 case_flow 都需要同一个 setup 时使用。
+# 如果 setup_{module} 直接返回 client，不写 default_case_setup。
 default_case_setup:
   call: client_factory
   kwargs:
@@ -166,6 +179,7 @@ case_bodies:
 规则：
 - `default_fixture/default_object/default_case_setup` 用于减少每条 `case_flow` 重复 setup。
 - `default_case_setup` 只在同一批 flow 都需要同一个 factory call 时写；普通 client fixture 不写。
+- fixture 直接返回 Client 时，`default_object` 写 Client 对象名；fixture 返回 factory 时，`default_object` 写 factory 对象名，并用 `default_case_setup` 保存业务对象。
 - 单条 `case_flow` 仍可显式声明 `fixture` 或 `object` 覆盖默认值。
 - 单条 `case_flow` 顶层可写 `description` 作为 profile 可读性 metadata；它不会进入 generated pytest。需要生成代码注释时，用 step 的 `comment`。
 - 非 manual 用例的 `case_flow` 至少包含一个 `call` 或 `assert`；纯人工 `[manual]` 不写 flow，半自动 manual 才写带 `call/assert` 的 flow。
@@ -199,7 +213,7 @@ def setup_{module}() -> {Module}Client:
 
 target：{target}
 模块：{module}
-模式：full / incremental
+模式：scaffold-module / scaffold-suite / incremental
 module_type：{type}
 
 创建/修改文件：
@@ -209,7 +223,17 @@ module_type：{type}
 - test_workspace/targets/{target}/profiles/profile_{module}.md — module profile
 - {suite_dir}/suite.yaml — suite manifest（suite 模式）
 - {suite_dir}/profile_{suite}_suite.md — suite profile（suite 模式）
-- api_map_{module}.md — API 面 + env 契约 + 可行性判定
+- test_workspace/targets/{target}/api_maps/api_map_{module}.md — API 面 + env 契约 + 可行性判定
+
+api_map：
+- path: test_workspace/targets/{target}/api_maps/api_map_{module}.md
+- skipped: {TC...}
+- manual_pure: {TC...}
+- manual_semi_auto: {TC...}
+
+profile 归属：
+- module profile: L1 稳定能力、module_type、默认 fixture/object、公共 assertion_rules
+- suite profile: TC-ID 绑定的 variables/case_flows/case_bodies/request_overrides/case_fixtures
 
 Client 方法：
 - {method_name}({params}) [auth: yes/no]
@@ -229,8 +253,20 @@ Client 方法：
 
 验证结果：
 - validate-profile: {PASS/FAIL}
+- dump-ir strategy: {PASS/FAIL}
 - codegen --check: {PASS/FAIL}
-- collect: {N} / {可执行 case 数}
+- suite collect: {N} / {可执行 case 数}
+- module selector check: {PASS/FAIL/NA}
+- module selector collect: {PASS/FAIL/NA}
+
+warnings：
+- validate-profile warnings: {列表或无}
+- accepted warnings: {列表或无}
+- must-fix warnings: {列表或无}
+
+report artifacts：
+- suite latest: test_workspace/reports/{target}/{module}/suites/{suite}/latest/result.json
+- module latest: test_workspace/reports/{target}/{module}/module/latest/result.json
 
 下一步：
 - 配置环境变量后执行 `aitest run --suite-file <suite_dir>/suite.yaml`

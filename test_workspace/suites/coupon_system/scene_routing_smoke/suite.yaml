@@ -4,7 +4,6 @@ suite: scene_routing_smoke
 case_files:
 - business.md
 - boundary.md
-profile: profile_scene_routing_smoke_suite.md
 knowledge_refs:
   l1:
   - test_workspace/knowledge/L1/scene_routing.md

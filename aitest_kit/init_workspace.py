@@ -21,12 +21,14 @@ def init_command(target: Path, force: bool) -> None:
     """Initialize a clean AITest workspace for one target system.
 
     Writes template-managed files such as aitest_config/, test_workspace/,
-    AGENTS.md, CLAUDE.md, and local skill directories into --target.
+    AGENTS.md, CLAUDE.md, and agent-neutral skills/ into --target.
 
     \b
     After init:
       cd <target>
       aitest doctor
+      # choose one agent integration, for example Codex:
+      mkdir -p .codex/skills && cp -R skills/. .codex/skills/
       # then create target/module/suite assets before codegen/run
     """
     try:
@@ -40,5 +42,7 @@ def init_command(target: Path, force: bool) -> None:
     click.echo("Next steps:")
     click.echo(f"  cd {result.target}")
     click.echo("  aitest doctor")
+    click.echo("  # choose one agent integration, for example Codex:")
+    click.echo("  mkdir -p .codex/skills && cp -R skills/. .codex/skills/")
     click.echo("  # after creating target/module/suite assets:")
     click.echo("  aitest codegen --suite-file <suite_dir>/suite.yaml --validate-profile")

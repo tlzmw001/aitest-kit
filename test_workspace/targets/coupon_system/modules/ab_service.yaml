@@ -4,8 +4,6 @@ module_type: multi_endpoint
 fixture:
   file: ab_service.py
   default_fixture: setup_ab_service
-profile:
-  file: profile_ab_service.md
 helpers:
 - test_workspace/targets/coupon_system/helpers/grpc_ops.py
 - test_workspace/targets/coupon_system/helpers/http.py
