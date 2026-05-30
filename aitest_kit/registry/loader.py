@@ -6,6 +6,7 @@ from typing import Any
 
 import yaml
 
+from aitest_kit.workspace_config import AITEST_CONFIG_PATH
 from aitest_kit.registry.models import (
     ModuleContext,
     RegisteredSuite,
@@ -139,6 +140,12 @@ def _read_yaml_mapping(path: Path, diagnostics: list[str], label: str) -> dict[s
     return data
 
 
+def _read_optional_yaml_mapping(path: Path, diagnostics: list[str], label: str) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    return _read_yaml_mapping(path, diagnostics, label)
+
+
 def _load_target_data(
     target: str | Path,
     root: Path,
@@ -156,11 +163,13 @@ def _load_target_data(
     if target_file.exists():
         return target_file, _read_yaml_mapping(target_file, diagnostics, "target")
 
-    targets_file = root / "aitest_config" / "targets.yaml"
-    targets_data = _read_yaml_mapping(targets_file, diagnostics, "targets")
-    target_data = targets_data.get("targets", {}).get(target_name) if isinstance(targets_data.get("targets"), dict) else None
-    if isinstance(target_data, dict):
-        return targets_file, target_data
+    for targets_file in (root / AITEST_CONFIG_PATH, root / "aitest_config" / "targets.yaml"):
+        targets_data = _read_optional_yaml_mapping(targets_file, diagnostics, "targets")
+        if targets_data is None:
+            continue
+        target_data = targets_data.get("targets", {}).get(target_name) if isinstance(targets_data.get("targets"), dict) else None
+        if isinstance(target_data, dict):
+            return targets_file, target_data
     diagnostics.append(f"E700: target not found: {target_name}")
     return None, {}
 

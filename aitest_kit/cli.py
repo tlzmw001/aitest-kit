@@ -6,6 +6,7 @@ import click
 from aitest_kit.codegen.cli import codegen
 from aitest_kit.doctor import doctor_command
 from aitest_kit.init_workspace import init_command
+from aitest_kit.registry.cli import registry_command, task_command
 from aitest_kit.report.cli import report_command, run_command
 from aitest_kit.upgrade_workspace import upgrade_command
 
@@ -18,8 +19,10 @@ def main():
 main.add_command(codegen)
 main.add_command(doctor_command)
 main.add_command(init_command)
+main.add_command(registry_command)
 main.add_command(run_command)
 main.add_command(report_command)
+main.add_command(task_command)
 main.add_command(upgrade_command)
 
 

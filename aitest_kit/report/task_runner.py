@@ -9,13 +9,10 @@ from typing import Any
 
 import click
 
-from aitest_kit.codegen.suite import (
-    load_suite_context_for_paths,
-    resolve_suite_runtime_paths,
-)
 from aitest_kit.registry import load_task_context
 from aitest_kit.registry.models import TaskContext, TaskUnit
-from aitest_kit.registry.selection import filter_task_context_by_case_ids, suite_case_report_dir_name
+from aitest_kit.registry.selection import filter_task_context_by_case_ids
+from aitest_kit.report.paths import selector_report_bucket, task_report_bucket, unit_report_dir
 
 
 def run_task_command_impl(
@@ -63,7 +60,8 @@ def run_task_context_command_impl(
         click.echo(f"Task {task.task} has no units")
         raise SystemExit(1)
 
-    task_reports_dir = _load_paths().reports_dir / "tasks" / task.task
+    paths = _load_paths()
+    task_reports_dir = _task_reports_dir(task, paths.reports_dir)
     task_run_id, task_run_dir = _create_run_dir(task_reports_dir)
     started = time.monotonic()
     unit_results: list[dict[str, Any]] = []
@@ -79,6 +77,8 @@ def run_task_context_command_impl(
             skip_codegen_check,
             extra_args,
             _run_command_impl,
+            task_run_id,
+            task_run_dir,
         )
         unit_results.append(result)
         if code:
@@ -91,6 +91,7 @@ def run_task_context_command_impl(
         unit_results=unit_results,
         exit_code=exit_code,
         include_manual=include_manual,
+        extra_args=extra_args,
     )
     _write_result(task_run_dir, task_reports_dir, aggregate)
     summary = aggregate["summary"]
@@ -109,6 +110,8 @@ def _run_task_unit(
     skip_codegen_check: bool,
     extra_args: list[str],
     run_suite,
+    task_run_id: str,
+    task_run_dir: Path,
 ) -> tuple[dict[str, Any], int]:
     if unit.suite_file is None:
         click.echo(f"\n[{index}] task unit requires suite_file")
@@ -121,6 +124,8 @@ def _run_task_unit(
     )
     unit_include_manual = _unit_include_manual(include_manual, task.defaults.include_manual, unit)
     label = unit.name or unit.suite or str(unit.suite_file)
+    unit_dir_name = _unit_dir_name(unit, index)
+    unit_dir = unit_report_dir(task_run_dir, unit_dir_name)
     click.echo(f"\n[{index}] suite_file: {unit.suite_file}")
     if label:
         click.echo(f"    unit: {label}")
@@ -133,44 +138,24 @@ def _run_task_unit(
             suite_file=str(unit.suite_file),
             case_ids=tuple(unit.case_ids),
             env_files=task.env_files,
+            report_run_dir=unit_dir,
+            run_id_override=task_run_id,
+            update_latest=False,
         )
         code = 0
     except SystemExit as exc:
         code = int(exc.code or 0)
 
-    result = _read_unit_latest_result(unit)
+    result = _read_unit_result(unit_dir)
     if result is None:
         result = _synthetic_unit_result(task, unit, index, "unit report was not written")
         code = code or 1
-    result.setdefault("task_unit", _unit_payload(unit, index))
+    result.setdefault("task_unit", _unit_payload(unit, index, unit_dir=unit_dir))
     return result, code
 
 
-def _read_unit_latest_result(unit: TaskUnit) -> dict[str, Any] | None:
-    if unit.suite_file is None:
-        return None
-    from aitest_kit.report.cli import _load_paths
-
-    paths = _load_paths()
-    context = load_suite_context_for_paths(
-        str(unit.suite_file),
-        profile_dir=paths.profile_dir,
-    )
-    runtime_paths = resolve_suite_runtime_paths(
-        context,
-        generated_dir=paths.generated_dir,
-        reports_dir=paths.reports_dir,
-        profile_dir=paths.profile_dir,
-    )
-    reports_dir = runtime_paths.reports_dir
-    if unit.case_ids:
-        reports_dir = paths.reports_dir / "tasks" / suite_case_report_dir_name(
-            target=context.target,
-            module=context.module,
-            suite=context.suite,
-            case_ids=unit.case_ids,
-        )
-    result_path = reports_dir / "latest" / "result.json"
+def _read_unit_result(unit_dir: Path) -> dict[str, Any] | None:
+    result_path = unit_dir / "result.json"
     if not result_path.exists():
         return None
     return json.loads(result_path.read_text(encoding="utf-8"))
@@ -184,6 +169,7 @@ def _task_result(
     unit_results: list[dict[str, Any]],
     exit_code: int,
     include_manual: bool,
+    extra_args: list[str],
 ) -> dict[str, Any]:
     cases: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
@@ -224,7 +210,7 @@ def _task_result(
         "status": "COMPLETED" if exit_code == 0 else "FAILED_RUN",
         "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
         "duration_seconds": duration_seconds,
-        "command": _task_command(task),
+        "command": _task_command(task, extra_args),
         "task_file": str(task.task_path),
         "run_scope": run_scope,
         "project_config_version": unit_results[0].get("project_config_version", "missing") if unit_results else "missing",
@@ -248,7 +234,7 @@ def _task_result(
     }
 
 
-def _task_command(task: TaskContext) -> str:
+def _task_command(task: TaskContext, extra_args: list[str] | None = None) -> str:
     selector = task.metadata.get("selector") if isinstance(task.metadata, dict) else None
     if isinstance(selector, dict):
         parts = ["aitest", "run"]
@@ -262,11 +248,17 @@ def _task_command(task: TaskContext) -> str:
             parts.extend(["--module", str(module)])
         for case_id in selector.get("case_ids") or []:
             parts.extend(["--case-id", str(case_id)])
+        if extra_args:
+            parts.append("--")
+            parts.extend(str(arg) for arg in extra_args)
         return " ".join(parts)
 
     parts = ["aitest", "run", "--task-file", str(task.task_path)]
     for case_id in task.metadata.get("case_ids", []) if isinstance(task.metadata, dict) else []:
         parts.extend(["--case-id", str(case_id)])
+    if extra_args:
+        parts.append("--")
+        parts.extend(str(arg) for arg in extra_args)
     return " ".join(parts)
 
 
@@ -358,8 +350,8 @@ def _synthetic_unit_result(task: TaskContext, unit: TaskUnit, index: int, messag
     }
 
 
-def _unit_payload(unit: TaskUnit, index: int) -> dict[str, Any]:
-    return {
+def _unit_payload(unit: TaskUnit, index: int, *, unit_dir: Path | None = None) -> dict[str, Any]:
+    payload = {
         "index": index,
         "name": unit.name,
         "target": unit.target,
@@ -368,6 +360,36 @@ def _unit_payload(unit: TaskUnit, index: int) -> dict[str, Any]:
         "suite_file": str(unit.suite_file) if unit.suite_file else "",
         "case_ids": unit.case_ids,
     }
+    if unit_dir is not None:
+        payload.update({
+            "result_path": str(unit_dir / "result.json"),
+            "report_path": str(unit_dir / "report.md"),
+            "junit_path": str(unit_dir / "junit.xml"),
+        })
+    return payload
+
+
+def _task_reports_dir(task: TaskContext, reports_root: Path) -> Path:
+    selector = task.metadata.get("selector") if isinstance(task.metadata, dict) else None
+    if isinstance(selector, dict):
+        return selector_report_bucket(
+            reports_root,
+            target=str(selector.get("target") or ""),
+            module=str(selector.get("module") or ""),
+            all_suites=bool(selector.get("all_suites")),
+            case_ids=selector.get("case_ids") or [],
+        )
+    return task_report_bucket(reports_root, task.task)
+
+
+def _unit_dir_name(unit: TaskUnit, index: int) -> str:
+    parts = [
+        f"{index:02d}",
+        unit.target,
+        unit.module,
+        unit.suite or unit.name or "suite",
+    ]
+    return "_".join(str(part) for part in parts if part)
 
 
 def _task_manual_policy(task: TaskContext, cli_include_manual: bool) -> str:

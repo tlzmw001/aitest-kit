@@ -39,6 +39,7 @@ test_workspace/
 
 - `test_workspace/suites/{target}/{suite}/` 存放 Markdown 源用例和 suite profile；`suite.yaml` 绑定 target/module。
 - `test_workspace/targets/{target}/` 存放 target/module registry、fixture、helper 和 module profile。
+- suite 可直接通过 `--suite-file` 执行；要进入 module/target/all 聚合入口，使用 `aitest registry register-suite` 注册到 module。
 - `test_workspace/generated/{target}/` 存放 codegen 生成的 pytest 文件，视为编译产物。
 - `test_workspace/results/` 记录已确认的待测系统 bug 或重要发现。
 - `test_workspace/reports/` 存放测试执行报告。
@@ -52,6 +53,8 @@ aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --
 aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --dump-ir
 aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
 aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest registry register-suite --target <target> --module <module> --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest task create --name <task_name> --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 aitest report
 ```

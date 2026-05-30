@@ -52,6 +52,24 @@ aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
 ```
 
+单个 suite 可以直接通过 `--suite-file` 运行；如果希望它进入 module、target 或 all 聚合入口，注册到 module：
+
+```bash
+aitest registry register-suite \
+  --target <target> \
+  --module <module> \
+  --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+```
+
+如果需要维护一组明确的回归 suite，可以创建 task：
+
+```bash
+aitest task create \
+  --name nightly_gateway \
+  --suite-file test_workspace/suites/<target>/<suite1>/suite.yaml \
+  --suite-file test_workspace/suites/<target>/<suite2>/suite.yaml
+```
+
 多个 suite 需要作为一次任务执行时，创建 `test_workspace/tasks/<task>.yaml`：
 
 ```bash

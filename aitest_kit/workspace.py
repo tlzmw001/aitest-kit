@@ -83,11 +83,22 @@ def init_workspace(target: str | Path, *, force: bool = False) -> InitWorkspaceR
     """Copy the packaged project workspace template into ``target``."""
     target_path = Path(target).expanduser().resolve()
     template_root = resources.files(_TEMPLATE_PACKAGE)
+    template_files = _template_files(template_root)
     result = InitWorkspaceResult(target=target_path)
+
+    blocked_directories = _blocked_template_directories(target_path, template_files)
+    if blocked_directories:
+        names = ", ".join(str(item) for item in blocked_directories[:8])
+        if len(blocked_directories) > 8:
+            names += f", ... (+{len(blocked_directories) - 8} more)"
+        raise FileExistsError(
+            "target contains file(s) where AITest needs directories: "
+            f"{names}. Move or rename them before running init."
+        )
 
     conflicts = [
         relative
-        for relative in _template_files(template_root)
+        for relative in template_files
         if (target_path / relative).exists()
     ]
     if conflicts and not force:
@@ -100,7 +111,7 @@ def init_workspace(target: str | Path, *, force: bool = False) -> InitWorkspaceR
         )
 
     target_path.mkdir(parents=True, exist_ok=True)
-    for relative in _template_files(template_root):
+    for relative in template_files:
         source = template_root.joinpath(*relative.parts)
         destination = target_path / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -209,6 +220,26 @@ def _template_files(root) -> list[Path]:
     files: list[Path] = []
     _collect_template_files(root, Path(), files)
     return sorted(files)
+
+
+def _blocked_template_directories(target: Path, template_files: list[Path]) -> list[Path]:
+    blocked: list[Path] = []
+    seen: set[str] = set()
+    if target.exists() and not target.is_dir():
+        return [Path(".")]
+
+    for relative in template_files:
+        for parent in relative.parents:
+            if parent == Path("."):
+                continue
+            candidate = target / parent
+            if candidate.exists() and not candidate.is_dir():
+                key = parent.as_posix()
+                if key not in seen:
+                    seen.add(key)
+                    blocked.append(parent)
+                break
+    return blocked
 
 
 def _collect_template_files(node, relative: Path, files: list[Path]) -> None:

@@ -163,6 +163,119 @@ def test_codegen_cases_suite_validates_dumps_generates_and_checks(tmp_path):
         assert (report_dir / "codegen_health_report.json").exists()
 
 
+def test_codegen_suite_dry_run_parses_cases_without_profile_gate(tmp_path):
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
+        root = Path(cwd)
+        _write_module_profile(root)
+        suite_dir = _write_suite(root)
+        (suite_dir / "profile_quota_billing_v2_suite.md").unlink()
+
+        result = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml"), "--dry-run"])
+
+        assert result.exit_code == 0, result.output
+        assert "Suite: quota_billing_v2" in result.output
+        assert "quota_billing_business.md: 1 cases" in result.output
+        assert "Profile gate blocked codegen" not in result.output
+
+
+def test_codegen_target_module_health_report_aggregates_registered_suites(tmp_path):
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
+        root = Path(cwd)
+        _write_module_profile(root)
+        _write_suite(root)
+
+        out_dir = root / "health-reports"
+        result = runner.invoke(
+            codegen,
+            [
+                "--target", "sub2api",
+                "--module", "gateway_api",
+                "--health-report",
+                "--write-report",
+                "--report-dir", str(out_dir),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "module_count: 1" in result.output
+        assert "suite: quota_billing_v2" in result.output
+        assert (out_dir / "codegen_health_report.md").exists()
+        assert (out_dir / "codegen_health_report.json").exists()
+
+
+def test_codegen_target_promotion_analysis_aggregates_registered_suites(tmp_path):
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
+        root = Path(cwd)
+        _write_module_profile(root)
+        suite_dir = _write_suite(root)
+        (suite_dir / "quota_billing_business.md").write_text(
+            """# promotion smoke
+
+## 共享配置
+
+**接口**：`GET /health`
+
+---
+
+## 一、重复流程
+
+### TC-GW-071：case body one
+- **优先级**：P1
+- **断言**：`response.status == "ok"`
+
+### TC-GW-072：case body two
+- **优先级**：P1
+- **断言**：`response.status == "ok"`
+
+### TC-GW-073：case body three
+- **优先级**：P1
+- **断言**：`response.status == "ok"`
+""",
+            encoding="utf-8",
+        )
+        (suite_dir / "profile_quota_billing_v2_suite.md").write_text(
+            """```yaml
+profile_scope: case_suite
+parent_module: gateway_api
+suite: quota_billing_v2
+case_bodies:
+  TC-GW-071: |
+    resp = client.health()
+    assert resp["status"] == "ok"
+  TC-GW-072: |
+    resp = client.health()
+    assert resp["status"] == "ok"
+  TC-GW-073: |
+    resp = client.health()
+    assert resp["status"] == "ok"
+```
+""",
+            encoding="utf-8",
+        )
+
+        out_dir = root / "promotion-reports"
+        result = runner.invoke(
+            codegen,
+            [
+                "--target", "sub2api",
+                "--analyze-promotion",
+                "--write-report",
+                "--report-dir", str(out_dir),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "promotion_summary:" in result.output
+        assert "suite_count: 1" in result.output
+        assert "candidate_groups: 1" in result.output
+        assert (out_dir / "sub2api_all_promotion_summary.md").exists()
+        assert (out_dir / "sub2api_all_promotion_summary.json").exists()
+        assert (out_dir / "suites" / "quota_billing_v2" / "gateway_api_quota_billing_v2_promotion_report.md").exists()
+
+
 def test_codegen_suite_file_and_task_manifest_reuse_suite_pipeline(tmp_path):
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
@@ -246,6 +359,38 @@ def test_codegen_all_and_module_discover_targets_yaml_registry(tmp_path):
         config_dir = root / "aitest_config"
         config_dir.mkdir(parents=True, exist_ok=True)
         (config_dir / "targets.yaml").write_text(
+            """targets:
+  sub2api:
+    target: sub2api
+    defaults:
+      module_dir: test_workspace/targets/sub2api/modules
+      profile_dir: test_workspace/targets/sub2api/profiles
+      generated_dir: test_workspace/generated/sub2api
+      reports_dir: test_workspace/reports/sub2api
+""",
+            encoding="utf-8",
+        )
+        _write_suite(root)
+
+        all_generate = runner.invoke(codegen, ["--all"])
+        assert all_generate.exit_code == 0, all_generate.output
+        assert "Task: all" in all_generate.output
+
+        module_check = runner.invoke(codegen, ["--module", "gateway_api", "--check"])
+        assert module_check.exit_code == 0, module_check.output
+        assert "Task: gateway_api" in module_check.output
+        assert "All generated files are up to date." in module_check.output
+
+
+def test_codegen_all_discovers_unified_aitest_yaml_target_registry(tmp_path):
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
+        root = Path(cwd)
+        _write_module_profile(root)
+        (root / "test_workspace" / "targets" / "sub2api" / "target.yaml").unlink()
+        config_dir = root / "aitest_config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "aitest.yaml").write_text(
             """targets:
   sub2api:
     target: sub2api

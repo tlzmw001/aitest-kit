@@ -134,6 +134,7 @@ def test_init_creates_workspace_from_single_package_template(tmp_path):
     assert (target / "test_workspace" / "targets" / ".gitkeep").exists()
     assert (target / "test_workspace" / "suites" / ".gitkeep").exists()
     assert (target / "test_workspace" / "generated" / ".gitkeep").exists()
+    assert (target / "test_workspace" / "tasks" / ".gitkeep").exists()
     assert not (target / "aitest_config" / "config.yaml").exists()
     assert not (target / "aitest_config" / "project_config.yaml").exists()
     assert not (target / "test_workspace" / "casesuites").exists()
@@ -158,6 +159,29 @@ def test_init_refuses_to_overwrite_template_managed_files(tmp_path):
     assert result.exit_code != 0
     assert "Use --force to overwrite" in result.output
     assert (target / "README.md").read_text(encoding="utf-8") == "keep me\n"
+
+
+def test_init_accepts_existing_template_parent_directory(tmp_path):
+    target = tmp_path / "project"
+    (target / ".claude").mkdir(parents=True)
+
+    result = CliRunner().invoke(main, ["init", "--target", str(target)])
+
+    assert result.exit_code == 0
+    assert (target / ".claude" / "skills" / "test-codegen" / "SKILL.md").exists()
+
+
+def test_init_reports_file_blocking_template_directory(tmp_path):
+    target = tmp_path / "project"
+    target.mkdir()
+    (target / ".claude").write_text("not a directory\n", encoding="utf-8")
+
+    result = CliRunner().invoke(main, ["init", "--target", str(target)])
+
+    assert result.exit_code != 0
+    assert "target contains file(s) where AITest needs directories: .claude" in result.output
+    assert "Traceback" not in result.output
+    assert (target / ".claude").read_text(encoding="utf-8") == "not a directory\n"
 
 
 def test_init_force_overwrites_template_managed_files(tmp_path):

@@ -51,6 +51,8 @@ aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --
 aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --dump-ir
 aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
 aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest registry register-suite --target <target> --module <module> --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest task create --name <task_name> --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 aitest run --task-file test_workspace/tasks/<task>.yaml
 aitest report
@@ -84,6 +86,7 @@ aitest report
 - 测试知识库是测试设计主输入，不要长期绕过知识层直接写 pytest。
 - Markdown 用例是源数据；generated pytest 是编译产物。
 - `profile_{module}.md` 位于 `test_workspace/targets/{target}/profiles/`；`profile_{suite}_suite.md` 跟随具体用例 suite。
+- suite 只有注册到 `module.yaml.registered_suites` 后，才会进入 `--module`、`--target`、`--all` 聚合入口；注册使用 `aitest registry register-suite`。
 - 生成代码不手改为长期资产；优先改 Markdown、profile、fixture、helper 或配置后重新生成。
 - 配置、端口、URL、凭证都走环境变量或配置文件，不硬编码。
 - 不放宽断言、不 skip 失败用例、不伪造成功响应。

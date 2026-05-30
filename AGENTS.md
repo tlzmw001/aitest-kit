@@ -89,6 +89,8 @@ python3 -m aitest_kit.cli init --target /path/to/your_project
 python3 -m aitest_kit.cli codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
 python3 -m aitest_kit.cli codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
 python3 -m aitest_kit.cli codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --health-report --write-report
+python3 -m aitest_kit.cli registry register-suite --target <target> --module <module> --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+python3 -m aitest_kit.cli task create --name <task_name> --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 python3 -m aitest_kit.cli run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 python3 -m aitest_kit.cli run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --case-id TC-XXX-001
 python3 -m aitest_kit.cli codegen --target <target> --module <module> --check
@@ -185,6 +187,9 @@ test-codegen
 
 - 测试用例按 suite 组织。
   L2/迭代批次放到任意 suite 目录，并用 `suite.yaml` 声明 `target`、`module`、`suite`、`case_files` 和 suite profile。
+
+- suite 注册是聚合执行入口。
+  单个 suite 可直接用 `--suite-file` 执行；只有通过 `aitest registry register-suite` 写入 `module.yaml.registered_suites` 的 active suite，才会进入 `--module`、`--target` 和 `--all`。
 
 - 模块 fixture 按 target/module 拆分。
   模块逻辑放到 `test_workspace/targets/{target}/fixtures/{module}.py`，由 `modules/{module}.yaml` 注册。
@@ -283,7 +288,7 @@ python3 -m aitest_kit.cli report --all
 1. 默认先执行 generated freshness check，确认 Markdown/profile 与 generated pytest 一致；失败时生成 `BLOCKED_RUN` 报告并停止，不执行过期测试。
 2. 默认排除 `@pytest.mark.manual` 用例；报告仍统计 `manual_total`、`manual_executed`、`manual_not_run`。需要执行 manual 时使用 `--include-manual`。
 3. collector 用 generated pytest 中的 `__tc_meta__` 与 JUnit XML 结果关联；`__codegen_skipped__` 统计可行性存疑且未生成 pytest 函数的用例。
-4. suite 执行输出 `junit.xml`、`result.json`、`report.md` 到对应 reports bucket 的 `runs/{run_id}/`，并同步到 `latest/`。task、target/module、target/all 和 workspace `--all` 会额外生成 `test_workspace/reports/tasks/{task_or_selector}/latest/` 汇总报告。
+4. suite 执行输出 `junit.xml`、`result.json`、`report.md` 到 `test_workspace/reports/{target}/{module}/suites/{suite}/` 的 `runs/{run_id}/`，并同步到 `latest/`。case 执行写入 `{target}/{module}/cases/{case_id}/`；module、target、task、all 聚合执行写入对应聚合 bucket，并把 suite unit 明细保存到同一个 run_id 的 `units/` 目录。
 5. report 的反哺清单只做规则化初判；断言失败不自动判定为产品 bug，需人工确认后再记录到 `test_workspace/results/`。
 
 ## codegen 可移植架构

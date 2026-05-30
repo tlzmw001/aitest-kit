@@ -61,6 +61,8 @@ pytest tests/
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 aitest report --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --case-id TC-XXX-001
+aitest registry register-suite --target <target> --module <module> --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest task create --name <task_name> --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 aitest run --target <target> --module <module>
 aitest run --target <target>
 aitest run --all
@@ -198,6 +200,7 @@ aitest report --all
 - Markdown 用例是唯一数据源，test-codegen 生成 pytest 代码执行
 - TEST_SPEC 是所有 skill 的行为准则，经验教训统一沉淀在此
 - 用例存放在 suite 目录，用 `suite.yaml` 绑定 target/module
+- 单 suite 可直接通过 `--suite-file` 执行；进入 `--module`、`--target`、`--all` 聚合前，必须用 `aitest registry register-suite` 注册到对应 module
 - 模块 fixture 按 target/module 拆分到 `test_workspace/targets/{target}/fixtures/{module}.py`
 - module profile 存放在 `test_workspace/targets/{target}/profiles/profile_{module}.md`；suite profile 跟随用例目录，命名为 `profile_{suite}_suite.md`
 - 测试执行报告写入 `test_workspace/reports/`，属于运行产物，不提交；待测系统 bug 仍记录到 `test_workspace/results/`
@@ -208,7 +211,7 @@ aitest report --all
 1. **freshness check** — `aitest run` 默认先检查 generated pytest 是否与 Markdown/profile 一致；失败时生成 `BLOCKED_RUN` 报告并停止。
 2. **pytest 执行** — 默认追加 `-m "not manual"`；`--include-manual` 才执行 manual 用例。
 3. **metadata join** — generated pytest 中的 `__tc_meta__` 连接 JUnit XML 结果；`__codegen_skipped__` 记录未生成 pytest 函数的可行性存疑用例。
-4. **结果落盘** — suite 执行输出 `junit.xml`、`result.json`、`report.md` 到对应 reports bucket 的 `runs/{run_id}/`，并同步到 `latest/`；task、target/module、target/all 和 workspace `--all` 会额外生成 `test_workspace/reports/tasks/{task_or_selector}/latest/` 汇总报告。
+4. **结果落盘** — suite 执行输出 `junit.xml`、`result.json`、`report.md` 到 `test_workspace/reports/{target}/{module}/suites/{suite}/` 的 `runs/{run_id}/`，并同步到 `latest/`；case 执行写入 `{target}/{module}/cases/{case_id}/`；module、target、task、all 聚合执行写入对应聚合 bucket，并把 suite unit 明细保存到同一个 run_id 的 `units/` 目录。
 5. **反哺清单** — 报告按环境、fixture/codegen、断言失败、未知问题生成下一步处理建议。
 
 ## 测试执行注意事项

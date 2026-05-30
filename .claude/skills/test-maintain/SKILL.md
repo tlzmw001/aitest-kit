@@ -56,6 +56,8 @@ effort: high
 | 废弃或删除测试 | “接口废弃/这批 case 不要了/删除相关测试” | 先列 retire/delete 清单；用户确认后路由到底层 skill 修改源文件并重新 codegen |
 | generated stale | “--check stale/generated 过期/pytest 和 case 不一致” | 走 `test-codegen`；若 stale 源于 fixture/profile 缺口，转 `test-scaffold incremental` |
 | fixture/profile 缺口 | “没有 fixture/缺方法/缺认证/header/env/cleanup/上传/流式/mock” | 走 `test-scaffold incremental` |
+| suite 注册到聚合入口 | “把这个 suite 加到 module/target/all”“注册 suite”“让模块跑到这个 suite” | 先确认 target/module/suite.yaml，再调用 `aitest registry register-suite` |
+| 创建 task | “创建 task/任务/回归集，包含这些 suite” | 先确认 task 名称和 suite_file 清单，再调用 `aitest task create` |
 | 单条用例错误 | “TC-XXX-001 写错/预期错/前置不可行” | 走 `test-fix` |
 | 已验证模式沉淀 | “重复 case_flow/case_body/想沉淀规则” | 走 `emitter-build` |
 | 不确定入口 | 用户只说“帮我维护测试/同步测试” | 本 skill 建影响面后给出路由选择，不直接改 |
@@ -67,8 +69,28 @@ effort: high
 只是新增/修改用例表达 -> test-design/test-fix/test-codegen
 需要新增测试调用能力 -> test-scaffold incremental
 只是 generated 不一致 -> test-codegen
+只是把 suite 纳入 module/target/all 聚合 -> aitest registry register-suite
+只是创建 task manifest -> aitest task create
 重复模式稳定后 -> emitter-build
 ```
+
+## codegen 模式速查
+
+本 skill 需要能向用户解释并选择合适的 codegen 模式。详细口径以 `README.md`、`docs/usebook/aitest_quickstart.md` 和 `docs/usebook/codegen_troubleshooting.md` 为准；需要细节时先读取这些文档，不要凭记忆猜。
+
+| 模式 | 用途 | 入口范围 |
+|---|---|---|
+| `--dry-run` | 只解析 Markdown，不进 profile gate，不写 generated；适合 scaffold/profile 完成前检查用例格式 | suite/task/target/module/all |
+| `--validate-profile` | 校验 profile schema、case_id 对齐、case_flow/case_body 语义 | suite/task/target/module/all |
+| `--check` | 临时重新生成到 tmpdir，与已有 generated pytest diff，不写 generated | suite/task/target/module/all |
+| 无特殊参数 | 正式生成 pytest | suite/task/target/module/all |
+| `--dump-ir` | 输出 Case IR JSON，排查 strategy、fixture、request、assertion 来源 | 只用 `--suite-file` |
+| `--explain <TC-ID>` | 输出单条 case 的 IR 解释 | 只用 `--suite-file` |
+| `--health-report` | 输出 codegen 健康度和成熟度 | suite/target/module |
+| `--analyze-promotion` | 分析 suite、module 或 target 范围内的 `case_bodies` 晋升机会 | suite/target/module |
+| `--suggest-promotion-patch` | 为一个 suite 生成 review-only patch 草案，不自动修改 profile | 只用 `--suite-file` |
+
+模块级沉淀可以先运行 `aitest codegen --target <target> --module <module> --health-report --write-report` 和 `aitest codegen --target <target> --module <module> --analyze-promotion --write-report` 获得聚合证据。真正修改 profile/helper 前，仍需路由 `emitter-build` 和人工 review；不要直接批量应用晋升。
 
 ## 工作流程
 
@@ -92,7 +114,7 @@ effort: high
 - target registry：`test_workspace/targets/{target}/target.yaml`、`modules/{module}.yaml`
 - fixture/profile/helper：`test_workspace/targets/{target}/fixtures/`、`profiles/`、`helpers/`
 - generated：`test_workspace/generated/{target}/`
-- reports/results：`test_workspace/reports/latest/`、`test_workspace/results/`
+- reports/results：`test_workspace/reports/{target}/.../latest/`、`test_workspace/reports/tasks/{task_name}/latest/`、`test_workspace/results/`
 
 输出格式：
 
@@ -176,8 +198,12 @@ generated pytest 函数
 - `test-scaffold`：target、模块、模式（scaffold-module/scaffold-suite/incremental）、suite_dir、fixture/profile/helper 缺口
 - `test-codegen`：模块、`--suite-file <suite_dir>/suite.yaml` 或 `--task-file <task.yaml>`、是否 check/dump-ir
 - `emitter-build`：已验证 pytest、profile、可沉淀模式
+- `aitest registry register-suite`：target、module、suite.yaml、status；用于把 suite 接入 module/target/all 聚合入口
+- `aitest task create`：task name、明确的 suite.yaml 清单、description/output；用于创建 task manifest
 
 不要把本 skill 的完整分析原文原样塞给底层 skill；只传决策所需的最小上下文。
+
+维护 CLI 只用于确定性接线，不生成业务测试资产。新建 target/module/suite、补 fixture/helper/profile、判断 case_flow/case_body 仍然路由 `test-scaffold`。
 
 ### Step 5：验证维护结果
 
@@ -213,10 +239,10 @@ python3 -m aitest_kit.cli run --task-file <task.yaml> -- --collect-only -q
 如果真实服务和前置 env 已准备好，再运行：
 
 ```bash
-aitest run <module>
+python3 -m aitest_kit.cli run --suite-file <suite_dir>/suite.yaml
+# 或
+python3 -m aitest_kit.cli run --target <target> --module <module>
 ```
-
-或 `aitest run --suite-file <suite_dir>/suite.yaml`。
 
 ### Step 6：维护摘要
 

@@ -16,6 +16,7 @@ import click
 
 from aitest_kit.report.codegen_check import run_codegen_check
 from aitest_kit.report.collector import blocked_result, collect_result, generated_nodeids_for_case_ids
+from aitest_kit.report.paths import selector_report_bucket, suite_report_bucket, task_report_bucket
 from aitest_kit.report.renderer import render_markdown
 from aitest_kit.runtime_variables import (
     ProfileVariableError,
@@ -33,8 +34,6 @@ from aitest_kit.registry import load_task_context
 from aitest_kit.registry.selection import (
     build_task_context_from_selectors,
     filter_task_context_by_case_ids,
-    suite_case_report_dir_name,
-    task_report_dir_name,
 )
 from aitest_kit.workspace import push_workspace
 from aitest_kit.workspace_config import load_workspace_paths
@@ -121,6 +120,9 @@ def _run_command_impl(
     all_suites: bool = False,
     case_ids: tuple[str, ...] = (),
     env_files: list[Path] | None = None,
+    report_run_dir: Path | None = None,
+    run_id_override: str | None = None,
+    update_latest: bool = True,
 ) -> None:
     extra_args = list(args)
     if suite_file and task_file:
@@ -164,7 +166,6 @@ def _run_command_impl(
         )
         return
     paths = _load_paths()
-    root_reports_dir = paths.reports_dir
     suite_context = load_suite_context_for_paths(
         suite_file,
         profile_dir=paths.profile_dir,
@@ -177,15 +178,12 @@ def _run_command_impl(
     )
     paths = ReportPaths(
         suite_paths.generated_dir,
-        (
-            root_reports_dir / "tasks" / suite_case_report_dir_name(
-                target=suite_context.target,
-                module=suite_context.module,
-                suite=suite_context.suite,
-                case_ids=case_ids,
-            )
-            if case_ids
-            else suite_paths.reports_dir
+        suite_report_bucket(
+            paths.reports_dir,
+            target=suite_context.target,
+            module=suite_context.module,
+            suite=suite_context.suite,
+            case_ids=case_ids,
         ),
         suite_paths.profile_dir,
     )
@@ -193,11 +191,18 @@ def _run_command_impl(
         paths.generated_dir,
         suite_context=suite_context,
     )
-    run_id, run_dir = _create_run_dir(paths.reports_dir)
+    if report_run_dir is not None:
+        run_id = run_id_override or _new_run_id()
+        run_dir = Path(report_run_dir)
+        run_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        run_id, run_dir = _create_run_dir(paths.reports_dir)
 
-    command = "aitest run --suite-file " + suite_file
-    if case_ids:
-        command += "".join(f" --case-id {case_id}" for case_id in case_ids)
+    command = _format_run_command(
+        ["aitest", "run", "--suite-file", suite_file or ""],
+        case_ids=case_ids,
+        pytest_args=extra_args,
+    )
     manual_policy = "included" if include_manual else "excluded"
     run_scope = _run_scope_payload(
         suite_context=suite_context,
@@ -217,7 +222,7 @@ def _run_command_impl(
             environment=exc.environment,
             run_scope=run_scope,
         )
-        _write_result(run_dir, paths.reports_dir, result)
+        _write_result(run_dir, paths.reports_dir, result, update_latest=update_latest)
         click.echo(f"BLOCKED_RUN: {exc}")
         raise SystemExit(10) from exc
 
@@ -235,7 +240,7 @@ def _run_command_impl(
             environment=environment,
             run_scope=run_scope,
         )
-        _write_result(run_dir, paths.reports_dir, result)
+        _write_result(run_dir, paths.reports_dir, result, update_latest=update_latest)
         click.echo(f"BLOCKED_RUN: {codegen_check['message']}")
         raise SystemExit(10)
 
@@ -252,7 +257,7 @@ def _run_command_impl(
             run_scope=run_scope,
         )
         result["summary"]["error"] = 1
-        _write_result(run_dir, paths.reports_dir, result)
+        _write_result(run_dir, paths.reports_dir, result, update_latest=update_latest)
         click.echo("No generated test files found.")
         raise SystemExit(5)
 
@@ -291,7 +296,7 @@ def _run_command_impl(
         environment=environment,
         run_scope=run_scope,
     )
-    _write_result(run_dir, paths.reports_dir, result)
+    _write_result(run_dir, paths.reports_dir, result, update_latest=update_latest)
     summary = result["summary"]
     click.echo(
         f"Report written: {run_dir / 'report.md'} "
@@ -362,21 +367,12 @@ def _report_command_impl(
             suite_file,
             profile_dir=paths.profile_dir,
         )
-        suite_paths = resolve_suite_runtime_paths(
-            suite_context,
-            generated_dir=paths.generated_dir,
-            reports_dir=paths.reports_dir,
-            profile_dir=paths.profile_dir,
-        )
-        reports_dir = (
-            paths.reports_dir / "tasks" / suite_case_report_dir_name(
-                target=suite_context.target,
-                module=suite_context.module,
-                suite=suite_context.suite,
-                case_ids=case_ids,
-            )
-            if case_ids
-            else suite_paths.reports_dir
+        reports_dir = suite_report_bucket(
+            paths.reports_dir,
+            target=suite_context.target,
+            module=suite_context.module,
+            suite=suite_context.suite,
+            case_ids=case_ids,
         )
     elif task_file:
         task = load_task_context(task_file)
@@ -386,9 +382,10 @@ def _report_command_impl(
                 raise click.ClickException("; ".join(diagnostics))
         if task.diagnostics:
             raise click.ClickException("; ".join(task.diagnostics))
-        reports_dir = paths.reports_dir / "tasks" / task.task
+        reports_dir = task_report_bucket(paths.reports_dir, task.task)
     elif selector_used:
-        reports_dir = paths.reports_dir / "tasks" / task_report_dir_name(
+        reports_dir = selector_report_bucket(
+            paths.reports_dir,
             target=target or "",
             module=module_name or "",
             all_suites=all_suites,
@@ -506,11 +503,28 @@ def _run_scope_payload(
     return {"type": "unknown"}
 
 
-def _write_result(run_dir: Path, reports_dir: Path, result: dict) -> None:
+def _format_run_command(
+    parts: list[str],
+    *,
+    case_ids: tuple[str, ...] | list[str] = (),
+    pytest_args: list[str] | tuple[str, ...] = (),
+) -> str:
+    command = list(parts)
+    for case_id in case_ids:
+        command.extend(["--case-id", str(case_id)])
+    if pytest_args:
+        command.append("--")
+        command.extend(str(arg) for arg in pytest_args)
+    return " ".join(command)
+
+
+def _write_result(run_dir: Path, reports_dir: Path, result: dict, *, update_latest: bool = True) -> None:
     result_path = run_dir / "result.json"
     result_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     (run_dir / "report.md").write_text(render_markdown(result), encoding="utf-8")
 
+    if not update_latest:
+        return
     latest_dir = reports_dir / "latest"
     if latest_dir.exists():
         shutil.rmtree(latest_dir)

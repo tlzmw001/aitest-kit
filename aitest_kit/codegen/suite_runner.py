@@ -85,6 +85,9 @@ def run_suite_codegen(
                 click.echo(f"- {path}")
         return 1 if report.errors else 0
 
+    if dry_run:
+        return _dry_run_suite(context)
+
     gate_result = _suite_profile_gate(cases_path, runtime_paths, suite_project)
     if gate_result:
         return gate_result
@@ -106,8 +109,6 @@ def run_suite_codegen(
             report_dir=report_dir,
             echo_yaml=analyze_promotion,
         )
-    if dry_run:
-        return _dry_run_suite(context)
     return _generate_suite(context, runtime_paths, suite_project)
 
 

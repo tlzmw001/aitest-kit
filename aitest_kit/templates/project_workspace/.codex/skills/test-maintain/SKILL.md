@@ -56,6 +56,8 @@ effort: high
 | 废弃或删除测试 | “接口废弃/这批 case 不要了/删除相关测试” | 先列 retire/delete 清单；用户确认后路由到底层 skill 修改源文件并重新 codegen |
 | generated stale | “--check stale/generated 过期/pytest 和 case 不一致” | 走 `test-codegen`；若 stale 源于 fixture/profile 缺口，转 `test-scaffold incremental` |
 | fixture/profile 缺口 | “没有 fixture/缺方法/缺认证/header/env/cleanup/上传/流式/mock” | 走 `test-scaffold incremental` |
+| suite 注册到聚合入口 | “把这个 suite 加到 module/target/all”“注册 suite”“让模块跑到这个 suite” | 先确认 target/module/suite.yaml，再调用 `aitest registry register-suite` |
+| 创建 task | “创建 task/任务/回归集，包含这些 suite” | 先确认 task 名称和 suite_file 清单，再调用 `aitest task create` |
 | 单条用例错误 | “TC-XXX-001 写错/预期错/前置不可行” | 走 `test-fix` |
 | 已验证模式沉淀 | “重复 case_flow/case_body/想沉淀规则” | 走 `emitter-build` |
 | 不确定入口 | 用户只说“帮我维护测试/同步测试” | 本 skill 建影响面后给出路由选择，不直接改 |
@@ -67,6 +69,8 @@ effort: high
 只是新增/修改用例表达 -> test-design/test-fix/test-codegen
 需要新增测试调用能力 -> test-scaffold incremental
 只是 generated 不一致 -> test-codegen
+只是把 suite 纳入 module/target/all 聚合 -> aitest registry register-suite
+只是创建 task manifest -> aitest task create
 重复模式稳定后 -> emitter-build
 ```
 
@@ -176,8 +180,12 @@ generated pytest 函数
 - `test-scaffold`：target、模块、模式（scaffold-module/scaffold-suite/incremental）、suite_dir、fixture/profile/helper 缺口
 - `test-codegen`：模块、`--suite-file <suite_dir>/suite.yaml` 或 `--task-file <task.yaml>`、是否 check/dump-ir
 - `emitter-build`：已验证 pytest、profile、可沉淀模式
+- `aitest registry register-suite`：target、module、suite.yaml、status；用于把 suite 接入 module/target/all 聚合入口
+- `aitest task create`：task name、明确的 suite.yaml 清单、description/output；用于创建 task manifest
 
 不要把本 skill 的完整分析原文原样塞给底层 skill；只传决策所需的最小上下文。
+
+维护 CLI 只用于确定性接线，不生成业务测试资产。新建 target/module/suite、补 fixture/helper/profile、判断 case_flow/case_body 仍然路由 `test-scaffold`。
 
 ### Step 5：验证维护结果
 

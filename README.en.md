@@ -169,6 +169,21 @@ aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
 ```
 
+Codegen modes:
+
+| Command | Requires profile gate | Writes generated pytest | Purpose |
+|---|---:|---:|---|
+| `--dry-run` | No | No | Parse Markdown only; useful before scaffold/profile is complete |
+| `--validate-profile` | It is the gate | No | Validate profile JSON Schema, case id alignment, and case_flow/case_body semantics |
+| `--check` | Yes | No | Regenerate into a tmpdir and diff against existing generated pytest |
+| `--dump-ir` | Yes | No | Print suite Case IR JSON for strategy, fixture, request, and assertion tracing |
+| `--explain <TC-ID>` | Yes | No | Print IR details for one case |
+| `--health-report` | Yes | No, unless `--write-report` is used | Report codegen health, maturity, and stabilization signals |
+| `--analyze-promotion` | Yes | No, unless `--write-report` is used | Analyze current suite profile case_bodies promotion candidates |
+| no mode flag | Yes | Yes | Generate pytest |
+
+Diagnostic modes have different scopes. `--dump-ir` and `--explain` operate on one `--suite-file` for precise suite/case debugging. `--health-report` and `--analyze-promotion` support `--suite-file`, `--target <target> --module <module>`, and `--target <target>` for module/target aggregation. `--suggest-promotion-patch` remains suite-only to avoid producing broad patch drafts that are hard to review safely.
+
 From outside the workspace:
 
 ```bash
@@ -185,10 +200,14 @@ aitest report --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 Reports are written to:
 
 ```text
-test_workspace/reports/latest/
-test_workspace/reports/runs/{run_id}/
-test_workspace/reports/tasks/<task_or_selector>/latest/
+test_workspace/reports/<target>/<module>/suites/<suite>/latest/
+test_workspace/reports/<target>/<module>/cases/<case_id>/latest/
+test_workspace/reports/<target>/<module>/module/latest/
+test_workspace/reports/<target>/target/latest/
+test_workspace/reports/tasks/<task_name>/latest/
 ```
+
+Every report bucket keeps historical `runs/{run_id}/` entries and a `latest/` copy. Aggregate runs such as task, target, and module store suite-unit details under the same run id in `units/`, so one command does not create multiple unrelated top-level run ids.
 
 `aitest run` checks generated freshness before executing pytest. If Markdown/profile changed but generated pytest was not refreshed, it writes a `BLOCKED_RUN` report and stops.
 
@@ -200,6 +219,8 @@ test_workspace/reports/tasks/<task_or_selector>/latest/
 | `aitest upgrade --workspace <dir> --check` | Check whether copied workspace assets need updates |
 | `aitest upgrade --workspace <dir> --apply` | Apply safe template upgrades |
 | `aitest doctor` | Check layout, profiles, generated freshness, collect, and env hints |
+| `aitest registry register-suite --target <target> --module <module> --suite-file <suite.yaml>` | Register a suite into a module aggregate entry |
+| `aitest task create --name <task> --suite-file <suite.yaml>...` | Create a task manifest from explicit suite files |
 | `aitest codegen --suite-file <suite.yaml>` | Generate pytest for one target-aware suite |
 | `aitest codegen --task-file <task.yaml>` | Generate or check suites listed by a task |
 | `aitest codegen --target <target> [--module <module>]` | Generate or check registry suites for one target or module |

@@ -4,6 +4,7 @@ import json
 import re
 import subprocess
 import textwrap
+from pathlib import Path
 
 import pytest
 
@@ -96,7 +97,7 @@ profile: profile_demo_smoke_suite.md
         _run_command_impl(False, True, (), suite_file=str(suite_file))
 
     assert exc_info.value.code == 0
-    latest = tmp_path / "test_workspace" / "reports" / "latest" / "result.json"
+    latest = tmp_path / "test_workspace" / "reports" / "demo_target" / "demo" / "suites" / "demo_smoke" / "latest" / "result.json"
     result = json.loads(latest.read_text(encoding="utf-8"))
     assert result["summary"]["passed"] == 1
     assert result["environment"] == {
@@ -131,7 +132,7 @@ profile: profile_demo_smoke_suite.md
         _run_command_impl(False, True, (), suite_file=str(suite_file))
 
     assert exc_info.value.code == 10
-    result_path = tmp_path / "test_workspace" / "reports" / "latest" / "result.json"
+    result_path = tmp_path / "test_workspace" / "reports" / "demo_target" / "demo" / "suites" / "demo_smoke" / "latest" / "result.json"
     result = json.loads(result_path.read_text(encoding="utf-8"))
     assert result["status"] == "BLOCKED_RUN"
     assert result["blocked_reason"] == "env_file"
@@ -196,7 +197,17 @@ profile: profile_quota_billing_v2_suite.md
         _run_command_impl(False, True, (), suite_file=str(suite_file))
 
     assert exc_info.value.code == 0
-    result_path = tmp_path / "test_workspace" / "reports" / "latest" / "result.json"
+    result_path = (
+        tmp_path
+        / "test_workspace"
+        / "reports"
+        / "sub2api"
+        / "gateway_api"
+        / "suites"
+        / "quota_billing_v2"
+        / "latest"
+        / "result.json"
+    )
     result = json.loads(result_path.read_text(encoding="utf-8"))
     assert result["summary"]["passed"] == 1
     assert result["module"] == "gateway_api"
@@ -204,7 +215,7 @@ profile: profile_quota_billing_v2_suite.md
     assert result["suite_file"].endswith("suite.yaml")
     assert result["run_scope"]["type"] == "suite_file"
     assert result["cases"][0]["suite"] == "quota_billing_v2"
-    report = (tmp_path / "test_workspace" / "reports" / "latest" / "report.md").read_text(encoding="utf-8")
+    report = (result_path.parent / "report.md").read_text(encoding="utf-8")
     assert "- **Suite**：quota_billing_v2" in report
     assert "quota_billing_business" in report
 
@@ -264,7 +275,17 @@ profile: profile_quota_billing_v2_suite.md
         _run_command_impl(False, True, (), suite_file=str(suite_file))
 
     assert exc_info.value.code == 0
-    result_path = tmp_path / "test_workspace" / "reports" / "latest" / "result.json"
+    result_path = (
+        tmp_path
+        / "test_workspace"
+        / "reports"
+        / "sub2api"
+        / "gateway_api"
+        / "suites"
+        / "quota_billing_v2"
+        / "latest"
+        / "result.json"
+    )
     result = json.loads(result_path.read_text(encoding="utf-8"))
     assert result["summary"]["passed"] == 1
     assert result["command"].startswith("aitest run --suite-file ")
@@ -303,6 +324,9 @@ units:
     assert task_result["run_scope"]["type"] == "task"
     assert task_result["task"]["name"] == "release_regression"
     assert task_result["task"]["units"][0]["target"] == "sub2api"
+    unit_path = Path(task_result["task"]["units"][0]["result_path"])
+    assert unit_path.exists()
+    assert (task_result_path.parent / "units" / unit_path.parent.name / "result.json").exists()
 
 
 def test_run_suite_file_supports_case_id_filter(tmp_path, monkeypatch):
@@ -381,8 +405,10 @@ profile: profile_case_filter_suite.md
         tmp_path
         / "test_workspace"
         / "reports"
-        / "tasks"
-        / "sub2api_gateway_api_case_filter_case_tc_gw_041"
+        / "sub2api"
+        / "gateway_api"
+        / "cases"
+        / "tc_gw_041"
         / "latest"
         / "result.json"
     )
@@ -398,6 +424,84 @@ profile: profile_case_filter_suite.md
     _report_command_impl(None, suite_file=str(suite_file), case_ids=("TC-GW-041",))
     assert "# 测试执行报告" in report_path.read_text(encoding="utf-8")
     assert "stale" not in report_path.read_text(encoding="utf-8")
+
+
+def test_run_suite_file_records_pytest_passthrough_args(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("AITEST_ENV_FILE", raising=False)
+    suite_dir = tmp_path / "test_workspace" / "suites" / "sub2api" / "passthrough"
+    suite_dir.mkdir(parents=True)
+    suite_file = suite_dir / "suite.yaml"
+    suite_file.write_text(
+        """target: sub2api
+module: gateway_api
+suite: passthrough
+case_files:
+  - business.md
+profile: profile_passthrough_suite.md
+""",
+        encoding="utf-8",
+    )
+    (suite_dir / "business.md").write_text(
+        """# passthrough
+
+### TC-GW-041：selected case
+- **优先级**：P0
+- **断言**：`response.status == "ok"`
+""",
+        encoding="utf-8",
+    )
+    generated = tmp_path / "test_workspace" / "generated"
+    generated.mkdir(parents=True)
+    (generated / "test_gateway_api_passthrough_business.py").write_text(
+        textwrap.dedent(
+            '''
+            class TestGatewayApiPassthroughBusiness:
+                def test_tc_gw_041(self):
+                    __tc_meta__ = {
+                        "tc_id": "TC-GW-041",
+                        "module": "gateway_api",
+                        "suite": "passthrough",
+                        "category": "business",
+                        "source": "test_workspace/suites/sub2api/passthrough/business.md",
+                        "title": "selected case",
+                        "priority": "P0",
+                        "markers": [],
+                    }
+                    assert True
+
+
+            __codegen_skipped__ = []
+            '''
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        _run_command_impl(
+            False,
+            True,
+            ("--collect-only", "-q"),
+            suite_file=str(suite_file),
+            case_ids=("TC-GW-041",),
+        )
+
+    assert exc_info.value.code == 0
+    result_path = (
+        tmp_path
+        / "test_workspace"
+        / "reports"
+        / "sub2api"
+        / "gateway_api"
+        / "cases"
+        / "tc_gw_041"
+        / "latest"
+        / "result.json"
+    )
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    assert result["command"] == (
+        f"aitest run --suite-file {suite_file} --case-id TC-GW-041 -- --collect-only -q"
+    )
 
 
 def test_run_target_module_selector_and_report(tmp_path, monkeypatch):
@@ -484,18 +588,139 @@ registered_suites:
         _run_command_impl(False, True, (), target="sub2api", module_name="gateway_api")
 
     assert exc_info.value.code == 0
-    result_path = tmp_path / "test_workspace" / "reports" / "tasks" / "sub2api_gateway_api" / "latest" / "result.json"
+    result_path = tmp_path / "test_workspace" / "reports" / "sub2api" / "gateway_api" / "module" / "latest" / "result.json"
     result = json.loads(result_path.read_text(encoding="utf-8"))
     assert result["summary"]["passed"] == 1
     assert result["run_scope"]["type"] == "task"
     assert result["task"]["name"] == "sub2api_gateway_api"
     assert result["command"] == "aitest run --target sub2api --module gateway_api"
+    unit_path = Path(result["task"]["units"][0]["result_path"])
+    assert unit_path.exists()
+    assert (result_path.parent / "units" / unit_path.parent.name / "result.json").exists()
+    suite_latest = (
+        tmp_path
+        / "test_workspace"
+        / "reports"
+        / "sub2api"
+        / "gateway_api"
+        / "suites"
+        / "quota_billing_v2"
+        / "latest"
+        / "result.json"
+    )
+    assert not suite_latest.exists()
 
     report_path = result_path.parent / "report.md"
     report_path.write_text("stale\n", encoding="utf-8")
     _report_command_impl(None, target="sub2api", module_name="gateway_api")
     assert "# 测试执行报告" in report_path.read_text(encoding="utf-8")
     assert "stale" not in report_path.read_text(encoding="utf-8")
+
+    with pytest.raises(SystemExit) as target_exit:
+        _run_command_impl(False, True, (), target="sub2api")
+
+    assert target_exit.value.code == 0
+    target_result_path = tmp_path / "test_workspace" / "reports" / "sub2api" / "target" / "latest" / "result.json"
+    target_result = json.loads(target_result_path.read_text(encoding="utf-8"))
+    assert target_result["summary"]["passed"] == 1
+    assert target_result["command"] == "aitest run --target sub2api"
+    target_unit_path = Path(target_result["task"]["units"][0]["result_path"])
+    assert target_unit_path.exists()
+
+    target_report_path = target_result_path.parent / "report.md"
+    target_report_path.write_text("stale\n", encoding="utf-8")
+    _report_command_impl(None, target="sub2api")
+    assert "# 测试执行报告" in target_report_path.read_text(encoding="utf-8")
+    assert "stale" not in target_report_path.read_text(encoding="utf-8")
+
+
+def test_run_target_module_selector_records_pytest_passthrough_args(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("AITEST_ENV_FILE", raising=False)
+    target_dir = tmp_path / "test_workspace" / "targets" / "sub2api"
+    module_dir = target_dir / "modules"
+    profile_dir = target_dir / "profiles"
+    module_dir.mkdir(parents=True)
+    profile_dir.mkdir(parents=True)
+    (target_dir / "target.yaml").write_text(
+        """target: sub2api
+defaults:
+  module_dir: test_workspace/targets/sub2api/modules
+  profile_dir: test_workspace/targets/sub2api/profiles
+  generated_dir: test_workspace/generated/sub2api
+  reports_dir: test_workspace/reports/sub2api
+""",
+        encoding="utf-8",
+    )
+    (profile_dir / "profile_gateway_api.md").write_text("```yaml\nmodule_type: multi_endpoint\n```\n", encoding="utf-8")
+    suite_dir = tmp_path / "test_workspace" / "suites" / "sub2api" / "passthrough"
+    suite_dir.mkdir(parents=True)
+    suite_file = suite_dir / "suite.yaml"
+    suite_file.write_text(
+        """target: sub2api
+module: gateway_api
+suite: passthrough
+case_files:
+  - business.md
+profile: profile_passthrough_suite.md
+""",
+        encoding="utf-8",
+    )
+    (suite_dir / "business.md").write_text(
+        """# passthrough
+
+### TC-GW-041：selector case
+- **优先级**：P0
+- **断言**：`response.status == "ok"`
+""",
+        encoding="utf-8",
+    )
+    (module_dir / "gateway_api.yaml").write_text(
+        f"""target: sub2api
+module: gateway_api
+module_type: multi_endpoint
+profile:
+  file: profile_gateway_api.md
+registered_suites:
+  - suite: passthrough
+    manifest: {suite_file}
+    status: active
+""",
+        encoding="utf-8",
+    )
+    generated = tmp_path / "test_workspace" / "generated" / "sub2api"
+    generated.mkdir(parents=True)
+    (generated / "test_gateway_api_passthrough_business.py").write_text(
+        textwrap.dedent(
+            '''
+            class TestGatewayApiPassthroughBusiness:
+                def test_tc_gw_041(self):
+                    __tc_meta__ = {
+                        "tc_id": "TC-GW-041",
+                        "module": "gateway_api",
+                        "suite": "passthrough",
+                        "category": "business",
+                        "source": "test_workspace/suites/sub2api/passthrough/business.md",
+                        "title": "selector case",
+                        "priority": "P0",
+                        "markers": [],
+                    }
+                    assert True
+
+
+            __codegen_skipped__ = []
+            '''
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        _run_command_impl(False, True, ("--collect-only", "-q"), target="sub2api", module_name="gateway_api")
+
+    assert exc_info.value.code == 0
+    result_path = tmp_path / "test_workspace" / "reports" / "sub2api" / "gateway_api" / "module" / "latest" / "result.json"
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    assert result["command"] == "aitest run --target sub2api --module gateway_api -- --collect-only -q"
 
 
 def test_run_suite_file_uses_target_generated_and_reports_dirs(tmp_path, monkeypatch):
@@ -576,7 +801,17 @@ case_files:
         _run_command_impl(False, True, (), suite_file=str(suite_file))
 
     assert exc_info.value.code == 0
-    result_path = tmp_path / "test_workspace" / "reports" / "sub2api" / "latest" / "result.json"
+    result_path = (
+        tmp_path
+        / "test_workspace"
+        / "reports"
+        / "sub2api"
+        / "gateway_api"
+        / "suites"
+        / "quota_billing_v2"
+        / "latest"
+        / "result.json"
+    )
     result = json.loads(result_path.read_text(encoding="utf-8"))
     assert result["summary"]["passed"] == 1
     assert result["target"] == "sub2api"
@@ -584,7 +819,7 @@ case_files:
     assert result["suite"] == "quota_billing_v2"
     assert result["suite_file"] == str(suite_file)
 
-    report_path = tmp_path / "test_workspace" / "reports" / "sub2api" / "latest" / "report.md"
+    report_path = result_path.parent / "report.md"
     report_path.write_text("stale\n", encoding="utf-8")
     _report_command_impl(None, suite_file=str(suite_file))
     assert "# 测试执行报告" in report_path.read_text(encoding="utf-8")
@@ -693,6 +928,9 @@ units:
     assert result["summary"]["passed"] == 1
     assert result["summary"]["failed"] == 0
     assert result["task"]["units"][0]["name"] == "selected"
+    unit_path = Path(result["task"]["units"][0]["result_path"])
+    assert unit_path.exists()
+    assert (result_path.parent / "units" / unit_path.parent.name / "result.json").exists()
     assert result["environment"]["env_file"] == str(env_file)
     assert result["environment"]["env_files"] == [str(env_file)]
     assert result["environment"]["env_file_keys"] == ["TASK_TOKEN"]

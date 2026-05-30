@@ -190,6 +190,21 @@ aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
 ```
 
+codegen 模式说明：
+
+| 命令 | 是否需要 profile gate | 是否写 generated | 用途 |
+|---|---:|---:|---|
+| `--dry-run` | 否 | 否 | 只解析 Markdown，用于 scaffold/profile 完成前检查用例格式 |
+| `--validate-profile` | 自身就是校验 | 否 | 校验 profile JSON Schema、case_id 对齐、case_flow/case_body 语义 |
+| `--check` | 是 | 否 | 临时重新生成到 tmpdir，与已有 generated pytest 做 diff |
+| `--dump-ir` | 是 | 否 | 输出 suite 的 Case IR JSON，定位 strategy、fixture、request、assertion 来源 |
+| `--explain <TC-ID>` | 是 | 否 | 输出单条 case 的 IR 解释 |
+| `--health-report` | 是 | 否，除非加 `--write-report` | 输出 codegen 健康度、成熟度和待沉淀信号 |
+| `--analyze-promotion` | 是 | 否，除非加 `--write-report` | 分析当前 suite profile 中 `case_bodies` 的晋升机会 |
+| 无特殊参数 | 是 | 是 | 正式生成 pytest |
+
+诊断入口的粒度不同：`--dump-ir`、`--explain` 只支持 `--suite-file`，用于精确排查单个 suite 或单条 case；`--health-report`、`--analyze-promotion` 支持 `--suite-file`、`--target <target> --module <module>` 和 `--target <target>`，用于聚合查看模块或目标系统的生成健康度和晋升候选。`--suggest-promotion-patch` 仍只支持 `--suite-file`，避免批量生成难以 review 的 patch 草案。
+
 可以按不同粒度执行：
 
 ```bash
@@ -221,6 +236,25 @@ aitest report --all
 --workspace /path/to/aitest_workspace
 ```
 
+suite 可以直接通过 `--suite-file` 运行；只有注册到 `module.yaml.registered_suites`
+后，才会进入 `--module`、`--target`、`--all` 聚合入口。注册使用：
+
+```bash
+aitest registry register-suite \
+  --target <target> \
+  --module <module> \
+  --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+```
+
+如果要创建一个显式任务清单：
+
+```bash
+aitest task create \
+  --name nightly_gateway \
+  --suite-file test_workspace/suites/<target>/<suite1>/suite.yaml \
+  --suite-file test_workspace/suites/<target>/<suite2>/suite.yaml
+```
+
 ### 5. 执行和报告
 
 ```bash
@@ -233,10 +267,14 @@ aitest report --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 报告输出：
 
 ```text
-test_workspace/reports/latest/
-test_workspace/reports/runs/{run_id}/
-test_workspace/reports/tasks/<task_or_selector>/latest/
+test_workspace/reports/<target>/<module>/suites/<suite>/latest/
+test_workspace/reports/<target>/<module>/cases/<case_id>/latest/
+test_workspace/reports/<target>/<module>/module/latest/
+test_workspace/reports/<target>/target/latest/
+test_workspace/reports/tasks/<task_name>/latest/
 ```
+
+每个报告 bucket 都保留 `runs/{run_id}/` 历史记录和 `latest/` 最近一次结果。task、target、module 等聚合执行会把 suite 明细放到同一个 run_id 下的 `units/` 目录，避免一次命令产生多个难以关联的顶层 run_id。
 
 核心文件：
 
@@ -252,6 +290,8 @@ test_workspace/reports/tasks/<task_or_selector>/latest/
 | `aitest upgrade --workspace <dir> --check` | 检查已初始化 workspace 是否需要同步新版模板 |
 | `aitest upgrade --workspace <dir> --apply` | 安全应用可自动合并的模板升级 |
 | `aitest doctor` | 检查 workspace、profile、generated、collect 和环境变量提示 |
+| `aitest registry register-suite --target <target> --module <module> --suite-file <suite.yaml>` | 把 suite 安全注册到 module 聚合入口 |
+| `aitest task create --name <task> --suite-file <suite.yaml>...` | 从明确 suite 清单创建 task manifest |
 | `aitest codegen --suite-file <suite.yaml>` | 生成 target-aware case suite pytest |
 | `aitest codegen --task-file <task.yaml>` | 按 task 中的 suite 列表生成或检查 pytest |
 | `aitest codegen --target <target> [--module <module>]` | 按 target 或 target/module registry 生成或检查 pytest |

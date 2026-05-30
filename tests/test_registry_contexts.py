@@ -181,6 +181,32 @@ def test_registry_loads_target_from_central_targets_yaml(tmp_path):
     assert context.knowledge_refs["l0"] == workspace / "test_workspace" / "knowledge" / "L0_system_architecture.md"
 
 
+def test_registry_loads_target_from_unified_aitest_yaml(tmp_path):
+    workspace = tmp_path / "aitest_project"
+    config_dir = workspace / "aitest_config"
+    config_dir.mkdir(parents=True)
+    (config_dir / "aitest.yaml").write_text(
+        """targets:
+  coupon_system:
+    target: coupon_system
+    defaults:
+      module_dir: test_workspace/targets/coupon_system/modules
+      profile_dir: test_workspace/targets/coupon_system/profiles
+    knowledge_refs:
+      l0: test_workspace/knowledge/L0_system_architecture.md
+""",
+        encoding="utf-8",
+    )
+
+    context = load_target_context("coupon_system", workspace_root=workspace)
+
+    assert context.diagnostics == []
+    assert context.target == "coupon_system"
+    assert context.config_path == config_dir / "aitest.yaml"
+    assert context.defaults.module_dir == workspace / "test_workspace" / "targets" / "coupon_system" / "modules"
+    assert context.knowledge_refs["l0"] == workspace / "test_workspace" / "knowledge" / "L0_system_architecture.md"
+
+
 def test_registry_reports_missing_environment_reference(tmp_path):
     workspace = tmp_path / "aitest_project"
     target_dir = workspace / "test_workspace" / "targets" / "sub2api"

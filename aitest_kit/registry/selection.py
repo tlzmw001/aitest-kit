@@ -86,37 +86,6 @@ def filter_task_context_by_case_ids(
     ), []
 
 
-def task_report_dir_name(
-    *,
-    target: str = "",
-    module: str = "",
-    all_suites: bool = False,
-    case_ids: Iterable[str] = (),
-) -> str:
-    """Return the deterministic task report bucket for selector-based runs."""
-    return _selector_task_name(
-        target=target,
-        module=module,
-        all_suites=all_suites,
-        case_ids=_clean_case_ids(case_ids),
-    )
-
-
-def suite_case_report_dir_name(
-    *,
-    target: str,
-    module: str,
-    suite: str,
-    case_ids: Iterable[str],
-) -> str:
-    """Return the deterministic report bucket for a suite filtered by case id."""
-    clean_case_ids = _clean_case_ids(case_ids)
-    base = "_".join(part for part in (target, module, suite) if part)
-    if clean_case_ids:
-        base += "_case_" + "_".join(case_id.lower().replace("-", "_") for case_id in clean_case_ids)
-    return _safe_name(base)
-
-
 def _module_units(target: str, module: str, diagnostics: list[str]) -> list[TaskUnit]:
     if not module:
         diagnostics.append("E740: --module requires a module name")
