@@ -384,7 +384,7 @@ aitest_workspace/
 
 ## 当前稳定边界
 
-v0.1.x 稳定维护：
+v0.2.x 稳定维护：
 
 - `aitest init/codegen/run/report/doctor/upgrade`
 - workspace layout

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.0 - 2026-05-30
+
+### Added
+
+- Added target/module/suite/task registry support for decoupled test workspaces.
+- Added target-aware generated pytest layout and report buckets for target, module, suite, case, and task executions.
+- Added registry maintenance CLI helpers for registering suites and creating task manifests.
+- Added package-level helper modules and workspace config loading through the unified `aitest_config/aitest.yaml`.
+
+### Changed
+
+- Reworked codegen, run, report, doctor, and workspace template flows around target-aware suites.
+- Replaced legacy split project config files with the unified `aitest.yaml` workspace configuration.
+- Updated bundled Codex, Claude, and agents skills to use generic target/module parameters and project-neutral examples.
+- Improved CLI help text so agents and users can discover the main workflow from `aitest --help` and command-level help.
+
 ## 0.1.6 - 2026-05-28
 
 ### Added

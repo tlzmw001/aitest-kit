@@ -2,9 +2,10 @@
 
 This roadmap describes the current product boundary and near-term direction. It is intentionally conservative: `aitest-kit` should remain easy to install, easy to inspect, and deterministic where it matters.
 
-## Stable in v0.1
+## Stable in v0.2
 
 - `aitest init` workspace initialization.
+- Target/module/suite/task workspace organization.
 - Markdown case parsing.
 - codegen profile JSON Schema and semantic validation.
 - Case IR planning.
@@ -33,7 +34,7 @@ This roadmap describes the current product boundary and near-term direction. It 
 - Codex plugin packaging as a workflow wrapper around the existing CLI and workspace.
 - Historical report trends and CI-oriented integrations.
 
-## Not Planned for v0.1
+## Not Planned for v0.2
 
 - Hosted SaaS dashboard.
 - Automatic profile rewriting.

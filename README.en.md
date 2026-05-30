@@ -279,7 +279,7 @@ case_bodies -> case_flows -> assertion_rules / default templates
 
 ## Stable Scope
 
-Stable in v0.1.x:
+Stable in v0.2.x:
 
 - `aitest init/codegen/run/report/doctor/upgrade`
 - workspace layout

@@ -202,7 +202,7 @@ aitest upgrade --workspace /path/to/aitest_workspace --apply
 
 ## 稳定性说明
 
-v0.1.x 稳定维护：
+v0.2.x 稳定维护：
 
 - `aitest init/codegen/run/report/doctor/upgrade`
 - workspace 目录结构
