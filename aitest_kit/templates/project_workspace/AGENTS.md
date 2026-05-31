@@ -1,44 +1,29 @@
 # AITest Workspace 协作指南
 
-本文件适用于当前目录及其所有子目录。这里是一个由 `aitest init` 初始化的新项目测试工作区，用于围绕目标系统建设 AI 驱动的自动化测试流程。
+本文件适用于当前目录及其所有子目录。这里是由 `aitest init` 初始化的测试工作区，用于围绕目标系统建设 AI 驱动的自动化测试流程。
 
-## 项目定位
+## 角色与边界
 
-当前目录是目标系统的独立测试工作区。默认工作流是：
+AI 的角色是目标系统的测试工程师。默认工作流：
 
 `开发文档 -> 测试知识库 -> Markdown suite -> target fixture/profile -> codegen -> pytest 执行 -> 修正与沉淀`
 
-AI 的默认角色是测试工程师。除非用户明确要求，不要为了让测试通过而修改目标系统业务代码；如果现有接口无法支撑测试条件，记录为测试基础设施需求或待测系统 bug。
+- 除非用户明确要求，不修改目标系统业务代码。公开 API 或测试钩子不足时，记录为可测试性需求或待测系统 bug。
+- 默认按黑盒测试执行：以公开设计文档、API 定义、配置 schema、示例请求/响应和可执行 API 行为作为规则来源。
+- 不从目标系统源码或内部实现推断业务规则，除非用户明确切换到灰盒阶段并指定可读范围。
 
 ## 目录结构
 
-- `aitest_config/`
-  项目级配置目录，包含路径、codegen 项目配置、schema 和共享格式参考。
-
-- `test_workspace/knowledge/`
-  测试知识库目录，包含 L0/L1/L2 和 `TEST_SPEC.md`。
-
-- `test_workspace/targets/`
-  按目标系统组织 target/module registry、模块 fixture、helper 和 module profile。
-
-- `test_workspace/suites/`
-  按目标系统组织独立 suite；suite 通过 `suite.yaml` 绑定到 target/module。
-
-- `test_workspace/generated/`
-  按目标系统保存 codegen 生成的 pytest 文件，视为编译产物。
-
-- `test_workspace/reports/`
-  测试执行报告目录。
-
-- `test_workspace/results/`
-  已确认的待测系统 bug、测试发现和复现记录。
-
-- `skills/`
-  agent-neutral 的 AITest skill 源目录。根据实际使用的 AI 编程环境，复制到 `.codex/skills/`、`.claude/skills/` 或 `.agents/skills/`。
+- `aitest_config/` — 项目级配置、refs/、schemas/
+- `test_workspace/knowledge/` — 测试知识库（L0/L1/L2 + TEST_SPEC）
+- `test_workspace/targets/` — target/module registry、fixture、helper、module profile
+- `test_workspace/suites/` — suite 用例（Markdown + suite.yaml + suite profile）
+- `test_workspace/generated/` — codegen 生成的 pytest（编译产物）
+- `test_workspace/reports/` — 测试执行报告（运行产物）
+- `test_workspace/results/` — 待测系统 bug 记录
+- `skills/` — agent-neutral skill 源目录
 
 ## 常用命令
-
-在当前 workspace 根目录内执行：
 
 ```bash
 aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
@@ -46,78 +31,88 @@ aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --
 aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
 aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 aitest registry register-suite --target <target> --module <module> --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
-aitest task create --name <task_name> --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 aitest run --task-file test_workspace/tasks/<task>.yaml
 aitest report
 ```
 
-如果从 workspace 外部执行，给命令追加：
-
-```bash
---workspace /path/to/this/workspace
-```
+从 workspace 外部执行时追加 `--workspace /path/to/this/workspace`。
 
 ## 测试飞轮
 
-1. 文档审查：确认公开文档、接口定义、配置和错误行为是否足够支撑测试。
-2. 知识构建：把文档沉淀为 L0/L1/L2 测试知识库。
-3. 用例设计：在 `test_workspace/suites/{target}/{suite}/` 编写 L2/迭代批次用例。
-4. profile/fixture：在 target 目录维护模块 fixture/helper/module profile；suite 用例在用例目录旁维护 `_suite` profile。
-5. codegen：通过 profile gate、dump IR、check，再正式生成 pytest。
-6. 执行与报告：用 `aitest run` 生成结构化报告。
-7. 失败分流：区分文档问题、用例问题、fixture/codegen 问题、环境问题和待测系统 bug。
-8. 规则沉淀：稳定模式沉淀到 profile、`aitest.yaml`、fixture/helper 或 emitter 规则。
-
-## 信息边界
-
-新项目迁移首轮按黑盒测试方式推进：只使用公开设计文档、接口定义、配置 schema、示例请求响应和可执行 API 行为作为规则来源。
-
-不要读取目标系统源码、已有测试或内部实现文档来推断业务规则，除非用户明确切换到灰盒补文档阶段，并说明哪些文件可以读、读它们是为了补全文档还是为了修复测试基础设施。
+1. **文档审查**：确认接口定义、配置和错误行为是否足够支撑测试。
+2. **知识构建**：沉淀为 L0/L1/L2 测试知识库。
+3. **用例设计**：编写 Markdown 用例。
+4. **脚手架**：构建 fixture/helper/module profile，补 suite profile。
+5. **codegen**：profile gate → dump IR → check → 生成 pytest。
+6. **执行与报告**：`aitest run` 生成结构化报告。
+7. **失败分流**：区分用例问题、fixture/codegen 问题、环境问题和待测系统 bug。
+8. **规则沉淀**：稳定模式沉淀到 profile、fixture/helper 或 emitter 规则。
 
 ## 关键约定
 
 - 测试知识库是测试设计主输入，不要长期绕过知识层直接写 pytest。
-- Markdown 用例是源数据；generated pytest 是编译产物。
-- `profile_{module}.md` 位于 `test_workspace/targets/{target}/profiles/`；`profile_{suite}_suite.md` 跟随具体用例 suite。
-- 配置文件写法以 `aitest_config/refs/config-files.md` 为准；新建或修改 target/module/suite/profile/task/env 配置前先确认字段归属。
-- suite 只有注册到 `module.yaml.registered_suites` 后，才会进入 `--module`、`--target`、`--all` 聚合入口；注册使用 `aitest registry register-suite`。手写 `registered_suites` 时推荐直接写 suite manifest 路径字符串；需要 `status` 时再写 `{suite, manifest, status}` mapping。
-- 生成代码不手改为长期资产；优先改 Markdown、profile、fixture、helper 或配置后重新生成。
-- 配置、端口、URL、凭证都走环境变量或配置文件，不硬编码。
+- Markdown 用例是源数据；generated pytest 是编译产物，优先改输入后重新生成。
+- 配置文件写法以 `aitest_config/refs/config-files.md` 为准。
+- `profile_{module}.md` 位于 `targets/{target}/profiles/`，放 L1 稳定能力；`profile_{suite}_suite.md` 跟随用例目录，放 TC-ID 绑定的 case_flows/case_bodies。
+- suite 通过 `aitest registry register-suite` 注册到 module 后，才进入 `--module`/`--target`/`--all` 聚合入口。
+- 不硬编码端口、URL、凭证或 token；走环境变量或配置文件。
 - 不放宽断言、不 skip 失败用例、不伪造成功响应。
-- 确认是待测系统 bug 时，记录到 `test_workspace/results/`。
-- 运行产物放到 `test_workspace/reports/`，不要和 bug 记录混用。
+- 待测系统 bug 记录到 `test_workspace/results/`；执行报告记录到 `test_workspace/reports/`，两者不混用。
+
+## Codegen 规则
+
+1. Profile 校验是生成、`--check`、`--dump-ir`、`--explain` 和晋升分析的硬门禁。
+2. Parser 诊断报错时阻断生成。
+3. 断言匹配优先级：profile 规则 > `aitest.yaml` 内置规则 > 命名模板。
+4. 生成的 pytest 应通过修改 Markdown/profile/config/fixture/helper 输入来刷新，而非长期手动编辑。
+
+## 测试执行要点
+
+### 部署拓扑先行
+
+设计 fixture 前确认目标系统的 base URL、认证方式、上游依赖和可清理资源。环境变量真实值来自 shell、CI secrets 或 `AITEST_ENV_FILE`；profile 和 Markdown 只记录变量名。
+
+### 运行前置条件
+
+- fixture 中必需 env 使用 `aitest_kit.runtime_variables.require_env()`，不手写 `os.environ.get()` + `pytest.fail()`。
+- 缺 env、token 或测试资源时 fail-fast，不构造空 header 或假数据继续执行。
+- `httpx` 0.28+ 自动读取 macOS 系统代理。fixture 访问本地或测试环境时显式指定 transport：
+  ```python
+  httpx.Client(transport=httpx.HTTPTransport())
+  ```
+
+### 失败处理
+
+先看 `result.json` 和 `report.md`，按分类处理：
+
+| 分类 | 处理 |
+|------|------|
+| `PRECONDITION_MISSING` | 补 env/token/测试账号，不当作待测系统 bug |
+| `ENVIRONMENT_ERROR` | 检查服务启动、端口、网络 |
+| `TEST_SCAFFOLD_ERROR` | 回 `test-scaffold` 修 fixture/profile |
+| `CODEGEN_ERROR` | 修 profile/emitter/生成链路 |
+| `ASSERTION_FAILURE` | 人工复核；断言失败不自动等于待测系统 bug |
 
 ## Skill 使用
 
-当用户明确指定本地 skill，或任务明显匹配某个 skill 时，按本地 SOP 执行：
+`skills/` 是 agent-neutral 的 AITest skill 源目录。根据使用的 AI 编程环境复制到对应目录：
 
-1. 如果当前 agent 已安装本地 skill，优先读取对应隐藏目录，例如 `.codex/skills/{skill}/SKILL.md`、`.claude/skills/{skill}/SKILL.md` 或 `.agents/skills/{skill}/SKILL.md`。
-2. 如果尚未安装，先从模板源目录复制：`mkdir -p .codex/skills && cp -R skills/. .codex/skills/`，或替换为当前 agent 对应目录。
-3. 执行时保持输出与本 workspace 测试飞轮一致。
-4. 修改或迁移 skill 时，先更新 `skills/`，再同步到当前 agent 的隐藏目录。
+```bash
+cp -R skills/. .claude/skills/   # Claude Code
+cp -R skills/. .codex/skills/    # Codex
+```
 
-核心 skill：
+核心 skill：doc-review、doc-gen、knowledge-build、test-design、test-scaffold、test-codegen、test-fix、test-maintain、emitter-build。
 
-- `doc-review`：审查开发文档完整性。
-- `doc-gen`：从源码和现有文档补全测试设计输入。
-- `knowledge-build`：构建或更新测试知识库。
-- `test-design`：生成 Markdown 测试用例。
-- `test-scaffold`：构建 target/module fixture、helper、module profile 和 suite profile。
-- `test-codegen`：从 Markdown/profile 生成 pytest。
-- `test-fix`：修正用例问题并沉淀经验。
-- `test-maintain`：诊断 workspace 状态，定位断裂层并路由到正确 skill 或 CLI。
-- `emitter-build`：从已验证 pytest 提取确定性模板。
+修改 skill 时先更新 `skills/`，再同步到当前 agent 的隐藏目录。
 
 ## 验证要求
 
-声称完成前，至少给出并运行相关验证命令。常规 codegen 修改应覆盖：
+声称完成前，运行相关验证命令并报告结果：
 
 ```bash
 aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
 aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
-aitest run --task-file test_workspace/tasks/<task>.yaml -- --collect-only -q
 ```
-
-如服务环境已就绪，再运行对应模块的真实 pytest。

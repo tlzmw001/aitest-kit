@@ -41,12 +41,12 @@ jobs:
         run: python -m aitest_kit.cli codegen --all --check
 
       - name: Collect generated pytest
-        run: python -m pytest test_workspace/tests/generated --collect-only -q
+        run: python -m pytest test_workspace/generated --collect-only -q
 
       - name: Initialize empty workspace
         run: |
           python -m aitest_kit.cli init --target /tmp/aitest_ci_project
-          python -m aitest_kit.cli codegen --workspace /tmp/aitest_ci_project --all --validate-profile
+          python -m aitest_kit.cli doctor --workspace /tmp/aitest_ci_project
 
       - name: Build wheel and sdist
         run: python -m build --no-isolation
@@ -65,7 +65,8 @@ jobs:
               "aitest_kit/templates/project_workspace/README.md",
               "aitest_kit/templates/project_workspace/AGENTS.md",
               "aitest_kit/templates/project_workspace/CLAUDE.md",
-              "aitest_kit/templates/project_workspace/.codex/skills/test-codegen/SKILL.md",
+              "aitest_kit/templates/project_workspace/skills/README.md",
+              "aitest_kit/templates/project_workspace/skills/test-codegen/SKILL.md",
           )
 
           with zipfile.ZipFile(wheel) as zf:

@@ -431,12 +431,11 @@ httpx.Client(transport=httpx.HTTPTransport())
 | 变化类型 | 必查文档 |
 |---|---|
 | 协作规则、仓库结构、AI 工作边界 | `AGENTS.md`、`CLAUDE.md` |
-| 安装、发布、CLI 入口、3 分钟上手路径 | `README.md`、`README.en.md`、`docs/usebook/aitest_quickstart.md` |
-| 新项目迁移、长期工作流、测试飞轮 | `docs/usebook/aitest_migration_guide.md`、`docs/usebook/aitest_workflow_guide.md` |
+| 安装、发布、CLI 入口、迁移、长期工作流 | `README.md`、`README.en.md`、`docs/usebook/aitest_getting_started.md` |
 | 配置字段、字段归属、target/module/suite/task/env 写法 | `aitest_config/refs/config-files.md`、`aitest_kit/templates/project_workspace/aitest_config/refs/config-files.md` |
 | Markdown 用例格式 | `aitest_config/refs/case-format.md`、`aitest_kit/templates/project_workspace/aitest_config/refs/case-format.md` |
 | profile、schema、codegen 规则、排障方式 | `docs/usebook/codegen_profile_guide.md`、`docs/usebook/codegen_troubleshooting.md`、`aitest_config/schemas/`、相关 skill |
-| run/report 语义、失败分类、报告目录 | `docs/usebook/aitest_workflow_guide.md`、`docs/usebook/aitest_quickstart.md`、`test-maintain` / `test-codegen` skill |
+| run/report 语义、失败分类、报告目录 | `docs/usebook/aitest_getting_started.md`、`test-maintain` / `test-codegen` skill |
 | init 模板内容 | `aitest_kit/templates/project_workspace/README.md`、`AGENTS.md`、`CLAUDE.md`、`skills/README.md` |
 | skill 行为 | 本仓 `.codex/skills/`、`.claude/skills/`、`.agents/skills/`；模板 skill 只改 `aitest_kit/templates/project_workspace/skills/` |
 

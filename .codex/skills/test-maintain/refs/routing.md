@@ -2,36 +2,24 @@
 
 ## 症状 → 断裂层映射
 
-| 症状 | 断裂层 | 路由 |
-|------|--------|------|
-| 需求规则未进入知识库 | knowledge | `knowledge-build` |
-| 缺用例 / 用例过时 | cases | `test-design` |
-| 单条用例错误 | cases | `test-fix` |
-| profile not found / validate-profile ERROR | scaffold | `test-scaffold` |
-| fixture 缺方法 / 缺认证 / 缺 env / 缺 cleanup | scaffold | `test-scaffold incremental` |
-| `--check` stale | codegen | `test-codegen` |
-| UNPARSED 过多 | codegen | `test-codegen`（可能回退到 scaffold） |
-| pytest collect 失败 | codegen 或 scaffold | 语法问题 → `test-codegen`；fixture 接线 → `test-scaffold` |
-| 测试执行失败 | execution | 分流：用例问题 → `test-fix`；fixture → `test-scaffold`；SUT → 记录 `results/` |
-| 重复 case_body / case_flow 模式稳定 | emitter | `emitter-build` |
+| 症状 | 断裂层 | 路由 | 歧义判定 |
+|------|--------|------|----------|
+| 需求规则未进入知识库 | knowledge | `knowledge-build` | — |
+| 缺用例 / 用例过时 | cases | `test-design` | — |
+| 单条用例错误 | cases | `test-fix` | — |
+| profile not found / validate-profile ERROR | scaffold | `test-scaffold` | — |
+| fixture 缺方法 / 缺认证 / 缺 env / 缺 cleanup | scaffold | `test-scaffold incremental` | — |
+| `--check` stale | codegen | `test-codegen` | — |
+| UNPARSED 过多 | codegen 或 scaffold | 先 `--dump-ir` 看 strategy 来源：emitter 规则缺失 → `test-codegen`；fixture 能力缺失 → `test-scaffold` | 列两候选让用户选 |
+| pytest collect 失败 | codegen 或 scaffold | `python -c "import ast; ast.parse(open(f).read())"` 语法错误 → `test-codegen`；ImportError → `test-scaffold` | 按错误类型判定 |
+| 测试执行失败 | execution | 读 `report.md` 分流：`ASSERTION_FAILURE` → `test-fix`；`TEST_SCAFFOLD_ERROR` → `test-scaffold`；`PRECONDITION_MISSING` / `ENVIRONMENT_ERROR` → 补 env/服务；SUT bug → 记录 `results/` | — |
+| 重复 case_body / case_flow 模式稳定 | emitter | `emitter-build` | — |
 
-## codegen 模式速查
+## codegen 诊断模式
 
-详细口径以 `CLAUDE.md` 和 `docs/usebook/` 为准；需要细节时先读取这些文档。
+路由时只需要关心这条诊断链：`--validate-profile`（profile 门禁）→ `--check`（同步性）→ 无参数（生成）→ `--dump-ir` / `--explain`（排查 IR 来源）。
 
-| 模式 | 用途 | 适用范围 |
-|------|------|----------|
-| `--dry-run` | 只解析 Markdown，不进 profile gate，不写 generated | suite/task/target/module/all |
-| `--validate-profile` | 校验 profile schema、case_id 对齐、语义 | suite/task/target/module/all |
-| `--check` | diff generated 与当前源头，不写 generated | suite/task/target/module/all |
-| 无特殊参数 | 正式生成 pytest | suite/task/target/module/all |
-| `--dump-ir` | 输出 Case IR JSON，排查 strategy 来源 | 仅 `--suite-file` |
-| `--explain <TC-ID>` | 单条 case 的 IR 解释 | 仅 `--suite-file` |
-| `--health-report` | 成熟度和健康度报告 | suite/target/module |
-| `--analyze-promotion` | case_bodies 晋升分析 | suite/target/module |
-| `--suggest-promotion-patch` | review-only 晋升草案 | 仅 `--suite-file` |
-
-模块级沉淀先用 `--health-report` 和 `--analyze-promotion` 获得聚合证据，修改 profile/helper 前仍需路由 `emitter-build` 和人工 review。
+完整模式细节见 `CLAUDE.md` codegen 可移植架构节和 `docs/usebook/codegen_troubleshooting.md`。
 
 ## 验证命令序列
 

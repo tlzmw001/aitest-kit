@@ -30,5 +30,10 @@ test_workspace/backups/
 htmlcov/
 .coverage
 test_workspace/reports/
+test_workspace/plans/
 
+# Internal PRD / planning docs
+docs/prd/
+
+# Personal notes
 docs/usebook/备忘continue.md

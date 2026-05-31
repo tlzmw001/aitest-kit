@@ -24,7 +24,7 @@
 - generated pytest。
 - `aitest run` 结构化报告。
 
-它主要用于展示完整能力和做仓库回归，不建议作为陌生用户第一次试跑的唯一入口。第一次迁移自己的系统时，仍然建议从 [AITest 新项目迁移指南](./aitest_migration_guide.md) 开始。
+它主要用于展示完整能力和做仓库回归，不建议作为陌生用户第一次试跑的唯一入口。第一次迁移自己的系统时，仍然建议从 [Getting Started](./aitest_getting_started.md) 开始。
 
 ## 二、关键目录
 

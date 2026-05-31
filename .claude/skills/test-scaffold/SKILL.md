@@ -46,73 +46,52 @@ test-codegen 消费 fixture + profile 生成 pytest
 ## 哲学
 AI 探索：理解 API 面、设计 Client、判断生成路线、写 case_flow。
 Skill 保障：分步交互、结构化数据流、验证闭环。
-用户 review 每一层设计决策，不面对黑盒最终产物。
+用户 review 设计决策，机械产物呈现后自动推进。
 
-## 代码阅读边界
+## 读写边界
+
 默认不读待测系统源码。docs/、knowledge/、cases/ 不足时，列出缺口请求用户确认后读 API 声明层。
 
-允许读取：路由/端点声明、请求/响应 schema、认证/中间件配置、启动配置。
-禁止读取：handler body 业务逻辑、数据库模型/查询、内部服务调用、算法/策略。
+允许读取：路由/端点声明、请求/响应 schema、认证/中间件配置、启动配置、其他模块 fixture/profile、`aitest.yaml`。
+允许写入：target 下的 fixture/profile/helper/module.yaml、api_map、suite 目录下的 suite.yaml 和 suite profile。
+禁止：读业务逻辑（handler body/DB 模型/内部调用/算法）、改 generated/、改 .env、硬编码凭证、编造 API 行为、import 待测系统、改待测系统代码、生成 case_id 分发表。
 
-读取过的 API 声明层文件记录到 `test_workspace/targets/{target}/api_maps/api_map_{module}.md`。
+读取过的 API 声明层文件记录到 api_map。
 
 ## Step 0：模式选择
 确认：**target** + **模块名** + **模式**（scaffold-module / scaffold-suite / incremental）。如果用户只给模块名，先从 suite manifest、module registry 或现有目录推断 target；推断不到时询问。
 
 ### scaffold-module 模式
-模块尚无 fixture 和 module profile。输入必须包含 L1/API 文档和一份最小冒烟用例 suite，用于锚定真实调用路径、认证方式、响应结构和基础断言。没有可用冒烟用例时，不编造 Markdown case；先回到 `test-design` 或请用户提供最小 case。输出：
+模块尚无 fixture 和 module profile。输入必须包含 L1/API 文档和一份最小冒烟用例 suite，用于锚定真实调用路径、认证方式、响应结构和基础断言。没有可用冒烟用例时，不编造 Markdown case；先回到 `test-design` 或请用户提供最小 case。产出见上方产出表。
 
-```text
-test_workspace/targets/{target}/target.yaml
-test_workspace/targets/{target}/modules/{module}.yaml
-test_workspace/targets/{target}/fixtures/{module}.py
-test_workspace/targets/{target}/profiles/profile_{module}.md
-{suite_dir}/suite.yaml
-{suite_dir}/profile_{suite}_suite.md
-```
-
-module profile 不索引所有 suite profile，不承载频繁变化的 L2 case_flow。
 module profile 禁止放当前 suite 的 `case_flows/case_bodies/request_overrides/case_fixtures/variables.cases`；这些 TC-ID 绑定配置必须写入 suite profile，否则 profile gate 会报错。
 最小 suite 必须注册到 `module.yaml.registered_suites`，用于验证 module/target/all selector 能发现该模块。
 
 ### scaffold-suite 模式
-已有 fixture 和 module profile，用户给出某个用例目录。输出：
-
-```text
-{suite_dir}/suite.yaml
-{suite_dir}/profile_{suite}_suite.md
-```
-
-suite profile 文件名必须以 `_suite.md` 结尾，只覆盖该目录下的 case_id。验证命令：
-
-```bash
-python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --validate-profile
-python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --dump-ir
-python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml
-python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --check
-```
+已有 fixture 和 module profile，用户给出某个用例目录。产出 `suite.yaml` + `profile_{suite}_suite.md`。suite profile 文件名必须以 `_suite.md` 结尾，只覆盖该目录下的 case_id。
 
 ### incremental 模式
-用于已有模块新增用例时，从 `test-codegen` 接手"fixture 能力不足"的问题；不是重做整个模块。
+从 `test-codegen` 接手"fixture 能力不足"的问题，不是重做整个模块。
 
-1. 读取 `test-codegen` 的失败信号：缺少 fixture 方法、新认证/header、case-scoped env、cleanup、流式/文件/WebSocket/mock 等新交互能力
-2. 读取现有 target/module registry、fixture、module profile、suite profile、helpers 和新增 cases
-3. 判断缺口类型：只缺 suite profile 则退回 `test-codegen`；缺测试调用能力才继续 incremental scaffold
-4. 对新增 case 执行 Step 3 + Step 4，更新 variables/env 矩阵、状态影响和可行性判定
-5. 如需新端点方法或 helper，回到 Step 2 扩展 Client，只追加最小方法，不重写已有方法
-6. 如需新 env，按连接/认证/资源/业务分层，并优先 case-scoped lazy lookup，避免一个 case 的 secret 缺失拖垮整个模块
-7. Step 6 → Step 7 追加 suite profile 条目或必要的 module profile 稳定能力，不重写已有条目
-8. Step 8 验证闭环；通过后回到 `test-codegen` 重新生成或 check
+1. 读取失败信号，判断缺口类型：只缺 suite profile → 退回 `test-codegen`
+2. 缺测试调用能力 → 按 Step 1 补 api_map 增量，按 Step 2 追加 Client 方法（最小追加，不重写已有）
+3. 按 Step 5 追加 profile 条目，不重写已有
+4. Step 6 验证后回到 `test-codegen`
 
-## Step 1：提取 API Map
+## Step 1：API Map 全量分析（子 Agent）
 
-**子 Agent 适用**：读大量源材料，产出紧凑文档。
+单个子 Agent 一次完成 API 面提取、variables/env 矩阵、状态影响和可行性判定。
 
-提取来源优先级：cases/ 共享配置 → docs/knowledge → 代码 API 声明层（需用户确认）。
+子 Agent 输入：cases/ + docs/knowledge + 代码 API 声明层（需用户先确认可读范围）。
+子 Agent 产出：完整 `api_map_{module}.md`，格式参考 `refs/formats.md`。包含：
+- 端点列表 + 认证模式 + 请求体参考
+- 环境变量分层（连接/认证/资源/业务）
+- case → variables/env 矩阵（分类规则参考 `refs/formats.md#case-variablesenv-矩阵`）
+- 状态影响表 + 可行性判定 + skip_list
 
-产出 `test_workspace/targets/{target}/api_maps/api_map_{module}.md`，格式参考 `refs/formats.md#api-map-模板`。环境变量必须分层（连接/认证/资源/业务），分层在此步完成，后续步骤继承。
-
-**用户确认**：端点列表、认证模式、env 分层、信息缺口。
+主 Agent 分段呈现给用户确认：
+- **段 1**：端点列表、认证模式、信息缺口
+- **段 2**：env 分层、variables 矩阵、状态影响、可行性判定（用户可将可行性存疑的 case 移入可执行或确认 skipped）
 
 ## Step 2：设计 fixture Client
 
@@ -134,83 +113,49 @@ class {Module}Client:
 
 **用户确认**：方法粒度、命名、auth 标注。
 
-## Step 3：Profile Variables 与环境变量契约
+## Step 3：生成 fixture + registry 接线（子 Agent，呈现不阻塞）
 
-**子 Agent 适用**。可与 Step 2 并行。
+子 Agent 输入：确认的 Client 签名 + api_map（env 分层、cleanup 策略）。
+子 Agent 产出：`fixtures/{module}.py` + registry 接线检查结果。
 
-输入：api_map 的分层 env 定义 + cases/ 全部文件。
-产出：case → variables/env 矩阵，**追加写入 api_map**。格式和分类规则参考 `refs/formats.md#case-variablesenv-矩阵`。
+必需 env 统一用 `require_env()`，硬约束和代码结构参考 `refs/constraints.md` 和 `refs/formats.md#fixture-代码结构`。
 
-矩阵写入 api_map 后，Step 5 只处理 fixture/driver 必需的模块级 env；case-scoped 的账号、密码、token、URL path、非法字段等优先写入 suite profile `variables`，由 case_flow 通过 `{var: name}` 引用。负向输入用 `value` 表达，不用缺失 env 表达。
+registry 接线：生成 fixture 后立即检查 `module.yaml` 声明 `fixture.file/default_fixture`，且 `default_fixture` 符号可 import。
 
-**用户确认**：哪些变量是真实凭证、CI 中能否自动获取。
+主 Agent 呈现 fixture 代码和接线结果，自动推进到 Step 4；用户有异议可打断修改。
 
-## Step 4：状态影响与可行性判定
+## Step 4：Profile 模式确认
 
-**子 Agent 适用**。可与 Step 3 并行。
+auto_fields 判断、module_type → 路线映射、逐条 case 路线评估参考 `refs/constraints.md`。api_map 中标为 skipped 的 case 不参与路线评估。
 
-产出两部分，**追加写入 api_map**。格式参考 `refs/formats.md#状态影响表` 和 `refs/formats.md#可行性判定`。
+从可执行 case 中挑 1-2 条最有代表性的，展示完整 profile 片段：路线理由、fixture/object、steps、断言。
 
-非幂等且无 cleanup API 的 case 默认标为可行性存疑。可行性判定是 Step 7 的显式输入——skip_list 中的 case 不生成 case_flow/case_body。`[manual]` case 要单独判断：纯人工不生成 profile entry；能自动触发动作或稳定断言的半自动 manual 才生成 case_flow/case_body，并保留 manual marker。
-
-可行性判定必须给出 `automation_status`、`reason_type`、`required_capability`、`cleanup_strategy`、`evidence_ref` 和 `resume_condition`，便于用户 review 和后续恢复 skipped case。
-
-**用户确认**：非幂等 case 是否可接受、cleanup 策略、是否需要测试专用资源。用户可以将可行性存疑的 case 移入可执行或确认保持 skipped。
-
-## Step 5：生成 fixture + registry 接线
-
-基于已确认的 Step 2（Client 签名 + auth 标注）和 api_map 中的 variables/env 矩阵生成 `test_workspace/targets/{target}/fixtures/{module}.py`。
-
-数据流：
-- `__init__` 参数和 fail-fast 逻辑 → 从 Step 2 auth 标注 + api_map env 分层
-- cleanup 方法 → 从 Step 4 状态影响表
-- env check 粒度 → 从 Step 3 矩阵中筛出 fixture/driver 必需的模块级 env；case-scoped 变量不写进 fixture 初始化
-- 必需 env 读取统一用 `from aitest_kit.runtime_variables import require_env`；不要手写 `os.environ.get(...)` + `pytest.fail(...)`，这样报告才能稳定归类为 `PRECONDITION_MISSING`
-
-硬约束、代码结构和测试数据分类参考 `refs/constraints.md#fixture-硬约束` 和 `refs/formats.md#fixture-代码结构`。
-
-registry 接线（原子步骤）：生成 fixture 文件后，立即检查 `test_workspace/targets/{target}/modules/{module}.yaml` 是否声明 `fixture.file/default_fixture`，且 `default_fixture` 符号可 import。suite generated pytest 会从 module.yaml 自动注入 fixture import。
-
-**用户确认**：fixture 代码。
-
-## Step 6：Profile 模式确认
-
-auto_fields 判断和 module_type → 路线映射参考 `refs/constraints.md#auto_fields-判断` 和 `refs/constraints.md#module_type--路线映射`。
-
-逐条 case 从简到繁评估路线，参考 `refs/constraints.md#逐条-case-路线评估`。api_map 中标为 skipped 的 case 不参与路线评估。
-
-从可执行 case 中挑 1-2 条最有代表性的（标准是代表性，不是路线覆盖），展示完整 profile 片段：路线理由、fixture/object、steps、断言。说明选择原因。
-
-Profile YAML 结构参考 `refs/formats.md#profile-yaml-结构`，注入一致性和 case_flow 规则参考 `refs/constraints.md`。
-
-注入模型必须二选一：fixture 直接返回 Client 时，`default_object` 写 Client 对象名且不写 `default_case_setup`；fixture 返回 factory 时，`default_object` 写 factory 对象名，并用 `default_case_setup` 保存业务对象，例如 `case = client_factory(case_id="{case_id}")`。
+注入模型和 case_flow 规则参考 `refs/constraints.md#fixture-注入一致性` 和 `refs/constraints.md#case_flow-规则`。Profile YAML 结构参考 `refs/formats.md#profile-yaml-结构`。
 
 **用户确认**：路线选择、step 结构、断言充分性。
 
-## Step 7：生成全量 profile
-
-**子 Agent 适用**。
+## Step 5：生成全量 profile（子 Agent，呈现不阻塞）
 
 子 Agent 输入（全部为已确认的结构化文档）：
-- Step 6 确认的 profile 模式样本
+- Step 4 确认的 profile 模式样本
 - cases/ 全部文件
 - Client 方法签名（Step 2）
-- api_map 中的 variables/env 矩阵（Step 3）
-- **api_map 中的 skip_list（Step 4）**— skip_list 中的 case 不生成 case_flow/case_body
+- api_map（env 矩阵 + skip_list）
 
-输出：scaffold-module 模式生成模块稳定能力所需的 `profile_{module}.md`，并为最小 suite 生成 `{suite_dir}/profile_{suite}_suite.md`；scaffold-suite 模式生成 `{suite_dir}/profile_{suite}_suite.md`。module profile 只放 L1 稳定能力；suite profile 优先承载 `variables` 和本批 case 的 `case_flows/case_bodies/request_overrides/case_fixtures/variables.cases`。纯人工 manual 不写入 suite profile；半自动 manual 写入可执行 flow/body。路线选择记录附在 profile 末尾或输出摘要中。
+子 Agent 产出：scaffold-module 模式生成 `profile_{module}.md` + `profile_{suite}_suite.md`；scaffold-suite 模式只生成 suite profile。module profile 只放 L1 稳定能力；suite profile 承载 `variables` 和 TC-ID 绑定的 `case_flows/case_bodies/request_overrides/case_fixtures`。纯人工 manual 不写入；半自动 manual 写入可执行 flow/body 并保留 manual marker。
 
-**用户确认**：路线分布统计 + skipped/manual/semi-auto manual 清单 + `case_body` 保留原因 + 特殊 warning。
+主 Agent 呈现路线分布统计 + skipped/manual 清单 + case_body 保留原因，自动推进到 Step 6；用户有异议可打断。
 
-## Step 8：验证闭环
+## Step 6：验证闭环（子 Agent）
 
-验证命令和预期结果参考 `refs/constraints.md#验证命令与预期`。
+子 Agent 按 `refs/constraints.md#验证命令与预期` 依次执行全部验证命令，产出 pass/fail 摘要表。
 
-collect 预期数量 = 总 case - skipped - pure manual，不追求最大化。`aitest run -- --collect-only` 会写入 reports/latest，这是验证 run/report 接线的一部分。
+collect 预期数量 = 总 case - skipped - pure manual。已注册 suite 追加 module selector 级验证。
 
-已注册 suite 还必须做 selector 级验证：`codegen --target <target> --module <module> --check` 和 `run --target <target> --module <module> -- --collect-only -q`。
+验证通过 → 输出摘要，scaffold 完成。
+验证失败 → 主 Agent 呈现失败项 + 修复建议，用户确认后修复并重新验证。
 
-## Step 9：跨模块 review（第 2+ 模块时）
+## Step 7：跨模块 review（第 2+ 模块时）
 
 检查跨模块可复用模式，只标记和建议，不自动提取：
 - Client 重复模式（auth header）→ helpers/ 或 base Client
@@ -219,33 +164,26 @@ collect 预期数量 = 总 case - skipped - pure manual，不追求最大化。`
 
 ## 子 Agent 策略
 
-| 步骤 | 任务 | 输入 | 输出 |
-|------|------|------|------|
-| Step 1 | 提取 API Map | cases/、docs/、代码 API 层 | api_map（~1 页） |
-| Step 3 | 扫描 variables/env | cases/、api_map env 分层 | case variables/env 矩阵（追加到 api_map） |
-| Step 4 | 扫描状态影响 | cases/、api_map | 状态影响表 + skip_list（追加到 api_map） |
-| Step 7 | 生成全量 profile | cases/、确认的模式、签名、api_map | profile 文件 + 路线分布 + skipped/manual 清单 + case_body 保留原因 |
+| 步骤 | 任务 | 输入 | 输出 | 确认方式 |
+|------|------|------|------|----------|
+| Step 1 | API Map 全量分析 | cases/、docs/、API 声明层 | 完整 api_map | 阻塞：分段确认（端点+认证 → env+可行性） |
+| Step 3 | 生成 fixture + 接线 | Client 签名、api_map | fixture .py + 接线检查 | 呈现不阻塞 |
+| Step 5 | 生成全量 profile | 确认的模式、cases/、api_map | profile 文件 + 路线分布 | 呈现不阻塞 |
+| Step 6 | 验证闭环 | 生成产物、验证命令表 | pass/fail 摘要 | 失败时阻塞 |
 
-并行：Step 1 确认后，Step 2（主 Agent）与 Step 3 + 4（子 Agent）可并行。
-case < 10 条时主 Agent 直接处理也可。
+case < 10 条时主 Agent 可直接处理不委托子 Agent。
 
-api_map 是全流程的结构化中间文档。Step 3、Step 4 的产出追加写入 api_map，后续步骤从 api_map 读取，不依赖 AI 跨步骤记忆。
-
-## 边界
-
-允许：读 docs/knowledge/cases/、经确认读 API 声明层、读其他模块 fixture/profile、读 `aitest.yaml`、创建/修改 target 下的 fixture/profile/helper/module.yaml 和 api_map、运行验证命令。API 声明层包括路由、schema、OpenAPI/proto、client interface、错误码定义；不包括业务实现分支、算法逻辑和内部状态计算。
-
-禁止：读业务逻辑、改 generated/、改 .env、硬编码凭证、编造 API 行为、import 待测系统、改待测系统代码、生成 case_id 分发表。
+api_map 是全流程的结构化中间文档，后续步骤从 api_map 读取，不依赖 AI 跨步骤记忆。
 
 ## 完成标准
 
 1. api_map 存在，包含 API Map、env 分层、case variables/env 矩阵、状态影响表、可行性判定和 skip_list
-2. `test_workspace/targets/{target}/fixtures/{module}.py` 和相关 helpers 存在且 `compileall` 通过
-3. `module.yaml` 已声明 `fixture.file/default_fixture/module_type/registered_suites`，module profile 位于约定路径 `profiles/profile_{module}.md`
+2. `fixtures/{module}.py` 和相关 helpers 存在且 `compileall` 通过
+3. `module.yaml` 已声明 `fixture.file/default_fixture/module_type/registered_suites`，module profile 位于约定路径
 4. `default_fixture` 符号真实可 import
 5. module profile 只放 L1 稳定能力；suite profile 放 TC-ID 绑定内容
 6. `--validate-profile` 无 ERROR；WARNING 已列出并确认处理方式
-7. `--dump-ir` 中每条 case 的 strategy 符合 Step 6 路线
+7. `--dump-ir` 中每条 case 的 strategy 符合 Step 4 路线
 8. `codegen` 后 `codegen --check` 通过
 9. `aitest run --suite-file <suite.yaml> -- --collect-only -q` 通过；已注册 suite 还要通过 module selector 的 `--check` 和 collect
 
