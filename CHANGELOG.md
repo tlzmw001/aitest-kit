@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.1 - 2026-05-31
+
+### Changed
+
+- Hard-converged profile locations so module profiles live under `test_workspace/targets/{target}/profiles/profile_{module}.md` and suite profiles follow their suite directory as `profile_{suite}_suite.md`.
+- Simplified the packaged workspace skill template to a root `skills/` directory so users can copy skills into the agent integration they use.
+- Refreshed README, getting-started, scaffold, codegen, emitter, and maintain guidance around target/module/suite selectors.
+
+### Fixed
+
+- Updated CI to validate the current `test_workspace/generated` layout and the root `skills/` template packaging path.
+- Updated empty-workspace CI validation to use `aitest doctor` instead of requiring `codegen --all` before any target registry exists.
+
 ## 0.2.0 - 2026-05-30
 
 ### Added
