@@ -131,6 +131,7 @@ mkdir -p .codex/skills && cp -R skills/. .codex/skills/     # Codex
 | `doc-review` | Check whether docs are sufficient for test generation |
 | `doc-gen` | Generate test-facing docs from source or existing docs |
 | `knowledge-build` | Build/update the L0/L1/L2 test knowledge base |
+| `case-migrate` | Optional; convert external/historical cases into AITest Markdown cases |
 | `test-design` | Generate Markdown cases from the knowledge base |
 | `test-scaffold` | Add fixtures/profiles for new modules or suites |
 | `test-codegen` | Generate pytest from Markdown/profile |

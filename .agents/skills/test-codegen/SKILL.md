@@ -100,6 +100,34 @@ target/suite 规则：
 
 如果 `$dry_run` 为 true，只输出可生成/不可生成用例列表，不生成代码。
 
+## 知识库读取边界
+
+默认 codegen 编译阶段不读取知识库。主输入是 `suite.yaml`、Markdown cases、module/suite profile、fixture/helper 和 `aitest.yaml`。
+
+只有在以下场景，test-codegen 作为工作流助手才可只读相关知识库：
+
+1. 缺 suite profile，且现有 fixture/module profile 已能支撑本 suite，需要补 `profile_{suite}_suite.md`
+2. 解释 UNPARSED / skipped / profile gap，并判断应路由到 `test-fix`、`test-scaffold` 还是 `test-design`
+3. 检测 Markdown 与知识库冲突
+
+读取范围优先来自 `suite.yaml.knowledge_refs`；没有配置时，只读与 `$target/$module` 直接相关的 L1/L2/TEST_SPEC。
+
+允许用途：
+
+- 确认 Markdown 用例的业务意图
+- 辅助选择已有 fixture 方法
+- 辅助判断断言字段映射
+- 发现冲突并报告
+
+禁止用途：
+
+- 不用知识库给 Markdown 补写新业务断言
+- 不用知识库覆盖已 review 的 Markdown 预期
+- 不基于知识库创建新的 fixture/helper/env 能力；这类缺口切到 `test-scaffold`
+- 冲突只报告，不裁决
+
+读过知识库时，输出摘要必须列出读取的 L1/L2/TEST_SPEC 路径。
+
 ## Step 1：能力缺口判断（新增 case 时）
 
 现有模块新增 Markdown 用例时，先判断 fixture 能力是否足够。
@@ -119,10 +147,11 @@ fixture 能力足够但缺 suite profile 时，做最小补齐：
 
 1. 创建 `<suite_dir>/suite.yaml`。
 2. 读取 module fixture 的 client 方法签名，只使用已存在的方法。
-3. 逐条 case 选择 `variables`、`case_flow`、`request_overrides`、`skipped/manual`。
-4. 纯人工 `[manual]` 不写 profile entry；半自动 manual 写 `case_flow/case_body` 保留 manual marker。
-5. 可行性存疑保持 skipped，不为覆盖率强行写可执行 flow。
-6. 生成 `profile_{suite}_suite.md` 后立即跑 suite 级 profile gate 和 dump-ir。
+3. 必要时按“知识库读取边界”读取 `knowledge_refs`，只辅助理解和字段映射，不新增 Markdown 没写的断言。
+4. 逐条 case 选择 `variables`、`case_flow`、`request_overrides`、`skipped/manual`。
+5. 纯人工 `[manual]` 不写 profile entry；半自动 manual 写 `case_flow/case_body` 保留 manual marker。
+6. 可行性存疑保持 skipped，不为覆盖率强行写可执行 flow。
+7. 生成 `profile_{suite}_suite.md` 后立即跑 suite 级 profile gate 和 dump-ir。
 
 **呈现不阻塞**：展示 profile 关键内容（variables + case_flows 路线分布），自动推进；用户有异议可打断。
 

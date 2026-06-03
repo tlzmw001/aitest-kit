@@ -30,6 +30,7 @@ cp -R skills/. .agents/skills/
 - `doc-review`：审查开发文档是否足够支撑测试。
 - `doc-gen`：从源码和现有文档补全测试设计输入。
 - `knowledge-build`：构建或更新测试知识库。
+- `case-migrate`：把外部/历史用例迁移为 AITest Markdown suite 用例，并输出迁移报告。
 - `test-design`：生成 Markdown 测试用例。
 - `test-scaffold`：构建 fixture、helper、module profile 和 suite profile。
 - `test-codegen`：从 Markdown/profile 生成 pytest。

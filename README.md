@@ -131,6 +131,7 @@ mkdir -p .codex/skills && cp -R skills/. .codex/skills/     # Codex
 | `doc-review` | 检查文档是否足够生成测试 |
 | `doc-gen` | 从源码或现有文档补测试设计输入 |
 | `knowledge-build` | 构建/更新 L0/L1/L2 测试知识库 |
+| `case-migrate` | 可选能力，仅用于把外部/历史用例迁移为 AITest Markdown 用例 |
 | `test-design` | 从知识库生成 Markdown 用例 |
 | `test-scaffold` | 为新模块或 suite 补 fixture/profile |
 | `test-codegen` | 从 Markdown/profile 生成 pytest |
