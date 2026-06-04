@@ -40,7 +40,7 @@ effort: high
 
 如果用户给出 `--suite-file <suite.yaml>`：
 
-1. 读取 `suite.yaml` 的 `target/module/suite/case_files/knowledge_refs`
+1. 读取 `suite.yaml` 的 `target/module/suite/case_files`，并合成 effective knowledge refs：`target.yaml.l0` + `module.yaml.l1` + `suite.yaml.l2`
 2. 按约定路径读取 module profile 和 suite profile
 3. 读取 `case_files` 中声明的 Markdown case
 4. 读取对应 generated 文件：`test_workspace/generated/{target}/test_{module}_{suite}_{case_file_stem}.py`

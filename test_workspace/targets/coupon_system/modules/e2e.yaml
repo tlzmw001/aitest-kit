@@ -10,6 +10,10 @@ helpers:
 - test_workspace/targets/coupon_system/helpers/redis_ops.py
 knowledge_refs:
   l0: test_workspace/knowledge/L0_system_architecture.md
+  l1:
+  - test_workspace/knowledge/L1/ab_experiment.md
+  - test_workspace/knowledge/L1/calibration.md
+  - test_workspace/knowledge/L1/issuance.md
 registered_suites:
 - suite: e2e_smoke
   manifest: test_workspace/suites/coupon_system/e2e_smoke/suite.yaml

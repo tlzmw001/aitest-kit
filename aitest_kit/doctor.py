@@ -235,6 +235,10 @@ def _check_target_registry(results: list[CheckResult], targets_dir: Path) -> Non
             if module.diagnostics:
                 failures.append(f"{module_file}: {_diagnostic_summary(module.diagnostics)}")
                 continue
+            if not module.knowledge_refs.get("l1"):
+                warnings.append(
+                    f"{target.target}/{module.module}: missing recommended knowledge_refs.l1"
+                )
             if module.fixture_path and not module.fixture_path.exists():
                 failures.append(f"{module_file}: fixture not found: {module.fixture_path}")
             if module.profile_path and not module.profile_path.exists():

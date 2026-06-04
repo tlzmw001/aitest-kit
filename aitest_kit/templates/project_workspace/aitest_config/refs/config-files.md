@@ -12,7 +12,7 @@ test_workspace/targets/{target}/target.yaml
   一个目标系统的默认目录、文档引用、知识库引用
 
 test_workspace/targets/{target}/modules/{module}.yaml
-  一个模块的 fixture 注册、module_type、registered_suites
+  一个模块的 fixture 注册、module_type、L1 知识引用、registered_suites
 
 test_workspace/targets/{target}/profiles/profile_{module}.md
   module profile，放 L1 级稳定生成能力
@@ -45,6 +45,9 @@ test_workspace/tasks/{task}.yaml
 | target 默认目录 | `target.yaml` 或 `aitest.yaml.targets` | suite.yaml |
 | module 的 fixture 文件 | `modules/{module}.yaml.fixture.file` | suite.yaml |
 | module 的默认 fixture 名 | `modules/{module}.yaml.fixture.default_fixture` | suite.yaml |
+| target 级 L0 知识引用 | `target.yaml.knowledge_refs.l0` | suite.yaml |
+| module 级 L1 知识引用 | `modules/{module}.yaml.knowledge_refs.l1` | suite.yaml |
+| suite 级 L2 知识引用 | `suite.yaml.knowledge_refs.l2` | module.yaml |
 | module profile 路径 | 约定路径 `test_workspace/targets/{target}/profiles/profile_{module}.md` | `module.yaml`、suite.yaml |
 | suite 属于哪个 target/module | `suite.yaml` | profile YAML |
 | suite 包含哪些 Markdown 文件 | `suite.yaml.case_files` | module profile |
@@ -127,15 +130,18 @@ defaults:
 
 - `source_root` 可以指向目标系统源码目录，但测试规则默认仍应来自公开文档、API schema、OpenAPI/proto 或用户确认的信息。
 - `defaults` 只定义目录，不定义具体用例策略。
+- `knowledge_refs.l0` 推荐写系统架构索引；外部知识库可写绝对路径或 `${ENV_NAME}`。
 
 ## `modules/{module}.yaml`
 
-职责：描述某个 module 属于哪个 target，注册 fixture 和 active suites，使 `--module`、`--target`、`--all` 能发现它们。module profile 不在这里配置路径，固定读取 `test_workspace/targets/{target}/profiles/profile_{module}.md`。
+职责：描述某个 module 属于哪个 target，注册 fixture、module_type、L1 知识引用和 active suites，使 `--module`、`--target`、`--all` 能发现它们。module profile 不在这里配置路径，固定读取 `test_workspace/targets/{target}/profiles/profile_{module}.md`。
 
 ```yaml
 target: your_service
 module: gateway_api
 module_type: multi_endpoint
+knowledge_refs:
+  l1: test_workspace/knowledge/L1/gateway_api.md
 fixture:
   file: gateway_api.py
   default_fixture: setup_gateway_api
@@ -154,6 +160,7 @@ registered_suites:
 
 注意：
 
+- `knowledge_refs.l1` 是 module 的推荐知识来源。缺少它不阻断 codegen/run，但 `doctor` 会提示追溯信息不足。
 - 手写 `registered_suites` 时，优先用 suite manifest 路径字符串。
 - 需要 `status` 时才写 mapping。
 - 推荐使用 CLI 注册，减少路径写错：
@@ -232,9 +239,42 @@ knowledge_refs:
 - `case_files` 只推荐写相对 `suite.yaml` 所在目录的路径，例如 `business.md`。
 - 不要写 `test_workspace/suites/.../business.md`。
 - 不要写系统绝对路径。
+- `knowledge_refs.l2` 推荐写本 suite 对应的 L2/需求文档；不要重复写 module 的 L1，代码会从 `module.yaml` 合并 effective refs。
 - `suite.yaml` 只放 suite 元数据，不放 fixture、helper、case_flow、profile 路径或执行参数。
 
 不要把 `profile`、`fixture`、`case_flows`、`case_bodies`、`variables`、`env_file`、`pytest_args` 写入 `suite.yaml`；这些内容分别属于约定路径、module profile、suite profile 或 task manifest。
+
+## knowledge_refs 写法
+
+`knowledge_refs` 用于给 skill、health、promotion 等诊断入口提供追溯信息。普通 codegen/run 不会因为缺知识文件而失败。
+
+推荐归属：
+
+| 层级 | 推荐 key | 含义 |
+|---|---|---|
+| target.yaml | `l0` | 系统架构索引 |
+| modules/{module}.yaml | `l1` | 模块可测试契约 |
+| suite.yaml | `l2` | 需求变更、迭代或用例批次 |
+| 任意层 | `test_spec` | 补充测试规范 |
+
+每个 key 支持文件、目录或列表：
+
+```yaml
+knowledge_refs:
+  l1: /path/to/L1/gateway_api.md
+  l2:
+    - /path/to/L2/quota_billing.md
+    - /path/to/L2/auth_changes.md
+  test_spec: /path/to/test_specs/
+```
+
+解析规则：
+
+- 文件：直接引用。
+- 目录：只展开当前目录下一级 `*.md`，按文件名排序；不递归。
+- 列表：逐项解析并扁平化。
+- 合并：处理 suite 时生成 effective refs，顺序为 `target -> module -> suite`，同 key 去重保序。
+- 外部知识库：可写绝对路径，也可写 `${ENV_NAME}`；环境变量缺失会形成诊断。
 
 ## suite profile
 

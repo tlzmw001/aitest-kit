@@ -110,7 +110,7 @@ units:
     target = load_target_context("sub2api", workspace_root=workspace)
     assert target.diagnostics == []
     assert target.target == "sub2api"
-    assert target.knowledge_refs["l0"] == knowledge / "L0_system_architecture.md"
+    assert target.knowledge_refs["l0"] == [knowledge / "L0_system_architecture.md"]
     assert target.docs == [knowledge / "L0_system_architecture.md"]
     assert target.defaults.profile_dir == target_dir / "profiles"
 
@@ -118,7 +118,7 @@ units:
     assert module.diagnostics == []
     assert module.module == "gateway_api"
     assert module.module_type == "multi_endpoint"
-    assert module.knowledge_refs["l1"] == knowledge_l1 / "gateway_api.md"
+    assert module.knowledge_refs["l1"] == [knowledge_l1 / "gateway_api.md"]
     assert module.fixture_path == target_dir / "fixtures" / "gateway_api.py"
     assert module.default_fixture == "setup_gateway_api"
     assert module.profile_path == target_dir / "profiles" / "profile_gateway_api.md"
@@ -244,7 +244,9 @@ def test_registry_loads_target_from_central_targets_yaml(tmp_path):
     assert context.target == "coupon_system"
     assert context.config_path == config_dir / "targets.yaml"
     assert context.defaults.module_dir == workspace / "test_workspace" / "targets" / "coupon_system" / "modules"
-    assert context.knowledge_refs["l0"] == workspace / "test_workspace" / "knowledge" / "L0_system_architecture.md"
+    assert context.knowledge_refs["l0"] == [
+        workspace / "test_workspace" / "knowledge" / "L0_system_architecture.md"
+    ]
 
 
 def test_registry_loads_target_from_unified_aitest_yaml(tmp_path):
@@ -270,7 +272,42 @@ def test_registry_loads_target_from_unified_aitest_yaml(tmp_path):
     assert context.target == "coupon_system"
     assert context.config_path == config_dir / "aitest.yaml"
     assert context.defaults.module_dir == workspace / "test_workspace" / "targets" / "coupon_system" / "modules"
-    assert context.knowledge_refs["l0"] == workspace / "test_workspace" / "knowledge" / "L0_system_architecture.md"
+    assert context.knowledge_refs["l0"] == [
+        workspace / "test_workspace" / "knowledge" / "L0_system_architecture.md"
+    ]
+
+
+def test_registry_expands_knowledge_ref_directories_one_level(tmp_path):
+    workspace = tmp_path / "aitest_project"
+    knowledge_l1 = workspace / "knowledge" / "L1" / "gateway_api"
+    nested = knowledge_l1 / "nested"
+    nested.mkdir(parents=True)
+    api_doc = knowledge_l1 / "api.md"
+    errors_doc = knowledge_l1 / "errors.md"
+    ignore_txt = knowledge_l1 / "ignore.txt"
+    nested_doc = nested / "nested.md"
+    api_doc.write_text("# API\n", encoding="utf-8")
+    errors_doc.write_text("# Errors\n", encoding="utf-8")
+    ignore_txt.write_text("ignore\n", encoding="utf-8")
+    nested_doc.write_text("# Nested\n", encoding="utf-8")
+
+    target_dir = workspace / "test_workspace" / "targets" / "sub2api"
+    (target_dir / "modules").mkdir(parents=True)
+    (target_dir / "target.yaml").write_text("target: sub2api\n", encoding="utf-8")
+    (target_dir / "modules" / "gateway_api.yaml").write_text(
+        """target: sub2api
+module: gateway_api
+knowledge_refs:
+  l1: knowledge/L1/gateway_api
+""",
+        encoding="utf-8",
+    )
+
+    target = load_target_context("sub2api", workspace_root=workspace)
+    module = load_module_context(target, "gateway_api")
+
+    assert module.diagnostics == []
+    assert module.knowledge_refs["l1"] == [api_doc, errors_doc]
 
 
 def test_registry_reports_missing_environment_reference(tmp_path):

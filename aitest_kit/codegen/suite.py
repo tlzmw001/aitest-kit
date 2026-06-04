@@ -14,6 +14,7 @@ from aitest_kit.codegen.profile import (
     merge_profile_yaml,
     preferred_module_profile_path,
 )
+from aitest_kit.registry.path_resolver import merge_knowledge_refs, resolve_knowledge_refs
 
 
 @dataclass(frozen=True)
@@ -201,10 +202,12 @@ def load_suite_context(
     merged, merge_diagnostics = merge_profile_yaml(module_data, suite_data)
     diagnostics.extend(merge_diagnostics)
 
-    knowledge_refs = manifest.get("knowledge_refs", {})
-    if not isinstance(knowledge_refs, dict):
-        diagnostics.append("E610: suite manifest knowledge_refs must be a mapping")
-        knowledge_refs = {}
+    knowledge_refs = resolve_knowledge_refs(
+        manifest.get("knowledge_refs", {}),
+        base_dir=Path.cwd().resolve(),
+        diagnostics=diagnostics,
+        field="knowledge_refs",
+    )
 
     runtime_profile = RuntimeProfile(
         data=merged,
@@ -223,7 +226,7 @@ def load_suite_context(
         module_profile_path=module_profile_path,
         suite_profile_path=suite_profile_path,
         runtime_profile=runtime_profile,
-        knowledge_refs=dict(knowledge_refs),
+        knowledge_refs=knowledge_refs,
         diagnostics=diagnostics,
     )
 
@@ -291,8 +294,26 @@ def _load_target_context_if_available(target: str):
 def _with_target_module_fixture_import(context: SuiteContext, target_context) -> SuiteContext:
     """Augment target-aware runtime profile with module.yaml fixture import."""
     module_context = _load_module_context_if_available(target_context, context.module)
+    knowledge_refs = merge_knowledge_refs(
+        target_context.knowledge_refs,
+        module_context.knowledge_refs if module_context is not None else {},
+        context.knowledge_refs,
+    )
     if module_context is None:
-        return context
+        diagnostics = list(context.diagnostics)
+        diagnostics.extend(target_context.diagnostics)
+        runtime_profile = RuntimeProfile(
+            data=load_profile_yaml(context.runtime_profile),
+            module_profile_path=context.runtime_profile.module_profile_path,
+            suite_profile_path=context.runtime_profile.suite_profile_path,
+            diagnostics=diagnostics,
+        )
+        return _replace_suite_context(
+            context,
+            runtime_profile=runtime_profile,
+            knowledge_refs=knowledge_refs,
+            diagnostics=diagnostics,
+        )
 
     data = load_profile_yaml(context.runtime_profile)
     diagnostics = list(context.diagnostics)
@@ -326,6 +347,21 @@ def _with_target_module_fixture_import(context: SuiteContext, target_context) ->
         suite_profile_path=context.runtime_profile.suite_profile_path,
         diagnostics=diagnostics,
     )
+    return _replace_suite_context(
+        context,
+        runtime_profile=runtime_profile,
+        knowledge_refs=knowledge_refs,
+        diagnostics=diagnostics,
+    )
+
+
+def _replace_suite_context(
+    context: SuiteContext,
+    *,
+    runtime_profile: RuntimeProfile,
+    knowledge_refs: dict[str, list[Path]],
+    diagnostics: list[str],
+) -> SuiteContext:
     return SuiteContext(
         suite_dir=context.suite_dir,
         target=context.target,
@@ -336,7 +372,7 @@ def _with_target_module_fixture_import(context: SuiteContext, target_context) ->
         module_profile_path=context.module_profile_path,
         suite_profile_path=context.suite_profile_path,
         runtime_profile=runtime_profile,
-        knowledge_refs=context.knowledge_refs,
+        knowledge_refs=knowledge_refs,
         diagnostics=diagnostics,
     )
 

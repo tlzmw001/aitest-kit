@@ -212,6 +212,76 @@ case_files:
         assert "from test_workspace.targets.sub2api.helpers import http as http_helper" in text
 
 
+def test_suite_context_uses_effective_target_module_suite_knowledge_refs(tmp_path):
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
+        root = Path(cwd)
+        knowledge = root / "test_workspace" / "knowledge"
+        knowledge_l1 = knowledge / "L1"
+        knowledge_l2 = knowledge / "L2"
+        knowledge_l1.mkdir(parents=True)
+        knowledge_l2.mkdir()
+        l0 = knowledge / "L0_system_architecture.md"
+        l1 = knowledge_l1 / "gateway_api.md"
+        l2 = knowledge_l2 / "quota_billing_v2.md"
+        l0.write_text("# L0\n", encoding="utf-8")
+        l1.write_text("# L1\n", encoding="utf-8")
+        l2.write_text("# L2\n", encoding="utf-8")
+
+        target_dir = root / "test_workspace" / "targets" / "sub2api"
+        module_dir = target_dir / "modules"
+        profile_dir = target_dir / "profiles"
+        module_dir.mkdir(parents=True)
+        profile_dir.mkdir()
+        (target_dir / "target.yaml").write_text(
+            """target: sub2api
+knowledge_refs:
+  l0: test_workspace/knowledge/L0_system_architecture.md
+defaults:
+  module_dir: test_workspace/targets/sub2api/modules
+  profile_dir: test_workspace/targets/sub2api/profiles
+""",
+            encoding="utf-8",
+        )
+        (module_dir / "gateway_api.yaml").write_text(
+            """target: sub2api
+module: gateway_api
+module_type: multi_endpoint
+knowledge_refs:
+  l1: test_workspace/knowledge/L1/gateway_api.md
+fixture:
+  file: gateway_api.py
+  default_fixture: setup_gateway_api
+""",
+            encoding="utf-8",
+        )
+        (profile_dir / "profile_gateway_api.md").write_text(
+            "```yaml\nmodule_type: multi_endpoint\n```\n",
+            encoding="utf-8",
+        )
+        suite_dir = _write_suite(root)
+        suite_file = suite_dir / "suite.yaml"
+        suite_file.write_text(
+            """target: sub2api
+module: gateway_api
+suite: quota_billing_v2
+case_files:
+  - quota_billing_business.md
+knowledge_refs:
+  l2: test_workspace/knowledge/L2/quota_billing_v2.md
+""",
+            encoding="utf-8",
+        )
+
+        context = load_suite_context_for_paths(suite_file)
+
+        assert context.knowledge_refs == {
+            "l0": [l0],
+            "l1": [l1],
+            "l2": [l2],
+        }
+
+
 def test_codegen_cases_suite_profile_variables_render_runtime_lookup(tmp_path):
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:

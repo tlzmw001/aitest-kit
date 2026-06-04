@@ -26,11 +26,11 @@ test-codegen 消费 fixture + profile 生成 pytest
 | 文件 | 职责 |
 |------|------|
 | `test_workspace/targets/{target}/target.yaml` | 被测系统入口和默认目录 |
-| `test_workspace/targets/{target}/modules/{module}.yaml` | module 归属、fixture、registered_suites；手写 registered_suites 时推荐直接写 suite manifest 路径，需要 status 时再写 `{suite, manifest, status}` |
+| `test_workspace/targets/{target}/modules/{module}.yaml` | module 归属、fixture、L1 知识引用、registered_suites；手写 registered_suites 时推荐直接写 suite manifest 路径，需要 status 时再写 `{suite, manifest, status}` |
 | `test_workspace/targets/{target}/fixtures/{module}.py` | Client 类 + setup/teardown fixture |
 | `test_workspace/targets/{target}/helpers/` | target 专属 helper，通用 helper 不够时再新增 |
 | `test_workspace/targets/{target}/profiles/profile_{module}.md` | module_type、共享 assertion_rules、默认 fixture/object、L1 稳定能力 |
-| `{suite_dir}/suite.yaml` | 用例 suite 归属：target、module、suite、case_files；suite profile 走约定路径 |
+| `{suite_dir}/suite.yaml` | 用例 suite 归属：target、module、suite、case_files、L2 知识引用；suite profile 走约定路径 |
 | `{suite_dir}/profile_{suite}_suite.md` | 本批用例的 variables、case_flows/case_bodies/request_overrides |
 | `test_workspace/targets/{target}/api_maps/api_map_{module}.md` | API 面 + env 契约 + 可行性判定（scaffold 过程产物，保留供 review） |
 
@@ -62,13 +62,13 @@ Skill 保障：分步交互、结构化数据流、验证闭环。
 确认：**target** + **模块名** + **模式**（scaffold-module / scaffold-suite / incremental）。如果用户只给模块名，先从 suite manifest、module registry 或现有目录推断 target；推断不到时询问。
 
 ### scaffold-module 模式
-模块尚无 fixture 和 module profile。输入必须包含 L1/API 文档和一份最小冒烟用例 suite，用于锚定真实调用路径、认证方式、响应结构和基础断言。没有可用冒烟用例时，不编造 Markdown case；先回到 `test-design` 或请用户提供最小 case。产出见上方产出表。
+模块尚无 fixture 和 module profile。输入必须包含 L1/API 文档和一份最小冒烟用例 suite，用于锚定真实调用路径、认证方式、响应结构和基础断言。生成 `module.yaml` 时应写入 `knowledge_refs.l1`；外部知识库可写文件、目录、列表或 `${ENV_NAME}` 路径。没有可用冒烟用例时，不编造 Markdown case；先回到 `test-design` 或请用户提供最小 case。产出见上方产出表。
 
 module profile 禁止放当前 suite 的 `case_flows/case_bodies/request_overrides/case_fixtures/variables.cases`；这些 TC-ID 绑定配置必须写入 suite profile，否则 profile gate 会报错。
 最小 suite 必须注册到 `module.yaml.registered_suites`，用于验证 module/target/all selector 能发现该模块。
 
 ### scaffold-suite 模式
-已有 fixture 和 module profile，用户给出某个用例目录。产出 `suite.yaml` + `profile_{suite}_suite.md`。suite profile 文件名必须以 `_suite.md` 结尾，只覆盖该目录下的 case_id。
+已有 fixture 和 module profile，用户给出某个用例目录。产出 `suite.yaml` + `profile_{suite}_suite.md`。`suite.yaml.knowledge_refs` 只写本批用例相关 L2，L1 从 `module.yaml.knowledge_refs.l1` 合并。suite profile 文件名必须以 `_suite.md` 结尾，只覆盖该目录下的 case_id。
 
 ### incremental 模式
 从 `test-codegen` 接手"fixture 能力不足"的问题，不是重做整个模块。
@@ -179,7 +179,7 @@ api_map 是全流程的结构化中间文档，后续步骤从 api_map 读取，
 
 1. api_map 存在，包含 API Map、env 分层、case variables/env 矩阵、状态影响表、可行性判定和 skip_list
 2. `fixtures/{module}.py` 和相关 helpers 存在且 `compileall` 通过
-3. `module.yaml` 已声明 `fixture.file/default_fixture/module_type/registered_suites`，module profile 位于约定路径
+3. `module.yaml` 已声明 `fixture.file/default_fixture/module_type/knowledge_refs.l1/registered_suites`，module profile 位于约定路径；缺 L1 只允许在用户确认暂无 L1 时保留 warning
 4. `default_fixture` 符号真实可 import
 5. module profile 只放 L1 稳定能力；suite profile 放 TC-ID 绑定内容
 6. `--validate-profile` 无 ERROR；WARNING 已列出并确认处理方式

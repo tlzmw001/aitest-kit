@@ -25,7 +25,7 @@ class TargetContext:
     source_root: Path | None
     docs: list[Path]
     defaults: TargetDefaults
-    knowledge_refs: dict[str, Any] = field(default_factory=dict)
+    knowledge_refs: dict[str, list[Path]] = field(default_factory=dict)
     diagnostics: list[str] = field(default_factory=list)
 
 
@@ -43,7 +43,7 @@ class ModuleContext:
     module: str
     module_type: str
     config_path: Path | None
-    knowledge_refs: dict[str, Any]
+    knowledge_refs: dict[str, list[Path]]
     fixture_path: Path | None
     default_fixture: str
     profile_path: Path | None
@@ -61,7 +61,7 @@ class SuiteManifestContext:
     manifest_path: Path
     case_files: list[Path]
     profile_path: Path
-    knowledge_refs: dict[str, Any]
+    knowledge_refs: dict[str, list[Path]]
     diagnostics: list[str] = field(default_factory=list)
 
 

@@ -63,9 +63,9 @@ knowledge → cases → scaffold → codegen → execution → emitter
 
 | 层 | 命令 | 看什么 |
 |----|------|--------|
-| knowledge | `ls test_workspace/knowledge/L*/` | 知识库覆盖 |
+| knowledge | `ls test_workspace/knowledge/L*/`，检查 target/module/suite effective knowledge refs | 知识库覆盖与追溯 |
 | cases | `ls test_workspace/suites/{target}/{suite}/` | 用例和 suite.yaml |
-| scaffold | `aitest codegen --suite-file <s.yaml> --validate-profile` | fixture/profile 齐备性 |
+| scaffold | `aitest codegen --suite-file <s.yaml> --validate-profile`，检查 `module.yaml.knowledge_refs.l1` | fixture/profile/L1 接线 |
 | codegen | `aitest codegen --suite-file <s.yaml> --check` | generated 与源头同步 |
 | execution | `ls test_workspace/reports/{target}/.../latest/` | 最近执行结果 |
 

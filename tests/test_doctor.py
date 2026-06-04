@@ -202,5 +202,8 @@ case_files:
     result = runner.invoke(main, ["doctor", "--workspace", str(target)])
 
     assert result.exit_code == 1, result.output
-    assert "[OK] target registry: 1 target(s), 1 module(s), 1 registered suite(s) valid" in result.output
+    assert (
+        "[WARN] target registry: demo_target/demo: missing recommended knowledge_refs.l1"
+        in result.output
+    )
     assert "[FAIL] generated freshness" in result.output

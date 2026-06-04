@@ -79,7 +79,7 @@ Markdown → AI 探索（可选）→ 回灌 fixture + profile → case_flows/ca
 
 读取 `suite.yaml`，根据其中的 `target/module` 加载：
 
-- `modules/{module}.yaml` — module registry（fixture 声明、module_type）
+- `modules/{module}.yaml` — module registry（fixture 声明、module_type、L1 知识引用）
 - `fixtures/{module}.py` — fixture 方法签名
 - `helpers/` — 可用 helper
 - `profiles/profile_{module}.md` — module profile
@@ -94,7 +94,7 @@ Markdown → AI 探索（可选）→ 回灌 fixture + profile → case_flows/ca
 target/suite 规则：
 
 1. module profile 放 L1 稳定能力；suite profile 放 `variables/case_flows/case_bodies/request_overrides`。
-2. `suite.yaml` 只放 `target/module/suite/case_files/knowledge_refs`。
+2. `suite.yaml` 只放 `target/module/suite/case_files/knowledge_refs`；其中 `knowledge_refs` 只写本 suite 相关 L2，L1 从 `module.yaml.knowledge_refs.l1` 合并。
 3. 生成文件名：`test_{module}_{suite}_{case_file_stem}.py`，输出到 `test_workspace/generated/{target}/`。
 4. target registry 不存在时，切到 `test-scaffold`，不回退旧路径。
 
@@ -110,7 +110,7 @@ target/suite 规则：
 2. 解释 UNPARSED / skipped / profile gap，并判断应路由到 `test-fix`、`test-scaffold` 还是 `test-design`
 3. 检测 Markdown 与知识库冲突
 
-读取范围优先来自 `suite.yaml.knowledge_refs`；没有配置时，只读与 `$target/$module` 直接相关的 L1/L2/TEST_SPEC。
+读取范围优先来自 effective knowledge refs：`target.yaml.knowledge_refs.l0` + `module.yaml.knowledge_refs.l1` + `suite.yaml.knowledge_refs.l2`。没有配置时，只读与 `$target/$module` 直接相关的 L1/L2/TEST_SPEC。
 
 允许用途：
 

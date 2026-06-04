@@ -15,9 +15,9 @@ from aitest_kit.registry.models import (
     TargetDefaults,
 )
 from aitest_kit.registry.path_resolver import (
+    resolve_knowledge_refs,
     resolve_named_path,
     resolve_path,
-    resolve_path_tree,
 )
 
 
@@ -35,7 +35,12 @@ def load_target_context(
     defaults = _target_defaults(target_name, data.get("defaults", {}), root, diagnostics)
     docs = _resolve_path_list(data.get("docs", []), base_dir=root, diagnostics=diagnostics, field="docs")
     source_root = resolve_path(data.get("source_root"), base_dir=root, diagnostics=diagnostics, field="source_root")
-    knowledge_refs = _resolve_mapping(data.get("knowledge_refs", {}), root, diagnostics, "knowledge_refs")
+    knowledge_refs = resolve_knowledge_refs(
+        data.get("knowledge_refs", {}),
+        base_dir=root,
+        diagnostics=diagnostics,
+        field="knowledge_refs",
+    )
 
     return TargetContext(
         workspace_root=root,
@@ -65,11 +70,11 @@ def load_module_context(
             f"E710: module target {declared_target} does not match target {target_context.target}"
         )
 
-    knowledge_refs = _resolve_mapping(
+    knowledge_refs = resolve_knowledge_refs(
         data.get("knowledge_refs", {}),
-        target_context.workspace_root,
-        diagnostics,
-        "knowledge_refs",
+        base_dir=target_context.workspace_root,
+        diagnostics=diagnostics,
+        field="knowledge_refs",
     )
     fixture_path, default_fixture = _module_fixture(target_context, data, diagnostics)
     profile_path = _module_profile(target_context, data, module_name, diagnostics)
@@ -110,7 +115,12 @@ def load_suite_context(
 
     case_files = _suite_case_files(data, manifest_path, diagnostics)
     profile_path = _suite_profile_path(manifest_path, suite)
-    knowledge_refs = _resolve_mapping(data.get("knowledge_refs", {}), root, diagnostics, "knowledge_refs")
+    knowledge_refs = resolve_knowledge_refs(
+        data.get("knowledge_refs", {}),
+        base_dir=root,
+        diagnostics=diagnostics,
+        field="knowledge_refs",
+    )
 
     return SuiteManifestContext(
         workspace_root=root,
@@ -473,21 +483,6 @@ def _required_string(data: dict[str, Any], key: str, diagnostics: list[str]) -> 
         diagnostics.append(f"E700: {key} is required")
         return ""
     return value.strip()
-
-
-def _resolve_mapping(
-    value: Any,
-    base_dir: Path,
-    diagnostics: list[str],
-    field: str,
-) -> dict[str, Any]:
-    if value is None:
-        return {}
-    if not isinstance(value, dict):
-        diagnostics.append(f"E700: {field} must be a mapping")
-        return {}
-    resolved = resolve_path_tree(value, base_dir=base_dir, diagnostics=diagnostics, field=field)
-    return resolved if isinstance(resolved, dict) else {}
 
 
 def _resolve_path_list(
