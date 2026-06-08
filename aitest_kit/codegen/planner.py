@@ -40,6 +40,8 @@ from aitest_kit.codegen.profile_variables import (
     case_flow_variable_refs,
     load_profile_variables,
     profile_variable_irs_for_case,
+    request_variable_refs,
+    validate_request_variable_references,
     validate_case_flow_variable_references,
     validate_profile_variables,
 )
@@ -191,6 +193,7 @@ def _request_patches_for(raw_patches: Any) -> list[RequestPatchIR]:
             path=str(patch.get("path", "") or ""),
             value=patch.get("value"),
             has_value="value" in patch,
+            value_from=str(patch.get("value_from", "") or ""),
         ))
     return patches
 
@@ -232,6 +235,27 @@ def _request_refs_for_flow(flow: dict[str, Any], current_case_id: str) -> set[st
         return refs
     for step in steps:
         refs.update(_request_refs_in_value(step, current_case_id))
+    return refs
+
+
+def _profile_variable_refs_for_case(
+    case_id: str,
+    case_flows: dict[str, dict[str, Any]],
+    request_bindings: dict[str, RequestIR],
+) -> set[str]:
+    refs = case_flow_variable_refs(case_flows.get(case_id, {}))
+    for request_binding in request_bindings.values():
+        raw_request = {
+            "patches": [
+                {
+                    **{"op": patch.op, "path": patch.path},
+                    **({"value": patch.value} if patch.has_value else {}),
+                    **({"value_from": patch.value_from} if patch.value_from else {}),
+                }
+                for patch in request_binding.patches
+            ]
+        }
+        refs.update(request_variable_refs(raw_request))
     return refs
 
 
@@ -421,6 +445,10 @@ def build_file_ir(
         DiagnosticIR(code="E202", layer="planner", message=error)
         for error in validate_case_flow_variable_references(case_flows, profile_variables)
     )
+    file_ir.diagnostics.extend(
+        DiagnosticIR(code="E202", layer="planner", message=error)
+        for error in validate_request_variable_references(requests, profile_variables)
+    )
 
     cases_by_id = {tc.id: tc for tc in parse_result.cases}
 
@@ -489,14 +517,10 @@ def build_file_ir(
             if strategy == "structured_case_flow"
             else None
         )
-        case_profile_variables = (
-            profile_variable_irs_for_case(
-                profile_variables,
-                tc.id,
-                case_flow_variable_refs(case_flows.get(tc.id, {})),
-            )
-            if strategy == "structured_case_flow"
-            else []
+        case_profile_variables = profile_variable_irs_for_case(
+            profile_variables,
+            tc.id,
+            _profile_variable_refs_for_case(tc.id, case_flows, request_bindings),
         )
 
         source_trace = {

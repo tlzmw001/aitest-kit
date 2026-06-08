@@ -46,7 +46,7 @@ Next step: create a target/module registry and a suite.yaml, or keep using legac
 
 - 基础请求体必须能被 `json.loads` 解析。
 - 变化字段填合法默认值。
-- case 级变化写到“请求覆盖”或 profile 的 `requests.<case_id>.overrides/patches`。
+- case 级变化写到“请求覆盖”供 review；真实执行差异优先写 profile 的 `requests.<case_id>.patches`，简单字段覆盖可用 `overrides`。
 
 ## E002: 缺少基础请求体
 
@@ -93,16 +93,34 @@ aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --
 
 含义：
 
-- `--explain TC-ID`：人类可读的单 case 诊断卡片。重点看 `Strategy`、`Case flow`、`Request bindings`、`Assertions`、`Diagnostics`、`Review hint`。
-- `--health-report`：suite/module 健康度和下一步行动。重点看 `unparsed_cases`、`case_body_cases`、`manual_cases`、`structured_assertion_target_counts`、`next_actions`。
+- `--explain TC-ID`：人类可读的单 case 诊断卡片。重点看 `Strategy`、`Case flow`、`Request bindings`、`Request review`、`Assertions`、`Diagnostics`、`Review hint`。
+- `--health-report`：suite/module 健康度和下一步行动。重点看 `unparsed_cases`、`case_body_cases`、`manual_cases`、`structured_assertion_target_counts`、`request_binding_counts`、`profile_variable_counts`、`review_focus`、`next_actions`。
 - `--dump-ir`：机器可读 JSON。适合给 AI 或脚本做精确分析，不适合人工直接浏览大批 case。
 
 典型判断：
 
 - `Review hint` 提示 UNPARSED：优先补 `structured_assertions`、`assertion_rules` 或 fixture/helper。
 - `Case flow` 中没有预期的 `save_as`：修 suite profile 的 `case_flows.steps`。
-- `Request bindings` 没有预期 overrides/patches：修 suite profile 的 `requests.<case_id>`。
+- `Request bindings` 没有预期 patches/overrides：修 suite profile 的 `requests.<case_id>`。
+- `Request bindings` 里的 `value_from` 来源不符合预期：修 suite profile 的 `variables.defaults` / `variables.cases.<case_id>`，不要把 env 值写进 profile。
+- `review_focus` 出现 request patch env 变量：确认 env 名正确、运行环境能提供该变量，并用 `--explain TC-ID` 复核单条 case。
 - `structured_assertion_target_counts` 中 target 异常：检查 `structured_assertions.target` 是否应该来自 `resp`、`save_as` 或 `assign`。
+
+## requests / JSON Patch 错误
+
+常见诊断：
+
+- `E501`：`requests.<case_id>.patches` 格式不合法，例如 `path` 不是 JSON Pointer、`add/replace` 同时写了 `value` 和 `value_from`、`remove` 携带了 `value` 或 `value_from`。
+- `E507`：`requests.<case_id>.patches[].value_from` 引用了未定义的 profile variable。
+
+处理：
+
+- 精确请求变更优先写 `patches`，不要把 JSON 对象作为字符串塞进 `case_flow.kwargs`。
+- dict 整体替换：`op: replace` + `path: /field` + `value: {...}`。
+- list 追加：`op: add` + `path: /items/-`。
+- list 指定位置替换：`op: replace` + `path: /items/0`。
+- 删除字段：`op: remove` + `path: /debug`。
+- 需要 case/env 变量时，用 `value_from: name`，并在 `variables.defaults` 或 `variables.cases.<case_id>` 定义。
 
 ## structured_assertions 错误
 

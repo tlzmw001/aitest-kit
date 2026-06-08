@@ -212,6 +212,59 @@ case_flows:
     assert any("unknown case" in diag.message for diag in report.errors)
 
 
+def test_profile_validator_rejects_undefined_request_patch_value_from(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        with_base_request=True,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+requests:
+  TC-GW-001:
+    patches:
+      - op: replace
+        path: /request_id
+        value_from: missing_request_id
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any(diag.code == "E507" for diag in report.errors)
+    assert any("undefined profile variables: missing_request_id" in diag.message for diag in report.errors)
+
+
+def test_profile_validator_rejects_request_patch_value_and_value_from_together(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        with_base_request=True,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+variables:
+  defaults:
+    request_id:
+      value: req_001
+requests:
+  TC-GW-001:
+    patches:
+      - op: replace
+        path: /request_id
+        value: req_literal
+        value_from: request_id
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any(diag.code == "E501" for diag in report.errors)
+    assert any("requires exactly one of value or value_from" in diag.message for diag in report.errors)
+
+
 def test_profile_validator_accepts_structured_assertions(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     profile_dir = _write_target(tmp_path)

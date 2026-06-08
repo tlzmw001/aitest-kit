@@ -297,6 +297,9 @@ parent_module: gateway_api
 suite: gateway_smoke
 
 variables:
+  defaults:
+    expected_status:
+      value: 0
   cases:
     TC-GW-001:
       token:
@@ -304,6 +307,16 @@ variables:
     TC-GW-002:
       token:
         value: ""
+
+requests:
+  TC-GW-001:
+    patches:
+      - op: replace
+        path: /auth/token
+        value_from: token
+      - op: add
+        path: /filters/statuses/-
+        value_from: expected_status
 
 case_flows:
   TC-GW-001:
@@ -369,6 +382,14 @@ kwargs:
 - `{var: name}` 引用 profile `variables`。
 - `{ref: previous_save_as}` 引用前面 step 的保存结果。
 - `{expr: python_expr}` 使用 Python 表达式。
+
+请求变更：
+
+- 新项目优先使用 `requests.<case_id>.patches`。
+- `add` / `replace` 必须写且只能写 `value` 或 `value_from` 其中一个。
+- `remove` 不写 `value` 或 `value_from`。
+- `value_from` 引用 profile `variables.defaults` 或 `variables.cases.<case_id>`。
+- `overrides` 只用于简单字段覆盖；涉及 list 追加/指定位置、删除字段、dict 整体替换或变量注入时使用 `patches`。
 
 ## task manifest
 

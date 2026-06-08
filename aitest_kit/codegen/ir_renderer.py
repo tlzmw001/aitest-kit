@@ -137,15 +137,23 @@ def _render_req_call(request: RequestIR) -> str:
     if request.overrides:
         kwargs.append(f"overrides={overrides}")
     if request.patches:
-        patches = [
-            {
-                **{"op": patch.op, "path": patch.path},
-                **({"value": patch.value} if patch.has_value else {}),
-            }
-            for patch in request.patches
-        ]
-        kwargs.append(f"patches={dict_to_python_compact(patches)}")
+        kwargs.append(f"patches={_render_request_patches(request)}")
     return "_req(" + ", ".join(kwargs) + ")"
+
+
+def _render_request_patches(request: RequestIR) -> str:
+    items: list[str] = []
+    for patch in request.patches:
+        parts = [
+            f"'op': {dict_to_python_compact(patch.op)}",
+            f"'path': {dict_to_python_compact(patch.path)}",
+        ]
+        if patch.has_value:
+            parts.append(f"'value': {dict_to_python_compact(patch.value)}")
+        elif patch.value_from:
+            parts.append(f"'value': __tc_vars__[{dict_to_python_compact(patch.value_from)}]")
+        items.append("{" + ", ".join(parts) + "}")
+    return "[" + ", ".join(items) + "]"
 
 
 def _render_setup_call(case_ir: CaseIR) -> str | None:
@@ -360,6 +368,11 @@ def _render_default_body(
     lines.append(f"    def {tc_func_name(case_ir.case_id)}({signature}):")
     lines.append(f'        """{case_ir.case_id}：{case_ir.title}"""')
     lines.extend(render_assignment("__tc_meta__", _case_meta(tc, ctx), indent=2))
+    if case_ir.profile_variables:
+        lines.append(
+            "        __tc_vars__ = resolve_profile_variables("
+            f"{dict_to_python_compact(_profile_variable_specs(case_ir))})"
+        )
     lines.extend(_render_setup_comments(tc))
 
     setup_call = _render_setup_call(case_ir)

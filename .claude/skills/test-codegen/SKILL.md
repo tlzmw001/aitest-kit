@@ -56,8 +56,9 @@ test_workspace/generated/{target}/
 
 1. 检查 `aitest_config/aitest.yaml` 是否包含 `workspace`、`codegen` 配置。
 2. profile 使用 Markdown 内 YAML；结构契约由 `codegen_profile.schema.json` 校验，再叠加语义校验。
-3. 首个模块 UNPARSED / case_body 比例可能较高，选断言模式最典型的模块先做。
-4. IR 或 generated 中出现 `/api/v1/replace-me`、示例 helper 时，说明配置未适配。
+3. profile 是 AI 生成、代码校验、人工 review 的稳定中间态；人类主要通过 `--explain`、`--health-report`、generated pytest 和 report review，不要求手写到底。
+4. 首个模块 UNPARSED / case_body 比例可能较高，选断言模式最典型的模块先做。
+5. IR 或 generated 中出现 `/api/v1/replace-me`、示例 helper 时，说明配置未适配。
 
 新项目允许 AI 先手写 pytest 探索 API 行为，但必须回到 codegen 链路：
 
@@ -169,9 +170,9 @@ python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --check
 
 profile 硬门禁有 ERROR 时不进入 IR/emitter，先修 profile。`profile not found`、占位路径、`--check stale` 都是回灌未完成信号。
 
-Case IR strategy 覆盖：`default_http`、`default_grpc`、`custom_case_body`、`structured_case_flow`、`manual`、`skipped`。CLI 支持 `--explain`/`--dump-ir` 时优先用它们排查：单条 case 先看 `--explain <TC-ID>` 的 Strategy、Case flow、Request bindings、Assertions、Review hint；需要机器可读全量信息时再看 `--dump-ir`。
+Case IR strategy 覆盖：`default_http`、`default_grpc`、`custom_case_body`、`structured_case_flow`、`manual`、`skipped`。CLI 支持 `--explain`/`--dump-ir` 时优先用它们排查：单条 case 先看 `--explain <TC-ID>` 的 Strategy、Case flow、Request bindings、Request review、Assertions、Review hint；需要机器可读全量信息时再看 `--dump-ir`。
 
-检查输出摘要和 `--health-report` 中的 UNPARSED、case_body、manual、structured_assertion_target_counts、next_actions，确认每条 case 的 strategy/protocol/fixtures 与预期一致。
+检查输出摘要和 `--health-report` 中的 UNPARSED、case_body、manual、structured_assertion_target_counts、request_binding_counts、profile_variable_counts、review_focus、next_actions，确认每条 case 的 strategy/protocol/fixtures/request binding 与预期一致。
 
 ## Step 3：UNPARSED 补写（子 Agent，>5 条时）
 

@@ -204,6 +204,89 @@ structured_assertions:
         assert "path: $.status" in explain.output
 
 
+def test_codegen_suite_explain_shows_request_value_from_source(tmp_path):
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
+        root = Path(cwd)
+        _write_module_profile(root)
+        suite_dir = _write_suite(root)
+        (suite_dir / "quota_billing_business.md").write_text(
+            """# quota billing cases
+
+## 共享配置
+
+**接口**：`POST /api/v1/gateway`
+
+**基础请求体（HTTP）**：
+
+```json
+{
+  "status": 1,
+  "token": "placeholder"
+}
+```
+
+---
+
+## 一、冒烟
+
+### TC-GW-041：health ok
+- **优先级**：P0
+- **断言**：`response.status == "ok"`
+""",
+            encoding="utf-8",
+        )
+        (suite_dir / "profile_quota_billing_v2_suite.md").write_text(
+            """```yaml
+profile_scope: case_suite
+parent_module: gateway_api
+suite: quota_billing_v2
+variables:
+  defaults:
+    expected_status:
+      value: 0
+  cases:
+    TC-GW-041:
+      auth_token:
+        env: SUB2API_USER_TOKEN
+requests:
+  TC-GW-041:
+    patches:
+      - op: replace
+        path: /status
+        value_from: expected_status
+      - op: replace
+        path: /token
+        value_from: auth_token
+case_flows:
+  TC-GW-041:
+    fixture: setup_gateway_api
+    object: client
+    steps:
+      - call: client.submit
+        kwargs:
+          body: {request_ref: self}
+        save_as: resp
+      - assert: 'assert resp["status"] == "ok"'
+```
+""",
+            encoding="utf-8",
+        )
+
+        explain = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml"), "--explain", "TC-GW-041"])
+
+        assert explain.exit_code == 0, explain.output
+        assert "value_from=expected_status (provider=value source=profile.variables.defaults.expected_status)" in explain.output
+        assert (
+            "value_from=auth_token (provider=env env=SUB2API_USER_TOKEN "
+            "source=profile.variables.cases.TC-GW-041.auth_token)"
+        ) in explain.output
+        assert "Request review:" in explain.output
+        assert "uses request patches: 2" in explain.output
+        assert "uses env variables: SUB2API_USER_TOKEN" in explain.output
+        assert "uses profile variable values: expected_status" in explain.output
+
+
 def test_codegen_suite_explain_reports_unparsed_case_flow_assertion(tmp_path):
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:

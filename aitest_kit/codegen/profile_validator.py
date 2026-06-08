@@ -25,6 +25,7 @@ from aitest_kit.codegen.profile import (
     validate_profile_strategy_conflicts,
 )
 from aitest_kit.codegen.profile_variables import (
+    validate_request_variable_references,
     validate_case_flow_variable_references,
     validate_profile_variables,
 )
@@ -149,6 +150,8 @@ def validate_profile_suite(
     _validate_non_manual_executable_flows(report, suite_case_flows)
     _warn_fixture_reinvocation(report, runtime_case_flows, case_flow_defaults.case_setup)
     for message in validate_case_flow_variable_references(runtime_case_flows, runtime_variables):
+        _error(report, "E507", message)
+    for message in validate_request_variable_references(runtime_requests, runtime_variables):
         _error(report, "E507", message)
     _validate_module_type(report, runtime_data, project_config, runtime_case_bodies, runtime_case_flows)
     _validate_suite_default_coverage(report, context, runtime_case_bodies, runtime_case_flows)
@@ -320,14 +323,22 @@ def _expect_request_patch(report: ProfileValidationReport, patch: Any, source: s
         return
     op = patch.get("op")
     path = patch.get("path")
+    has_value = "value" in patch
+    has_value_from = "value_from" in patch
     if op not in {"add", "replace", "remove"}:
         _error(report, "E501", "request patch op must be one of add/replace/remove", source)
     if not isinstance(path, str) or not path.startswith("/"):
         _error(report, "E501", "request patch path must be a JSON Pointer", source)
-    if op in {"add", "replace"} and "value" not in patch:
-        _error(report, "E501", f"request patch {op} requires value", source)
-    if op == "remove" and "value" in patch:
-        _error(report, "E501", "request patch remove must not include value", source)
+    value_from = patch.get("value_from")
+    if value_from is not None and (
+        not isinstance(value_from, str) or not _IDENT_RE.match(value_from)
+    ):
+        _error(report, "E501", "request patch value_from must be a profile variable name", source)
+    if op in {"add", "replace"}:
+        if has_value == has_value_from:
+            _error(report, "E501", f"request patch {op} requires exactly one of value or value_from", source)
+    if op == "remove" and (has_value or has_value_from):
+        _error(report, "E501", "request patch remove must not include value or value_from", source)
 
 
 def _validate_structured_assertions(

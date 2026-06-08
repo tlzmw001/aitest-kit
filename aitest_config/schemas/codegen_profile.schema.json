@@ -269,7 +269,10 @@
           "type": "string",
           "minLength": 1
         },
-        "value": true
+        "value": true,
+        "value_from": {
+          "$ref": "#/$defs/variableName"
+        }
       }
     },
     "caseFlow": {

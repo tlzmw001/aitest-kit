@@ -8,6 +8,7 @@ from aitest_kit.codegen.ir import (
     AssertionIR,
     CaseFlowStepIR,
     CaseIR,
+    ProfileVariableIR,
     RequestBindingIR,
     SourceTraceIR,
 )
@@ -83,13 +84,24 @@ def _request_section(case_ir: CaseIR) -> list[str]:
         lines.append("  none")
         return lines + [""]
 
+    variables = _profile_variable_map(case_ir)
     for case_id, binding in sorted(case_ir.request_bindings.items()):
         lines.append(f"  {case_id}:")
-        lines.extend(_request_binding_lines(binding, indent="    "))
+        lines.extend(_request_binding_lines(binding, indent="    ", variables=variables))
+    review_lines = _request_review_lines(case_ir, variables)
+    if review_lines:
+        lines.append("")
+        lines.append("Request review:")
+        lines.extend(f"  - {line}" for line in review_lines)
     return lines + [""]
 
 
-def _request_binding_lines(binding: RequestBindingIR, *, indent: str) -> list[str]:
+def _request_binding_lines(
+    binding: RequestBindingIR,
+    *,
+    indent: str,
+    variables: dict[str, ProfileVariableIR],
+) -> list[str]:
     lines = [
         f"{indent}source: {binding.source}",
         f"{indent}base_source: {binding.base_source}",
@@ -102,8 +114,81 @@ def _request_binding_lines(binding: RequestBindingIR, *, indent: str) -> list[st
         lines.append(f"{indent}patches:")
         for patch in binding.patches:
             value = f" value={_compact(patch.value)}" if patch.has_value else ""
-            lines.append(f"{indent}  - {patch.op} {patch.path}{value}")
+            value_from = ""
+            if patch.value_from:
+                detail = _value_from_detail(patch.value_from, variables)
+                value_from = f" value_from={patch.value_from}{detail}"
+            lines.append(f"{indent}  - {patch.op} {patch.path}{value}{value_from}")
     return lines
+
+
+def _profile_variable_map(case_ir: CaseIR) -> dict[str, ProfileVariableIR]:
+    return {variable.name: variable for variable in case_ir.profile_variables}
+
+
+def _value_from_detail(
+    name: str,
+    variables: dict[str, ProfileVariableIR],
+) -> str:
+    variable = variables.get(name)
+    if variable is None:
+        return " (undefined profile variable)"
+    parts = [f"provider={variable.provider}"]
+    if variable.env:
+        parts.append(f"env={variable.env}")
+    parts.append(f"source={variable.source}")
+    return " (" + " ".join(parts) + ")"
+
+
+def _request_review_lines(
+    case_ir: CaseIR,
+    variables: dict[str, ProfileVariableIR],
+) -> list[str]:
+    patch_count = 0
+    override_count = 0
+    env_names: set[str] = set()
+    value_names: set[str] = set()
+    undefined_names: set[str] = set()
+    pointer_paths: set[str] = set()
+
+    for binding in case_ir.request_bindings.values():
+        if binding.overrides:
+            override_count += 1
+        for patch in binding.patches:
+            patch_count += 1
+            if _needs_json_pointer_review(patch.path):
+                pointer_paths.add(patch.path)
+            if not patch.value_from:
+                continue
+            variable = variables.get(patch.value_from)
+            if variable is None:
+                undefined_names.add(patch.value_from)
+            elif variable.provider == "env" and variable.env:
+                env_names.add(variable.env)
+            else:
+                value_names.add(variable.name)
+
+    lines: list[str] = []
+    if override_count:
+        lines.append(f"uses request overrides: {override_count}")
+    if patch_count:
+        lines.append(f"uses request patches: {patch_count}")
+    if env_names:
+        lines.append("uses env variables: " + ", ".join(sorted(env_names)))
+    if value_names:
+        lines.append("uses profile variable values: " + ", ".join(sorted(value_names)))
+    if undefined_names:
+        lines.append("has undefined value_from variables: " + ", ".join(sorted(undefined_names)))
+    if pointer_paths:
+        lines.append("review JSON Pointer paths: " + ", ".join(sorted(pointer_paths)))
+    return lines
+
+
+def _needs_json_pointer_review(path: str) -> bool:
+    if path.endswith("/-"):
+        return True
+    parts = [part for part in path.split("/") if part]
+    return len(parts) > 1 or any(part.isdigit() for part in parts)
 
 
 def _case_flow_section(case_ir: CaseIR) -> list[str]:

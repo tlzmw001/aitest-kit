@@ -147,13 +147,17 @@ variables:
 
 requests:
   TC-XXX-001:
-    overrides:
-      field_name: value
     patches:
+      - op: replace
+        path: /field_name
+        value: value
       - op: add
         path: /items/-
         value:
           item_id: item_001
+      - op: replace
+        path: /auth/token
+        value_from: token
 
 assertion_rules:
   - name: "..."
@@ -199,7 +203,9 @@ case_bodies:
 - fixture 直接返回 Client 时，`default_object` 写 Client 对象名；fixture 返回 factory 时，`default_object` 写 factory 对象名，并用 `default_case_setup` 保存业务对象。
 - 单条 `case_flow` 仍可显式声明 `fixture` 或 `object` 覆盖默认值。
 - 单条 `case_flow` 顶层可写 `description` 作为 profile 可读性 metadata；它不会进入 generated pytest。需要生成代码注释时，用 step 的 `comment`。
-- `case_flow` 的 `args/kwargs` 需要完整请求体时，不要把 JSON 写成字符串；优先在 `requests.<case_id>` 声明 `overrides/patches`，再用 `{request_ref: self}` 或 `{request_ref: TC-XXX-001}` 引用。
+- `case_flow` 的 `args/kwargs` 需要完整请求体时，不要把 JSON 写成字符串；优先在 `requests.<case_id>.patches` 声明请求变更，再用 `{request_ref: self}` 或 `{request_ref: TC-XXX-001}` 引用。
+- `requests.patches` 使用 JSON Patch 子集：`add` / `replace` / `remove`。`add/replace` 必须且只能写 `value` 或 `value_from`；`remove` 不写值。`value_from` 引用 `variables.defaults` 或 `variables.cases.<case_id>`。
+- `overrides` 只适合简单字段覆盖；涉及 list 追加/指定位置、删除字段、dict 整体替换或变量注入时使用 `patches`。
 - 集合遍历、JSONPath、字段存在性和长度断言优先写 `structured_assertions`，不要为了这类断言升级成 `case_body`。
 - default HTTP/gRPC 路线的 `structured_assertions.target` 只能写 `resp`；case_flow 路线只能写当前 flow 中 `save_as` 或 `assign` 产出的变量。
 - 复杂业务计算、循环/条件/等待逻辑封装到 fixture/helper 方法，再由 `case_flow.call` 调用；不要扩展 YAML 控制流。

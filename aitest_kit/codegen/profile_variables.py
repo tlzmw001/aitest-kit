@@ -78,6 +78,23 @@ def case_flow_variable_refs(flow: Any) -> set[str]:
     return refs
 
 
+def request_variable_refs(request: Any) -> set[str]:
+    """Return profile variables referenced by one request binding."""
+    refs: set[str] = set()
+    if not isinstance(request, dict):
+        return refs
+    patches = request.get("patches", [])
+    if not isinstance(patches, list):
+        return refs
+    for patch in patches:
+        if not isinstance(patch, dict):
+            continue
+        value_from = patch.get("value_from")
+        if isinstance(value_from, str) and value_from:
+            refs.add(value_from)
+    return refs
+
+
 def validate_profile_variables(variables: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     for key in variables:
@@ -101,6 +118,27 @@ def validate_profile_variables(variables: dict[str, Any]) -> list[str]:
                 continue
             _validate_variable_map(case_vars, prefix, errors)
 
+    return errors
+
+
+def validate_request_variable_references(
+    requests: dict[str, Any],
+    variables: dict[str, Any],
+) -> list[str]:
+    """Validate requests.<case_id>.patches[].value_from variable references."""
+    errors: list[str] = []
+    defaults = variables.get("defaults", {}) if isinstance(variables.get("defaults"), dict) else {}
+    cases = variables.get("cases", {}) if isinstance(variables.get("cases"), dict) else {}
+    for case_id, request in requests.items():
+        refs = request_variable_refs(request)
+        if not refs:
+            continue
+        case_vars = cases.get(case_id, {}) if isinstance(cases.get(case_id), dict) else {}
+        missing = sorted(refs - (set(defaults) | set(case_vars)))
+        if missing:
+            errors.append(
+                f"requests.{case_id}: undefined profile variables: " + ", ".join(missing)
+            )
     return errors
 
 

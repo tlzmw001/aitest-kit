@@ -348,6 +348,74 @@ def test_generated_req_applies_request_patches(tmp_path):
     }
 
 
+def test_generated_req_applies_request_patch_value_from_profile_variable(tmp_path):
+    profile_path = tmp_path / "profile_demo_suite.md"
+    _write_profile(
+        profile_path,
+        """variables:
+  defaults:
+    publish_status:
+      value: 0
+requests:
+  TC-DEMO-001:
+    patches:
+      - op: replace
+        path: /data/items/0/publishStatus
+        value_from: publish_status
+""",
+    )
+    parse_result = _parse_result(
+        base_request_http={
+            "data": {
+                "items": [
+                    {"id": "item-1", "publishStatus": 1},
+                ]
+            }
+        },
+    )
+
+    project = ProjectConfig(default_request=DefaultRequestConfig(auto_fields={}))
+    file_ir = build_file_ir(
+        parse_result,
+        "business",
+        profile_path=profile_path,
+        project=project,
+    )
+    case_ir = _case(file_ir, "TC-DEMO-001")
+    assert [(var.name, var.provider, var.value) for var in case_ir.profile_variables] == [
+        ("publish_status", "value", 0)
+    ]
+
+    result = emit_file(
+        parse_result,
+        "business",
+        output_dir=tmp_path,
+        profile_path=profile_path,
+        project=project,
+    )
+
+    assert result.diagnostics == []
+    text = (tmp_path / "test_demo_business.py").read_text(encoding="utf-8")
+    assert "resolve_profile_variables" in text
+    assert "'value': __tc_vars__[\"publish_status\"]" in text
+    namespace: dict[str, object] = {}
+    exec(text, namespace)
+
+    request_ir = case_ir.request
+    req = namespace["_req"](
+        auto_fields=request_ir.auto_fields,
+        overrides=request_ir.overrides,
+        patches=[
+            {
+                "op": request_ir.patches[0].op,
+                "path": request_ir.patches[0].path,
+                "value": 0,
+            }
+        ],
+    )
+    assert req["data"]["items"][0]["publishStatus"] == 0
+
+
 def test_case_flow_renders_request_ref_from_unified_request_binding(tmp_path):
     profile_path = tmp_path / "profile_demo_suite.md"
     _write_profile(

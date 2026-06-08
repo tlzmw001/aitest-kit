@@ -10,7 +10,7 @@
 - 每个用例文件顶部建议定义**共享配置**，包含所有用例共用的部分
 - 每条用例只写与共享配置不同的**场景变量**和**断言**
 - 目标：人类 review 时一眼看到"这条用例测什么"，不被重复信息干扰
-- Markdown 不负责执行接线；默认请求差异写入 suite profile 的 `requests.<case_id>.overrides/patches`，多步骤流程写入 suite profile 的 `case_flows`，复杂控制逻辑写入 suite profile 的 `case_bodies` 或沉淀到 fixture/helper
+- Markdown 不负责执行接线；默认请求差异优先写入 suite profile 的 `requests.<case_id>.patches`，简单字段覆盖可用 `overrides`；多步骤流程写入 suite profile 的 `case_flows`，复杂控制逻辑写入 suite profile 的 `case_bodies` 或沉淀到 fixture/helper
 
 ## 文件结构
 
@@ -112,7 +112,7 @@ key 名称不做全局限定，由各项目按实际需要自行约定，保持�
 ## 执行接线边界
 
 - Markdown 只描述场景、输入差异、前置意图和断言意图。
-- 默认请求差异写入 suite profile 的 `requests.<case_id>.overrides/patches`。
+- 默认请求差异写入 suite profile 的 `requests.<case_id>.patches`；简单字段覆盖可用 `overrides`，复杂 list/dict/delete/env/value 注入优先 `patches`。
 - 多步骤流程写入 suite profile 的 `case_flows`。
 - 循环、条件分支、mock、文件生命周期、跨进程等复杂逻辑写入 suite profile 的 `case_bodies`，或沉淀到 fixture/helper。
 - 不要把 token、密钥、真实账号值写进 Markdown；只写环境变量名、资源别名或测试语义，具体值由 env/runtime variables 提供。

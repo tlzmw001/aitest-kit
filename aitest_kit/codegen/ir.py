@@ -35,6 +35,7 @@ class RequestPatchIR:
     path: str
     value: Any = None
     has_value: bool = False
+    value_from: str = ""
 
 
 @dataclass

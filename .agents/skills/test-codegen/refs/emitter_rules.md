@@ -69,7 +69,8 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 
 1. 从共享配置取基础请求体，场景变量 `请求覆盖` 合并
 2. gRPC 用例通过场景变量中的 `协议：gRPC` 标识，Case IR 应记录该判断来源
-3. 共享配置中的 HTTP 基础请求体必须是合法 JSON，不使用 `{{placeholder}}`；case 级差异通过 profile `requests.<case_id>.overrides/patches` 合并。多步骤 `case_flow` 需要请求体时，用 `{request_ref: self}` 或 `{request_ref: TC-XXX-001}` 引用同一套请求绑定。
+3. 共享配置中的 HTTP 基础请求体必须是合法 JSON，不使用 `{{placeholder}}`；case 级差异优先通过 profile `requests.<case_id>.patches` 表达，简单字段覆盖可用 `overrides`。多步骤 `case_flow` 需要请求体时，用 `{request_ref: self}` 或 `{request_ref: TC-XXX-001}` 引用同一套请求绑定。
+4. `requests.patches` 使用 JSON Patch 子集：`add` / `replace` / `remove`。`add` / `replace` 必须且只能写 `value` 或 `value_from`；`remove` 不能写值。`value_from` 引用 profile `variables.defaults` 或 `variables.cases.<case_id>`。
 
 ## 结构化断言
 
@@ -93,8 +94,8 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 - 新增 `case_flow` 前必须能解释它比原 `case_body` 更稳定、更可读、更可校验。
 - 生成或迁移前显式运行 `--validate-profile`；普通生成也会自动硬门禁，用于提前发现 JSON Schema 格式、case_id 引用、case_flow assert 和 module_type 必需字段问题。
 - `--analyze-promotion --write-report` 和 `--suggest-promotion-patch` 的产物写入 `test_workspace/reports/codegen/latest/`，不要放到 `plans/`；patch 草案默认只供 review，不自动修改 profile。
-- `--explain <TC-ID>` 输出单 case 诊断卡片，用于确认 strategy 来源、fixture、case_flow steps、request bindings、structured assertions target、generated assertion code 和 review hint。
-- `--health-report --write-report` 输出模块成熟度、case_flow/case_body/UNPARSED、structured assertion target、request binding 和 next_actions，用来决定下一轮沉淀优先级。
+- `--explain <TC-ID>` 输出单 case 诊断卡片，用于确认 strategy 来源、fixture、case_flow steps、request bindings、request review、structured assertions target、generated assertion code 和 review hint；`value_from` 会显示 provider/source/env 名。
+- `--health-report --write-report` 输出模块成熟度、case_flow/case_body/UNPARSED、structured assertion target、request binding、profile variable、review focus 和 next_actions，用来决定下一轮沉淀优先级。
 
 ## 标记处理
 
