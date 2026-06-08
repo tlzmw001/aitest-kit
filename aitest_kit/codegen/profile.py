@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 from aitest_kit.codegen.project_config import AssertionRule
+from aitest_kit.codegen.profile_merge import merge_profile_yaml
 
 
 @dataclass(frozen=True)
@@ -66,96 +67,6 @@ def load_profile_yaml(profile_path: ProfileSource) -> dict[str, Any]:
         return {}
 
     return data if isinstance(data, dict) else {}
-
-
-def _dedupe_strings(values: list[str]) -> list[str]:
-    seen: set[str] = set()
-    result: list[str] = []
-    for value in values:
-        if value in seen:
-            continue
-        seen.add(value)
-        result.append(value)
-    return result
-
-
-def merge_profile_yaml(
-    module_data: dict[str, Any],
-    suite_data: dict[str, Any] | None = None,
-) -> tuple[dict[str, Any], list[str]]:
-    """Merge stable module profile data with optional case-suite profile data."""
-    suite_data = suite_data or {}
-    merged: dict[str, Any] = {}
-    diagnostics: list[str] = []
-
-    for key in ("module_type", "assertion_rules"):
-        if key in module_data:
-            merged[key] = module_data[key]
-
-    for key in ("default_fixture", "default_object", "default_case_setup"):
-        if key in suite_data:
-            merged[key] = suite_data[key]
-        elif key in module_data:
-            merged[key] = module_data[key]
-
-    imports = []
-    for raw in (module_data.get("extra_imports", []), suite_data.get("extra_imports", [])):
-        if isinstance(raw, list):
-            imports.extend(item for item in raw if isinstance(item, str) and item.strip())
-    if imports:
-        merged["extra_imports"] = _dedupe_strings(imports)
-
-    for key in ("request_overrides", "case_fixtures", "case_bodies", "case_flows"):
-        module_values = module_data.get(key, {})
-        suite_values = suite_data.get(key, {})
-        module_map = module_values if isinstance(module_values, dict) else {}
-        suite_map = suite_values if isinstance(suite_values, dict) else {}
-        overlap = sorted(set(module_map) & set(suite_map))
-        if overlap:
-            diagnostics.append(
-                f"E520: profile merge conflict in {key}: " + ", ".join(overlap)
-            )
-        merged_values = {**module_map, **suite_map}
-        if merged_values:
-            merged[key] = merged_values
-
-    variables = _merge_profile_variables(
-        module_data.get("variables", {}),
-        suite_data.get("variables", {}),
-    )
-    if variables:
-        merged["variables"] = variables
-
-    return merged, diagnostics
-
-
-def _merge_profile_variables(
-    module_variables: Any,
-    suite_variables: Any,
-) -> dict[str, Any]:
-    module_map = module_variables if isinstance(module_variables, dict) else {}
-    suite_map = suite_variables if isinstance(suite_variables, dict) else {}
-
-    defaults = {
-        **dict(module_map.get("defaults", {}) if isinstance(module_map.get("defaults"), dict) else {}),
-        **dict(suite_map.get("defaults", {}) if isinstance(suite_map.get("defaults"), dict) else {}),
-    }
-    module_cases = module_map.get("cases", {}) if isinstance(module_map.get("cases"), dict) else {}
-    suite_cases = suite_map.get("cases", {}) if isinstance(suite_map.get("cases"), dict) else {}
-    cases: dict[str, Any] = {}
-    for case_id in sorted(set(module_cases) | set(suite_cases)):
-        module_case = module_cases.get(case_id, {}) if isinstance(module_cases.get(case_id), dict) else {}
-        suite_case = suite_cases.get(case_id, {}) if isinstance(suite_cases.get(case_id), dict) else {}
-        merged_case = {**module_case, **suite_case}
-        if merged_case:
-            cases[case_id] = merged_case
-
-    result: dict[str, Any] = {}
-    if defaults:
-        result["defaults"] = defaults
-    if cases:
-        result["cases"] = cases
-    return result
 
 
 def load_profile_rules(profile_path: ProfileSource) -> list[AssertionRule]:

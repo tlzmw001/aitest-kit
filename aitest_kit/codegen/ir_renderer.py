@@ -53,9 +53,13 @@ def _render_header(
     lines = [
         f"# Auto-generated from {ctx.source_path}",
         f"# DO NOT EDIT — regenerate with: {regenerate_hint}",
+    ]
+    if ctx.shared_config.base_request_http:
+        lines.append("from copy import deepcopy")
+    lines.extend([
         "import pytest",
         ctx.project.helper_import,
-    ]
+    ])
     if has_grpc:
         lines.append(ctx.project.grpc_helper_import)
     if has_profile_variables:
@@ -88,10 +92,27 @@ def _render_req_helper(ctx: EmitContext) -> list[str]:
     return [
         "",
         "",
+        "def _deep_merge(base, override):",
+        "    if isinstance(base, dict) and isinstance(override, dict):",
+        "        result = deepcopy(base)",
+        "        for key, value in override.items():",
+        "            result[key] = _deep_merge(result[key], value) if key in result else deepcopy(value)",
+        "        return result",
+        "    if isinstance(base, list) and isinstance(override, list):",
+        "        result = []",
+        "        for index in range(max(len(base), len(override))):",
+        "            if index < len(base) and index < len(override):",
+        "                result.append(_deep_merge(base[index], override[index]))",
+        "            elif index < len(override):",
+        "                result.append(deepcopy(override[index]))",
+        "            else:",
+        "                result.append(deepcopy(base[index]))",
+        "        return result",
+        "    return deepcopy(override)",
+        "",
+        "",
         "def _req(**overrides) -> dict:",
-        "    body = {**BASE_REQUEST}",
-        "    body.update(overrides)",
-        "    return body",
+        "    return _deep_merge(BASE_REQUEST, overrides)",
     ]
 
 

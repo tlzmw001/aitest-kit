@@ -8,10 +8,15 @@ from aitest_kit.codegen.ir import ir_to_dict
 from aitest_kit.codegen.parser import ParseResult, SharedConfig, TestCase as ParsedTestCase
 from aitest_kit.codegen.planner import build_file_ir
 from aitest_kit.codegen.profile import (
+    merge_profile_yaml,
     validate_case_flows,
     validate_profile_strategy_conflicts,
 )
-from aitest_kit.codegen.project_config import ProjectConfig, load_project_config
+from aitest_kit.codegen.project_config import (
+    DefaultRequestConfig,
+    ProjectConfig,
+    load_project_config,
+)
 
 
 def _case(file_ir, case_id: str):
@@ -46,6 +51,93 @@ def _parse_result(
             )
         ],
     )
+
+
+def test_profile_merge_merges_nested_lists_by_index():
+    merged, diagnostics = merge_profile_yaml(
+        {
+            "request_overrides": {
+                "TC-DEMO-001": {
+                    "messages": [
+                        {"role": "user", "content": "ping"},
+                        {"role": "assistant", "content": "pong"},
+                    ],
+                    "metadata": {"trace": True, "tags": ["base"]},
+                }
+            }
+        },
+        {
+            "request_overrides": {
+                "TC-DEMO-001": {
+                    "messages": [
+                        {"content": "hello"},
+                        {"content": "world"},
+                        {"role": "tool", "content": "extra"},
+                    ],
+                    "metadata": {"tags": ["override"]},
+                }
+            }
+        },
+    )
+
+    assert diagnostics == []
+    assert merged["request_overrides"]["TC-DEMO-001"] == {
+        "messages": [
+            {"role": "user", "content": "hello"},
+            {"role": "assistant", "content": "world"},
+            {"role": "tool", "content": "extra"},
+        ],
+        "metadata": {"trace": True, "tags": ["override"]},
+    }
+
+
+def test_generated_req_deep_merges_request_override_lists(tmp_path):
+    profile_path = tmp_path / "profile_demo_suite.md"
+    _write_profile(
+        profile_path,
+        """request_overrides:
+  TC-DEMO-001:
+    messages:
+      - content: hello
+    metadata:
+      trace_id: tc-001
+""",
+    )
+    parse_result = _parse_result(
+        base_request_http={
+            "messages": [{"role": "user", "content": "ping"}],
+            "metadata": {"tenant": "demo"},
+        },
+    )
+
+    project = ProjectConfig(default_request=DefaultRequestConfig(auto_fields={}))
+    file_ir = build_file_ir(
+        parse_result,
+        "business",
+        profile_path=profile_path,
+        project=project,
+    )
+    result = emit_file(
+        parse_result,
+        "business",
+        output_dir=tmp_path,
+        profile_path=profile_path,
+        project=project,
+    )
+
+    assert result.diagnostics == []
+    namespace: dict[str, object] = {}
+    exec((tmp_path / "test_demo_business.py").read_text(encoding="utf-8"), namespace)
+
+    req = namespace["_req"](**_case(file_ir, "TC-DEMO-001").request.overrides)
+    assert req == {
+        "messages": [{"role": "user", "content": "hello"}],
+        "metadata": {"tenant": "demo", "trace_id": "tc-001"},
+    }
+    assert namespace["BASE_REQUEST"] == {
+        "messages": [{"role": "user", "content": "ping"}],
+        "metadata": {"tenant": "demo"},
+    }
 
 
 def test_ir_marks_profile_case_flow_without_default_request_plan(tmp_path):
