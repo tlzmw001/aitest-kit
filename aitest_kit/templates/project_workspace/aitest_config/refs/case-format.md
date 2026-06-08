@@ -5,9 +5,12 @@
 
 ## 设计原则
 
-- 每个模块的用例文件顶部定义**共享配置**，包含所有用例共用的部分
+- `suite.yaml` 声明一批用例属于哪个 target/module/suite，以及包含哪些 Markdown case files
+- Markdown case file 只表达测试意图；`business.md`、`boundary.md` 是推荐命名，不是强制结构
+- 每个用例文件顶部建议定义**共享配置**，包含所有用例共用的部分
 - 每条用例只写与共享配置不同的**场景变量**和**断言**
 - 目标：人类 review 时一眼看到"这条用例测什么"，不被重复信息干扰
+- Markdown 不负责执行接线；默认请求差异优先写入 suite profile 的 `requests.<case_id>.patches`，简单字段覆盖可用 `overrides`；多步骤流程写入 suite profile 的 `case_flows`，复杂控制逻辑写入 suite profile 的 `case_bodies` 或沉淀到 fixture/helper
 
 ## 文件结构
 
@@ -22,32 +25,22 @@
 
 ## 共享配置
 
-**接口**：`POST /api/v1/resources/evaluate` / `gRPC package.Service/Method`
+**接口**：`POST /api/v1/recommend` / `gRPC coupon.CouponService/Recommend`
 
 **基础请求体（HTTP）**：
-
-```json
-{
-  "request_id": "req_default",
-  "user_id": "user_default",
-  "resource_id": "resource_default",
-  "attributes": {}
-}
-```
-
-（必须是 `json.loads` 可解析的合法 JSON；变化字段填合法默认值。场景变量中的“请求覆盖”用于设计 review；确定性 codegen 的真实请求覆盖以 `codegen_profile` 的 `request_overrides` 为准）
+（完整、合法的 JSON。变化字段写合法默认值，不使用 `{{placeholder}}`；默认请求路线中每条用例会替换的字段放到 suite profile 的 `requests`）
 
 **基础请求体（gRPC）**：
 （完整 protobuf message 字段，如有两种接口）
 
 **标准前置**：
-- 所有用例共用的环境准备步骤（配置准备、测试数据初始化、外部依赖状态等）
+- 所有用例共用的环境准备步骤（路由配置、库存初始化等）
 
 **通用断言**：`response.code == 0`
 
 **变量定义**：
-- `raw` = `response.items[0].raw_value`（系统计算得到的中间值，不可预知）
-- `derived` = `response.items[0].derived_value`
+- `s` = `response.results[0].score`（打分模型返回的原始分数，不可预知）
+- `cal` = `response.results[0].calibrated_score`
 - `clamp(x, 0, 1)` = `max(0, min(1, x))`
 
 ---
@@ -59,13 +52,13 @@
 - **场景变量**：
   - 协议：HTTP
   - 请求覆盖：`{"user_id": "u_xxx_001"}`
-  - 前置操作：通过管理 API 写入测试资源 `{"resource_id":"resource_a", "status":"active"}`
-- **断言**：`derived == clamp(1.5 * raw + 0.1, 0, 1)`
+  - 前置操作：校准文件 `linear/1.json` 内容 `{"conditions":{"device":"mobile"}, "k":1.5, "b":0.1}`
+- **断言**：`cal == clamp(1.5 * s + 0.1, 0, 1)`
 
 ### TC-XXX-002：{一句话描述}
 - **优先级**：P1
 - **场景变量**：请求覆盖：`{"user_id": "u_xxx_002"}`
-- **断言**：`derived == raw`（规则未命中时保持原值）
+- **断言**：`cal == s`（校准跳过）
 - **标记**：`[manual]`
 
 ---
@@ -82,8 +75,8 @@
 | 字段 | 必填 | 说明 |
 |------|------|------|
 | 接口 | 是 | 列出模块暴露的所有接口类型（HTTP endpoint + gRPC method） |
-| 基础请求体 | 是 | 完整的请求 JSON/protobuf，每种接口一份；HTTP JSON 必须是合法 JSON，不使用 `{{placeholder}}` |
-| 标准前置 | 是 | 所有用例共用的环境准备（配置、测试数据、外部依赖状态等） |
+| 基础请求体 | 默认请求路线必填 | 完整的请求 JSON/protobuf，每种接口一份；HTTP JSON 不允许 `{{var}}` 占位符。若全部用例由 `case_flows/case_bodies` 覆盖，生成时可以不依赖它，但仍建议保留合法共享配置 |
+| 标准前置 | 是 | 所有用例共用的环境准备（路由表、库存、基础配置等） |
 | 通用断言 | 是 | 每条用例都要检查的断言 |
 | 变量定义 | 按需 | 关系断言中的变量缩写，减少每条用例的重复 |
 
@@ -92,7 +85,7 @@
 | 字段 | 必填 | 说明 |
 |------|------|------|
 | 优先级 | 是 | P0/P1/P2，异常类型追加标注（如 `P1 / 异常`） |
-| 场景变量 | 是 | 与共享配置的差异，必须写成 `key：value` 条目列表（见下方书写约束）。注意：这里的“请求覆盖”用于设计 review；确定性 codegen 的真实请求覆盖以 `codegen_profile` 的 `request_overrides` 为准 |
+| 场景变量 | 是 | 与共享配置的差异，必须写成 `key：value` 条目列表（见下方书写约束）。注意：这里的“请求覆盖”用于设计 review；默认请求路线的真实请求覆盖以 suite profile 的 `requests` 为准 |
 | 断言 | 是 | 可程序化的断言表达式，引用变量定义中的缩写 |
 | 标记 | 否 | `[manual]`、`[!可行性存疑: 原因]` 等标记，独立一行，不内联到其他字段 |
 
@@ -111,10 +104,19 @@
 ```markdown
 - **场景变量**：
   - 请求覆盖：`{"scene_name": "ad", "device": "pc"}`
-  - 前置操作：`PUT /api/v1/test-data/u_xxx {"mode": "fallback"}`
+  - 前置操作：`PUT /api/v1/ab/whitelist/u_xxx {"exp": "strategy_off"}`
 ```
 
 key 名称不做全局限定，由各项目按实际需要自行约定，保持同一模块内一致即可。
+
+## 执行接线边界
+
+- Markdown 只描述场景、输入差异、前置意图和断言意图。
+- 默认请求差异写入 suite profile 的 `requests.<case_id>.patches`；简单字段覆盖可用 `overrides`，复杂 list/dict/delete/env/value 注入优先 `patches`。
+- 多步骤流程写入 suite profile 的 `case_flows`。
+- 循环、条件分支、mock、文件生命周期、跨进程等复杂逻辑写入 suite profile 的 `case_bodies`，或沉淀到 fixture/helper。
+- 不要把 token、密钥、真实账号值写进 Markdown；只写环境变量名、资源别名或测试语义，具体值由 env/runtime variables 提供。
+- 区分可控输入与系统中间产物：请求参数、Redis 数据、配置文件、实验参数属于可控输入；打分分数、排序位次、校准后分数等 pipeline 计算结果属于中间产物，不能在前置条件或场景变量中假设其具体值。
 
 ## 标记字段
 

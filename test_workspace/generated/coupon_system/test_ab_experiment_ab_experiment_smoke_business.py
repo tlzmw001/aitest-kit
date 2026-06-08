@@ -2,8 +2,8 @@
 # DO NOT EDIT — regenerate with: aitest codegen --suite-file test_workspace/suites/coupon_system/ab_experiment_smoke/suite.yaml
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
+from aitest_kit.helpers.request_binding import build_request
 from test_workspace.targets.coupon_system.helpers import grpc_ops
-from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
 from test_workspace.targets.coupon_system.fixtures.ab_experiment import setup_ab_experiment
 
 
@@ -21,10 +21,13 @@ BASE_REQUEST = {
 }
 
 
-def _req(**overrides) -> dict:
-    body = {**BASE_REQUEST}
-    body.update(overrides)
-    return body
+def _req(*, auto_fields=None, overrides=None, patches=None) -> dict:
+    return build_request(
+        BASE_REQUEST,
+        auto_fields=auto_fields or {},
+        overrides=overrides or {},
+        patches=patches or [],
+    )
 
 
 class TestAbExperimentBusiness:
@@ -32,7 +35,7 @@ class TestAbExperimentBusiness:
 
     # ── 一、SDK 分流 ──
 
-    def test_tc_ab_001(self, http_base_url, setup_ab_experiment):
+    def test_tc_ab_001(self, setup_ab_experiment):
         """TC-AB-001：HTTP 通过 hash 命中场景关联实验"""
         __tc_meta__ = {
             "tc_id": "TC-AB-001",
@@ -46,14 +49,15 @@ class TestAbExperimentBusiness:
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_ab_hash_http"、scene_name="game"、device="mobile"、external=0、reqId="req-ab-001"
         # SETUP: 前置操作：不设置该用户白名单
-        setup_ab_experiment(case_id="TC-AB-001")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_ab_hash_http", "reqId": "req-ab-001", "scene_name": "game", "device": "mobile", "external": 0}))
+        client = setup_ab_experiment
+        client.prepare_stock(coupon_id="COUPON_AB_001", stock=100)
+        resp = client.recommend_http(request_overrides={"user_id": "u_ab_hash_http", "reqId": "req-ab-001", "scene_name": "game", "device": "mobile", "external": 0})
         assert resp["code"] == 0
-        assert set(resp["experiment_info"].keys()) <= {"coarse_rank_exp_game", "calibration_exp_game"}
+        assert client.experiment_keys(resp) <= {"coarse_rank_exp_game", "calibration_exp_game"}
         assert "coarse_rank_exp_ad" not in resp["experiment_info"] and "calibration_exp_ad" not in resp["experiment_info"]
 
-    def test_tc_ab_002(self, grpc_target, setup_ab_experiment):
+    def test_tc_ab_002(self, setup_ab_experiment):
         """TC-AB-002：gRPC 通过 hash 命中场景关联实验"""
         __tc_meta__ = {
             "tc_id": "TC-AB-002",
@@ -67,14 +71,15 @@ class TestAbExperimentBusiness:
         # SETUP: 协议：gRPC
         # SETUP: 请求覆盖：gRPC 请求 user_id="u_ab_hash_grpc"、scene_name="ad"、device="pc"、external=0、req_id="req-ab-002"
         # SETUP: 前置操作：不设置该用户白名单
-        setup_ab_experiment(case_id="TC-AB-002")
 
-        resp = grpc_ops.recommend(grpc_target, _req(**{"user_id": "u_ab_hash_grpc", "reqId": "req_ab_002", "req_id": "req-ab-002", "scene_name": "ad", "device": "pc", "external": 0}))
+        client = setup_ab_experiment
+        client.prepare_stock(coupon_id="COUPON_AB_001", stock=100)
+        resp = client.recommend_grpc(request_overrides={"user_id": "u_ab_hash_grpc", "req_id": "req-ab-002", "scene_name": "ad", "device": "pc", "external": 0})
         assert resp["code"] == 0
-        assert set(resp["experiment_info"].keys()) <= {"coarse_rank_exp_ad", "calibration_exp_ad"}
+        assert client.experiment_keys(resp) <= {"coarse_rank_exp_ad", "calibration_exp_ad"}
         assert "coarse_rank_exp_game" not in resp["experiment_info"] and "calibration_exp_game" not in resp["experiment_info"]
 
-    def test_tc_ab_003(self, http_base_url, setup_ab_experiment):
+    def test_tc_ab_003(self, setup_ab_experiment):
         """TC-AB-003：白名单优先级高于 hash 分流"""
         __tc_meta__ = {
             "tc_id": "TC-AB-003",
@@ -88,16 +93,18 @@ class TestAbExperimentBusiness:
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：先执行 PUT /api/v1/ab/whitelist/u_ab_white，body 为 {"strategy_map":{"coarse_rank_exp_game":"cr_off","calibration_exp_game":"cal_off"}}
         # SETUP: 请求覆盖_2：HTTP 请求 user_id="u_ab_white"、scene_name="game"、device="mobile"、external=0、reqId="req-ab-003"
-        setup_ab_experiment(case_id="TC-AB-003")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_ab_white", "reqId": "req-ab-003", "scene_name": "game", "device": "mobile", "external": 0}))
+        client = setup_ab_experiment
+        client.prepare_stock(coupon_id="COUPON_AB_001", stock=100)
+        client.set_whitelist(user_id="u_ab_white", strategy_map={"coarse_rank_exp_game": "cr_off", "calibration_exp_game": "cal_off"})
+        resp = client.recommend_http(request_overrides={"user_id": "u_ab_white", "reqId": "req-ab-003", "scene_name": "game", "device": "mobile", "external": 0})
         assert resp["code"] == 0
         assert resp["experiment_info"].get("coarse_rank_exp_game") == "cr_off"
         assert resp["experiment_info"].get("calibration_exp_game") == "cal_off"
 
     # ── 二、场景实验映射 ──
 
-    def test_tc_ab_004(self, http_base_url, setup_ab_experiment):
+    def test_tc_ab_004(self, setup_ab_experiment):
         """TC-AB-004：只评估当前 scene_id 映射的实验"""
         __tc_meta__ = {
             "tc_id": "TC-AB-004",
@@ -111,16 +118,17 @@ class TestAbExperimentBusiness:
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_ab_scene_game"、scene_name="game"、device="mobile"、external=0
         # SETUP: 请求覆盖_2：AB 服务中同时存在 game/ad 两组实验
-        setup_ab_experiment(case_id="TC-AB-004")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_ab_scene_game", "reqId": "req-ab-004", "scene_name": "game", "device": "mobile", "external": 0}))
+        client = setup_ab_experiment
+        client.prepare_stock(coupon_id="COUPON_AB_001", stock=100)
+        resp = client.recommend_http(request_overrides={"user_id": "u_ab_scene_game", "reqId": "req-ab-004", "scene_name": "game", "device": "mobile", "external": 0})
         assert resp["code"] == 0
-        assert set(resp["experiment_info"].keys()) <= {"coarse_rank_exp_game", "calibration_exp_game"}
+        assert client.experiment_keys(resp) <= {"coarse_rank_exp_game", "calibration_exp_game"}
         assert not any(k.endswith("_ad") for k in resp["experiment_info"])
 
     # ── 三、外部打分隔离 ──
 
-    def test_tc_ab_006(self, http_base_url, setup_ab_experiment):
+    def test_tc_ab_006(self, setup_ab_experiment):
         """TC-AB-006：HTTP external=1 时不获取任何实验"""
         __tc_meta__ = {
             "tc_id": "TC-AB-006",
@@ -134,13 +142,14 @@ class TestAbExperimentBusiness:
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_ab_external_http"、scene_name="game"、device="mobile"、external=1、reqId="req-ab-006"
         # SETUP: 请求覆盖_2：AB 服务可用且存在可命中实验
-        setup_ab_experiment(case_id="TC-AB-006")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_ab_external_http", "reqId": "req-ab-006", "scene_name": "game", "device": "mobile", "external": 1}))
+        client = setup_ab_experiment
+        client.prepare_stock(coupon_id="COUPON_AB_001", stock=100)
+        resp = client.recommend_http(request_overrides={"user_id": "u_ab_external_http", "reqId": "req-ab-006", "scene_name": "game", "device": "mobile", "external": 1})
         assert resp["code"] == 0
         assert resp["experiment_info"] == {}
 
-    def test_tc_ab_007(self, grpc_target, setup_ab_experiment):
+    def test_tc_ab_007(self, setup_ab_experiment):
         """TC-AB-007：gRPC external=1 时不获取任何实验"""
         __tc_meta__ = {
             "tc_id": "TC-AB-007",
@@ -154,9 +163,10 @@ class TestAbExperimentBusiness:
         # SETUP: 协议：gRPC
         # SETUP: 请求覆盖：gRPC 请求 user_id="u_ab_external_grpc"、scene_name="game"、device="mobile"、external=1、req_id="req-ab-007"
         # SETUP: 请求覆盖_2：AB 服务可用且存在可命中实验
-        setup_ab_experiment(case_id="TC-AB-007")
 
-        resp = grpc_ops.recommend(grpc_target, _req(**{"user_id": "u_ab_external_grpc", "reqId": "req_ab_007", "req_id": "req-ab-007", "scene_name": "game", "device": "mobile", "external": 1}))
+        client = setup_ab_experiment
+        client.prepare_stock(coupon_id="COUPON_AB_001", stock=100)
+        resp = client.recommend_grpc(request_overrides={"user_id": "u_ab_external_grpc", "req_id": "req-ab-007", "scene_name": "game", "device": "mobile", "external": 1})
         assert resp["code"] == 0
         assert resp["experiment_info"] == {}
 

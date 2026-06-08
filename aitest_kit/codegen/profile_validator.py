@@ -2,11 +2,17 @@
 from __future__ import annotations
 
 import re
+import json
 from pathlib import Path
 from typing import Any
 
 import yaml
+from jsonpath_ng import parse as parse_jsonpath
 
+from aitest_kit.codegen.structured_assertions import (
+    SUPPORTED_STRUCTURED_ASSERTION_TYPES,
+    structured_assertion_required_fields,
+)
 from aitest_kit.codegen.module_type import (
     resolve_module_type,
     validate_module_type_requirements,
@@ -19,6 +25,7 @@ from aitest_kit.codegen.profile import (
     validate_profile_strategy_conflicts,
 )
 from aitest_kit.codegen.profile_variables import (
+    validate_request_variable_references,
     validate_case_flow_variable_references,
     validate_profile_variables,
 )
@@ -36,6 +43,7 @@ from aitest_kit.codegen.suite import load_suite_context_for_paths, parse_suite_c
 
 _YAML_BLOCK_RE = re.compile(r"```ya?ml\s*\n(.*?)```", re.DOTALL)
 _CASE_ID_RE = re.compile(r"^TC-[A-Z0-9]+-\d+$")
+_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _TOP_LEVEL_KEYS = {
     "module_type",
     "profile_scope",
@@ -47,8 +55,9 @@ _TOP_LEVEL_KEYS = {
     "default_object",
     "default_case_setup",
     "assertion_rules",
+    "structured_assertions",
     "variables",
-    "request_overrides",
+    "requests",
     "extra_imports",
     "case_fixtures",
     "case_bodies",
@@ -101,9 +110,12 @@ def validate_profile_suite(
     suite_case_bodies = _mapping(suite_data, "case_bodies")
     suite_case_flows = _mapping(suite_data, "case_flows")
     suite_case_fixtures = _mapping(suite_data, "case_fixtures")
-    suite_request_overrides = _mapping(suite_data, "request_overrides")
+    suite_requests = _mapping(suite_data, "requests")
+    suite_structured_assertions = _mapping(suite_data, "structured_assertions")
     suite_variables = _mapping(suite_data, "variables")
     runtime_case_bodies = _mapping(runtime_data, "case_bodies")
+    runtime_requests = _mapping(runtime_data, "requests")
+    runtime_structured_assertions = _mapping(runtime_data, "structured_assertions")
     case_flow_defaults = case_flow_defaults_from_yaml(runtime_data)
     runtime_case_flows = apply_case_flow_defaults(
         _mapping(runtime_data, "case_flows"),
@@ -121,13 +133,25 @@ def validate_profile_suite(
     _validate_case_references(report, "case_bodies", suite_case_bodies)
     _validate_case_references(report, "case_flows", suite_case_flows)
     _validate_case_references(report, "case_fixtures", suite_case_fixtures)
-    _validate_case_references(report, "request_overrides", suite_request_overrides)
+    _validate_case_references(report, "requests", suite_requests)
+    _validate_case_references(report, "structured_assertions", suite_structured_assertions)
     _validate_case_references(report, "variables.cases", _variable_cases(suite_variables))
+    _validate_structured_assertions(report, runtime_structured_assertions)
+    _validate_structured_assertion_targets(
+        report,
+        runtime_structured_assertions,
+        runtime_case_flows,
+        runtime_case_bodies,
+    )
+    _validate_request_refs(report, runtime_requests, runtime_case_flows)
+    _warn_json_string_request_kwargs(report, runtime_case_flows)
     _warn_feasibility_suspect_strategies(report, suite_case_bodies, suite_case_flows)
     _warn_manual_comment_only_flows(report, suite_case_flows)
     _validate_non_manual_executable_flows(report, suite_case_flows)
     _warn_fixture_reinvocation(report, runtime_case_flows, case_flow_defaults.case_setup)
     for message in validate_case_flow_variable_references(runtime_case_flows, runtime_variables):
+        _error(report, "E507", message)
+    for message in validate_request_variable_references(runtime_requests, runtime_variables):
         _error(report, "E507", message)
     _validate_module_type(report, runtime_data, project_config, runtime_case_bodies, runtime_case_flows)
     _validate_suite_default_coverage(report, context, runtime_case_bodies, runtime_case_flows)
@@ -195,12 +219,13 @@ def _validate_top_level_shape(report: ProfileValidationReport, data: dict[str, A
         if key not in _TOP_LEVEL_KEYS:
             _error(report, "E501", f"unknown top-level field {key}", key)
 
-    _expect_mapping(report, data, "request_overrides")
+    _expect_mapping(report, data, "requests")
     _expect_mapping(report, data, "case_fixtures")
     _expect_mapping(report, data, "case_bodies")
     _expect_mapping(report, data, "case_flows")
     _expect_mapping(report, data, "knowledge_refs")
     _expect_mapping(report, data, "variables")
+    _expect_mapping(report, data, "structured_assertions")
     _expect_string(report, data, "module_type")
     _expect_string(report, data, "profile_scope")
     _expect_string(report, data, "parent_module")
@@ -213,7 +238,8 @@ def _validate_top_level_shape(report: ProfileValidationReport, data: dict[str, A
     _expect_rule_list(report, data)
     _expect_case_fixture_values(report, _mapping(data, "case_fixtures"))
     _expect_case_body_values(report, _mapping(data, "case_bodies"))
-    _expect_request_override_values(report, _mapping(data, "request_overrides"))
+    _expect_request_values(report, _mapping(data, "requests"))
+    _expect_structured_assertion_values(report, _mapping(data, "structured_assertions"))
 
 
 def _expect_mapping(report: ProfileValidationReport, data: dict[str, Any], key: str) -> None:
@@ -271,10 +297,230 @@ def _expect_case_body_values(report: ProfileValidationReport, bodies: dict[str, 
         _error(report, "E501", "case_bodies value must be a string or list of strings", source)
 
 
-def _expect_request_override_values(report: ProfileValidationReport, overrides: dict[str, Any]) -> None:
-    for case_id, value in overrides.items():
+def _expect_request_values(report: ProfileValidationReport, requests: dict[str, Any]) -> None:
+    for case_id, value in requests.items():
+        source = f"requests.{case_id}"
         if not isinstance(value, dict):
-            _error(report, "E501", "request_overrides value must be a mapping", f"request_overrides.{case_id}")
+            _error(report, "E501", "requests value must be a mapping", source)
+            continue
+        base = value.get("base")
+        if base is not None and base != "shared":
+            _error(report, "E501", "requests base currently supports only 'shared'", f"{source}.base")
+        overrides = value.get("overrides")
+        if overrides is not None and not isinstance(overrides, dict):
+            _error(report, "E501", "requests overrides must be a mapping", f"{source}.overrides")
+        patches = value.get("patches")
+        if patches is not None and not isinstance(patches, list):
+            _error(report, "E501", "requests patches must be a list", f"{source}.patches")
+            continue
+        for index, patch in enumerate(patches or []):
+            _expect_request_patch(report, patch, f"{source}.patches[{index}]")
+
+
+def _expect_request_patch(report: ProfileValidationReport, patch: Any, source: str) -> None:
+    if not isinstance(patch, dict):
+        _error(report, "E501", "request patch must be a mapping", source)
+        return
+    op = patch.get("op")
+    path = patch.get("path")
+    has_value = "value" in patch
+    has_value_from = "value_from" in patch
+    if op not in {"add", "replace", "remove"}:
+        _error(report, "E501", "request patch op must be one of add/replace/remove", source)
+    if not isinstance(path, str) or not path.startswith("/"):
+        _error(report, "E501", "request patch path must be a JSON Pointer", source)
+    value_from = patch.get("value_from")
+    if value_from is not None and (
+        not isinstance(value_from, str) or not _IDENT_RE.match(value_from)
+    ):
+        _error(report, "E501", "request patch value_from must be a profile variable name", source)
+    if op in {"add", "replace"}:
+        if has_value == has_value_from:
+            _error(report, "E501", f"request patch {op} requires exactly one of value or value_from", source)
+    if op == "remove" and (has_value or has_value_from):
+        _error(report, "E501", "request patch remove must not include value or value_from", source)
+
+
+def _validate_structured_assertions(
+    report: ProfileValidationReport,
+    templates_by_case: dict[str, Any],
+) -> None:
+    for case_id, templates in templates_by_case.items():
+        source = f"structured_assertions.{case_id}"
+        if not isinstance(templates, list):
+            continue
+        for index, template in enumerate(templates):
+            item_source = f"{source}[{index}]"
+            if not isinstance(template, dict):
+                continue
+            template_type = template.get("type")
+            if template_type not in SUPPORTED_STRUCTURED_ASSERTION_TYPES:
+                _error(
+                    report,
+                    "E529",
+                    "structured assertion type must be one of: "
+                    + ", ".join(sorted(SUPPORTED_STRUCTURED_ASSERTION_TYPES)),
+                    f"{item_source}.type",
+                )
+                continue
+
+            for field in sorted(structured_assertion_required_fields(str(template_type))):
+                if field not in template:
+                    _error(
+                        report,
+                        "E529",
+                        f"structured assertion {template_type} requires field {field}",
+                        item_source,
+                    )
+
+            target = template.get("target")
+            if not isinstance(target, str) or not _IDENT_RE.match(target):
+                _error(
+                    report,
+                    "E529",
+                    "structured assertion target must be a Python variable name",
+                    f"{item_source}.target",
+                )
+
+            path = template.get("path")
+            if not isinstance(path, str) or not path.strip():
+                _error(
+                    report,
+                    "E529",
+                    "structured assertion path must be a non-empty JSONPath string",
+                    f"{item_source}.path",
+                )
+            else:
+                try:
+                    parse_jsonpath(path)
+                except Exception as exc:
+                    _error(
+                        report,
+                        "E529",
+                        f"structured assertion JSONPath is invalid: {exc}",
+                        f"{item_source}.path",
+                    )
+
+            if template_type in {"jsonpath_len_equals", "jsonpath_len_gte"}:
+                value = template.get("value")
+                if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                    _error(
+                        report,
+                        "E529",
+                        "structured assertion length value must be a non-negative integer",
+                        f"{item_source}.value",
+                    )
+            if template_type == "jsonpath_field_in_set":
+                values = template.get("values")
+                if not isinstance(values, list) or not values:
+                    _error(
+                        report,
+                        "E529",
+                        "structured assertion values must be a non-empty list",
+                        f"{item_source}.values",
+                    )
+
+
+def _expect_structured_assertion_values(
+    report: ProfileValidationReport,
+    templates_by_case: dict[str, Any],
+) -> None:
+    for case_id, value in templates_by_case.items():
+        source = f"structured_assertions.{case_id}"
+        if not isinstance(value, list):
+            _error(report, "E501", "structured_assertions value must be a list", source)
+            continue
+        for index, template in enumerate(value):
+            item_source = f"{source}[{index}]"
+            if not isinstance(template, dict):
+                _error(report, "E501", "structured assertion must be a mapping", item_source)
+
+
+def _validate_structured_assertion_targets(
+    report: ProfileValidationReport,
+    templates_by_case: dict[str, Any],
+    case_flows: dict[str, Any],
+    case_bodies: dict[str, Any],
+) -> None:
+    """Validate that structured assertion targets exist in the selected strategy."""
+    for case_id, templates in templates_by_case.items():
+        if not isinstance(case_id, str) or case_id not in report.case_ids:
+            continue
+        if not isinstance(templates, list):
+            continue
+
+        strategy = _strategy_name_for_case(report, case_id, case_flows, case_bodies)
+        allowed_targets = _allowed_structured_assertion_targets(strategy, case_flows.get(case_id))
+        for index, template in enumerate(templates):
+            if not isinstance(template, dict):
+                continue
+            target = template.get("target")
+            if not isinstance(target, str) or not _IDENT_RE.match(target):
+                continue
+            source = f"structured_assertions.{case_id}[{index}].target"
+            if strategy in {"custom_case_body", "manual", "skipped"}:
+                _error(
+                    report,
+                    "E530",
+                    "structured_assertions only render for default_http/default_grpc "
+                    "or structured_case_flow cases; use case_bodies or manual notes for "
+                    f"{strategy} cases",
+                    source,
+                )
+                continue
+            if target not in allowed_targets:
+                expected = ", ".join(sorted(allowed_targets)) or "<none>"
+                _error(
+                    report,
+                    "E530",
+                    f"structured assertion target {target!r} is not produced by "
+                    f"{strategy}; available targets: {expected}",
+                    source,
+                )
+
+
+def _strategy_name_for_case(
+    report: ProfileValidationReport,
+    case_id: str,
+    case_flows: dict[str, Any],
+    case_bodies: dict[str, Any],
+) -> str:
+    if case_id in case_bodies:
+        return "custom_case_body"
+    if case_id in case_flows:
+        return "structured_case_flow"
+    if _case_has_marker(report, case_id, "可行性存疑"):
+        return "skipped"
+    if _case_has_marker(report, case_id, "manual"):
+        return "manual"
+    return "default_http/default_grpc"
+
+
+def _allowed_structured_assertion_targets(strategy: str, flow: Any) -> set[str]:
+    if strategy == "default_http/default_grpc":
+        return {"resp"}
+    if strategy != "structured_case_flow":
+        return set()
+    return _case_flow_output_names(flow)
+
+
+def _case_flow_output_names(flow: Any) -> set[str]:
+    if not isinstance(flow, dict):
+        return set()
+    steps = flow.get("steps")
+    if not isinstance(steps, list):
+        return set()
+    names: set[str] = set()
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        save_as = step.get("save_as")
+        if isinstance(save_as, str) and _IDENT_RE.match(save_as):
+            names.add(save_as)
+        assign = step.get("assign")
+        if isinstance(assign, str) and _IDENT_RE.match(assign):
+            names.add(assign)
+    return names
 
 
 def _validate_case_references(
@@ -299,7 +545,8 @@ def _validate_module_profile_scope(
         "case_bodies",
         "case_flows",
         "case_fixtures",
-        "request_overrides",
+        "requests",
+        "structured_assertions",
     )
     for section in case_scoped_sections:
         values = _mapping(module_data, section)
@@ -478,6 +725,79 @@ def _is_declared_factory_setup(
     if first_step.get("call") != default_case_setup.get("call"):
         return False
     if first_step.get("save_as") != default_case_setup.get("save_as"):
+        return False
+    return True
+
+
+def _validate_request_refs(
+    report: ProfileValidationReport,
+    requests: dict[str, Any],
+    case_flows: dict[str, Any],
+) -> None:
+    for case_id, flow in case_flows.items():
+        for source, value in _iter_flow_values(flow, f"case_flows.{case_id}"):
+            if not isinstance(value, dict) or set(value) != {"request_ref"}:
+                continue
+            ref = value.get("request_ref")
+            if ref == "self":
+                continue
+            if not isinstance(ref, str) or not _CASE_ID_RE.match(ref):
+                _error(report, "E528", "request_ref must be self or a case id", source)
+                continue
+            if ref not in requests and ref not in report.case_ids:
+                _error(report, "E528", f"request_ref points to unknown case: {ref}", source)
+
+
+def _warn_json_string_request_kwargs(
+    report: ProfileValidationReport,
+    case_flows: dict[str, Any],
+) -> None:
+    request_like_keys = {"body", "json", "request", "payload"}
+    for case_id, flow in case_flows.items():
+        if not isinstance(flow, dict):
+            continue
+        steps = flow.get("steps")
+        if not isinstance(steps, list):
+            continue
+        for step_index, step in enumerate(steps):
+            if not isinstance(step, dict):
+                continue
+            kwargs = step.get("kwargs")
+            if not isinstance(kwargs, dict):
+                continue
+            for key, value in kwargs.items():
+                if key == "raw_body":
+                    continue
+                if key not in request_like_keys or not _looks_like_json_string(value):
+                    continue
+                _warn(
+                    report,
+                    "W506",
+                    "case_flow passes a JSON-looking string as request data; use a structured "
+                    "mapping or {request_ref: self}, unless this endpoint requires raw_body",
+                    f"case_flows.{case_id}.steps[{step_index}].kwargs.{key}",
+                )
+
+
+def _iter_flow_values(value: Any, source: str):
+    yield source, value
+    if isinstance(value, dict):
+        for key, item in value.items():
+            yield from _iter_flow_values(item, f"{source}.{key}")
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            yield from _iter_flow_values(item, f"{source}[{index}]")
+
+
+def _looks_like_json_string(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    text = value.strip()
+    if not text or text[0] not in "[{":
+        return False
+    try:
+        json.loads(text)
+    except json.JSONDecodeError:
         return False
     return True
 

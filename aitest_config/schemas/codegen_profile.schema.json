@@ -70,11 +70,23 @@
     "variables": {
       "$ref": "#/$defs/profileVariables"
     },
-    "request_overrides": {
+    "structured_assertions": {
       "type": "object",
       "patternProperties": {
         "^TC-[A-Z0-9]+-[0-9]+$": {
-          "type": "object"
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/structuredAssertion"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "requests": {
+      "type": "object",
+      "patternProperties": {
+        "^TC-[A-Z0-9]+-[0-9]+$": {
+          "$ref": "#/$defs/requestBinding"
         }
       },
       "additionalProperties": false
@@ -191,6 +203,77 @@
           }
         }
       ]
+    },
+    "requestBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "type": "string",
+          "enum": ["shared"]
+        },
+        "overrides": {
+          "type": "object"
+        },
+        "patches": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/requestPatch"
+          }
+        }
+      }
+    },
+    "structuredAssertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "target", "path"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "jsonpath_equals",
+            "jsonpath_exists",
+            "jsonpath_not_exists",
+            "jsonpath_all_equals",
+            "jsonpath_any_equals",
+            "jsonpath_len_equals",
+            "jsonpath_len_gte",
+            "jsonpath_field_in_set"
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/identifier"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "equals": true,
+        "value": true,
+        "values": {
+          "type": "array",
+          "items": true
+        }
+      }
+    },
+    "requestPatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "path"],
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": ["add", "replace", "remove"]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": true,
+        "value_from": {
+          "$ref": "#/$defs/variableName"
+        }
+      }
     },
     "caseFlow": {
       "type": "object",

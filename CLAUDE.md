@@ -145,7 +145,7 @@ emitter-build ── 分析是否值得沉淀；人工 review 后再更新 profi
 codegen 链路：suite context 加载 → profile 硬门禁 → parser 解析 Markdown → Case IR planner → emitter 渲染 → 生成后验证。agent 需要遵守的规则：
 
 - 生成策略优先级固定：`skipped` > `custom_case_body` > `structured_case_flow` > `manual` > `default_grpc` > `default_http`
-- 断言匹配优先级：profile assertion_rules > `aitest.yaml` builtin_assertion_rules > named_templates
+- 断言匹配优先级：profile assertion_rules > `aitest.yaml` builtin_assertion_rules > UNPARSED
 - profile 硬门禁有 ERROR 时不进入 IR/emitter，先修 profile
 - UNPARSED 断言应回写到 Markdown/profile/assertion_rules/emitter，不手改 generated
 - 测试稳定通过后调用 `/emitter-build`，人工 review 后再沉淀规则
@@ -172,7 +172,7 @@ codegen 链路：suite context 加载 → profile 硬门禁 → parser 解析 Ma
 - 用例存放在 suite 目录，用 `suite.yaml` 绑定 target/module
 - 单 suite 可直接通过 `--suite-file` 执行；进入 `--module`、`--target`、`--all` 聚合前，必须用 `aitest registry register-suite` 注册到对应 module；手写 `registered_suites` 时推荐直接写 suite manifest 路径字符串，需要 `status` 时再写 `{suite, manifest, status}` mapping
 - 模块 fixture 按 target/module 拆分到 `test_workspace/targets/{target}/fixtures/{module}.py`
-- module profile 存放在 `test_workspace/targets/{target}/profiles/profile_{module}.md`，只放 L1 稳定能力；suite profile 跟随用例目录，命名为 `profile_{suite}_suite.md`，具体 TC-ID 绑定的 `case_flows`、`case_bodies`、`request_overrides`、`case_fixtures` 应优先放 suite profile
+- module profile 存放在 `test_workspace/targets/{target}/profiles/profile_{module}.md`，只放 L1 稳定能力；suite profile 跟随用例目录，命名为 `profile_{suite}_suite.md`，具体 TC-ID 绑定的 `requests`、`case_flows`、`case_bodies`、`case_fixtures` 应优先放 suite profile
 - generated pytest 是编译产物；如果需要手修，先判断应回写到 suite profile、module profile、fixture/helper 还是 emitter
 - 测试执行报告写入 `test_workspace/reports/`，属于运行产物，不提交；待测系统 bug 仍记录到 `test_workspace/results/`
 - 项目结构或流程发生变更时，检查是否需要同步更新 `CLAUDE.md` 和 `README.md`，并询问用户是否需要更新 `docs/usebook/` 下的文档
@@ -289,7 +289,7 @@ workspace 模板只有一个来源：`aitest_kit/templates/project_workspace/`�
 
 ### 生成策略与规则层
 
-`assertion_rules`、`request_overrides`、`variables` 是规则层输入，不是独立 strategy。`case_flow` 支持 `call`、`assign`、`assert`、`comment`；复杂 `if/for/try/with` 应封装进 fixture/helper 或用 `case_bodies` 逃生。
+`assertion_rules`、`requests`、`variables` 是规则层输入，不是独立 strategy。`case_flow` 支持 `call`、`assign`、`assert`、`comment`；复杂 `if/for/try/with` 应封装进 fixture/helper 或用 `case_bodies` 逃生。
 
 晋升方向：`case_bodies` → `case_flows` / fixture helper → assertion_rules / builtin rules。同一 case_id 不允许同时出现在 `case_bodies` 和 `case_flows`。
 
@@ -304,7 +304,7 @@ workspace 模板只有一个来源：`aitest_kit/templates/project_workspace/`�
 格式规范和示例见 `aitest_config/refs/case-format.md`。关键规则：
 
 - `json` 代码块必须是严格合法 JSON，禁止 `{{var}}` 占位符
-- Markdown 描述场景和断言意图，不负责执行接线；请求差异写 `request_overrides`，多步骤写 `case_flows`
+- Markdown 描述场景和断言意图，不负责执行接线；请求差异写 `requests.<case_id>.overrides/patches`，多步骤写 `case_flows`
 - 不要把 token、密钥、真实账号值写进 Markdown；只写环境变量名
 
 ### 待测系统 bug 记录

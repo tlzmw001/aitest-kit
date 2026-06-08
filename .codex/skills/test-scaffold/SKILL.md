@@ -31,7 +31,7 @@ test-codegen 消费 fixture + profile 生成 pytest
 | `test_workspace/targets/{target}/helpers/` | target 专属 helper，通用 helper 不够时再新增 |
 | `test_workspace/targets/{target}/profiles/profile_{module}.md` | module_type、共享 assertion_rules、默认 fixture/object、L1 稳定能力 |
 | `{suite_dir}/suite.yaml` | 用例 suite 归属：target、module、suite、case_files、L2 知识引用；suite profile 走约定路径 |
-| `{suite_dir}/profile_{suite}_suite.md` | 本批用例的 variables、case_flows/case_bodies/request_overrides |
+| `{suite_dir}/profile_{suite}_suite.md` | 本批用例的 variables、requests、case_flows/case_bodies |
 | `test_workspace/targets/{target}/api_maps/api_map_{module}.md` | API 面 + env 契约 + 可行性判定（scaffold 过程产物，保留供 review） |
 
 模块级 fixture/profile/helper 归属于 `test_workspace/targets/{target}/`；suite 级文件跟随具体用例目录。
@@ -64,7 +64,7 @@ Skill 保障：分步交互、结构化数据流、验证闭环。
 ### scaffold-module 模式
 模块尚无 fixture 和 module profile。输入必须包含 L1/API 文档和一份最小冒烟用例 suite，用于锚定真实调用路径、认证方式、响应结构和基础断言。生成 `module.yaml` 时应写入 `knowledge_refs.l1`；外部知识库可写文件、目录、列表或 `${ENV_NAME}` 路径。没有可用冒烟用例时，不编造 Markdown case；先回到 `test-design` 或请用户提供最小 case。产出见上方产出表。
 
-module profile 禁止放当前 suite 的 `case_flows/case_bodies/request_overrides/case_fixtures/variables.cases`；这些 TC-ID 绑定配置必须写入 suite profile，否则 profile gate 会报错。
+module profile 禁止放当前 suite 的 `requests/case_flows/case_bodies/case_fixtures/variables.cases`；这些 TC-ID 绑定配置必须写入 suite profile，否则 profile gate 会报错。
 最小 suite 必须注册到 `module.yaml.registered_suites`，用于验证 module/target/all selector 能发现该模块。
 
 ### scaffold-suite 模式
@@ -142,7 +142,7 @@ auto_fields 判断、module_type → 路线映射、逐条 case 路线评估参�
 - Client 方法签名（Step 2）
 - api_map（env 矩阵 + skip_list）
 
-子 Agent 产出：scaffold-module 模式生成 `profile_{module}.md` + `profile_{suite}_suite.md`；scaffold-suite 模式只生成 suite profile。module profile 只放 L1 稳定能力；suite profile 承载 `variables` 和 TC-ID 绑定的 `case_flows/case_bodies/request_overrides/case_fixtures`。纯人工 manual 不写入；半自动 manual 写入可执行 flow/body 并保留 manual marker。
+子 Agent 产出：scaffold-module 模式生成 `profile_{module}.md` + `profile_{suite}_suite.md`；scaffold-suite 模式只生成 suite profile。module profile 只放 L1 稳定能力；suite profile 承载 `variables` 和 TC-ID 绑定的 `requests/case_flows/case_bodies/case_fixtures`。纯人工 manual 不写入；半自动 manual 写入可执行 flow/body 并保留 manual marker。
 
 主 Agent 呈现路线分布统计 + skipped/manual 清单 + case_body 保留原因，自动推进到 Step 6；用户有异议可打断。
 
@@ -183,7 +183,7 @@ api_map 是全流程的结构化中间文档，后续步骤从 api_map 读取，
 4. `default_fixture` 符号真实可 import
 5. module profile 只放 L1 稳定能力；suite profile 放 TC-ID 绑定内容
 6. `--validate-profile` 无 ERROR；WARNING 已列出并确认处理方式
-7. `--dump-ir` 中每条 case 的 strategy 符合 Step 4 路线
+7. `--explain <TC-ID>` 中关键 case 的 strategy、case_flow、request bindings、structured assertions 和 review hint 符合 Step 4 路线；`--dump-ir` 用于机器可读全量复核
 8. `codegen` 后 `codegen --check` 通过
 9. `aitest run --suite-file <suite.yaml> -- --collect-only -q` 通过；已注册 suite 还要通过 module selector 的 `--check` 和 collect
 

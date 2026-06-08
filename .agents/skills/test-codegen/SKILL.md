@@ -56,8 +56,9 @@ test_workspace/generated/{target}/
 
 1. 检查 `aitest_config/aitest.yaml` 是否包含 `workspace`、`codegen` 配置。
 2. profile 使用 Markdown 内 YAML；结构契约由 `codegen_profile.schema.json` 校验，再叠加语义校验。
-3. 首个模块 UNPARSED / case_body 比例可能较高，选断言模式最典型的模块先做。
-4. IR 或 generated 中出现 `/api/v1/replace-me`、示例 helper 时，说明配置未适配。
+3. profile 是 AI 生成、代码校验、人工 review 的稳定中间态；人类主要通过 `--explain`、`--health-report`、generated pytest 和 report review，不要求手写到底。
+4. 首个模块 UNPARSED / case_body 比例可能较高，选断言模式最典型的模块先做。
+5. IR 或 generated 中出现 `/api/v1/replace-me`、示例 helper 时，说明配置未适配。
 
 新项目允许 AI 先手写 pytest 探索 API 行为，但必须回到 codegen 链路：
 
@@ -93,7 +94,7 @@ Markdown → AI 探索（可选）→ 回灌 fixture + profile → case_flows/ca
 
 target/suite 规则：
 
-1. module profile 放 L1 稳定能力；suite profile 放 `variables/case_flows/case_bodies/request_overrides`。
+1. module profile 放 L1 稳定能力；suite profile 放 `variables/requests/case_flows/case_bodies`。
 2. `suite.yaml` 只放 `target/module/suite/case_files/knowledge_refs`；其中 `knowledge_refs` 只写本 suite 相关 L2，L1 从 `module.yaml.knowledge_refs.l1` 合并。
 3. 生成文件名：`test_{module}_{suite}_{case_file_stem}.py`，输出到 `test_workspace/generated/{target}/`。
 4. target registry 不存在时，切到 `test-scaffold`，不回退旧路径。
@@ -148,7 +149,7 @@ fixture 能力足够但缺 suite profile 时，做最小补齐：
 1. 创建 `<suite_dir>/suite.yaml`。
 2. 读取 module fixture 的 client 方法签名，只使用已存在的方法。
 3. 必要时按“知识库读取边界”读取 `knowledge_refs`，只辅助理解和字段映射，不新增 Markdown 没写的断言。
-4. 逐条 case 选择 `variables`、`case_flow`、`request_overrides`、`skipped/manual`。
+4. 逐条 case 选择 `variables`、`requests`、`case_flow`、`skipped/manual`。
 5. 纯人工 `[manual]` 不写 profile entry；半自动 manual 写 `case_flow/case_body` 保留 manual marker。
 6. 可行性存疑保持 skipped，不为覆盖率强行写可执行 flow。
 7. 生成 `profile_{suite}_suite.md` 后立即跑 suite 级 profile gate 和 dump-ir。
@@ -162,15 +163,16 @@ fixture 能力足够但缺 suite profile 时，做最小补齐：
 ```bash
 python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --validate-profile
 python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --dump-ir
+python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --explain <TC-ID>
 python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml
 python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --check
 ```
 
 profile 硬门禁有 ERROR 时不进入 IR/emitter，先修 profile。`profile not found`、占位路径、`--check stale` 都是回灌未完成信号。
 
-Case IR strategy 覆盖：`default_http`、`default_grpc`、`custom_case_body`、`structured_case_flow`、`manual`、`skipped`。CLI 支持 `--dump-ir`/`--explain` 时优先用它们排查。
+Case IR strategy 覆盖：`default_http`、`default_grpc`、`custom_case_body`、`structured_case_flow`、`manual`、`skipped`。CLI 支持 `--explain`/`--dump-ir` 时优先用它们排查：单条 case 先看 `--explain <TC-ID>` 的 Strategy、Case flow、Request bindings、Request review、Assertions、Review hint；需要机器可读全量信息时再看 `--dump-ir`。
 
-检查输出摘要中的 UNPARSED 数量，确认每条 case 的 strategy/protocol/fixtures 与预期一致。
+检查输出摘要和 `--health-report` 中的 UNPARSED、case_body、manual、structured_assertion_target_counts、request_binding_counts、profile_variable_counts、review_focus、next_actions，确认每条 case 的 strategy/protocol/fixtures/request binding 与预期一致。
 
 ## Step 3：UNPARSED 补写（子 Agent，>5 条时）
 

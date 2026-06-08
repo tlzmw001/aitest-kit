@@ -30,10 +30,6 @@ codegen:
     validation_ratelimit: val
     e2e: e2e
     discount_policy: dp
-  named_templates:
-  - piecewise_cascade
-  - piecewise_only
-  - skip
   module_types:
     standard_recommend:
       description: 标准推荐接口模块

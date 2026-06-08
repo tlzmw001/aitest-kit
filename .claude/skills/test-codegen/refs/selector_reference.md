@@ -79,7 +79,7 @@ task / module / target / all 是聚合执行维度：
 | 发现 | 处理 |
 |------|------|
 | 只是缺 `suite.yaml` 或 suite profile | 留在 `test-codegen`：创建 suite 元数据和 `profile_{suite}_suite.md` |
-| 只是新增参数组合、断言组合或已有 client 方法的新调用顺序 | 留在 `test-codegen`：补 `variables/case_flows/request_overrides/assertion_rules` |
+| 只是新增参数组合、断言组合或已有 client 方法的新调用顺序 | 留在 `test-codegen`：补 `variables/requests/case_flows/assertion_rules` |
 | 需要调用现有 fixture 没封装的新端点 | 切到 `test-scaffold incremental`：补 client/helper 方法后再回到 codegen |
 | 需要新的认证方式、header、cookie、token 来源或 case-scoped env | 切到 `test-scaffold incremental`：补 env 契约和 fixture 注入 |
 | 需要创建/清理测试数据或跨步骤状态管理 | 切到 `test-scaffold incremental`：补 setup/cleanup 能力 |

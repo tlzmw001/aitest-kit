@@ -118,7 +118,7 @@ test_workspace/suites/{target}/{suite}/profile_{suite}_suite.md
 
 - `json` 代码块必须是严格合法 JSON，禁止 `{{var}}` 占位符
 - 基础请求体必须是可执行默认值
-- case 级差异写在 profile 的 `request_overrides`、`variables` 或 `case_flows` 中
+- case 级差异写在 profile 的 `requests`、`variables` 或 `case_flows` 中
 
 ### 4. 补充项目配置
 
@@ -146,7 +146,7 @@ test_workspace/targets/{target}/profiles/profile_{module}.md
 
 fixture 封装测试能力：读取服务地址和环境变量、调用公开 API、准备/清理状态、提供查询副作用的 helper。必需环境变量缺失时应明确失败，不静默回退。
 
-profile 指导 codegen：`module_type`、`request_overrides`、`assertion_rules`、`case_flows`、`case_bodies`。module profile 放 L1 稳定能力；suite profile 放 TC-ID 绑定的 `variables`、`case_flows`、`case_bodies`、`request_overrides`。
+profile 指导 codegen：`module_type`、`requests`、`assertion_rules`、`case_flows`、`case_bodies`。module profile 放 L1 稳定能力；suite profile 放 TC-ID 绑定的 `variables`、`requests`、`case_flows`、`case_bodies`。
 
 详细字段说明见 [Profile Guide](./codegen_profile_guide.md)。
 

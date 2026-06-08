@@ -75,6 +75,12 @@ case_files:
 
 **通用断言**：`response.code == 0`
 
+**基础请求体（HTTP）**：
+
+```json
+{"status": 1, "token": "placeholder"}
+```
+
 ---
 
 ## 一、冒烟
@@ -94,14 +100,39 @@ case_files:
 profile_scope: case_suite
 parent_module: gateway_api
 suite: gateway_smoke
+variables:
+  defaults:
+    expected_status:
+      value: 0
+  cases:
+    TC-GW-001:
+      auth_token:
+        env: SUB2API_USER_TOKEN
+requests:
+  TC-GW-001:
+    patches:
+      - op: replace
+        path: /status
+        value_from: expected_status
+      - op: replace
+        path: /token
+        value_from: auth_token
 case_flows:
   TC-GW-001:
     fixture: setup_gateway_api
     object: client
     steps:
       - call: client.health
+        kwargs:
+          body: {request_ref: self}
         save_as: resp
       - assert: 'assert resp["status"] == "ok"'
+structured_assertions:
+  TC-GW-001:
+    - type: jsonpath_equals
+      target: resp
+      path: $.status
+      equals: ok
 case_bodies:
   TC-GW-002: |
     assert True
@@ -128,6 +159,19 @@ def test_codegen_health_report_counts_case_flow_and_case_body(tmp_path, monkeypa
     assert module["case_body_count"] == 1
     assert module["maturity"] == "L3"
     assert module["profile_errors"] == 0
+    assert module["structured_assertion_target_counts"] == {"resp": 1}
+    assert module["request_binding_counts"]["profile.requests.patches"] == 1
+    assert module["request_binding_counts"]["profile.requests.patches.value_from"] == 1
+    assert module["profile_variable_counts"]["profile.variables.usage"] == 2
+    assert module["profile_variable_counts"]["profile.variables.value"] == 1
+    assert module["profile_variable_counts"]["profile.variables.env"] == 1
+    assert module["profile_variable_counts"]["profile.variables.defaults"] == 1
+    assert module["profile_variable_counts"]["profile.variables.cases"] == 1
+    assert any("SUB2API_USER_TOKEN" in item["message"] for item in module["review_focus"])
+    assert any(item["kind"] == "request_patch_variable" for item in module["review_focus"])
+    assert module["case_body_cases"][0]["case_id"] == "TC-GW-002"
+    assert module["structured_assertion_cases"][0]["case_id"] == "TC-GW-001"
+    assert module["next_actions"]
 
 
 def test_codegen_health_report_cli_writes_artifacts(tmp_path):
@@ -157,3 +201,7 @@ def test_codegen_health_report_cli_writes_artifacts(tmp_path):
         payload = json.loads(json_path.read_text(encoding="utf-8"))
         assert payload["modules"][0]["module"] == "gateway_api"
         assert payload["modules"][0]["suite"] == "gateway_smoke"
+        assert payload["modules"][0]["structured_assertion_target_counts"] == {"resp": 1}
+        assert payload["modules"][0]["profile_variable_counts"]["profile.variables.env"] == 1
+        assert any("SUB2API_USER_TOKEN" in item["message"] for item in payload["modules"][0]["review_focus"])
+        assert "P1: review 1 case_body case(s)" in "\n".join(payload["modules"][0]["next_actions"])

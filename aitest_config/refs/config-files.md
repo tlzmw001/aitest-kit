@@ -54,7 +54,8 @@ test_workspace/tasks/{task}.yaml
 | suite profile 路径 | 约定路径 `{suite_dir}/profile_{suite}_suite.md` | `suite.yaml`、module profile |
 | `case_flows` | suite profile | module profile |
 | `case_bodies` | suite profile | module profile |
-| `request_overrides` | suite profile | module profile |
+| `requests` | suite profile | module profile |
+| `structured_assertions` | suite profile | module profile |
 | `case_fixtures` | suite profile | module profile |
 | `variables.cases` | suite profile | module profile |
 | `variables.defaults` | module profile 或 suite profile | fixture 代码里硬编码 |
@@ -210,7 +211,8 @@ assertion_rules:
 ```yaml
 case_flows: {}
 case_bodies: {}
-request_overrides: {}
+requests: {}
+structured_assertions: {}
 case_fixtures: {}
 variables:
   cases: {}
@@ -284,7 +286,7 @@ knowledge_refs:
 test_workspace/suites/{target}/{suite}/profile_{suite}_suite.md
 ```
 
-职责：只覆盖当前 suite 的 case_id，放本批用例的 `variables.cases`、`case_flows`、`case_bodies`、`request_overrides`。文件名必须以 `_suite.md` 结尾；YAML 中建议写 `profile_scope: case_suite`、`parent_module` 和 `suite`。
+职责：只覆盖当前 suite 的 case_id，放本批用例的 `variables.cases`、`requests`、`structured_assertions`、`case_flows`、`case_bodies`。文件名必须以 `_suite.md` 结尾；YAML 中建议写 `profile_scope: case_suite`、`parent_module` 和 `suite`。
 
 ````markdown
 # profile_gateway_smoke_suite
@@ -295,6 +297,9 @@ parent_module: gateway_api
 suite: gateway_smoke
 
 variables:
+  defaults:
+    expected_status:
+      value: 0
   cases:
     TC-GW-001:
       token:
@@ -302,6 +307,16 @@ variables:
     TC-GW-002:
       token:
         value: ""
+
+requests:
+  TC-GW-001:
+    patches:
+      - op: replace
+        path: /auth/token
+        value_from: token
+      - op: add
+        path: /filters/statuses/-
+        value_from: expected_status
 
 case_flows:
   TC-GW-001:
@@ -316,6 +331,17 @@ case_flows:
         expr: http_resp.json()
       - assert: 'assert http_resp.status_code == 200'
       - assert: 'assert resp["code"] == 0'
+
+structured_assertions:
+  TC-GW-001:
+    - type: jsonpath_all_equals
+      target: resp
+      path: $.data.items[*].publishStatus
+      equals: 0
+    - type: jsonpath_len_gte
+      target: resp
+      path: $.data.items
+      value: 1
 ```
 ````
 
@@ -333,6 +359,14 @@ case_flows:
 | `comment` | 生成代码中的注释；不能作为非 manual flow 的唯一内容 |
 | `description` | 单条 flow 的 profile 元数据，不进入 generated pytest；纯人工 `[manual]` 不写 flow，半自动 manual flow 至少包含 `call` 或 `assert` |
 
+`structured_assertions` 规则：
+
+- default HTTP/gRPC 路线只能写 `target: resp`。
+- `case_flow` 路线只能写当前 flow 中 `save_as` 或 `assign` 产出的变量。
+- `case_bodies`、pure manual、skipped 用例不写 `structured_assertions`。
+- JSONPath、集合遍历、字段存在性和长度断言优先写 `structured_assertions`。
+- 复杂业务计算、循环、条件和等待逻辑封装到 fixture/helper 方法，再通过 `case_flow.call` 调用。
+
 变量引用：
 
 ```yaml
@@ -348,6 +382,14 @@ kwargs:
 - `{var: name}` 引用 profile `variables`。
 - `{ref: previous_save_as}` 引用前面 step 的保存结果。
 - `{expr: python_expr}` 使用 Python 表达式。
+
+请求变更：
+
+- 新项目优先使用 `requests.<case_id>.patches`。
+- `add` / `replace` 必须写且只能写 `value` 或 `value_from` 其中一个。
+- `remove` 不写 `value` 或 `value_from`。
+- `value_from` 引用 profile `variables.defaults` 或 `variables.cases.<case_id>`。
+- `overrides` 只用于简单字段覆盖；涉及 list 追加/指定位置、删除字段、dict 整体替换或变量注入时使用 `patches`。
 
 ## task manifest
 

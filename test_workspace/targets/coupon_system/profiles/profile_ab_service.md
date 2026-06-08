@@ -5,7 +5,7 @@ Stable module-level codegen profile. Suite-specific flows stay with suite profil
 ```yaml
 module_type: multi_endpoint
 extra_imports:
-- from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
+- from test_workspace.targets.coupon_system.fixtures.ab_service import setup_ab_service
 default_fixture: setup_ab_service
 default_object: ab
 default_case_setup:

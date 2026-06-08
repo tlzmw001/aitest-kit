@@ -153,9 +153,10 @@ def test_profile_validator_rejects_unknown_case_reference(tmp_path, monkeypatch)
         suite_profile="""profile_scope: case_suite
 parent_module: gateway_api
 suite: gateway_smoke
-request_overrides:
+requests:
   TC-GW-999:
-    user_id: u_missing
+    overrides:
+      user_id: u_missing
 """,
     )
 
@@ -163,6 +164,384 @@ request_overrides:
 
     assert any(diag.code == "E505" for diag in report.errors)
     assert any("does not exist in suite markdown cases" in diag.message for diag in report.errors)
+
+
+def test_profile_validator_rejects_legacy_request_overrides(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+request_overrides:
+  TC-GW-001:
+    user_id: u_001
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any("Additional properties are not allowed" in diag.message for diag in report.errors)
+    assert any("request_overrides" in diag.message for diag in report.errors)
+
+
+def test_profile_validator_rejects_unknown_request_ref(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+case_flows:
+  TC-GW-001:
+    fixture: setup_gateway_api
+    steps:
+      - call: client.create
+        kwargs:
+          body: {request_ref: TC-GW-999}
+        save_as: resp
+      - assert: 'assert resp["code"] == 0'
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any(diag.code == "E528" for diag in report.errors)
+    assert any("unknown case" in diag.message for diag in report.errors)
+
+
+def test_profile_validator_rejects_undefined_request_patch_value_from(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        with_base_request=True,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+requests:
+  TC-GW-001:
+    patches:
+      - op: replace
+        path: /request_id
+        value_from: missing_request_id
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any(diag.code == "E507" for diag in report.errors)
+    assert any("undefined profile variables: missing_request_id" in diag.message for diag in report.errors)
+
+
+def test_profile_validator_rejects_request_patch_value_and_value_from_together(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        with_base_request=True,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+variables:
+  defaults:
+    request_id:
+      value: req_001
+requests:
+  TC-GW-001:
+    patches:
+      - op: replace
+        path: /request_id
+        value: req_literal
+        value_from: request_id
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any(diag.code == "E501" for diag in report.errors)
+    assert any("requires exactly one of value or value_from" in diag.message for diag in report.errors)
+
+
+def test_profile_validator_accepts_structured_assertions(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        with_base_request=True,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+structured_assertions:
+  TC-GW-001:
+    - type: jsonpath_all_equals
+      target: resp
+      path: $.data.items[*].publishStatus
+      equals: 0
+    - type: jsonpath_len_gte
+      target: resp
+      path: $.data.items
+      value: 1
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert report.errors == []
+
+
+def test_profile_validator_rejects_default_structured_assertion_non_resp_target(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        with_base_request=True,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+structured_assertions:
+  TC-GW-001:
+    - type: jsonpath_exists
+      target: query_resp
+      path: $.data
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any(diag.code == "E530" for diag in report.errors)
+    assert any("available targets: resp" in diag.message for diag in report.errors)
+
+
+def test_profile_validator_accepts_case_flow_structured_assertion_save_as_target(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+case_flows:
+  TC-GW-001:
+    fixture: setup_gateway_api
+    object: client
+    steps:
+      - call: client.health
+        save_as: resp
+structured_assertions:
+  TC-GW-001:
+    - type: jsonpath_exists
+      target: resp
+      path: $.status
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert report.errors == []
+
+
+def test_profile_validator_accepts_case_flow_structured_assertion_assign_target(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+case_flows:
+  TC-GW-001:
+    fixture: setup_gateway_api
+    object: client
+    steps:
+      - call: client.health
+        save_as: resp
+      - assign: query_resp
+        expr: resp
+structured_assertions:
+  TC-GW-001:
+    - type: jsonpath_exists
+      target: query_resp
+      path: $.status
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert report.errors == []
+
+
+def test_profile_validator_rejects_case_flow_structured_assertion_unknown_target(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+case_flows:
+  TC-GW-001:
+    fixture: setup_gateway_api
+    object: client
+    steps:
+      - call: client.health
+        save_as: resp
+structured_assertions:
+  TC-GW-001:
+    - type: jsonpath_exists
+      target: missing_resp
+      path: $.status
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any(diag.code == "E530" for diag in report.errors)
+    assert any("available targets: resp" in diag.message for diag in report.errors)
+
+
+def test_profile_validator_rejects_case_body_structured_assertions(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+case_bodies:
+  TC-GW-001: |
+    assert True
+structured_assertions:
+  TC-GW-001:
+    - type: jsonpath_exists
+      target: resp
+      path: $.status
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any(diag.code == "E530" for diag in report.errors)
+    assert any("custom_case_body" in diag.message for diag in report.errors)
+
+
+def test_profile_validator_rejects_unknown_structured_assertion_case(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        with_base_request=True,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+structured_assertions:
+  TC-GW-999:
+    - type: jsonpath_exists
+      target: resp
+      path: $.data
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any(diag.code == "E505" for diag in report.errors)
+    assert any(diag.source == "structured_assertions.TC-GW-999" for diag in report.errors)
+
+
+def test_profile_validator_rejects_invalid_structured_assertion(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        with_base_request=True,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+structured_assertions:
+  TC-GW-001:
+    - type: jsonpath_len_gte
+      target: resp
+      path: "$.data.items["
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any(diag.code == "E529" for diag in report.errors)
+    assert any("requires field value" in diag.message for diag in report.errors)
+    assert any("JSONPath is invalid" in diag.message for diag in report.errors)
+
+
+def test_profile_validator_rejects_suite_structured_assertions_in_module_profile(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(
+        tmp_path,
+        module_profile="""module_type: standard_http
+structured_assertions:
+  TC-GW-001:
+    - type: jsonpath_exists
+      target: resp
+      path: $.data
+""",
+    )
+    suite_dir = _write_suite(
+        tmp_path,
+        with_base_request=True,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any(diag.code == "E526" for diag in report.errors)
+    assert any(diag.source == "structured_assertions" for diag in report.errors)
+
+
+def test_profile_validator_warns_json_string_request_kwargs(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+case_flows:
+  TC-GW-001:
+    fixture: setup_gateway_api
+    steps:
+      - call: client.create
+        kwargs:
+          body: '{"user_id": "u_001"}'
+        save_as: resp
+      - assert: 'assert resp["code"] == 0'
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any(diag.code == "W506" for diag in report.warnings)
 
 
 def test_profile_validator_rejects_variables_with_unknown_case_reference(tmp_path, monkeypatch):

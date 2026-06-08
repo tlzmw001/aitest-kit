@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 import copy
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Optional
 
 import pytest
 
+from aitest_kit.runtime_variables import require_envs
 from test_workspace.targets.coupon_system.helpers import grpc_ops
 from test_workspace.targets.coupon_system.helpers import http as http_helper
+from test_workspace.targets.coupon_system.helpers.redis_ops import RedisTracker
 
 
 AB_OFF = {"coarse_rank_exp_game": "cr_off", "calibration_exp_game": "cal_off"}
@@ -59,7 +62,7 @@ class IssuanceCase:
     http_base_url: str
     grpc_target: str
     ab_base_url: str
-    redis_tracker: object
+    redis_tracker: RedisTracker
     users: set[str] = field(default_factory=set)
 
     def prepare_user(self, user_id: str) -> None:
@@ -130,6 +133,34 @@ class IssuanceCase:
     def grpc_query_coupons(self, user_id: str) -> dict:
         return grpc_ops.query_user_coupons(self.grpc_target, user_id)
 
+    def concurrent_issue_once(self) -> dict:
+        self.set_stock("COUPON_ISSUE_CONCURRENT", 1)
+        body_a = self.request(
+            "u_issue_concurrent_a",
+            "req_issue_013a",
+            items=issue_items("COUPON_ISSUE_CONCURRENT"),
+            score_threshold=0.0,
+        )
+        body_b = self.request(
+            "u_issue_concurrent_b",
+            "req_issue_013b",
+            items=issue_items("COUPON_ISSUE_CONCURRENT"),
+            score_threshold=0.0,
+        )
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            responses = list(pool.map(self.post_recommend, [body_a, body_b]))
+        successes = [
+            r for r in responses
+            if r["coupon"] is not None and r["coupon"]["item_id"] == "COUPON_ISSUE_CONCURRENT"
+        ]
+        empty = [r for r in responses if r["coupon"] is None]
+        return {
+            "responses": responses,
+            "success_count": len(successes),
+            "empty_count": len(empty),
+            "stock": self.stock("COUPON_ISSUE_CONCURRENT"),
+        }
+
     def teardown(self) -> None:
         for user_id in self.users:
             try:
@@ -140,14 +171,20 @@ class IssuanceCase:
 
 
 @pytest.fixture
-def setup_issuance(http_base_url, grpc_target, ab_base_url, redis_tracker):
+def setup_issuance():
     """Prepare isolated stock, AB state, and user coupon state for issuance cases."""
-    case = IssuanceCase(http_base_url, grpc_target, ab_base_url, redis_tracker)
-
-    def _setup(case_id: str) -> IssuanceCase:
-        for coupon_id in ("COUPON_ISSUE_A", "COUPON_ISSUE_B", "COUPON_ISSUE_CONCURRENT"):
-            case.set_stock(coupon_id, 100)
-        return case
-
-    yield _setup
-    case.teardown()
+    env = require_envs(["COUPON_SYSTEM_BASE_URL", "COUPON_GRPC_TARGET", "COUPON_AB_BASE_URL", "REDIS_URL"])
+    redis_tracker = RedisTracker(url=env["REDIS_URL"])
+    case = IssuanceCase(
+        http_base_url=env["COUPON_SYSTEM_BASE_URL"],
+        grpc_target=env["COUPON_GRPC_TARGET"],
+        ab_base_url=env["COUPON_AB_BASE_URL"],
+        redis_tracker=redis_tracker,
+    )
+    for coupon_id in ("COUPON_ISSUE_A", "COUPON_ISSUE_B", "COUPON_ISSUE_CONCURRENT"):
+        case.set_stock(coupon_id, 100)
+    try:
+        yield case
+    finally:
+        case.teardown()
+        redis_tracker.close()

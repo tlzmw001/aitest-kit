@@ -67,7 +67,7 @@ aitest report
 
 1. Profile 校验是生成、`--check`、`--dump-ir`、`--explain` 和晋升分析的硬门禁。
 2. Parser 诊断报错时阻断生成。
-3. 断言匹配优先级：profile 规则 > `aitest.yaml` 内置规则 > 命名模板。
+3. 断言匹配优先级：profile 规则 > `aitest.yaml` 内置规则 > UNPARSED。
 4. 生成的 pytest 应通过修改 Markdown/profile/config/fixture/helper 输入来刷新，而非长期手动编辑。
 
 ## 测试执行要点

@@ -25,7 +25,7 @@
 
 - AI 负责理解业务、设计初版、判断哪里值得沉淀。
 - Python 代码负责稳定、可重复、可验证的解析、校验、生成和报告。
-- Markdown 用例和 profile 是源数据，`test_workspace/tests/generated/` 是编译产物。
+- Markdown suite、module/suite profile 和 fixture 是源数据，`test_workspace/generated/` 是编译产物。
 
 ## 2. 仓库功能地图
 
@@ -44,15 +44,16 @@
 
 | 路径 | 职责 |
 |---|---|
-| `aitest_config/config.yaml` | workspace 路径、服务信息、协议偏好，主要给 CLI 和 skills 定位目录 |
-| `aitest_config/project_config.yaml` | codegen 引擎配置：默认 helper、API path、断言规则、module_type |
+| `aitest_config/aitest.yaml` | 统一配置入口：workspace 路径、codegen 默认 helper、API path、断言规则、module_type |
 | `aitest_config/schemas/codegen_profile.schema.json` | profile 的 JSON Schema 硬门禁 |
 | `test_workspace/knowledge/` | 测试知识库 |
-| `test_workspace/cases/{module}/business.md` | 业务用例源数据 |
-| `test_workspace/cases/{module}/boundary.md` | 边界用例源数据 |
-| `test_workspace/tests/fixtures/{module}.py` | 模块测试 client、setup fixture、辅助方法 |
-| `test_workspace/tests/fixtures/codegen_profile_{module}.md` | 模块生成配置 |
-| `test_workspace/tests/generated/test_{module}_{category}.py` | codegen 生成的 pytest |
+| `test_workspace/targets/{target}/modules/{module}.yaml` | 模块注册信息 |
+| `test_workspace/targets/{target}/fixtures/{module}.py` | 模块测试 client、setup fixture、辅助方法 |
+| `test_workspace/targets/{target}/profiles/profile_{module}.md` | 模块级稳定生成配置 |
+| `test_workspace/suites/{target}/{suite}/suite.yaml` | suite manifest，绑定 target/module/case files |
+| `test_workspace/suites/{target}/{suite}/*.md` | Markdown 用例源数据 |
+| `test_workspace/suites/{target}/{suite}/profile_{suite}_suite.md` | suite 级 TC-ID 绑定配置 |
+| `test_workspace/generated/{target}/` | codegen 生成的 pytest |
 | `test_workspace/reports/` | `aitest run` 输出的运行报告 |
 | `test_workspace/results/` | 待测系统 bug 和测试发现记录 |
 
@@ -166,15 +167,11 @@ codegen 是项目最核心的链路。
 - `--dump-ir`、`--explain`、promotion、`--validate-profile`、`--health-report` 互斥。
 - `--write-report` 只能配合 profile/health/promotion 报告类模式。
 
-然后读取路径和配置：
+然后读取配置：
 
 ```text
-_load_codegen_paths()
-  -> 读 aitest_config/config.yaml 的 paths
-  -> 合并默认路径
-
 load_project_config()
-  -> 读 aitest_config/project_config.yaml
+  -> 读 aitest_config/aitest.yaml
   -> 与 fallback 默认配置合并
 ```
 
@@ -199,11 +196,10 @@ load_project_config()
 
 文件：`aitest_kit/codegen/parser.py`
 
-输入：
+输入来自 suite manifest 中的 `case_files`，通常位于：
 
 ```text
-test_workspace/cases/{module}/business.md
-test_workspace/cases/{module}/boundary.md
+test_workspace/suites/{target}/{suite}/*.md
 ```
 
 输出：
@@ -251,10 +247,11 @@ ParseResult(
 - `aitest_kit/codegen/profile.py`
 - `aitest_kit/codegen/profile_validator.py`
 
-profile 路径固定：
+profile 分两层：
 
 ```text
-test_workspace/tests/fixtures/codegen_profile_{module}.md
+test_workspace/targets/{target}/profiles/profile_{module}.md
+test_workspace/suites/{target}/{suite}/profile_{suite}_suite.md
 ```
 
 profile loader 只提取 Markdown 中第一个 YAML 代码块：
@@ -271,7 +268,7 @@ loader 系列函数：
 | 函数 | 读取 YAML 字段 |
 |---|---|
 | `load_profile_rules()` | `assertion_rules` |
-| `load_profile_request_overrides()` | `request_overrides` |
+| `load_profile_requests()` | `requests` |
 | `load_profile_extra_imports()` | `extra_imports` |
 | `load_profile_case_fixtures()` | `case_fixtures` |
 | `load_profile_case_bodies()` | `case_bodies` |
@@ -309,7 +306,7 @@ validate_profile_module()
 输入：
 
 ```text
-aitest_config/project_config.yaml
+aitest_config/aitest.yaml
 ```
 
 输出：
@@ -324,7 +321,6 @@ ProjectConfig(
     var_map={...},
     module_abbrevs={...},
     builtin_assertion_rules=[...],
-    named_templates={...},
     module_types={...},
     modules={...},
 )
@@ -333,7 +329,7 @@ ProjectConfig(
 关键点：
 
 - `FALLBACK_PROJECT_CONFIG_DATA` 是兼容默认值，不是当前项目配置的主编辑入口。
-- 当前项目的主配置入口是 `aitest_config/project_config.yaml`。
+- 当前项目的主配置入口是 `aitest_config/aitest.yaml`。
 - `load_project_config()` 会把 fallback 和 YAML 合并。
 - `builtin_assertion_rules` 会被转换成 `AssertionRule` 对象。
 
@@ -421,7 +417,6 @@ planner 的策略优先级：
 ```text
 profile assertion_rules
   -> project_config builtin_assertion_rules
-  -> named_templates
   -> UNPARSED
 ```
 
@@ -655,16 +650,16 @@ Markdown:
   TC-DP-xxx 断言
 
 profile:
-  request_overrides 可选
+  requests 可选
 
 planner:
   strategy = default_http
-  request = RequestIR(...)
+  request = RequestBindingIR(...)
   call = CallIR(helper="http_helper.post", target="http_base_url")
   assertions = resolve_assertion(...)
 
 renderer:
-  resp = http_helper.post(http_base_url, api_path, json=_req(...))
+  resp = http_helper.post(http_base_url, api_path, json=_req(auto_fields=..., overrides=..., patches=...))
   assert ...
 ```
 
@@ -674,12 +669,19 @@ renderer:
 
 ```text
 profile:
+  requests:
+    TC-DP-008:
+      overrides:
+        request_id: req_dp_delete_then_query
   case_flows:
     TC-DP-008:
       fixture: setup_discount_policy
       object: client
       steps:
         - call: client.evaluate
+          kwargs:
+            overrides:
+              request_ref: self
           save_as: policy_resp
         - call: client.delete
           save_as: delete_resp
@@ -695,7 +697,8 @@ planner:
 
 renderer:
   client = setup_discount_policy
-  policy_resp = client.evaluate(...)
+  __request_tc_dp_008 = _req(...)
+  policy_resp = client.evaluate(overrides=__request_tc_dp_008)
   delete_resp = client.delete(...)
   query_http = client.query_response(...)
   query_resp = query_http.json()
@@ -704,21 +707,9 @@ renderer:
 
 ## 12. 配置如何影响生成
 
-### 12.1 `aitest_config/config.yaml`
+### 12.1 `aitest_config/aitest.yaml`
 
-主要影响 CLI 和 skills 的目录定位。
-
-`codegen/cli.py::_load_codegen_paths()` 会读取：
-
-- `paths.cases_dir`
-- `paths.generated_dir`
-- `paths.fixtures_dir`
-- `paths.reports_dir`
-- `paths.project_config`
-
-### 12.2 `aitest_config/project_config.yaml`
-
-主要影响生成代码内容。
+统一影响 workspace 路径和生成代码内容。
 
 关键字段：
 
@@ -731,19 +722,18 @@ renderer:
 | `api_path` | 默认 HTTP API path |
 | `var_map` | `s/cal` 等断言变量如何落到 Python 表达式 |
 | `module_abbrevs` | 默认 user_id/req_id 如何生成 |
-| `named_templates` | 复杂断言模板白名单 |
 | `module_types` | profile 的 module_type 合法值和 requires |
 | `builtin_assertion_rules` | Markdown 断言到 Python assert 的规则 |
 
-### 12.3 `codegen_profile_{module}.md`
+### 12.2 module profile 与 suite profile
 
-模块级配置优先级最高。
+module profile 放模块稳定能力，suite profile 放具体 TC-ID 绑定。
 
 可控制：
 
 - `module_type`
 - `extra_imports`
-- `request_overrides`
+- `requests`
 - `assertion_rules`
 - `case_fixtures`
 - `case_bodies`
@@ -895,7 +885,7 @@ Case IR 是解释层。它保存：
 - profile `case_flows`
 - profile `assertion_rules`
 - fixture helper
-- `project_config.yaml`
+- `aitest.yaml`
 
 否则每次生成都依赖 AI 重新理解，会出现不稳定、难 review、难复现的问题。
 
@@ -904,9 +894,10 @@ Case IR 是解释层。它保存：
 短期调试可以看，但不应该作为长期源文件维护。  
 正确修复位置通常是：
 
-- Markdown 用例错误 -> 改 `test_workspace/cases/`
-- profile 错误 -> 改 `codegen_profile_{module}.md`
-- fixture 问题 -> 改 `fixtures/{module}.py`
+- Markdown 用例错误 -> 改 suite 目录下的 `.md`
+- suite profile 错误 -> 改 `profile_{suite}_suite.md`
+- module profile 错误 -> 改 `profile_{module}.md`
+- fixture 问题 -> 改 `test_workspace/targets/{target}/fixtures/{module}.py`
 - 通用生成问题 -> 改 `aitest_kit/codegen/`
 - 报告问题 -> 改 `aitest_kit/report/`
 
@@ -970,7 +961,7 @@ Case IR 是解释层。它保存：
 读：
 
 - `render_utils.py::resolve_assertion`
-- `project_config.yaml::builtin_assertion_rules`
+- `aitest.yaml::codegen.builtin_assertion_rules`
 
 你需要能回答：
 

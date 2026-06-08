@@ -12,6 +12,7 @@ import click
 import yaml
 
 from aitest_kit.codegen.emitter import emit_file
+from aitest_kit.codegen.explain import render_case_explain
 from aitest_kit.codegen.health import (
     build_suite_codegen_health_report,
     codegen_health_to_dict,
@@ -193,11 +194,11 @@ def _explain_suite_case(context: SuiteContext, case_id: str, project: ProjectCon
         )
         for case_ir in file_ir.cases:
             if case_ir.case_id == case_id:
-                click.echo(yaml.safe_dump(
-                    ir_to_dict(case_ir),
-                    allow_unicode=True,
-                    sort_keys=False,
-                ).rstrip())
+                click.echo(render_case_explain(
+                    case_ir,
+                    suite=context.suite,
+                    profile_path=context.suite_profile_path,
+                ))
                 return 0
     click.echo(f"Case {case_id} not found in suite {context.suite}")
     return 1

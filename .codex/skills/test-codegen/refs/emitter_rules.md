@@ -40,7 +40,7 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 2. **可用 API** — fixture 需要调用的管理接口或数据准备接口
 3. **隔离策略** — 每条用例的数据如何隔离（tmp_path、唯一 user_id、teardown 恢复）
 4. **teardown** — 所有副作用都能恢复（配置、测试数据、外部依赖状态）
-5. **profile 映射** — case_flows/case_bodies/request_overrides 是否覆盖当前用例
+5. **profile 映射** — requests/case_flows/case_bodies 是否覆盖当前用例
 6. **服务地址** — 从项目专属环境变量读取（如 `SERVICE_BASE_URL` 或 `{TARGET}_BASE_URL`），可兼容 `HTTP_BASE_URL`；不要硬编码端口或 URL
 7. **环境缺失** — 可执行 API 测试缺少服务地址时用 `pytest.fail`，不要用 `pytest.skip` 掩盖环境未配置
 8. **HTTP 客户端** — 使用 `httpx` 时显式指定 `httpx.HTTPTransport()`，避免 macOS/CI 系统代理影响本地 HTTP 测试
@@ -48,7 +48,7 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 
 ## 断言生成
 
-断言匹配优先级：profile assertion_rules > `aitest.yaml.codegen.builtin_assertion_rules` > named_templates。
+断言匹配优先级：profile assertion_rules > `aitest.yaml.codegen.builtin_assertion_rules` > UNPARSED。
 
 通用断言模式（框架内置）：
 
@@ -69,7 +69,16 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 
 1. 从共享配置取基础请求体，场景变量 `请求覆盖` 合并
 2. gRPC 用例通过场景变量中的 `协议：gRPC` 标识，Case IR 应记录该判断来源
-3. 共享配置中的 HTTP 基础请求体必须是合法 JSON，不使用 `{{placeholder}}`；case 级差异通过场景变量或 profile `request_overrides` 合并
+3. 共享配置中的 HTTP 基础请求体必须是合法 JSON，不使用 `{{placeholder}}`；case 级差异优先通过 profile `requests.<case_id>.patches` 表达，简单字段覆盖可用 `overrides`。多步骤 `case_flow` 需要请求体时，用 `{request_ref: self}` 或 `{request_ref: TC-XXX-001}` 引用同一套请求绑定。
+4. `requests.patches` 使用 JSON Patch 子集：`add` / `replace` / `remove`。`add` / `replace` 必须且只能写 `value` 或 `value_from`；`remove` 不能写值。`value_from` 引用 profile `variables.defaults` 或 `variables.cases.<case_id>`。
+
+## 结构化断言
+
+- JSONPath、列表遍历、字段存在性和长度断言优先写 suite profile `structured_assertions`。
+- default HTTP/gRPC 路线的 `target` 只能是 `resp`。
+- `case_flow` 路线的 `target` 必须来自当前 flow 中的 `save_as` 或 `assign`。
+- `case_bodies`、pure manual、skipped 用例不挂 `structured_assertions`。
+- 复杂业务公式、循环、条件、等待和跨响应计算应封装到 fixture/helper 方法，再用 `case_flow.call` 调用；不要把 YAML 写成控制流语言。
 
 ## case_body 与 case_flow
 
@@ -79,13 +88,15 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 - `case_flow` 的 `assert` step 必须写成可执行 Python 断言，例如 `assert resp["code"] == 0`；裸表达式如 `` `resp == ERR` `` 会被 profile 校验拒绝。
 - `case_flow` 表示可执行流程，至少应包含 `call` 或 `assert`。非 manual 用例不能写只有 `comment/assign` 的 flow；纯人工 `[manual]` 不写 flow，半自动 manual 才写带 `call/assert` 的 flow，并保留 manual marker。
 - `case_flow` 的 `args/kwargs` 可以用 `{var: name}` 引用 profile `variables`；变量来源只支持 `env` 或 `value`，`env` 可从进程环境变量、当前工作目录 `.env` 或 `AITEST_ENV_FILE` 指定文件读取；缺 env 时运行失败且只显示 env 名。
+- `case_flow` 不自动注入 pytest fixture 名；不要直接引用 `tmp_path`、`caplog`、`monkeypatch`、`mocker`。需要这些能力时封装到 fixture/helper 方法。
 - profile 顶层可以写 `default_fixture`、`default_object`、`default_case_setup`，用于给多条 `case_flows` 统一补 fixture/object/factory setup；`default_case_setup.kwargs.case_id: "{case_id}"` 会替换为当前用例 ID。
 - 如果 `case_flow` 自身没有 `fixture`，必须能从 `default_fixture` 得到；单条 flow 显式 `fixture/object` 时覆盖顶层默认值。
 - 不要把复杂 Python 控制流硬塞进 `case_flow`；包含线程、进程、mock、复杂文件生命周期时继续保留 `case_body`。
 - 新增 `case_flow` 前必须能解释它比原 `case_body` 更稳定、更可读、更可校验。
 - 生成或迁移前显式运行 `--validate-profile`；普通生成也会自动硬门禁，用于提前发现 JSON Schema 格式、case_id 引用、case_flow assert 和 module_type 必需字段问题。
 - `--analyze-promotion --write-report` 和 `--suggest-promotion-patch` 的产物写入 `test_workspace/reports/codegen/latest/`，不要放到 `plans/`；patch 草案默认只供 review，不自动修改 profile。
-- `--health-report --write-report` 输出模块成熟度、case_flow/case_body/UNPARSED 和断言命中统计，用来决定下一轮沉淀优先级。
+- `--explain <TC-ID>` 输出单 case 诊断卡片，用于确认 strategy 来源、fixture、case_flow steps、request bindings、request review、structured assertions target、generated assertion code 和 review hint；`value_from` 会显示 provider/source/env 名。
+- `--health-report --write-report` 输出模块成熟度、case_flow/case_body/UNPARSED、structured assertion target、request binding、profile variable、review focus 和 next_actions，用来决定下一轮沉淀优先级。
 
 ## 标记处理
 
@@ -98,7 +109,7 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 
 - module profile：`test_workspace/targets/{target}/profiles/profile_{module}.md`，承载 L1 级稳定能力
 - suite profile：`{suite_dir}/profile_{suite}_suite.md`，只覆盖该 suite 的 case_id
-- `case_flows/case_bodies/request_overrides/case_fixtures/variables.cases` 是 TC-ID 绑定配置，必须写入 suite profile；如果写到 module profile 且引用当前 suite 的 case_id，profile gate 会报错。
+- `requests/case_flows/case_bodies/case_fixtures/variables.cases` 是 TC-ID 绑定配置，必须写入 suite profile；如果写到 module profile 且引用当前 suite 的 case_id，profile gate 会报错。
 
 profile 应包含：
 

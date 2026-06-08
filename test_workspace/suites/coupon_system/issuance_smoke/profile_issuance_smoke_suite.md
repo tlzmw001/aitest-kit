@@ -7,35 +7,7 @@ profile_scope: case_suite
 parent_module: issuance
 suite: issuance_smoke
 extra_imports:
-- from concurrent.futures import ThreadPoolExecutor
 - from test_workspace.targets.coupon_system.fixtures.issuance import issue_item, issue_items
-case_bodies:
-  TC-ISSUE-013:
-  - issue = setup_issuance(case_id="TC-ISSUE-013")
-  - issue.set_stock("COUPON_ISSUE_CONCURRENT", 1)
-  - body_a = issue.request(
-  - '    "u_issue_concurrent_a",'
-  - '    "req_issue_013a",'
-  - '    items=issue_items("COUPON_ISSUE_CONCURRENT"),'
-  - '    score_threshold=0.0,'
-  - )
-  - body_b = issue.request(
-  - '    "u_issue_concurrent_b",'
-  - '    "req_issue_013b",'
-  - '    items=issue_items("COUPON_ISSUE_CONCURRENT"),'
-  - '    score_threshold=0.0,'
-  - )
-  - 'with ThreadPoolExecutor(max_workers=2) as pool:'
-  - '    responses = list(pool.map(issue.post_recommend, [body_a, body_b]))'
-  - successes = [
-  - '    r for r in responses'
-  - '    if r["coupon"] is not None and r["coupon"]["item_id"] == "COUPON_ISSUE_CONCURRENT"'
-  - ']'
-  - empty = [r for r in responses if r["coupon"] is None]
-  - assert all(r["code"] == 0 for r in responses)
-  - assert len(successes) == 1
-  - assert len(empty) == 1
-  - assert issue.stock("COUPON_ISSUE_CONCURRENT") == 0
 case_flows:
   TC-ISSUE-001:
     steps:
@@ -282,6 +254,14 @@ case_flows:
     - assert: assert resp['code'] == 0
     - assert: assert resp['coupon'] is None
     - assert: assert resp['code'] != 1006
+  TC-ISSUE-013:
+    steps:
+    - call: issue.concurrent_issue_once
+      save_as: result
+    - assert: assert all(r['code'] == 0 for r in result['responses'])
+    - assert: assert result['success_count'] == 1
+    - assert: assert result['empty_count'] == 1
+    - assert: assert result['stock'] == 0
   TC-ISSUE-016:
     steps:
     - call: issue.request

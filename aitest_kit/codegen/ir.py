@@ -30,9 +30,24 @@ class SetupCallIR:
 
 
 @dataclass
-class RequestIR:
+class RequestPatchIR:
+    op: str
+    path: str
+    value: Any = None
+    has_value: bool = False
+    value_from: str = ""
+
+
+@dataclass
+class RequestBindingIR:
     source: str
+    base_source: str = "shared_config.base_request_http"
+    auto_fields: dict[str, Any] = field(default_factory=dict)
     overrides: dict[str, Any] = field(default_factory=dict)
+    patches: list[RequestPatchIR] = field(default_factory=list)
+
+
+RequestIR = RequestBindingIR
 
 
 @dataclass
@@ -65,6 +80,7 @@ class AssertionIR:
     code_lines: list[str] = field(default_factory=list)
     resolved_by: str = ""
     variables: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -111,6 +127,7 @@ class CaseIR:
     fixtures: list[str] = field(default_factory=list)
     setup_call: SetupCallIR | None = None
     request: RequestIR | None = None
+    request_bindings: dict[str, RequestBindingIR] = field(default_factory=dict)
     call: CallIR | None = None
     variables: list[VariableIR] = field(default_factory=list)
     profile_variables: list[ProfileVariableIR] = field(default_factory=list)

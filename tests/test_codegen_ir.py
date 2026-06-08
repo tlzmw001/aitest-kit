@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from aitest_kit.codegen.emitter import emit_file
 from aitest_kit.codegen.ir import ir_to_dict
 from aitest_kit.codegen.parser import ParseResult, SharedConfig, TestCase as ParsedTestCase
@@ -17,6 +19,7 @@ from aitest_kit.codegen.project_config import (
     ProjectConfig,
     load_project_config,
 )
+from aitest_kit.helpers import structured_assertions as aitest_assertions
 
 
 def _case(file_ir, case_id: str):
@@ -56,32 +59,36 @@ def _parse_result(
 def test_profile_merge_merges_nested_lists_by_index():
     merged, diagnostics = merge_profile_yaml(
         {
-            "request_overrides": {
+            "requests": {
                 "TC-DEMO-001": {
-                    "messages": [
-                        {"role": "user", "content": "ping"},
-                        {"role": "assistant", "content": "pong"},
-                    ],
-                    "metadata": {"trace": True, "tags": ["base"]},
+                    "overrides": {
+                        "messages": [
+                            {"role": "user", "content": "ping"},
+                            {"role": "assistant", "content": "pong"},
+                        ],
+                        "metadata": {"trace": True, "tags": ["base"]},
+                    }
                 }
             }
         },
         {
-            "request_overrides": {
+            "requests": {
                 "TC-DEMO-001": {
-                    "messages": [
-                        {"content": "hello"},
-                        {"content": "world"},
-                        {"role": "tool", "content": "extra"},
-                    ],
-                    "metadata": {"tags": ["override"]},
+                    "overrides": {
+                        "messages": [
+                            {"content": "hello"},
+                            {"content": "world"},
+                            {"role": "tool", "content": "extra"},
+                        ],
+                        "metadata": {"tags": ["override"]},
+                    }
                 }
             }
         },
     )
 
     assert diagnostics == []
-    assert merged["request_overrides"]["TC-DEMO-001"] == {
+    assert merged["requests"]["TC-DEMO-001"]["overrides"] == {
         "messages": [
             {"role": "user", "content": "hello"},
             {"role": "assistant", "content": "world"},
@@ -91,16 +98,55 @@ def test_profile_merge_merges_nested_lists_by_index():
     }
 
 
+def test_profile_merge_merges_structured_assertions_by_case():
+    merged, diagnostics = merge_profile_yaml(
+        {
+            "structured_assertions": {
+                "TC-DEMO-001": [
+                    {
+                        "type": "jsonpath_exists",
+                        "target": "resp",
+                        "path": "$.data",
+                    }
+                ]
+            }
+        },
+        {
+            "structured_assertions": {
+                "TC-DEMO-001": [
+                    {
+                        "type": "jsonpath_all_equals",
+                        "target": "resp",
+                        "path": "$.data.items[*].publishStatus",
+                        "equals": 0,
+                    }
+                ]
+            }
+        },
+    )
+
+    assert diagnostics == []
+    assert merged["structured_assertions"]["TC-DEMO-001"] == [
+        {
+            "type": "jsonpath_all_equals",
+            "target": "resp",
+            "path": "$.data.items[*].publishStatus",
+            "equals": 0,
+        }
+    ]
+
+
 def test_generated_req_deep_merges_request_override_lists(tmp_path):
     profile_path = tmp_path / "profile_demo_suite.md"
     _write_profile(
         profile_path,
-        """request_overrides:
+        """requests:
   TC-DEMO-001:
-    messages:
-      - content: hello
-    metadata:
-      trace_id: tc-001
+    overrides:
+      messages:
+        - content: hello
+      metadata:
+        trace_id: tc-001
 """,
     )
     parse_result = _parse_result(
@@ -129,7 +175,12 @@ def test_generated_req_deep_merges_request_override_lists(tmp_path):
     namespace: dict[str, object] = {}
     exec((tmp_path / "test_demo_business.py").read_text(encoding="utf-8"), namespace)
 
-    req = namespace["_req"](**_case(file_ir, "TC-DEMO-001").request.overrides)
+    request_ir = _case(file_ir, "TC-DEMO-001").request
+    req = namespace["_req"](
+        auto_fields=request_ir.auto_fields,
+        overrides=request_ir.overrides,
+        patches=[],
+    )
     assert req == {
         "messages": [{"role": "user", "content": "hello"}],
         "metadata": {"tenant": "demo", "trace_id": "tc-001"},
@@ -138,6 +189,281 @@ def test_generated_req_deep_merges_request_override_lists(tmp_path):
         "messages": [{"role": "user", "content": "ping"}],
         "metadata": {"tenant": "demo"},
     }
+
+
+def test_structured_assertions_render_jsonpath_all_equals_and_len_gte(tmp_path):
+    profile_path = tmp_path / "profile_demo_suite.md"
+    _write_profile(
+        profile_path,
+        """case_flows:
+  TC-DEMO-001:
+    fixture: setup_demo
+    steps:
+      - assign: resp
+        expr: '{"data": {"items": [{"publishStatus": 0}, {"publishStatus": 0}]}}'
+structured_assertions:
+  TC-DEMO-001:
+    - type: jsonpath_all_equals
+      target: resp
+      path: $.data.items[*].publishStatus
+      equals: 0
+    - type: jsonpath_len_gte
+      target: resp
+      path: $.data.items
+      value: 2
+""",
+    )
+
+    parse_result = _parse_result(assertions=["所有 publishStatus 都是 0"])
+    file_ir = build_file_ir(
+        parse_result,
+        "business",
+        profile_path=profile_path,
+        project=load_project_config(),
+    )
+    case_ir = _case(file_ir, "TC-DEMO-001")
+    template_assertions = [
+        assertion for assertion in case_ir.assertions
+        if assertion.kind == "structured_assertion"
+    ]
+    assert len(template_assertions) == 2
+    assert all(
+        assertion.resolved_by == "profile.structured_assertions.TC-DEMO-001"
+        for assertion in template_assertions
+    )
+    assert template_assertions[0].metadata == {
+        "type": "jsonpath_all_equals",
+        "target": "resp",
+        "path": "$.data.items[*].publishStatus",
+        "equals": 0,
+    }
+    assert template_assertions[1].metadata == {
+        "type": "jsonpath_len_gte",
+        "target": "resp",
+        "path": "$.data.items",
+        "value": 2,
+    }
+
+    result = emit_file(
+        parse_result,
+        "business",
+        profile_path=profile_path,
+        output_dir=tmp_path,
+        project=load_project_config(),
+    )
+
+    assert result.diagnostics == []
+    text = (tmp_path / "test_demo_business.py").read_text(encoding="utf-8")
+    assert "from aitest_kit.helpers import structured_assertions as aitest_assertions" in text
+    assert "aitest_assertions.assert_jsonpath_all_equals" in text
+    assert "aitest_assertions.assert_jsonpath_len_gte" in text
+
+    namespace: dict[str, object] = {}
+    exec(text, namespace)
+    namespace["TestDemoBusiness"]().test_tc_demo_001(object())
+
+
+def test_structured_assertion_failure_message_is_readable():
+    with pytest.raises(AssertionError) as exc:
+        aitest_assertions.assert_jsonpath_all_equals(
+            {"data": {"items": [{"publishStatus": 0}, {"publishStatus": 1}]}},
+            "$.data.items[*].publishStatus",
+            0,
+        )
+
+    message = str(exc.value)
+    assert "$.data.items[*].publishStatus" in message
+    assert "mismatches" in message
+    assert "(1, 1)" in message
+
+
+def test_generated_req_applies_request_patches(tmp_path):
+    profile_path = tmp_path / "profile_demo_suite.md"
+    _write_profile(
+        profile_path,
+        """requests:
+  TC-DEMO-001:
+    overrides:
+      metadata:
+        trace_id: tc-001
+    patches:
+      - op: replace
+        path: /messages/0/content
+        value: hello
+      - op: add
+        path: /messages/-
+        value:
+          role: user
+          content: second
+      - op: remove
+        path: /debug
+""",
+    )
+    parse_result = _parse_result(
+        base_request_http={
+            "messages": [{"role": "user", "content": "ping"}],
+            "metadata": {"tenant": "demo"},
+            "debug": True,
+        },
+    )
+
+    project = ProjectConfig(default_request=DefaultRequestConfig(auto_fields={}))
+    file_ir = build_file_ir(
+        parse_result,
+        "business",
+        profile_path=profile_path,
+        project=project,
+    )
+    result = emit_file(
+        parse_result,
+        "business",
+        output_dir=tmp_path,
+        profile_path=profile_path,
+        project=project,
+    )
+
+    assert result.diagnostics == []
+    namespace: dict[str, object] = {}
+    exec((tmp_path / "test_demo_business.py").read_text(encoding="utf-8"), namespace)
+
+    request_ir = _case(file_ir, "TC-DEMO-001").request
+    patches = [
+        {
+            **{"op": patch.op, "path": patch.path},
+            **({"value": patch.value} if patch.has_value else {}),
+        }
+        for patch in request_ir.patches
+    ]
+    req = namespace["_req"](
+        auto_fields=request_ir.auto_fields,
+        overrides=request_ir.overrides,
+        patches=patches,
+    )
+    assert req == {
+        "messages": [
+            {"role": "user", "content": "hello"},
+            {"role": "user", "content": "second"},
+        ],
+        "metadata": {"tenant": "demo", "trace_id": "tc-001"},
+    }
+
+
+def test_generated_req_applies_request_patch_value_from_profile_variable(tmp_path):
+    profile_path = tmp_path / "profile_demo_suite.md"
+    _write_profile(
+        profile_path,
+        """variables:
+  defaults:
+    publish_status:
+      value: 0
+requests:
+  TC-DEMO-001:
+    patches:
+      - op: replace
+        path: /data/items/0/publishStatus
+        value_from: publish_status
+""",
+    )
+    parse_result = _parse_result(
+        base_request_http={
+            "data": {
+                "items": [
+                    {"id": "item-1", "publishStatus": 1},
+                ]
+            }
+        },
+    )
+
+    project = ProjectConfig(default_request=DefaultRequestConfig(auto_fields={}))
+    file_ir = build_file_ir(
+        parse_result,
+        "business",
+        profile_path=profile_path,
+        project=project,
+    )
+    case_ir = _case(file_ir, "TC-DEMO-001")
+    assert [(var.name, var.provider, var.value) for var in case_ir.profile_variables] == [
+        ("publish_status", "value", 0)
+    ]
+
+    result = emit_file(
+        parse_result,
+        "business",
+        output_dir=tmp_path,
+        profile_path=profile_path,
+        project=project,
+    )
+
+    assert result.diagnostics == []
+    text = (tmp_path / "test_demo_business.py").read_text(encoding="utf-8")
+    assert "resolve_profile_variables" in text
+    assert "'value': __tc_vars__[\"publish_status\"]" in text
+    namespace: dict[str, object] = {}
+    exec(text, namespace)
+
+    request_ir = case_ir.request
+    req = namespace["_req"](
+        auto_fields=request_ir.auto_fields,
+        overrides=request_ir.overrides,
+        patches=[
+            {
+                "op": request_ir.patches[0].op,
+                "path": request_ir.patches[0].path,
+                "value": 0,
+            }
+        ],
+    )
+    assert req["data"]["items"][0]["publishStatus"] == 0
+
+
+def test_case_flow_renders_request_ref_from_unified_request_binding(tmp_path):
+    profile_path = tmp_path / "profile_demo_suite.md"
+    _write_profile(
+        profile_path,
+        """requests:
+  TC-DEMO-001:
+    overrides:
+      user_id: u001
+case_flows:
+  TC-DEMO-001:
+    fixture: setup_demo
+    object: client
+    steps:
+      - call: client.create
+        kwargs:
+          body: {request_ref: self}
+        save_as: resp
+      - assert: 'assert resp["code"] == 0'
+""",
+    )
+    parse_result = _parse_result(
+        assertions=['`response.code == 0`'],
+        base_request_http={"user_id": "u_default", "items": []},
+    )
+    project = ProjectConfig(default_request=DefaultRequestConfig(auto_fields={}))
+
+    file_ir = build_file_ir(
+        parse_result,
+        "business",
+        profile_path=profile_path,
+        project=project,
+    )
+    case_ir = _case(file_ir, "TC-DEMO-001")
+    assert case_ir.strategy == "structured_case_flow"
+    assert "TC-DEMO-001" in case_ir.request_bindings
+    assert case_ir.request_bindings["TC-DEMO-001"].overrides == {"user_id": "u001"}
+
+    result = emit_file(
+        parse_result,
+        "business",
+        output_dir=tmp_path,
+        profile_path=profile_path,
+        project=project,
+    )
+    assert result.diagnostics == []
+    text = (tmp_path / "test_demo_business.py").read_text(encoding="utf-8")
+    assert '__request_tc_demo_001 = _req(overrides={"user_id": "u001"})' in text
+    assert "resp = client.create(body=__request_tc_demo_001)" in text
 
 
 def test_ir_marks_profile_case_flow_without_default_request_plan(tmp_path):

@@ -29,6 +29,15 @@ class ModuleHealth:
     protocol_counts: Counter[str] = field(default_factory=Counter)
     assertion_kind_counts: Counter[str] = field(default_factory=Counter)
     assertion_resolved_by_counts: Counter[str] = field(default_factory=Counter)
+    structured_assertion_target_counts: Counter[str] = field(default_factory=Counter)
+    request_binding_counts: Counter[str] = field(default_factory=Counter)
+    profile_variable_counts: Counter[str] = field(default_factory=Counter)
+    unparsed_cases: list[dict[str, Any]] = field(default_factory=list)
+    manual_cases: list[dict[str, Any]] = field(default_factory=list)
+    case_body_cases: list[dict[str, Any]] = field(default_factory=list)
+    structured_assertion_cases: list[dict[str, Any]] = field(default_factory=list)
+    review_focus: list[dict[str, Any]] = field(default_factory=list)
+    next_actions: list[str] = field(default_factory=list)
     diagnostic_count: int = 0
     maturity: str = "L0"
 
@@ -125,6 +134,48 @@ def render_codegen_health_markdown(report: CodegenHealthReport) -> str:
             lines.append("- resolved_by:")
             for key, value in sorted(module.assertion_resolved_by_counts.items()):
                 lines.append(f"  - `{key}`: {value}")
+        if module.structured_assertion_target_counts:
+            lines.append("- structured_assertion_targets:")
+            for key, value in sorted(module.structured_assertion_target_counts.items()):
+                lines.append(f"  - `{key}`: {value}")
+        if module.request_binding_counts:
+            lines.append("- request_bindings:")
+            for key, value in sorted(module.request_binding_counts.items()):
+                lines.append(f"  - `{key}`: {value}")
+        if module.profile_variable_counts:
+            lines.append("- profile_variables:")
+            for key, value in sorted(module.profile_variable_counts.items()):
+                lines.append(f"  - `{key}`: {value}")
+        lines.append("")
+        if module.review_focus:
+            lines.append("#### Review Focus")
+            lines.append("")
+            for item in module.review_focus:
+                lines.append(f"- `{item['case_id']}` [{item['kind']}]: {item['message']}")
+            lines.append("")
+        if module.unparsed_cases:
+            lines.append("#### UNPARSED Cases")
+            lines.append("")
+            for item in module.unparsed_cases:
+                lines.append(f"- `{item['case_id']}`: {item['source']}")
+            lines.append("")
+        if module.manual_cases:
+            lines.append("#### Manual Cases")
+            lines.append("")
+            for item in module.manual_cases:
+                lines.append(f"- `{item['case_id']}`: {item['title']}")
+            lines.append("")
+        if module.case_body_cases:
+            lines.append("#### Case Body Cases")
+            lines.append("")
+            for item in module.case_body_cases:
+                lines.append(f"- `{item['case_id']}`: {item['title']}")
+            lines.append("")
+        if module.next_actions:
+            lines.append("#### Next Actions")
+            lines.append("")
+            for action in module.next_actions:
+                lines.append(f"- {action}")
         lines.append("")
     return "\n".join(lines)
 
@@ -181,6 +232,10 @@ def _module_health(
             health.strategy_counts[case_ir.strategy] += 1
             health.protocol_counts[case_ir.protocol] += 1
             health.diagnostic_count += len(case_ir.diagnostics)
+            _count_case_attention(health, case_ir)
+            _count_request_bindings(health, case_ir)
+            _count_profile_variables(health, case_ir)
+            _collect_review_focus(health, case_ir)
             for assertion in case_ir.assertions:
                 _count_assertion(health, assertion)
             if case_ir.case_flow:
@@ -188,6 +243,7 @@ def _module_health(
                     if step.assertion:
                         _count_assertion(health, step.assertion)
     health.maturity = _maturity_for(health)
+    health.next_actions = _next_actions_for(health)
     return health
 
 
@@ -195,6 +251,185 @@ def _count_assertion(health: ModuleHealth, assertion: AssertionIR) -> None:
     health.assertion_kind_counts[assertion.kind] += 1
     if assertion.resolved_by:
         health.assertion_resolved_by_counts[assertion.resolved_by] += 1
+    if assertion.kind == "structured_assertion":
+        target = _structured_assertion_target(assertion)
+        if target:
+            health.structured_assertion_target_counts[target] += 1
+
+
+def _count_case_attention(health: ModuleHealth, case_ir: Any) -> None:
+    if case_ir.strategy == "manual":
+        health.manual_cases.append(_case_ref(case_ir))
+    if case_ir.strategy == "custom_case_body":
+        health.case_body_cases.append(_case_ref(case_ir))
+
+    structured_count = sum(
+        1 for assertion in case_ir.assertions
+        if assertion.kind == "structured_assertion"
+    )
+    if structured_count:
+        item = _case_ref(case_ir)
+        item["count"] = structured_count
+        health.structured_assertion_cases.append(item)
+
+    for source in _unparsed_sources(case_ir):
+        item = _case_ref(case_ir)
+        item["source"] = source
+        health.unparsed_cases.append(item)
+
+
+def _count_request_bindings(health: ModuleHealth, case_ir: Any) -> None:
+    if not case_ir.request_bindings:
+        health.request_binding_counts["none"] += 1
+        return
+    for binding in case_ir.request_bindings.values():
+        if binding.auto_fields:
+            health.request_binding_counts["default_request.auto_fields"] += 1
+        if binding.overrides:
+            health.request_binding_counts["profile.requests.overrides"] += 1
+        if binding.patches:
+            health.request_binding_counts["profile.requests.patches"] += 1
+            if any(patch.value_from for patch in binding.patches):
+                health.request_binding_counts["profile.requests.patches.value_from"] += 1
+        if not binding.auto_fields and not binding.overrides and not binding.patches:
+            health.request_binding_counts["base_only"] += 1
+
+
+def _count_profile_variables(health: ModuleHealth, case_ir: Any) -> None:
+    for variable in case_ir.profile_variables:
+        health.profile_variable_counts["profile.variables.usage"] += 1
+        health.profile_variable_counts[f"profile.variables.{variable.provider}"] += 1
+        if str(variable.source).startswith("profile.variables.cases."):
+            health.profile_variable_counts["profile.variables.cases"] += 1
+        elif str(variable.source).startswith("profile.variables.defaults."):
+            health.profile_variable_counts["profile.variables.defaults"] += 1
+
+
+def _collect_review_focus(health: ModuleHealth, case_ir: Any) -> None:
+    if not case_ir.request_bindings:
+        return
+    variables = {variable.name: variable for variable in case_ir.profile_variables}
+    env_names: set[str] = set()
+    value_names: set[str] = set()
+    undefined_names: set[str] = set()
+    patch_paths: set[str] = set()
+
+    for binding in case_ir.request_bindings.values():
+        for patch in binding.patches:
+            patch_paths.add(patch.path)
+            if not patch.value_from:
+                continue
+            variable = variables.get(patch.value_from)
+            if variable is None:
+                undefined_names.add(patch.value_from)
+            elif variable.provider == "env" and variable.env:
+                env_names.add(variable.env)
+            else:
+                value_names.add(variable.name)
+
+    if env_names:
+        _add_review_focus(
+            health,
+            case_ir,
+            "request_patch_env",
+            "request patch reads env variable(s): " + ", ".join(sorted(env_names)),
+            env=sorted(env_names),
+        )
+    if value_names:
+        _add_review_focus(
+            health,
+            case_ir,
+            "request_patch_variable",
+            "request patch reads profile value(s): " + ", ".join(sorted(value_names)),
+            variables=sorted(value_names),
+        )
+    if undefined_names:
+        _add_review_focus(
+            health,
+            case_ir,
+            "request_patch_undefined_variable",
+            "request patch references undefined variable(s): "
+            + ", ".join(sorted(undefined_names)),
+            variables=sorted(undefined_names),
+        )
+    if patch_paths:
+        _add_review_focus(
+            health,
+            case_ir,
+            "request_patch_path",
+            "request patch path(s): " + ", ".join(sorted(patch_paths)),
+            paths=sorted(patch_paths),
+        )
+
+
+def _add_review_focus(
+    health: ModuleHealth,
+    case_ir: Any,
+    kind: str,
+    message: str,
+    **metadata: Any,
+) -> None:
+    item = _case_ref(case_ir)
+    item["kind"] = kind
+    item["message"] = message
+    item.update(metadata)
+    health.review_focus.append(item)
+
+
+def _case_ref(case_ir: Any) -> dict[str, Any]:
+    return {
+        "case_id": case_ir.case_id,
+        "title": case_ir.title,
+        "source_file": case_ir.source_file,
+    }
+
+
+def _unparsed_sources(case_ir: Any) -> list[str]:
+    sources = [
+        assertion.source for assertion in case_ir.assertions
+        if assertion.kind == "unparsed"
+    ]
+    if case_ir.case_flow:
+        sources.extend(
+            step.assertion.source
+            for step in case_ir.case_flow.steps
+            if step.assertion is not None and step.assertion.kind == "unparsed"
+        )
+    return sources
+
+
+def _structured_assertion_target(assertion: AssertionIR) -> str:
+    target = assertion.metadata.get("target")
+    return str(target) if target else ""
+
+
+def _next_actions_for(health: ModuleHealth) -> list[str]:
+    actions: list[str] = []
+    if health.profile_errors:
+        actions.append("P0: fix profile errors before codegen.")
+    if health.unparsed_cases:
+        actions.append(
+            f"P0: fix {len(health.unparsed_cases)} UNPARSED assertion(s) in "
+            "Markdown/profile/assertion rules."
+        )
+    if health.case_body_cases:
+        actions.append(
+            f"P1: review {len(health.case_body_cases)} case_body case(s); keep as "
+            "escape hatch or move stable parts to case_flow/helper."
+        )
+    if health.manual_cases:
+        actions.append(
+            f"P1: review {len(health.manual_cases)} manual case(s) and confirm they "
+            "should remain manual."
+        )
+    if health.review_focus:
+        actions.append(
+            f"P1: review {len(health.review_focus)} request/profile binding item(s) "
+            "with --explain before trusting generated pytest."
+        )
+    if not actions:
+        actions.append("OK: no immediate codegen health action.")
+    return actions
 
 
 def _maturity_for(health: ModuleHealth) -> str:
@@ -223,6 +458,15 @@ def _module_health_to_dict(module: ModuleHealth) -> dict[str, Any]:
         "protocol_counts": dict(sorted(module.protocol_counts.items())),
         "assertion_kind_counts": dict(sorted(module.assertion_kind_counts.items())),
         "assertion_resolved_by_counts": dict(sorted(module.assertion_resolved_by_counts.items())),
+        "structured_assertion_target_counts": dict(sorted(module.structured_assertion_target_counts.items())),
+        "request_binding_counts": dict(sorted(module.request_binding_counts.items())),
+        "profile_variable_counts": dict(sorted(module.profile_variable_counts.items())),
+        "unparsed_cases": module.unparsed_cases,
+        "manual_cases": module.manual_cases,
+        "case_body_cases": module.case_body_cases,
+        "structured_assertion_cases": module.structured_assertion_cases,
+        "review_focus": module.review_focus,
+        "next_actions": module.next_actions,
     }
     if module.suite:
         result["suite"] = module.suite

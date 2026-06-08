@@ -37,7 +37,6 @@ class ProjectConfig:
     var_map: dict[str, str] = field(default_factory=dict)
     module_abbrevs: dict[str, str] = field(default_factory=dict)
     builtin_assertion_rules: list[AssertionRule] = field(default_factory=list)
-    named_templates: set[str] = field(default_factory=set)
     module_types: dict[str, dict[str, Any]] = field(default_factory=dict)
     default_request: DefaultRequestConfig = field(default_factory=DefaultRequestConfig)
 
@@ -64,7 +63,6 @@ FALLBACK_PROJECT_CONFIG_DATA: dict[str, Any] = {
         "validation_ratelimit": "val",
         "e2e": "e2e",
     },
-    "named_templates": ["piecewise_cascade", "piecewise_only", "skip"],
     "module_types": {
         "standard_recommend": {"description": "标准推荐接口模块"},
         "multi_endpoint": {"description": "多端点服务模块", "requires": ["case_bodies"]},
@@ -186,7 +184,6 @@ def _project_from(data: dict[str, Any]) -> ProjectConfig:
         var_map=dict(data.get("var_map") or FALLBACK_PROJECT_CONFIG_DATA["var_map"]),
         module_abbrevs=dict(data.get("module_abbrevs") or FALLBACK_PROJECT_CONFIG_DATA["module_abbrevs"]),
         builtin_assertion_rules=_rules_from(data.get("builtin_assertion_rules")),
-        named_templates=set(data.get("named_templates") or FALLBACK_PROJECT_CONFIG_DATA["named_templates"]),
         module_types=dict(data.get("module_types") or FALLBACK_PROJECT_CONFIG_DATA["module_types"]),
         default_request=_default_request_from(data.get("default_request")),
     )

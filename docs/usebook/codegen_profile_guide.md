@@ -1,8 +1,10 @@
 # Codegen Profile Guide
 
-`profile_{module}.md` 是 target/module 级生成配置。它告诉 codegen：这个模块属于什么类型、哪些用例要覆盖请求字段、哪些断言有专属模板、哪些复杂流程需要走 `case_flows` 或 `case_bodies`。
+`profile_{module}.md` 是 target/module 级生成配置。它告诉 codegen：这个模块属于什么类型、哪些用例要绑定请求、哪些断言有专属模板、哪些复杂流程需要走 `case_flows` 或 `case_bodies`。
 
-独立 case suite 在用例目录旁放 `profile_{suite}_suite.md`。module profile 放 L1 稳定能力，路径通常是 `test_workspace/targets/{target}/profiles/profile_{module}.md`；suite profile 跟随用例批次，优先放本批用例的 `variables`、`case_flows`、`case_bodies` 和 `request_overrides`。
+独立 case suite 在用例目录旁放 `profile_{suite}_suite.md`。module profile 放 L1 稳定能力，路径通常是 `test_workspace/targets/{target}/profiles/profile_{module}.md`；suite profile 跟随用例批次，优先放本批用例的 `variables`、`requests`、`case_flows` 和 `case_bodies`。
+
+profile 的定位是“AI 生成、代码校验、人工 review 的稳定中间态”。人类不需要把它当业务文档手写到底；更推荐让 AI 根据 Markdown、fixture/helper 和知识库生成 profile，再用 `--validate-profile`、`--explain`、`--health-report`、generated pytest 和执行报告 review。
 
 profile 文件必须包含一个 YAML 代码块：
 
@@ -36,24 +38,48 @@ module_types:
 
 如果某类模块可以由 `case_flows` 满足，也可以在项目配置中把它设计为需要 `case_bodies`，profile gate 会把 `case_bodies` 或 `case_flows` 都视为可满足复杂流程要求。
 
-## request_overrides
+## requests
 
-当 Markdown 用例中的“请求覆盖”不足以表达稳定差异时，可以在 profile 中按 case_id 明确覆盖请求字段：
-当前确定性 codegen 生成真实请求体时，以这里的 `request_overrides` 为准；Markdown 场景变量中的“请求覆盖”主要用于人类 review 和 trace。
+`requests` 是统一请求绑定层。默认 HTTP/gRPC 路线和 `case_flows` 都可以使用它构造请求体。
+
+当前确定性 codegen 生成真实请求体时，以这里的 `requests.<case_id>` 为准；Markdown 场景变量中的“请求覆盖”主要用于人类 review 和 trace。
+
+新项目优先使用 `patches` 表达精确请求变更。`overrides` 只适合少量简单字段覆盖；涉及 dict 整体替换、list 指定位置、追加、删除或变量注入时，用 `patches`。
 
 ```yaml
 module_type: standard_http
-request_overrides:
+variables:
+  defaults:
+    expected_status:
+      value: 0
+requests:
   TC-DEMO-001:
-    user_id: "u_demo_001"
-    value: 2
+    overrides:
+      user_id: "u_demo_001"
+    patches:
+      - op: replace
+        path: /payload
+        value:
+          kind: demo
+          items: []
+      - op: add
+        path: /payload/items/-
+        value_from: expected_status
+      - op: remove
+        path: /debug
 ```
 
 约束：
 
 - key 必须是 `TC-XXX-001` 这类格式。
-- value 必须是对象。
+- `overrides` 必须是对象，只写普通简单覆盖；不要依赖它表达复杂 list 语义。
+- `patches` 使用 JSON Patch 子集，支持 `add`、`replace`、`remove`。
+- `patches.path` 是 JSON Pointer，必须以 `/` 开头；list 追加使用 `/-`。
+- `add` / `replace` 必须且只能写 `value` 或 `value_from` 其中一个。
+- `remove` 不允许写 `value` 或 `value_from`。
+- `value_from` 引用 `variables.defaults` 或 `variables.cases.<case_id>` 中定义的变量。
 - 只写 case 级差异，不要复制完整基础请求体。
+- 不要把 JSON 对象写成字符串传给 `case_flow.kwargs.body`；需要请求体时用 `{request_ref: self}`。
 
 ## assertion_rules
 
@@ -70,7 +96,7 @@ assertion_rules:
 匹配优先级：
 
 ```text
-profile assertion_rules > aitest.yaml builtin_assertion_rules > named_templates
+profile assertion_rules > aitest.yaml builtin_assertion_rules > UNPARSED
 ```
 
 适用：
@@ -84,6 +110,82 @@ profile assertion_rules > aitest.yaml builtin_assertion_rules > named_templates
 - 需要多步骤前置动作。
 - 断言依赖复杂临时变量。
 - 只有一条用例临时出现，尚不值得沉淀。
+
+## structured_assertions
+
+`structured_assertions` 是 TC-ID 绑定的结构化断言，适合表达 JSONPath、集合遍历和长度断言。它的目标是减少这类断言退化为 raw assert 或 `case_bodies`。
+
+```yaml
+profile_scope: case_suite
+parent_module: gateway_api
+suite: publish_status_smoke
+
+case_flows:
+  TC-GW-001:
+    fixture: setup_gateway_api
+    object: client
+    steps:
+      - call: client.list_items
+        save_as: resp
+
+structured_assertions:
+  TC-GW-001:
+    - type: jsonpath_all_equals
+      target: resp
+      path: $.data.items[*].publishStatus
+      equals: 0
+    - type: jsonpath_len_gte
+      target: resp
+      path: $.data.items
+      value: 1
+```
+
+第一版支持：
+
+- `jsonpath_equals`
+- `jsonpath_exists`
+- `jsonpath_not_exists`
+- `jsonpath_all_equals`
+- `jsonpath_any_equals`
+- `jsonpath_len_equals`
+- `jsonpath_len_gte`
+- `jsonpath_field_in_set`
+
+约束：
+
+- `structured_assertions` 属于 suite profile，不写进 module profile。
+- key 必须是当前 suite Markdown 中存在的 case_id。
+- `target` 必须是当前 generated pytest 中已经存在的变量名。
+- default HTTP/gRPC 路线只允许 `target: resp`。
+- `case_flow` 路线只允许引用当前 flow 中 `save_as` 或 `assign` 产生的变量，例如 `resp`、`query_resp`。
+- `case_bodies`、manual、skipped 用例不使用 `structured_assertions`；复杂业务计算应封装到 fixture/helper 断言方法。
+- `path` 必须是合法 JSONPath。
+- `jsonpath_equals`、`jsonpath_all_equals`、`jsonpath_any_equals` 使用 `equals`。
+- `jsonpath_len_equals`、`jsonpath_len_gte` 使用非负整数 `value`。
+- `jsonpath_field_in_set` 使用非空数组 `values`。
+- 复杂业务计算应封装到 fixture/helper 断言方法，不在 YAML 里扩展循环或条件语言。
+
+调试方式：
+
+```bash
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --explain TC-GW-001
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --health-report
+```
+
+`--explain` 中应能看到：
+
+```text
+Assertions:
+  - kind: structured_assertion
+    source: jsonpath_all_equals resp $.data.items[*].publishStatus == 0
+    resolved_by: profile.structured_assertions.TC-GW-001
+```
+
+如果 `target` 写错，profile gate 会先报 `E530`，不会进入 IR/emitter。`--health-report` 会汇总 `structured_assertion_target_counts`，用于批量检查 structured assertion 主要绑定在哪些中间变量上。
+
+当 suite profile 使用 `requests.<case_id>.patches[].value_from` 时，`--explain` 会在 `Request bindings` 中展示变量来源，例如 `provider=value source=profile.variables.defaults.expected_status` 或 `provider=env env=SUB2API_USER_TOKEN source=profile.variables.cases.TC-XXX-001.auth_token`。输出只显示 env 名，不显示 env 值。
+
+`--explain` 还会输出 `Request review`，用于快速检查该 case 是否使用了 request overrides、JSON Patch、env 变量或复杂 JSON Pointer path。`--health-report` 会汇总 `profile_variable_counts` 和 `review_focus`，用于批量定位需要人工 review 的 request/profile binding。
 
 ## variables
 
@@ -139,7 +241,7 @@ variables:
         value: wrong-password
 ```
 
-`case_flow` 的 `args` / `kwargs` 通过 `{var: name}` 引用：
+`case_flow` 的 `args` / `kwargs` 通过 `{var: name}` 引用；`requests.patches` 通过 `value_from` 引用：
 
 ```yaml
 case_flows:
@@ -155,6 +257,13 @@ case_flows:
             var: password
         save_as: resp
       - assert: 'assert resp.status_code == 200'
+
+requests:
+  TC-AUTH-001:
+    patches:
+      - op: replace
+        path: /auth/password
+        value_from: password
 ```
 
 约束：
@@ -162,6 +271,7 @@ case_flows:
 - 变量名必须是合法 Python 标识符。
 - 每个变量只能声明 `env` 或 `value` 之一。
 - `{var: name}` 必须能在 `variables.defaults` 或 `variables.cases.{case_id}` 中找到。
+- `value_from: name` 必须能在 `variables.defaults` 或 `variables.cases.{case_id}` 中找到。
 - 缺 env 且 `.env` / `AITEST_ENV_FILE` 也无法提供时，测试失败，错误信息只显示 env 名，不显示 env 值。
 - 不要让 fixture 按 case_id 分发不同账号或 token；case 级数据差异放到 `variables`。
 
@@ -178,13 +288,21 @@ default_case_setup:
   kwargs:
     case_id: "{case_id}"
   save_as: client
+requests:
+  TC-DEMO-002:
+    patches:
+      - op: replace
+        path: /user_id
+        value: "u_demo_002"
+      - op: replace
+        path: /value
+        value: 3
 case_flows:
   TC-DEMO-002:
     steps:
       - call: client.create
         kwargs:
-          user_id: "u_demo_002"
-          value: 3
+          body: {request_ref: self}
         save_as: create_resp
       - assert: 'assert create_resp["code"] == 0'
       - call: client.get
@@ -211,6 +329,10 @@ case_flows:
 - `object` / `default_object` 必须是合法 Python 标识符。
 - `steps` 至少一项。
 - `assert` 必须写成可执行 Python 断言，例如 `'assert resp["code"] == 0'`；不要写裸表达式。
+- `kwargs` 中需要请求体时优先使用 `{request_ref: self}` 或 `{request_ref: TC-XXX-001}`。
+- `case_flow` 只能引用 codegen 生成的变量：`object`、前序 `save_as`、`assign`、`{var: name}` 和 `{request_ref: ...}`。
+- 不要直接引用 pytest fixture 变量，例如 `tmp_path`、`caplog`、`monkeypatch`、`mocker`。当前 renderer 不会把这些名字自动加入 generated pytest 函数签名。
+- 需要临时目录、日志捕获、mock、monkeypatch 或 cleanup 时，封装到 fixture/helper 方法，`case_flow` 只调用该方法并断言返回结果。
 
 适用：
 
@@ -218,6 +340,46 @@ case_flows:
 - 先写入再查询。
 - 先执行动作再验证状态。
 - 流程稳定，值得代码确定性生成。
+
+错误示例：
+
+```yaml
+case_flows:
+  TC-DEMO-004:
+    fixture: setup_demo_client
+    object: client
+    steps:
+      - call: client.load_from_temp_file
+        args:
+          - tmp_path
+        save_as: result
+      - assert: 'assert result is True'
+```
+
+这会生成类似 `client.load_from_temp_file(tmp_path)`，但测试函数签名没有 `tmp_path`，运行时报 `NameError`。
+
+正确做法是把 pytest 运行器细节下沉到 fixture/helper：
+
+```python
+def load_from_temp_file_auto(self) -> bool:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = Path(tmpdir) / "data.json"
+        path.write_text("{}")
+        return self.load_from_file(path)
+```
+
+suite profile 只保留编排：
+
+```yaml
+case_flows:
+  TC-DEMO-004:
+    fixture: setup_demo_client
+    object: client
+    steps:
+      - call: client.load_from_temp_file_auto
+        save_as: result
+      - assert: 'assert result is True'
+```
 
 ## case_bodies
 
@@ -242,8 +404,22 @@ case_bodies:
 不建议长期滥用。稳定后应优先晋升为：
 
 ```text
-case_bodies -> case_flows -> assertion_rules / aitest.yaml builtin rules
+case_bodies -> case_flows -> structured_assertions / assertion_rules / aitest.yaml builtin rules
 ```
+
+## AI 编写 profile 的推荐顺序
+
+1. 读 `suite.yaml`，确认 `target`、`module`、`suite` 和 `case_files`。
+2. 读 `module.yaml`，确认 fixture、module_type 和 knowledge_refs。
+3. 读 module profile，复用默认 fixture/object、共享断言和稳定能力。
+4. 读 fixture/helper，优先复用已有动作方法。
+5. 只为当前 suite 写 suite profile。
+6. 请求差异优先写 `requests.<case_id>.patches`；简单字段覆盖可用 `overrides`。
+7. 多步骤流程写 `case_flows`。
+8. JSONPath、列表遍历和长度断言写 `structured_assertions`。
+9. 临时文件、日志、mock、并发、cleanup 和复杂计算先下沉 fixture/helper。
+10. 无法自然封装时才保留 `case_bodies`，并记录原因。
+11. 依次运行 `--validate-profile`、`--explain TC-ID`、`--check` 和 collect。
 
 ## strategy 优先级
 
@@ -261,6 +437,10 @@ profile gate 会阻断同一 case_id 同时存在 `case_bodies` 和 `case_flows`
 - `E502`：未知 `module_type`。
 - `E503`：module_type 要求复杂流程，但 profile 没有提供 `case_bodies` 或 `case_flows`。
 - `E510/E511`：`case_flows` 结构或断言格式不符合约定。
+- `E501`：`requests.patches` 结构不合法，例如 `add/replace` 没有且只有一个 `value` / `value_from`。
+- `E507`：`requests.patches[].value_from` 或 `case_flows` 的 `{var: name}` 引用了未定义变量。
+- `E529`：`structured_assertions` 类型、必填字段、target 或 JSONPath 不合法。
+- `E530`：`structured_assertions.target` 在当前生成策略下不可用，例如 default 路线用了非 `resp` target，或 case_flow 未产出该变量。
 
 排查方式见 [codegen_troubleshooting.md](./codegen_troubleshooting.md)。
 
@@ -269,7 +449,7 @@ profile gate 会阻断同一 case_id 同时存在 `case_bodies` 和 `case_flows`
 v0.1 中，以下内容按稳定契约维护：
 
 - profile 文件路径：`test_workspace/targets/{target}/profiles/profile_{module}.md` 和 `{suite_dir}/profile_{suite}_suite.md`
-- YAML 顶层字段：`module_type`、`request_overrides`、`assertion_rules`、`case_flows`、`case_bodies`
+- YAML 顶层字段：`module_type`、`requests`、`structured_assertions`、`assertion_rules`、`case_flows`、`case_bodies`
 - case_id 格式：`^TC-[A-Z0-9]+-[0-9]+$`
 - profile gate 的原则：ERROR 阻断生成，WARNING 允许继续但需要 review
 

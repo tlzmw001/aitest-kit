@@ -89,7 +89,7 @@ effort: high
 
 1. `aitest.yaml` — 跨模块通用断言规则
 2. module profile — 模块级 assertion_rules、defaults
-3. suite profile — case_flows、case_bodies、request_overrides、variables.cases
+3. suite profile — requests、case_flows、case_bodies、variables.cases
 4. fixture/helper — 重复测试动作、复杂断言 helper
 5. emitter/renderer — 只有 profile/fixture/helper 无法表达且跨模块稳定时
 

@@ -3,6 +3,10 @@ from __future__ import annotations
 
 import json
 import logging
+import io
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Optional
 
@@ -10,8 +14,10 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from ab_experiment_sdk import ABExperimentRequest
 from ab_experiment_sdk.remote_client import RemoteABExperimentSDK
 from ab_experiment_sdk.service import create_app
+from aitest_kit.runtime_variables import require_env
 
 logger = logging.getLogger(__name__)
 
@@ -167,10 +173,312 @@ class ABServiceCase:
         )
         return RemoteABExperimentSDK(base_url="http://testserver", client=client), client
 
+    def isolated_experiment_persists(self, tmp_path: Path) -> dict[str, Any]:
+        payload = {
+            "name": "exp_abs_persist",
+            "strategies": [{"id": "s1", "hash_range": [0, 100], "params": {}}],
+        }
+        client1, _, _ = build_isolated_client(tmp_path, experiments=[])
+        try:
+            create_resp = client1.post("/api/v1/ab/experiments", json=payload)
+        finally:
+            client1.close()
+
+        client2, _, _ = build_isolated_client(tmp_path)
+        try:
+            read_resp = client2.get("/api/v1/ab/experiments/exp_abs_persist")
+            body = read_resp.json() if read_resp.status_code == 200 else {}
+            return {
+                "create_status": create_resp.status_code,
+                "read_status": read_resp.status_code,
+                "name": body.get("name"),
+            }
+        finally:
+            client2.close()
+
+    def isolated_whitelist_persists(self, tmp_path: Path) -> dict[str, Any]:
+        client1, _, _ = build_isolated_client(
+            tmp_path,
+            experiments=[
+                {"name": "exp_game", "strategies": [{"id": "game_on", "hash_range": [0, 100], "params": {}}]},
+            ],
+        )
+        try:
+            write_resp = client1.put(
+                "/api/v1/ab/whitelist/u_abs_persist",
+                json={"strategy_map": {"exp_game": "game_on"}},
+            )
+        finally:
+            client1.close()
+
+        client2, _, _ = build_isolated_client(tmp_path)
+        try:
+            read_resp = client2.get("/api/v1/ab/whitelist/u_abs_persist")
+            body = read_resp.json() if read_resp.status_code == 200 else {}
+            return {
+                "write_status": write_resp.status_code,
+                "read_status": read_resp.status_code,
+                "body": body,
+            }
+        finally:
+            client2.close()
+
+    def missing_experiments_file_is_created(self, tmp_path: Path) -> dict[str, Any]:
+        experiments_path = tmp_path / "new" / "experiments.json"
+        client, _, _ = build_isolated_client(experiments_path.parent)
+        try:
+            resp = client.get("/api/v1/ab/experiments")
+            return {
+                "status": resp.status_code,
+                "body": resp.json(),
+                "exists": experiments_path.exists(),
+            }
+        finally:
+            client.close()
+
+    def malformed_whitelist_falls_back_empty(self, tmp_path: Path, caplog: Any) -> dict[str, Any]:
+        caplog.set_level(logging.WARNING, logger="ab_experiment_sdk.service")
+        client, _, _ = build_isolated_client(tmp_path, whitelist_text="{bad json")
+        try:
+            resp = client.get("/api/v1/ab/whitelist")
+            return {
+                "status": resp.status_code,
+                "body": resp.json(),
+                "logs": caplog.text,
+            }
+        finally:
+            client.close()
+
+    def bad_hash_range_still_evaluates(self, tmp_path: Path) -> dict[str, Any]:
+        client, _, _ = build_isolated_client(
+            tmp_path,
+            experiments=[
+                {"name": "exp_abs_bad_hash", "strategies": [{"id": "s_bad", "hash_range": ["bad"], "params": {}}]},
+            ],
+        )
+        try:
+            resp = client.post(
+                "/api/v1/ab/evaluate",
+                json={"user_id": "u_abs_any_0", "experiment_names": ["exp_abs_bad_hash"]},
+            )
+            body = resp.json()
+            return {
+                "status": resp.status_code,
+                "strategy_id": body["assignments"]["exp_abs_bad_hash"]["strategy_id"],
+            }
+        finally:
+            client.close()
+
+    def bad_params_fall_back_empty(self, tmp_path: Path) -> dict[str, Any]:
+        client, _, _ = build_isolated_client(
+            tmp_path,
+            experiments=[
+                {"name": "exp_abs_bad_params", "strategies": [{"id": "s_bad_params", "hash_range": [0, 100], "params": "bad"}]},
+            ],
+        )
+        try:
+            resp = client.post(
+                "/api/v1/ab/evaluate",
+                json={"user_id": "u_abs_any_0", "experiment_names": ["exp_abs_bad_params"]},
+            )
+            body = resp.json()
+            return {
+                "status": resp.status_code,
+                "params": body["assignments"]["exp_abs_bad_params"]["params"],
+            }
+        finally:
+            client.close()
+
+    def import_works_from_other_cwd(self, tmp_path: Path) -> dict[str, Any]:
+        repo_root = _repo_root()
+        src_pkg = repo_root / "ab_experiment_sdk"
+        isolated_root = tmp_path / "isolated_pkg"
+        isolated_pkg = isolated_root / "ab_experiment_sdk"
+        isolated_pkg.mkdir(parents=True, exist_ok=True)
+        for file in src_pkg.glob("*.py"):
+            (isolated_pkg / file.name).write_text(file.read_text(encoding="utf-8"), encoding="utf-8")
+        run_dir = tmp_path / "run_import"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        script = (
+            "import os,sys;"
+            f"os.chdir({str(run_dir)!r});"
+            f"sys.path.insert(0,{str(isolated_root)!r});"
+            "import ab_experiment_sdk.service as s;"
+            "print('ok', s.__name__)"
+        )
+        completed = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
+        return {
+            "returncode": completed.returncode,
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+        }
+
+    def import_has_no_default_file_side_effect(self, tmp_path: Path) -> dict[str, Any]:
+        repo_root = _repo_root()
+        run_dir = tmp_path / "run_side_effect"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        script = (
+            "import os,sys,pathlib;"
+            f"os.chdir({str(run_dir)!r});"
+            f"sys.path.insert(0,{str(repo_root)!r});"
+            "import ab_experiment_sdk.service;"
+            "p=pathlib.Path('coupon_system/config/experiments.json');"
+            "print('exists', p.exists())"
+        )
+        completed = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
+        return {
+            "returncode": completed.returncode,
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+        }
+
+    def remote_sdk_evaluate_whitelist(self, tmp_path: Path) -> dict[str, Any]:
+        sdk, client = self.remote_sdk(tmp_path)
+        try:
+            response = sdk.evaluate(
+                ABExperimentRequest(user_id="u1", request_id="req_abs_035", experiment_names=["exp_game"])
+            )
+            assignment = response.assignments["exp_game"]
+            return {
+                "request_id": response.request_id,
+                "strategy_id": assignment.strategy_id,
+                "hit_reason": assignment.hit_reason,
+            }
+        finally:
+            sdk.close()
+            client.close()
+
+    def remote_sdk_set_user_whitelist(self, tmp_path: Path) -> dict[str, Any]:
+        sdk, client = self.remote_sdk(tmp_path)
+        try:
+            sdk.set_user_whitelist("u2", {"exp_cal": "cal_on"})
+            response = sdk.evaluate(ABExperimentRequest(user_id="u2", experiment_names=["exp_cal"]))
+            assignment = response.assignments["exp_cal"]
+            return {"strategy_id": assignment.strategy_id, "hit_reason": assignment.hit_reason}
+        finally:
+            sdk.close()
+            client.close()
+
+    def remote_sdk_clear_user_whitelist(self, tmp_path: Path) -> dict[str, Any]:
+        sdk, client = self.remote_sdk(tmp_path)
+        try:
+            sdk.set_user_whitelist("u2", {"exp_cal": "cal_on"})
+            sdk.clear_whitelist("u2")
+            return {"whitelist": sdk.get_whitelist()}
+        finally:
+            sdk.close()
+            client.close()
+
+    def remote_sdk_replace_whitelist(self, tmp_path: Path) -> dict[str, Any]:
+        sdk, client = self.remote_sdk(tmp_path)
+        try:
+            sdk.set_whitelist({"u3": {"exp_game": "game_on"}})
+            return {"whitelist": sdk.get_whitelist()}
+        finally:
+            sdk.close()
+            client.close()
+
+    def remote_sdk_clear_all_whitelist(self, tmp_path: Path) -> dict[str, Any]:
+        sdk, client = self.remote_sdk(tmp_path)
+        try:
+            sdk.set_whitelist({"u3": {"exp_game": "game_on"}})
+            sdk.clear_whitelist()
+            return {"whitelist": sdk.get_whitelist()}
+        finally:
+            sdk.close()
+            client.close()
+
+    def remote_sdk_raises_on_http_error(self) -> dict[str, Any]:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(500, json={"detail": "internal error"})
+
+        mock_client = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://ab.test")
+        sdk = RemoteABExperimentSDK(base_url="http://ab.test", client=mock_client)
+        try:
+            try:
+                sdk.evaluate(ABExperimentRequest(user_id="u_err"))
+            except httpx.HTTPStatusError as exc:
+                return {"raised": True, "status_code": exc.response.status_code}
+            return {"raised": False, "status_code": None}
+        finally:
+            sdk.close()
+
+    def isolated_experiment_persists_auto(self) -> dict[str, Any]:
+        with tempfile.TemporaryDirectory(prefix="aitest_abs_") as root:
+            return self.isolated_experiment_persists(Path(root))
+
+    def isolated_whitelist_persists_auto(self) -> dict[str, Any]:
+        with tempfile.TemporaryDirectory(prefix="aitest_abs_") as root:
+            return self.isolated_whitelist_persists(Path(root))
+
+    def missing_experiments_file_is_created_auto(self) -> dict[str, Any]:
+        with tempfile.TemporaryDirectory(prefix="aitest_abs_") as root:
+            return self.missing_experiments_file_is_created(Path(root))
+
+    def malformed_whitelist_falls_back_empty_auto(self) -> dict[str, Any]:
+        stream = io.StringIO()
+        handler = logging.StreamHandler(stream)
+        logger_obj = logging.getLogger("ab_experiment_sdk.service")
+        old_level = logger_obj.level
+        logger_obj.setLevel(logging.WARNING)
+        logger_obj.addHandler(handler)
+        try:
+            with tempfile.TemporaryDirectory(prefix="aitest_abs_") as root:
+                client, _, _ = build_isolated_client(Path(root), whitelist_text="{bad json")
+                try:
+                    resp = client.get("/api/v1/ab/whitelist")
+                    return {
+                        "status": resp.status_code,
+                        "body": resp.json(),
+                        "logs": stream.getvalue(),
+                    }
+                finally:
+                    client.close()
+        finally:
+            logger_obj.removeHandler(handler)
+            logger_obj.setLevel(old_level)
+
+    def bad_hash_range_still_evaluates_auto(self) -> dict[str, Any]:
+        with tempfile.TemporaryDirectory(prefix="aitest_abs_") as root:
+            return self.bad_hash_range_still_evaluates(Path(root))
+
+    def bad_params_fall_back_empty_auto(self) -> dict[str, Any]:
+        with tempfile.TemporaryDirectory(prefix="aitest_abs_") as root:
+            return self.bad_params_fall_back_empty(Path(root))
+
+    def import_works_from_other_cwd_auto(self) -> dict[str, Any]:
+        with tempfile.TemporaryDirectory(prefix="aitest_abs_") as root:
+            return self.import_works_from_other_cwd(Path(root))
+
+    def import_has_no_default_file_side_effect_auto(self) -> dict[str, Any]:
+        with tempfile.TemporaryDirectory(prefix="aitest_abs_") as root:
+            return self.import_has_no_default_file_side_effect(Path(root))
+
+    def remote_sdk_evaluate_whitelist_auto(self) -> dict[str, Any]:
+        with tempfile.TemporaryDirectory(prefix="aitest_abs_") as root:
+            return self.remote_sdk_evaluate_whitelist(Path(root))
+
+    def remote_sdk_set_user_whitelist_auto(self) -> dict[str, Any]:
+        with tempfile.TemporaryDirectory(prefix="aitest_abs_") as root:
+            return self.remote_sdk_set_user_whitelist(Path(root))
+
+    def remote_sdk_clear_user_whitelist_auto(self) -> dict[str, Any]:
+        with tempfile.TemporaryDirectory(prefix="aitest_abs_") as root:
+            return self.remote_sdk_clear_user_whitelist(Path(root))
+
+    def remote_sdk_replace_whitelist_auto(self) -> dict[str, Any]:
+        with tempfile.TemporaryDirectory(prefix="aitest_abs_") as root:
+            return self.remote_sdk_replace_whitelist(Path(root))
+
+    def remote_sdk_clear_all_whitelist_auto(self) -> dict[str, Any]:
+        with tempfile.TemporaryDirectory(prefix="aitest_abs_") as root:
+            return self.remote_sdk_clear_all_whitelist(Path(root))
+
 
 @pytest.fixture
-def setup_ab_service(ab_base_url):
+def setup_ab_service():
     """Prepare AB service state through its public API and restore it after each case."""
+    ab_base_url = require_env("COUPON_AB_BASE_URL")
     case = ABServiceCase(ab_base_url)
 
     def _setup(case_id: str) -> ABServiceCase:
@@ -218,3 +526,10 @@ def _experiments_for_case(case_id: str) -> set[str]:
         "TC-ABS-039": {"exp_game", "exp_cal"},
     }
     return set(mapping.get(case_id, set()))
+
+
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "pyproject.toml").exists():
+            return parent
+    raise RuntimeError("cannot locate repository root")

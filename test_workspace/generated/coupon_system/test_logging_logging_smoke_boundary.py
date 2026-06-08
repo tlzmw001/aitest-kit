@@ -2,8 +2,7 @@
 # DO NOT EDIT — regenerate with: aitest codegen --suite-file test_workspace/suites/coupon_system/logging_smoke/suite.yaml
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
-from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
-import re
+from aitest_kit.helpers.request_binding import build_request
 from test_workspace.targets.coupon_system.fixtures.logging import setup_logging
 
 
@@ -21,10 +20,13 @@ BASE_REQUEST = {
 }
 
 
-def _req(**overrides) -> dict:
-    body = {**BASE_REQUEST}
-    body.update(overrides)
-    return body
+def _req(*, auto_fields=None, overrides=None, patches=None) -> dict:
+    return build_request(
+        BASE_REQUEST,
+        auto_fields=auto_fields or {},
+        overrides=overrides or {},
+        patches=patches or [],
+    )
 
 
 class TestLoggingBoundary:
@@ -47,12 +49,10 @@ class TestLoggingBoundary:
         # SETUP: 环境覆盖：测试启动入口显式配置 logging.basicConfig(level=logging.INFO) 后启动服务
         # SETUP: 请求覆盖：HTTP 请求 reqId="req-log-010"
 
-        case = setup_logging(case_id="TC-LOG-010")
-        case.start_with_info_logging()
-        resp = case.request("u_log_010", "req-log-010", external=0, items=[{"item_id": "COUPON_LOG_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}])
-        logs = case.stop_and_logs()
-        assert resp["code"] == 0
-        assert "recommend request: reqId=req-log-010" in logs
+        case = setup_logging
+        result = case.run_http_with_logs(user_id="u_log_010", req_id="req-log-010", external=0, items=[{"item_id": "COUPON_LOG_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}])
+        assert result["resp"]["code"] == 0
+        assert "recommend request: reqId=req-log-010" in result["logs"]
 
 
 # TODO: setup_logging fixture 需要手写实现（→ tests/fixtures/logging.py）

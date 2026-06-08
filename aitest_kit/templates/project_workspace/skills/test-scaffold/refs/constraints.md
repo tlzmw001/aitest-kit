@@ -35,8 +35,10 @@
 - steps 只用 `call` / `assign` / `assert` / `comment`
 - `assert` 以 `assert ` 开头，是可执行 Python
 - 不塞 if/loop/try，复杂逻辑下沉到 fixture/helper
+- 不直接引用 pytest fixture 名，如 `tmp_path`、`caplog`、`monkeypatch`、`mocker`；需要时封装到 fixture/helper
 - kwargs/args 值为合法 Python 字面量、`{ref: previous_save_as}`、`{expr: python_expr}` 或 `{var: profile_variable_name}`
 - `{var: name}` 只引用 suite/module profile 的 `variables.defaults` 或 `variables.cases.{case_id}`；缺 env 且 `.env` / `AITEST_ENV_FILE` 也无法提供时，会在运行时失败并只显示 env 名，不显示值
+- 请求体差异优先写 `requests.<case_id>.patches`。`value_from` 引用同一套 profile variables；不要让 fixture 根据 case_id 拼装不同请求体
 - 不用 fixture 按 case_id 选择账号/token；不同 case 的数据差异放到 profile variables
 - 单条 case_flow 可以显式写 `fixture` 或 `object` 覆盖顶层默认值；否则必须能从 `default_fixture` 得到 fixture
 
@@ -59,10 +61,11 @@ module_type 是能力门禁，不替代逐 case 路线判断。配置中写 `req
 
 ## 逐条 case 路线评估
 
-1. 默认模板够吗？→ 只需 request_overrides
+1. 默认模板够吗？→ 只需 `requests.<case_id>.patches`，简单字段覆盖可用 `overrides`
 2. 加 assertion_rules 够吗？→ 增加 profile assertion_rules
 3. 需要 case_flow？→ 多步骤 / 特定 Client 方法 / 中间变量
-4. 需要 case_body？→ 条件分支、循环、mock、并发 → 记录保留原因
+4. 需要 fixture/helper？→ 临时目录、日志捕获、mock、cleanup、复杂计算
+5. 需要 case_body？→ 条件分支、循环、并发、难以下沉的运行器控制 → 记录保留原因
 
 **api_map 中标为 skipped 的 case 不参与路线评估。**
 

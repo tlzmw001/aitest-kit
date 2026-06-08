@@ -2,8 +2,8 @@
 # DO NOT EDIT — regenerate with: aitest codegen --suite-file test_workspace/suites/coupon_system/scene_routing_smoke/suite.yaml
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
+from aitest_kit.helpers.request_binding import build_request
 from test_workspace.targets.coupon_system.helpers import grpc_ops
-from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
 from test_workspace.targets.coupon_system.fixtures.scene_routing import setup_scene_routing
 
 
@@ -21,10 +21,13 @@ BASE_REQUEST = {
 }
 
 
-def _req(**overrides) -> dict:
-    body = {**BASE_REQUEST}
-    body.update(overrides)
-    return body
+def _req(*, auto_fields=None, overrides=None, patches=None) -> dict:
+    return build_request(
+        BASE_REQUEST,
+        auto_fields=auto_fields or {},
+        overrides=overrides or {},
+        patches=patches or [],
+    )
 
 
 class TestSceneRoutingBoundary:
@@ -32,7 +35,7 @@ class TestSceneRoutingBoundary:
 
     # ── 一、兜底分容错 ──
 
-    def test_tc_route_011(self, http_base_url, setup_scene_routing):
+    def test_tc_route_011(self, setup_scene_routing):
         """TC-ROUTE-011：Redis 全局兜底分非数字时回退到配置默认值"""
         __tc_meta__ = {
             "tc_id": "TC-ROUTE-011",
@@ -46,16 +49,18 @@ class TestSceneRoutingBoundary:
         # SETUP: 协议：HTTP
         # SETUP: 前置操作：执行 DEL coupon:fallback:score:3001 和 SET coupon:fallback:score:default not-a-number
         # SETUP: 请求覆盖：HTTP 请求命中 policy_fallback_001
-        setup_scene_routing(case_id="TC-ROUTE-011")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_route_011", "reqId": "req_route_011", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0}))
+        client = setup_scene_routing
+        client.set_fallback_scores({"coupon:fallback:score:default": "not-a-number"})
+        client.prepare_stock(coupon_id="COUPON_ROUTE_BOUNDARY_001")
+        resp = client.recommend_http(request_overrides={"user_id": "u_route_011", "reqId": "req-route-011", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0, "items": [{"item_id": "COUPON_ROUTE_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]})
         assert resp["code"] == 0
         assert resp["scene_id"] == 3001
         assert resp["results"][0]["score"] == 0.5
 
     # ── 二、路由匹配边界 ──
 
-    def test_tc_route_013(self, http_base_url, setup_scene_routing):
+    def test_tc_route_013(self, setup_scene_routing):
         """TC-ROUTE-013：policy_id 为空字符串时不触发兜底策略"""
         __tc_meta__ = {
             "tc_id": "TC-ROUTE-013",
@@ -68,13 +73,14 @@ class TestSceneRoutingBoundary:
         }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 scene_name="game"、device="mobile"、policy_id=""
-        setup_scene_routing(case_id="TC-ROUTE-013")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_route_013", "reqId": "req_route_013", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 0}))
+        client = setup_scene_routing
+        client.prepare_stock(coupon_id="COUPON_ROUTE_BOUNDARY_001")
+        resp = client.recommend_http(request_overrides={"user_id": "u_route_013", "reqId": "req-route-013", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 0, "items": [{"item_id": "COUPON_ROUTE_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]})
         assert resp["code"] == 0
         assert resp["scene_id"] == 1001
 
-    def test_tc_route_014(self, grpc_target, setup_scene_routing):
+    def test_tc_route_014(self, setup_scene_routing):
         """TC-ROUTE-014：scene_name 大小写不同视为未匹配并走兜底"""
         __tc_meta__ = {
             "tc_id": "TC-ROUTE-014",
@@ -87,16 +93,17 @@ class TestSceneRoutingBoundary:
         }
         # SETUP: 协议：gRPC
         # SETUP: 请求覆盖：gRPC 请求 scene_name="Game"、device="mobile"、policy_id=""
-        setup_scene_routing(case_id="TC-ROUTE-014")
 
-        resp = grpc_ops.recommend(grpc_target, _req(**{"user_id": "u_route_014", "reqId": "req_route_014", "scene_name": "Game", "device": "mobile", "policy_id": "", "external": 0}))
+        client = setup_scene_routing
+        client.prepare_stock(coupon_id="COUPON_ROUTE_BOUNDARY_001")
+        resp = client.recommend_grpc(request_overrides={"user_id": "u_route_014", "req_id": "req-route-014", "scene_name": "Game", "device": "mobile", "policy_id": "", "external": 0, "items": [{"item_id": "COUPON_ROUTE_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]})
         assert resp["code"] == 0
         assert resp["scene_id"] == 3001
         assert resp["experiment_info"] == {}
 
     # ── 三、配置生命周期 ──
 
-    def test_tc_route_018(self, grpc_target, setup_scene_routing):
+    def test_tc_route_018(self, setup_scene_routing):
         """TC-ROUTE-018：gRPC policy_id 为空字符串时不触发兜底策略"""
         __tc_meta__ = {
             "tc_id": "TC-ROUTE-018",
@@ -109,9 +116,10 @@ class TestSceneRoutingBoundary:
         }
         # SETUP: 协议：gRPC
         # SETUP: 请求覆盖：gRPC 请求 scene_name="game"、device="mobile"、policy_id=""
-        setup_scene_routing(case_id="TC-ROUTE-018")
 
-        resp = grpc_ops.recommend(grpc_target, _req(**{"user_id": "u_route_018", "reqId": "req_route_018", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 0}))
+        client = setup_scene_routing
+        client.prepare_stock(coupon_id="COUPON_ROUTE_BOUNDARY_001")
+        resp = client.recommend_grpc(request_overrides={"user_id": "u_route_018", "req_id": "req-route-018", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 0, "items": [{"item_id": "COUPON_ROUTE_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]})
         assert resp["code"] == 0
         assert resp["scene_id"] == 1001
 

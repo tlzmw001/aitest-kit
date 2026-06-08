@@ -2,11 +2,10 @@
 # DO NOT EDIT — regenerate with: aitest codegen --suite-file test_workspace/suites/coupon_system/issuance_smoke/suite.yaml
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
+from aitest_kit.helpers.request_binding import build_request
 from test_workspace.targets.coupon_system.helpers import grpc_ops
-from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
-from concurrent.futures import ThreadPoolExecutor
-from test_workspace.targets.coupon_system.fixtures.issuance import issue_item, issue_items
 from test_workspace.targets.coupon_system.fixtures.issuance import setup_issuance
+from test_workspace.targets.coupon_system.fixtures.issuance import issue_item, issue_items
 
 
 BASE_REQUEST = {
@@ -23,10 +22,13 @@ BASE_REQUEST = {
 }
 
 
-def _req(**overrides) -> dict:
-    body = {**BASE_REQUEST}
-    body.update(overrides)
-    return body
+def _req(*, auto_fields=None, overrides=None, patches=None) -> dict:
+    return build_request(
+        BASE_REQUEST,
+        auto_fields=auto_fields or {},
+        overrides=overrides or {},
+        patches=patches or [],
+    )
 
 
 class TestIssuanceBusiness:
@@ -50,7 +52,6 @@ class TestIssuanceBusiness:
         # SETUP: 请求覆盖：score_threshold=0.0、max_claim_per_request=1
 
         issue = setup_issuance
-        issue = setup_issuance(case_id="TC-ISSUE-001")
         body = issue.request("u_issue_http_ok", "req_issue_001", score_threshold=0.0, max_claim_per_request=1)
         resp = issue.post_recommend(body)
         assert resp['code'] == 0
@@ -75,7 +76,6 @@ class TestIssuanceBusiness:
         # SETUP: 请求覆盖：score_threshold=0.0、max_claim_per_request=1
 
         issue = setup_issuance
-        issue = setup_issuance(case_id="TC-ISSUE-002")
         body = issue.request("u_issue_grpc_ok", "req_issue_002", score_threshold=0.0, max_claim_per_request=1)
         resp = issue.grpc_recommend(body)
         assert resp['code'] == 0
@@ -100,7 +100,6 @@ class TestIssuanceBusiness:
         # SETUP: 请求覆盖：score_threshold=1.0
 
         issue = setup_issuance
-        issue = setup_issuance(case_id="TC-ISSUE-003")
         body = issue.request("u_issue_high_threshold", "req_issue_003", score_threshold=1.0, max_claim_per_request=1)
         resp = issue.post_recommend(body)
         assert resp['code'] == 0
@@ -126,7 +125,6 @@ class TestIssuanceBusiness:
         # SETUP: 请求覆盖_2：score_threshold=0.0
 
         issue = setup_issuance
-        issue = setup_issuance(case_id="TC-ISSUE-004")
         issue.set_stock("COUPON_ISSUE_A", 2)
         before = issue.stock("COUPON_ISSUE_A")
         body = issue.request("u_issue_stock_decr", "req_issue_004", items=issue_items('COUPON_ISSUE_A'), score_threshold=0.0)
@@ -153,7 +151,6 @@ class TestIssuanceBusiness:
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_issue_query" 成功发放 A
 
         issue = setup_issuance
-        issue = setup_issuance(case_id="TC-ISSUE-005")
         body = issue.request("u_issue_query", "req_issue_005", items=issue_items('COUPON_ISSUE_A'), score_threshold=0.0)
         resp = issue.post_recommend(body)
         query = issue.query_coupons("u_issue_query")
@@ -178,7 +175,6 @@ class TestIssuanceBusiness:
         # SETUP: 请求覆盖：HTTP 请求 item A 的 expire_days=3，成功发放
 
         issue = setup_issuance
-        issue = setup_issuance(case_id="TC-ISSUE-006")
         body = issue.request("u_issue_expire_3", "req_issue_006", items=[issue_item('COUPON_ISSUE_A', expire_days=3)], score_threshold=0.0)
         resp = issue.post_recommend(body)
         assert resp['code'] == 0
@@ -202,7 +198,6 @@ class TestIssuanceBusiness:
         # SETUP: 请求覆盖：第一次 score_threshold=1.0，第二次 score_threshold=0.0
 
         issue = setup_issuance
-        issue = setup_issuance(case_id="TC-ISSUE-007")
         first = issue.post_recommend(issue.request('u_issue_threshold_control', 'req_issue_007a', items=issue_items('COUPON_ISSUE_A'), score_threshold=1.0))
         second = issue.post_recommend(issue.request('u_issue_threshold_control', 'req_issue_007b', items=issue_items('COUPON_ISSUE_A'), score_threshold=0.0))
         assert first['code'] == 0
@@ -227,7 +222,6 @@ class TestIssuanceBusiness:
         # SETUP: 请求覆盖_2：第一次 max_claim_per_request=1，第二次 max_claim_per_request=2，两次 score_threshold=0.0
 
         issue = setup_issuance
-        issue = setup_issuance(case_id="TC-ISSUE-008")
         issue.set_stock("COUPON_ISSUE_A", 0)
         issue.set_stock("COUPON_ISSUE_B", 100)
         first = issue.post_recommend(issue.request('u_issue_max_claim', 'req_issue_008a', items=issue_items('COUPON_ISSUE_A', 'COUPON_ISSUE_B'), score_threshold=0.0, max_claim_per_request=1, policy_id='policy_fallback_001'))
@@ -254,7 +248,6 @@ class TestIssuanceBusiness:
         # SETUP: 接口调用：调用 GET /api/v1/coupons/user_no_coupons，该用户没有领取记录
 
         issue = setup_issuance
-        issue = setup_issuance(case_id="TC-ISSUE-009")
         issue.cleanup_user("user_no_coupons")
         resp = issue.query_coupons("user_no_coupons")
         assert resp['code'] == 0
@@ -276,7 +269,6 @@ class TestIssuanceBusiness:
         # SETUP: 请求覆盖：通过 gRPC 或业务层查询接口传入 user_id=""
 
         issue = setup_issuance
-        issue = setup_issuance(case_id="TC-ISSUE-010")
         resp = issue.grpc_query_coupons("")
         assert resp['code'] == 1001
         assert resp['message'] == 'user_id不能为空'

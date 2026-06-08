@@ -10,5 +10,7 @@ assertion_rules:
   template: assert resp["coupon"] is not None
 module_type: standard_recommend
 extra_imports:
-- from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
+- from test_workspace.targets.coupon_system.fixtures.feature_scoring import setup_feature_scoring
+default_fixture: setup_feature_scoring
+default_object: client
 ```
