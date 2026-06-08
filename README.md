@@ -181,7 +181,7 @@ aitest_workspace/
 
 ## 当前稳定边界
 
-v0.2.x 稳定：`aitest init/codegen/run/report/doctor/upgrade`、workspace layout、Markdown 用例格式、profile schema、Case IR → pytest 主链路、freshness check、结构化报告。
+v0.3.x 稳定：`aitest init/codegen/run/report/doctor/upgrade`、workspace layout、Markdown 用例格式、profile schema、request bindings、structured assertions、Case IR → pytest 主链路、freshness check、结构化报告。
 
 仍在演进：health/promotion report 口径、`case_flows` step 词汇表、内部 Python API、前端和契约测试方向。
 

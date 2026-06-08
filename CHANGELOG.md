@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.3.0 - 2026-06-08
+
+### Added
+
+- Added profile request binding through JSON Patch so suite profiles can express precise request changes, including dict replacement, list updates, removals, and profile-variable injection.
+- Added structured assertions for JSONPath, list traversal, length checks, and field-in-set checks without falling back to raw Python bodies.
+- Added richer codegen diagnostics through `--explain` and `--health-report`, including request bindings, review hints, structured assertion targets, and profile variable usage.
+- Added helper modules for request binding and structured assertion rendering.
+- Added calibration API map coverage for the built-in coupon system example.
+
+### Changed
+
+- Reworked coupon system suites to use structured `case_flows` and fixture/helper methods instead of `case_bodies`.
+- Clarified the fixture/helper boundary: `case_flows` orchestrate generated variables and should not directly reference pytest fixture names such as `tmp_path` or `caplog`.
+- Updated README, profile guide, troubleshooting guide, scaffold/codegen skills, and workspace template skills for the profile binding architecture.
+- Updated the workspace template and skill references around request patches, profile variables, structured assertions, and case-flow boundaries.
+
+### Fixed
+
+- Strengthened profile validation for request bindings, structured assertions, manual/skipped handling, and case-flow semantics.
+- Fixed generated coupon system pytest freshness after profile rewrites.
+
 ## 0.2.1 - 2026-05-31
 
 ### Changed

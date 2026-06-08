@@ -234,12 +234,13 @@ aitest upgrade --workspace /path/to/aitest_workspace --apply
 
 ## 稳定性说明
 
-v0.2.x 稳定维护：
+v0.3.x 稳定维护：
 
 - `aitest init/codegen/run/report/doctor/upgrade`
 - workspace 目录结构
 - Markdown 用例格式
 - module/suite profile schema
+- request bindings 和 structured assertions
 - Case IR 到 pytest 的主链路
 - generated freshness check
 - 结构化报告格式

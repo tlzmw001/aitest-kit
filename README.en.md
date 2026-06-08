@@ -181,7 +181,7 @@ aitest_workspace/
 
 ## Stable Scope
 
-v0.2.x stable: `aitest init/codegen/run/report/doctor/upgrade`, workspace layout, Markdown case format, profile schema, Case IR → pytest path, freshness check, structured reports.
+v0.3.x stable: `aitest init/codegen/run/report/doctor/upgrade`, workspace layout, Markdown case format, profile schema, request bindings, structured assertions, Case IR → pytest path, freshness check, structured reports.
 
 Still evolving: health/promotion report wording, `case_flows` step vocabulary, internal Python APIs, frontend and contract-test directions.
 
