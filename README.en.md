@@ -143,7 +143,7 @@ mkdir -p .codex/skills && cp -R skills/. .codex/skills/     # Codex
 
 | Path | Profile Config | Best For |
 |---|---|---|
-| Default HTTP/gRPC | `request_overrides` | Single endpoint, stable request shape |
+| Default HTTP/gRPC | `requests` | Single endpoint, stable request shape |
 | Assertion rules | `assertion_rules` | Standard calls, reusable assertion templates |
 | Structured flow | `case_flows` | Linear multi-step workflows |
 | Custom body | `case_bodies` | Concurrency, subprocesses, mocks, file lifecycle |

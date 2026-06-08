@@ -399,14 +399,15 @@ case_bodies:
         assert case_ir.source_trace["strategy"].value == "custom_case_body"
         assert "profile.case_bodies" in case_ir.source_trace["strategy"].source
 
-    def test_request_overrides_trace(self, tmp_path):
+    def test_requests_trace(self, tmp_path):
         profile_path = tmp_path / "profile_demo_suite.md"
         profile_path.write_text(
             """```yaml
-request_overrides:
+requests:
   TC-DEMO-001:
-    external: 1
-    score_threshold: 0.8
+    overrides:
+      external: 1
+      score_threshold: 0.8
 ```
 """,
             encoding="utf-8",
@@ -419,10 +420,12 @@ request_overrides:
             project=DEFAULT_PROJECT,
         )
         case_ir = _case(file_ir, "TC-DEMO-001")
-        assert "request_overrides" in case_ir.source_trace
-        assert case_ir.request.overrides == {
+        assert "requests" in case_ir.source_trace
+        assert case_ir.request.auto_fields == {
             "user_id": "u_demo_001",
             "reqId": "req_demo_001",
+        }
+        assert case_ir.request.overrides == {
             "external": 1,
             "score_threshold": 0.8,
         }
@@ -498,8 +501,8 @@ class TestRequestIR:
         tc = TestCase(id="TC-DEMO-003", title="request", priority="P1", section="req")
         file_ir = build_file_ir(_parse_result([tc]), "business", project=DEFAULT_PROJECT)
         case_ir = _case(file_ir, "TC-DEMO-003")
-        assert case_ir.request.overrides["user_id"] == "u_demo_003"
-        assert case_ir.request.overrides["reqId"] == "req_demo_003"
+        assert case_ir.request.auto_fields["user_id"] == "u_demo_003"
+        assert case_ir.request.auto_fields["reqId"] == "req_demo_003"
 
     def test_no_auto_fields_by_default_for_new_project_config(self):
         tc = TestCase(id="TC-DEMO-003", title="request", priority="P1", section="req")
@@ -508,14 +511,15 @@ class TestRequestIR:
         case_ir = _case(file_ir, "TC-DEMO-003")
         assert case_ir.request.overrides == {}
 
-    def test_request_overrides_merge(self, tmp_path):
+    def test_requests_merge(self, tmp_path):
         profile_path = tmp_path / "profile_demo_suite.md"
         profile_path.write_text(
             """```yaml
-request_overrides:
+requests:
   TC-DEMO-001:
-    user_id: custom_user
-    external: 1
+    overrides:
+      user_id: custom_user
+      external: 1
 ```
 """,
             encoding="utf-8",
@@ -528,9 +532,12 @@ request_overrides:
             project=DEFAULT_PROJECT,
         )
         case_ir = _case(file_ir, "TC-DEMO-001")
+        assert case_ir.request.auto_fields == {
+            "user_id": "u_demo_001",
+            "reqId": "req_demo_001",
+        }
         assert case_ir.request.overrides == {
             "user_id": "custom_user",
-            "reqId": "req_demo_001",
             "external": 1,
         }
 

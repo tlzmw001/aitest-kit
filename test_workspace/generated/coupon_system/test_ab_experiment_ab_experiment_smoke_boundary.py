@@ -2,6 +2,7 @@
 # DO NOT EDIT — regenerate with: aitest codegen --suite-file test_workspace/suites/coupon_system/ab_experiment_smoke/suite.yaml
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
+from aitest_kit.helpers.request_binding import build_request
 from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
 from test_workspace.targets.coupon_system.fixtures.ab_experiment import setup_ab_experiment
 
@@ -20,10 +21,13 @@ BASE_REQUEST = {
 }
 
 
-def _req(**overrides) -> dict:
-    body = {**BASE_REQUEST}
-    body.update(overrides)
-    return body
+def _req(*, auto_fields=None, overrides=None, patches=None) -> dict:
+    return build_request(
+        BASE_REQUEST,
+        auto_fields=auto_fields or {},
+        overrides=overrides or {},
+        patches=patches or [],
+    )
 
 
 class TestAbExperimentBoundary:
@@ -47,7 +51,7 @@ class TestAbExperimentBoundary:
         # SETUP: 前置操作_3：将 scene_id=1001 映射到该实验
         setup_ab_experiment(case_id="TC-AB-011")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_ab_011", "reqId": "req_ab_011"}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(auto_fields={"user_id": "u_ab_011", "reqId": "req_ab_011"}))
         assert resp["code"] == 0
         assert "ab_boundary_right" not in resp["experiment_info"]
 

@@ -26,7 +26,6 @@ class EmitContext:
     shared_config: SharedConfig
     project: ProjectConfig
     profile_rules: list[AssertionRule] = field(default_factory=list)
-    request_overrides: dict[str, dict[str, Any]] = field(default_factory=dict)
     extra_imports: list[str] = field(default_factory=list)
     case_fixtures: dict[str, list[str]] = field(default_factory=dict)
     case_bodies: dict[str, list[str]] = field(default_factory=dict)
@@ -54,12 +53,12 @@ def _render_header(
         f"# Auto-generated from {ctx.source_path}",
         f"# DO NOT EDIT — regenerate with: {regenerate_hint}",
     ]
-    if ctx.shared_config.base_request_http:
-        lines.append("from copy import deepcopy")
     lines.extend([
         "import pytest",
         ctx.project.helper_import,
     ])
+    if ctx.shared_config.base_request_http:
+        lines.append("from aitest_kit.helpers.request_binding import build_request")
     if has_grpc:
         lines.append(ctx.project.grpc_helper_import)
     if has_profile_variables:
@@ -92,27 +91,13 @@ def _render_req_helper(ctx: EmitContext) -> list[str]:
     return [
         "",
         "",
-        "def _deep_merge(base, override):",
-        "    if isinstance(base, dict) and isinstance(override, dict):",
-        "        result = deepcopy(base)",
-        "        for key, value in override.items():",
-        "            result[key] = _deep_merge(result[key], value) if key in result else deepcopy(value)",
-        "        return result",
-        "    if isinstance(base, list) and isinstance(override, list):",
-        "        result = []",
-        "        for index in range(max(len(base), len(override))):",
-        "            if index < len(base) and index < len(override):",
-        "                result.append(_deep_merge(base[index], override[index]))",
-        "            elif index < len(override):",
-        "                result.append(deepcopy(override[index]))",
-        "            else:",
-        "                result.append(deepcopy(base[index]))",
-        "        return result",
-        "    return deepcopy(override)",
-        "",
-        "",
-        "def _req(**overrides) -> dict:",
-        "    return _deep_merge(BASE_REQUEST, overrides)",
+        "def _req(*, auto_fields=None, overrides=None, patches=None) -> dict:",
+        "    return build_request(",
+        "        BASE_REQUEST,",
+        "        auto_fields=auto_fields or {},",
+        "        overrides=overrides or {},",
+        "        patches=patches or [],",
+        "    )",
     ]
 
 
@@ -142,11 +127,22 @@ def _render_setup_comments(tc: TestCase) -> list[str]:
 
 
 def _render_req_call(request: RequestIR) -> str:
-    if not request.overrides:
-        return "_req()"
-
+    kwargs = []
+    if request.auto_fields:
+        kwargs.append(f"auto_fields={dict_to_python_compact(request.auto_fields)}")
     overrides = dict_to_python_compact(request.overrides)
-    return f"_req(**{overrides})"
+    if request.overrides:
+        kwargs.append(f"overrides={overrides}")
+    if request.patches:
+        patches = [
+            {
+                **{"op": patch.op, "path": patch.path},
+                **({"value": patch.value} if patch.has_value else {}),
+            }
+            for patch in request.patches
+        ]
+        kwargs.append(f"patches={dict_to_python_compact(patches)}")
+    return "_req(" + ", ".join(kwargs) + ")"
 
 
 def _render_setup_call(case_ir: CaseIR) -> str | None:
@@ -204,9 +200,17 @@ def _render_custom_body(case_ir: CaseIR, tc: TestCase, ctx: EmitContext) -> list
     return lines
 
 
-def _render_flow_value(value: Any) -> str:
+def _request_var_name(case_id: str) -> str:
+    return "__request_" + case_id.lower().replace("-", "_")
+
+
+def _render_flow_value(value: Any, *, current_case_id: str, request_vars: dict[str, str]) -> str:
     if isinstance(value, dict):
         keys = set(value)
+        if keys == {"request_ref"}:
+            ref = value["request_ref"]
+            ref_case_id = current_case_id if ref == "self" else str(ref)
+            return request_vars.get(ref_case_id, _request_var_name(ref_case_id))
         if keys == {"ref"}:
             return str(value["ref"])
         if keys == {"expr"}:
@@ -214,19 +218,25 @@ def _render_flow_value(value: Any) -> str:
         if keys == {"var"}:
             return f"__tc_vars__[{dict_to_python_compact(value['var'])}]"
         pairs = [
-            f"{dict_to_python_compact(key)}: {_render_flow_value(item)}"
+            f"{dict_to_python_compact(key)}: {_render_flow_value(item, current_case_id=current_case_id, request_vars=request_vars)}"
             for key, item in value.items()
         ]
         return "{" + ", ".join(pairs) + "}"
     if isinstance(value, list):
-        return "[" + ", ".join(_render_flow_value(item) for item in value) + "]"
+        return "[" + ", ".join(
+            _render_flow_value(item, current_case_id=current_case_id, request_vars=request_vars)
+            for item in value
+        ) + "]"
     return dict_to_python_compact(value)
 
 
-def _render_flow_call(step: Any) -> str:
-    args = [_render_flow_value(item) for item in step.args]
+def _render_flow_call(step: Any, *, current_case_id: str, request_vars: dict[str, str]) -> str:
+    args = [
+        _render_flow_value(item, current_case_id=current_case_id, request_vars=request_vars)
+        for item in step.args
+    ]
     kwargs = [
-        f"{key}={_render_flow_value(value)}"
+        f"{key}={_render_flow_value(value, current_case_id=current_case_id, request_vars=request_vars)}"
         for key, value in step.kwargs.items()
     ]
     params = ", ".join([*args, *kwargs])
@@ -267,9 +277,17 @@ def _render_case_flow(
         if case_ir.case_flow.object_name != fixture_name:
             lines.append(f"        {case_ir.case_flow.object_name} = {fixture_name}")
 
+    request_vars: dict[str, str] = {}
+    for request_case_id, request_binding in case_ir.request_bindings.items():
+        var_name = _request_var_name(request_case_id)
+        request_vars[request_case_id] = var_name
+        lines.append(f"        {var_name} = {_render_req_call(request_binding)}")
+
     for step in case_ir.case_flow.steps:
         if step.kind == "call":
-            lines.append(f"        {_render_flow_call(step)}")
+            lines.append(
+                f"        {_render_flow_call(step, current_case_id=case_ir.case_id, request_vars=request_vars)}"
+            )
             continue
         if step.kind == "assert" and step.assertion is not None:
             for cl in step.assertion.code_lines:

@@ -1,8 +1,8 @@
 # Codegen Profile Guide
 
-`profile_{module}.md` 是 target/module 级生成配置。它告诉 codegen：这个模块属于什么类型、哪些用例要覆盖请求字段、哪些断言有专属模板、哪些复杂流程需要走 `case_flows` 或 `case_bodies`。
+`profile_{module}.md` 是 target/module 级生成配置。它告诉 codegen：这个模块属于什么类型、哪些用例要绑定请求、哪些断言有专属模板、哪些复杂流程需要走 `case_flows` 或 `case_bodies`。
 
-独立 case suite 在用例目录旁放 `profile_{suite}_suite.md`。module profile 放 L1 稳定能力，路径通常是 `test_workspace/targets/{target}/profiles/profile_{module}.md`；suite profile 跟随用例批次，优先放本批用例的 `variables`、`case_flows`、`case_bodies` 和 `request_overrides`。
+独立 case suite 在用例目录旁放 `profile_{suite}_suite.md`。module profile 放 L1 稳定能力，路径通常是 `test_workspace/targets/{target}/profiles/profile_{module}.md`；suite profile 跟随用例批次，优先放本批用例的 `variables`、`requests`、`case_flows` 和 `case_bodies`。
 
 profile 文件必须包含一个 YAML 代码块：
 
@@ -36,24 +36,33 @@ module_types:
 
 如果某类模块可以由 `case_flows` 满足，也可以在项目配置中把它设计为需要 `case_bodies`，profile gate 会把 `case_bodies` 或 `case_flows` 都视为可满足复杂流程要求。
 
-## request_overrides
+## requests
 
-当 Markdown 用例中的“请求覆盖”不足以表达稳定差异时，可以在 profile 中按 case_id 明确覆盖请求字段：
-当前确定性 codegen 生成真实请求体时，以这里的 `request_overrides` 为准；Markdown 场景变量中的“请求覆盖”主要用于人类 review 和 trace。
+`requests` 是统一请求绑定层。默认 HTTP/gRPC 路线和 `case_flows` 都可以使用它构造请求体。
+
+当前确定性 codegen 生成真实请求体时，以这里的 `requests.<case_id>` 为准；Markdown 场景变量中的“请求覆盖”主要用于人类 review 和 trace。
 
 ```yaml
 module_type: standard_http
-request_overrides:
+requests:
   TC-DEMO-001:
-    user_id: "u_demo_001"
-    value: 2
+    overrides:
+      user_id: "u_demo_001"
+      value: 2
+    patches:
+      - op: add
+        path: /items/-
+        value:
+          id: item_001
 ```
 
 约束：
 
 - key 必须是 `TC-XXX-001` 这类格式。
-- value 必须是对象。
+- `overrides` 必须是对象，写普通结构化字段覆盖。
+- `patches` 使用 JSON Patch 子集，第一版支持 `add`、`replace`、`remove`。
 - 只写 case 级差异，不要复制完整基础请求体。
+- 不要把 JSON 对象写成字符串传给 `case_flow.kwargs.body`；需要请求体时用 `{request_ref: self}`。
 
 ## assertion_rules
 
@@ -178,13 +187,17 @@ default_case_setup:
   kwargs:
     case_id: "{case_id}"
   save_as: client
+requests:
+  TC-DEMO-002:
+    overrides:
+      user_id: "u_demo_002"
+      value: 3
 case_flows:
   TC-DEMO-002:
     steps:
       - call: client.create
         kwargs:
-          user_id: "u_demo_002"
-          value: 3
+          body: {request_ref: self}
         save_as: create_resp
       - assert: 'assert create_resp["code"] == 0'
       - call: client.get
@@ -211,6 +224,7 @@ case_flows:
 - `object` / `default_object` 必须是合法 Python 标识符。
 - `steps` 至少一项。
 - `assert` 必须写成可执行 Python 断言，例如 `'assert resp["code"] == 0'`；不要写裸表达式。
+- `kwargs` 中需要请求体时优先使用 `{request_ref: self}` 或 `{request_ref: TC-XXX-001}`。
 
 适用：
 
@@ -269,7 +283,7 @@ profile gate 会阻断同一 case_id 同时存在 `case_bodies` 和 `case_flows`
 v0.1 中，以下内容按稳定契约维护：
 
 - profile 文件路径：`test_workspace/targets/{target}/profiles/profile_{module}.md` 和 `{suite_dir}/profile_{suite}_suite.md`
-- YAML 顶层字段：`module_type`、`request_overrides`、`assertion_rules`、`case_flows`、`case_bodies`
+- YAML 顶层字段：`module_type`、`requests`、`assertion_rules`、`case_flows`、`case_bodies`
 - case_id 格式：`^TC-[A-Z0-9]+-[0-9]+$`
 - profile gate 的原则：ERROR 阻断生成，WARNING 允许继续但需要 review
 

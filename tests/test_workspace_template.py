@@ -363,6 +363,52 @@ def test_upgrade_apply_does_not_overwrite_local_modified_file(tmp_path):
     assert readme.read_text(encoding="utf-8") == local_content
 
 
+def test_upgrade_apply_migrates_legacy_profile_request_fields(tmp_path):
+    target = tmp_path / "project"
+    runner = CliRunner()
+    assert runner.invoke(main, ["init", "--target", str(target)]).exit_code == 0
+
+    profile = target / "test_workspace" / "suites" / "demo_target" / "demo_smoke" / "profile_demo_smoke_suite.md"
+    profile.parent.mkdir(parents=True, exist_ok=True)
+    profile.write_text(
+        """# profile
+
+```yaml
+profile_scope: case_suite
+parent_module: demo
+suite: demo_smoke
+request_overrides:
+  TC-DEMO-001:
+    user_id: u001
+request_patches:
+  TC-DEMO-001:
+    - op: add
+      path: /items/-
+      value:
+        id: item_001
+```
+""",
+        encoding="utf-8",
+    )
+
+    check = runner.invoke(main, ["upgrade", "--workspace", str(target), "--check"])
+    assert check.exit_code == 0
+    assert "[MIGRATE]" in check.output
+    assert "request_overrides/request_patches to requests" in check.output
+
+    apply = runner.invoke(main, ["upgrade", "--workspace", str(target), "--apply"])
+    assert apply.exit_code == 0
+    assert "[UPDATE]" in apply.output
+    assert "updated=1" in apply.output
+    text = profile.read_text(encoding="utf-8")
+    assert "request_overrides" not in text
+    assert "request_patches" not in text
+    assert "requests:" in text
+    assert "overrides:" in text
+    assert "patches:" in text
+    assert list((target / ".aitest" / "backups").glob("upgrade-*/test_workspace/suites/demo_target/demo_smoke/profile_demo_smoke_suite.md"))
+
+
 def _set_manifest_hash(target: Path, relative: str, content: str) -> None:
     metadata_path = target / ".aitest" / "workspace.json"
     manifest = json.loads(metadata_path.read_text(encoding="utf-8"))

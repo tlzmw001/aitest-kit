@@ -2,6 +2,7 @@
 # DO NOT EDIT — regenerate with: aitest codegen --suite-file test_workspace/suites/coupon_system/validation_ratelimit_smoke/suite.yaml
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
+from aitest_kit.helpers.request_binding import build_request
 from test_workspace.targets.coupon_system.helpers import grpc_ops
 from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
 from test_workspace.targets.coupon_system.fixtures.validation_ratelimit import BOUNDARY_ITEM, ERR, LIMITED
@@ -22,10 +23,13 @@ BASE_REQUEST = {
 }
 
 
-def _req(**overrides) -> dict:
-    body = {**BASE_REQUEST}
-    body.update(overrides)
-    return body
+def _req(*, auto_fields=None, overrides=None, patches=None) -> dict:
+    return build_request(
+        BASE_REQUEST,
+        auto_fields=auto_fields or {},
+        overrides=overrides or {},
+        patches=patches or [],
+    )
 
 
 class TestValidationRatelimitBoundary:

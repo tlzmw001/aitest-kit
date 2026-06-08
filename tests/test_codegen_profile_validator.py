@@ -153,9 +153,10 @@ def test_profile_validator_rejects_unknown_case_reference(tmp_path, monkeypatch)
         suite_profile="""profile_scope: case_suite
 parent_module: gateway_api
 suite: gateway_smoke
-request_overrides:
+requests:
   TC-GW-999:
-    user_id: u_missing
+    overrides:
+      user_id: u_missing
 """,
     )
 
@@ -163,6 +164,77 @@ request_overrides:
 
     assert any(diag.code == "E505" for diag in report.errors)
     assert any("does not exist in suite markdown cases" in diag.message for diag in report.errors)
+
+
+def test_profile_validator_rejects_legacy_request_overrides(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+request_overrides:
+  TC-GW-001:
+    user_id: u_001
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any("Additional properties are not allowed" in diag.message for diag in report.errors)
+    assert any("request_overrides" in diag.message for diag in report.errors)
+
+
+def test_profile_validator_rejects_unknown_request_ref(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+case_flows:
+  TC-GW-001:
+    fixture: setup_gateway_api
+    steps:
+      - call: client.create
+        kwargs:
+          body: {request_ref: TC-GW-999}
+        save_as: resp
+      - assert: 'assert resp["code"] == 0'
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any(diag.code == "E528" for diag in report.errors)
+    assert any("unknown case" in diag.message for diag in report.errors)
+
+
+def test_profile_validator_warns_json_string_request_kwargs(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+case_flows:
+  TC-GW-001:
+    fixture: setup_gateway_api
+    steps:
+      - call: client.create
+        kwargs:
+          body: '{"user_id": "u_001"}'
+        save_as: resp
+      - assert: 'assert resp["code"] == 0'
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any(diag.code == "W506" for diag in report.warnings)
 
 
 def test_profile_validator_rejects_variables_with_unknown_case_reference(tmp_path, monkeypatch):

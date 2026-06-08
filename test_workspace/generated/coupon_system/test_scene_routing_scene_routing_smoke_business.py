@@ -2,6 +2,7 @@
 # DO NOT EDIT — regenerate with: aitest codegen --suite-file test_workspace/suites/coupon_system/scene_routing_smoke/suite.yaml
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
+from aitest_kit.helpers.request_binding import build_request
 from test_workspace.targets.coupon_system.helpers import grpc_ops
 from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
 from test_workspace.targets.coupon_system.fixtures.scene_routing import setup_scene_routing
@@ -21,10 +22,13 @@ BASE_REQUEST = {
 }
 
 
-def _req(**overrides) -> dict:
-    body = {**BASE_REQUEST}
-    body.update(overrides)
-    return body
+def _req(*, auto_fields=None, overrides=None, patches=None) -> dict:
+    return build_request(
+        BASE_REQUEST,
+        auto_fields=auto_fields or {},
+        overrides=overrides or {},
+        patches=patches or [],
+    )
 
 
 class TestSceneRoutingBusiness:
@@ -47,7 +51,7 @@ class TestSceneRoutingBusiness:
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_route_game_mobile"、scene_name="game"、device="mobile"、policy_id=""、external=0
         setup_scene_routing(case_id="TC-ROUTE-001")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_route_game_mobile", "reqId": "req_route_001", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 0}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(auto_fields={"user_id": "u_route_001", "reqId": "req_route_001"}, overrides={"user_id": "u_route_game_mobile", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 0}))
         assert resp["code"] == 0
         assert resp["scene_id"] == 1001
 
@@ -66,7 +70,7 @@ class TestSceneRoutingBusiness:
         # SETUP: 请求覆盖：gRPC 请求 user_id="u_route_ad_pc"、scene_name="ad"、device="pc"、policy_id=""、external=0
         setup_scene_routing(case_id="TC-ROUTE-002")
 
-        resp = grpc_ops.recommend(grpc_target, _req(**{"user_id": "u_route_ad_pc", "reqId": "req_route_002", "scene_name": "ad", "device": "pc", "policy_id": "", "external": 0}))
+        resp = grpc_ops.recommend(grpc_target, _req(auto_fields={"user_id": "u_route_002", "reqId": "req_route_002"}, overrides={"user_id": "u_route_ad_pc", "scene_name": "ad", "device": "pc", "policy_id": "", "external": 0}))
         assert resp["code"] == 0
         assert resp["scene_id"] == 2002
 
@@ -85,7 +89,7 @@ class TestSceneRoutingBusiness:
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_route_external"、scene_name="game"、device="mobile"、policy_id=""、external=1
         setup_scene_routing(case_id="TC-ROUTE-003")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_route_external", "reqId": "req_route_003", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 1}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(auto_fields={"user_id": "u_route_003", "reqId": "req_route_003"}, overrides={"user_id": "u_route_external", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 1}))
         assert resp["code"] == 0
         assert resp["scene_id"] == 1001
 
@@ -106,7 +110,7 @@ class TestSceneRoutingBusiness:
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_route_policy_fb"、scene_name="game"、device="mobile"、policy_id="policy_fallback_001"、external=0
         setup_scene_routing(case_id="TC-ROUTE-004")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_route_policy_fb", "reqId": "req_route_004", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(auto_fields={"user_id": "u_route_004", "reqId": "req_route_004"}, overrides={"user_id": "u_route_policy_fb", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0}))
         assert resp["code"] == 0
         cal = resp["results"][0]["calibrated_score"]
         assert resp["scene_id"] == 3001
@@ -128,7 +132,7 @@ class TestSceneRoutingBusiness:
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_fallback"、scene_name="game"、device="mobile"、policy_id="policy_fallback_001"、external=0、score_threshold=0.0
         setup_scene_routing(case_id="TC-ROUTE-005")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_fallback", "reqId": "req_route_005", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0, "score_threshold": 0.0}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(auto_fields={"user_id": "u_route_005", "reqId": "req_route_005"}, overrides={"user_id": "u_fallback", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0, "score_threshold": 0.0}))
         assert resp["code"] == 0
         assert resp["coupon"] is not None
         assert resp["coupon"]["user_id"] == "u_fallback"
@@ -148,7 +152,7 @@ class TestSceneRoutingBusiness:
         # SETUP: 请求覆盖：gRPC 请求 user_id="u_route_unknown"、scene_name="unknown_scene"、device="unknown_device"、policy_id=""、external=0
         setup_scene_routing(case_id="TC-ROUTE-006")
 
-        resp = grpc_ops.recommend(grpc_target, _req(**{"user_id": "u_route_unknown", "reqId": "req_route_006", "scene_name": "unknown_scene", "device": "unknown_device", "policy_id": "", "external": 0}))
+        resp = grpc_ops.recommend(grpc_target, _req(auto_fields={"user_id": "u_route_006", "reqId": "req_route_006"}, overrides={"user_id": "u_route_unknown", "scene_name": "unknown_scene", "device": "unknown_device", "policy_id": "", "external": 0}))
         assert resp["code"] == 0
         assert resp["scene_id"] == 3001
         assert resp["experiment_info"] == {}
@@ -171,7 +175,7 @@ class TestSceneRoutingBusiness:
         # SETUP: 请求覆盖：HTTP 请求命中 policy_fallback_001
         setup_scene_routing(case_id="TC-ROUTE-007")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_route_007", "reqId": "req_route_007", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(auto_fields={"user_id": "u_route_007", "reqId": "req_route_007"}, overrides={"scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0}))
         assert resp["code"] == 0
         cal = resp["results"][0]["calibrated_score"]
         assert resp["results"][0]["score"] == 0.8
@@ -193,7 +197,7 @@ class TestSceneRoutingBusiness:
         # SETUP: 请求覆盖：HTTP 请求命中 policy_fallback_001
         setup_scene_routing(case_id="TC-ROUTE-008")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_route_008", "reqId": "req_route_008", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(auto_fields={"user_id": "u_route_008", "reqId": "req_route_008"}, overrides={"scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0}))
         assert resp["code"] == 0
         cal = resp["results"][0]["calibrated_score"]
         assert resp["results"][0]["score"] == 0.6
@@ -215,7 +219,7 @@ class TestSceneRoutingBusiness:
         # SETUP: 请求覆盖：HTTP 请求命中 policy_fallback_001
         setup_scene_routing(case_id="TC-ROUTE-009")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_route_009", "reqId": "req_route_009", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(auto_fields={"user_id": "u_route_009", "reqId": "req_route_009"}, overrides={"scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0}))
         assert resp["code"] == 0
         cal = resp["results"][0]["calibrated_score"]
         assert resp["results"][0]["score"] == 0.5

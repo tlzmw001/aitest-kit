@@ -2,6 +2,7 @@
 # DO NOT EDIT — regenerate with: aitest codegen --suite-file test_workspace/suites/coupon_system/feature_scoring_smoke/suite.yaml
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
+from aitest_kit.helpers.request_binding import build_request
 from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
 from test_workspace.targets.coupon_system.fixtures.feature_scoring import setup_feature_scoring
 
@@ -20,10 +21,13 @@ BASE_REQUEST = {
 }
 
 
-def _req(**overrides) -> dict:
-    body = {**BASE_REQUEST}
-    body.update(overrides)
-    return body
+def _req(*, auto_fields=None, overrides=None, patches=None) -> dict:
+    return build_request(
+        BASE_REQUEST,
+        auto_fields=auto_fields or {},
+        overrides=overrides or {},
+        patches=patches or [],
+    )
 
 
 class TestFeatureScoringBoundary:
@@ -124,7 +128,7 @@ class TestFeatureScoringBoundary:
         # SETUP: 前置操作：HTTP 请求 item_id="COUPON_FEAT_NOT_IN_TSV"，该 item 不在 TSV 中
         setup_feature_scoring(case_id="TC-FEAT-009")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_feat_not_in_tsv", "reqId": "req_feat_009", "items": [{"item_id": "COUPON_FEAT_NOT_IN_TSV", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(auto_fields={"user_id": "u_feat_009", "reqId": "req_feat_009"}, overrides={"user_id": "u_feat_not_in_tsv", "items": [{"item_id": "COUPON_FEAT_NOT_IN_TSV", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]}))
         assert resp["code"] == 0
         assert resp["code"] == 0
         assert resp["results"][0]["item_id"] == "COUPON_FEAT_NOT_IN_TSV"

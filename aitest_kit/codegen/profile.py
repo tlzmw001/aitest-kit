@@ -90,17 +90,17 @@ def load_profile_rules(profile_path: ProfileSource) -> list[AssertionRule]:
     return rules
 
 
-def load_profile_request_overrides(profile_path: ProfileSource) -> dict[str, dict[str, Any]]:
-    """Extract explicit case-level request overrides from a profile YAML block."""
+def load_profile_requests(profile_path: ProfileSource) -> dict[str, dict[str, Any]]:
+    """Extract canonical request bindings from a profile YAML block."""
     data = load_profile_yaml(profile_path)
-    raw = data.get("request_overrides", {})
+    raw = data.get("requests", {})
     if not isinstance(raw, dict):
         return {}
 
     result: dict[str, dict[str, Any]] = {}
-    for case_id, overrides in raw.items():
-        if isinstance(case_id, str) and isinstance(overrides, dict):
-            result[case_id] = dict(overrides)
+    for case_id, request in raw.items():
+        if isinstance(case_id, str) and isinstance(request, dict):
+            result[case_id] = dict(request)
     return result
 
 
@@ -415,6 +415,11 @@ def _validate_case_flow_values(
             var_name = value["var"]
             if not isinstance(var_name, str) or not _IDENT_RE.match(var_name):
                 errors.append(f"{prefix}.var: must be a valid profile variable name")
+            return
+        if set(value) == {"request_ref"}:
+            ref = value["request_ref"]
+            if ref != "self" and (not isinstance(ref, str) or not _CASE_ID_RE.match(ref)):
+                errors.append(f"{prefix}.request_ref: must be self or a case id")
             return
         for key, item in value.items():
             _validate_case_flow_values(item, f"{prefix}.{key}", saved_names, errors)

@@ -6,33 +6,6 @@ Suite-specific codegen profile generated from the existing reviewed case/profile
 profile_scope: case_suite
 parent_module: e2e
 suite: e2e_smoke
-request_overrides:
-  TC-E2E-002:
-    scene_name: ad
-    device: pc
-    external: 1
-    items:
-    - item_id: COUPON_SHIP_001
-      coupon_type: free_shipping
-      value: 1
-      min_spend: 0
-      expire_days: 7
-  TC-E2E-003:
-    policy_id: policy_fallback_001
-    score_threshold: 0.4
-  TC-E2E-006:
-    scene_name: ad
-    device: pc
-    external: 1
-    items:
-    - item_id: COUPON_SHIP_001
-      coupon_type: free_shipping
-      value: 1
-      min_spend: 0
-      expire_days: 7
-  TC-E2E-007:
-    policy_id: policy_fallback_001
-    score_threshold: 0.4
 case_flows:
   TC-E2E-001:
     steps:
@@ -58,7 +31,8 @@ case_flows:
       save_as: coupons
     - assert: assert resp["code"] == 0
     - assert: assert resp["scene_id"] == 1001
-    - assert: 'assert resp["experiment_info"] == {"coarse_rank_exp_game": "cr_v2_full", "calibration_exp_game": "cal_on"}'
+    - assert: 'assert resp["experiment_info"] == {"coarse_rank_exp_game": "cr_v2_full",
+        "calibration_exp_game": "cal_on"}'
     - assert: assert resp["results"][0]["item_id"] == "COUPON_ACT_001"
     - assert: assert resp["results"][0]["recommended"] is True
     - assert: assert resp["coupon"] is not None
@@ -167,7 +141,8 @@ case_flows:
       expr: response.json()
     - assert: assert resp["code"] == 0
     - assert: assert resp["scene_id"] == 1001
-    - assert: 'assert resp["experiment_info"] == {"coarse_rank_exp_game": "cr_v2_full", "calibration_exp_game": "cal_on"}'
+    - assert: 'assert resp["experiment_info"] == {"coarse_rank_exp_game": "cr_v2_full",
+        "calibration_exp_game": "cal_on"}'
     - assert: assert resp["results"][0]["item_id"] == "COUPON_ACT_001"
     - assert: assert resp["results"][0]["calibrated_score"] > resp["results"][0]["score"]
     - assert: assert resp["coupon"] is not None
@@ -236,4 +211,35 @@ case_flows:
     - assert: assert http_json["total"] == 1
     - assert: assert http_json["coupons"][0]["instance_id"] == grpc_resp["coupon"]["instance_id"]
     - assert: assert http_json["coupons"][0]["item_id"] == "COUPON_ACT_001"
+requests:
+  TC-E2E-002:
+    overrides:
+      scene_name: ad
+      device: pc
+      external: 1
+      items:
+      - item_id: COUPON_SHIP_001
+        coupon_type: free_shipping
+        value: 1
+        min_spend: 0
+        expire_days: 7
+  TC-E2E-003:
+    overrides:
+      policy_id: policy_fallback_001
+      score_threshold: 0.4
+  TC-E2E-006:
+    overrides:
+      scene_name: ad
+      device: pc
+      external: 1
+      items:
+      - item_id: COUPON_SHIP_001
+        coupon_type: free_shipping
+        value: 1
+        min_spend: 0
+        expire_days: 7
+  TC-E2E-007:
+    overrides:
+      policy_id: policy_fallback_001
+      score_threshold: 0.4
 ```

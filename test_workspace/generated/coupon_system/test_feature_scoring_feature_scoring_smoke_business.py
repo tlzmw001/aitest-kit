@@ -2,6 +2,7 @@
 # DO NOT EDIT — regenerate with: aitest codegen --suite-file test_workspace/suites/coupon_system/feature_scoring_smoke/suite.yaml
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
+from aitest_kit.helpers.request_binding import build_request
 from test_workspace.targets.coupon_system.helpers import grpc_ops
 from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
 from test_workspace.targets.coupon_system.fixtures.feature_scoring import setup_feature_scoring
@@ -23,10 +24,13 @@ BASE_REQUEST = {
 }
 
 
-def _req(**overrides) -> dict:
-    body = {**BASE_REQUEST}
-    body.update(overrides)
-    return body
+def _req(*, auto_fields=None, overrides=None, patches=None) -> dict:
+    return build_request(
+        BASE_REQUEST,
+        auto_fields=auto_fields or {},
+        overrides=overrides or {},
+        patches=patches or [],
+    )
 
 
 class TestFeatureScoringBusiness:
@@ -145,7 +149,7 @@ class TestFeatureScoringBusiness:
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_score_external_http"、external=1、reqId="req-score-003"
         setup_feature_scoring(case_id="TC-SCORE-003")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(**{"user_id": "u_score_external_http", "reqId": "req-score-003", "external": 1}))
+        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(auto_fields={"user_id": "u_feat_003", "reqId": "req_feat_003"}, overrides={"user_id": "u_score_external_http", "reqId": "req-score-003", "external": 1}))
         assert resp["code"] == 0
         assert resp["code"] == 0
         assert resp["results"][0]["score"] >= 0.2
@@ -166,7 +170,7 @@ class TestFeatureScoringBusiness:
         # SETUP: 请求覆盖：gRPC 请求 user_id="u_score_external_grpc"、external=1、req_id="req-score-004"
         setup_feature_scoring(case_id="TC-SCORE-004")
 
-        resp = grpc_ops.recommend(grpc_target, _req(**{"user_id": "u_score_external_grpc", "reqId": "req_feat_004", "req_id": "req-score-004", "external": 1}))
+        resp = grpc_ops.recommend(grpc_target, _req(auto_fields={"user_id": "u_feat_004", "reqId": "req_feat_004"}, overrides={"user_id": "u_score_external_grpc", "req_id": "req-score-004", "external": 1}))
         assert resp["code"] == 0
         assert resp["code"] == 0
         assert resp["results"][0]["score"] >= 0.2

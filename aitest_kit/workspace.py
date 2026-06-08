@@ -4,13 +4,16 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from importlib import metadata
 from importlib import resources
 from pathlib import Path
 from typing import Iterator
+
+import yaml
 
 
 _TEMPLATE_PACKAGE = "aitest_kit.templates.project_workspace"
@@ -200,6 +203,13 @@ def upgrade_workspace(
     for key in sorted(set(previous_hashes) - set(template_hashes)):
         entries.append(UpgradeEntry(relative=Path(key), status="OBSOLETE", message="not present in current template; kept"))
 
+    backup_dir = _upgrade_profile_request_bindings(
+        target_path,
+        apply=apply,
+        result=result,
+        backup_dir=backup_dir,
+    )
+
     if apply:
         merged_hashes = dict(previous_hashes)
         merged_hashes.update(synced_hashes)
@@ -214,6 +224,171 @@ def upgrade_workspace(
         result.backup_dir = backup_dir
 
     return result
+
+
+_PROFILE_YAML_RE = re.compile(r"```ya?ml\s*\n(.*?)```", re.DOTALL)
+
+
+def _upgrade_profile_request_bindings(
+    target_path: Path,
+    *,
+    apply: bool,
+    result: UpgradeWorkspaceResult,
+    backup_dir: Path | None,
+) -> Path | None:
+    for profile_path in sorted((target_path / "test_workspace").glob("**/profile_*.md")):
+        relative = profile_path.relative_to(target_path)
+        try:
+            text = profile_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            result.entries.append(UpgradeEntry(relative, "LOCAL", f"cannot read profile: {exc}"))
+            continue
+
+        migrated = _migrate_profile_request_binding_text(text)
+        for warning in migrated.warnings:
+            result.entries.append(UpgradeEntry(relative, "WARNING", warning))
+        if migrated.conflict:
+            result.entries.append(UpgradeEntry(relative, "LOCAL", migrated.conflict))
+            result.skipped += 1
+            continue
+        if not migrated.changed:
+            continue
+
+        result.entries.append(UpgradeEntry(
+            relative,
+            "UPDATE" if apply else "MIGRATE",
+            "migrate request_overrides/request_patches to requests",
+        ))
+        if not apply:
+            continue
+
+        if backup_dir is None:
+            backup_dir = _new_backup_dir(target_path)
+        _backup_file(target_path, profile_path, backup_dir)
+        profile_path.write_text(migrated.text, encoding="utf-8")
+        result.updated += 1
+    return backup_dir
+
+
+@dataclass
+class _ProfileMigration:
+    text: str
+    changed: bool = False
+    conflict: str = ""
+    warnings: list[str] = field(default_factory=list)
+
+
+def _migrate_profile_request_binding_text(text: str) -> _ProfileMigration:
+    match = _PROFILE_YAML_RE.search(text)
+    if not match:
+        return _ProfileMigration(text)
+    try:
+        data = yaml.safe_load(match.group(1))
+    except yaml.YAMLError:
+        return _ProfileMigration(text)
+    if not isinstance(data, dict):
+        return _ProfileMigration(text)
+
+    warnings = _profile_json_string_warnings(data)
+    old_overrides = data.pop("request_overrides", None)
+    old_patches = data.pop("request_patches", None)
+    if old_overrides is None and old_patches is None:
+        return _ProfileMigration(text, warnings=warnings)
+
+    requests = data.get("requests", {})
+    if requests is None:
+        requests = {}
+    if not isinstance(requests, dict):
+        return _ProfileMigration(
+            text,
+            conflict="profile has non-mapping requests; cannot migrate old request fields",
+            warnings=warnings,
+        )
+    data["requests"] = requests
+
+    conflict = _merge_legacy_request_section(
+        requests,
+        old_overrides,
+        section_name="overrides",
+    )
+    if conflict:
+        return _ProfileMigration(text, conflict=conflict, warnings=warnings)
+    conflict = _merge_legacy_request_section(
+        requests,
+        old_patches,
+        section_name="patches",
+    )
+    if conflict:
+        return _ProfileMigration(text, conflict=conflict, warnings=warnings)
+
+    yaml_text = yaml.safe_dump(data, allow_unicode=True, sort_keys=False).rstrip() + "\n"
+    new_text = text[:match.start(1)] + yaml_text + text[match.end(1):]
+    return _ProfileMigration(new_text, changed=True, warnings=warnings)
+
+
+def _merge_legacy_request_section(
+    requests: dict,
+    legacy: object,
+    *,
+    section_name: str,
+) -> str:
+    if legacy is None:
+        return ""
+    if not isinstance(legacy, dict):
+        return f"legacy request_{section_name} is not a mapping; cannot migrate"
+    for case_id, value in legacy.items():
+        if not isinstance(case_id, str):
+            return f"legacy request_{section_name} has non-string case id; cannot migrate"
+        request = requests.setdefault(case_id, {})
+        if not isinstance(request, dict):
+            return f"requests.{case_id} is not a mapping; cannot migrate"
+        if section_name in request:
+            return f"requests.{case_id}.{section_name} already exists; review migration manually"
+        request[section_name] = value
+    return ""
+
+
+def _profile_json_string_warnings(data: dict) -> list[str]:
+    warnings: list[str] = []
+    case_flows = data.get("case_flows")
+    if not isinstance(case_flows, dict):
+        return warnings
+    request_like_keys = {"body", "json", "request", "payload"}
+    for case_id, flow in case_flows.items():
+        if not isinstance(flow, dict):
+            continue
+        steps = flow.get("steps")
+        if not isinstance(steps, list):
+            continue
+        for step_index, step in enumerate(steps):
+            if not isinstance(step, dict):
+                continue
+            kwargs = step.get("kwargs")
+            if not isinstance(kwargs, dict):
+                continue
+            for key, value in kwargs.items():
+                if key == "raw_body" or key not in request_like_keys:
+                    continue
+                if _looks_like_json_string(value):
+                    warnings.append(
+                        "case_flow JSON-looking string request data at "
+                        f"case_flows.{case_id}.steps[{step_index}].kwargs.{key}; "
+                        "manual migration may be required"
+                    )
+    return warnings
+
+
+def _looks_like_json_string(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    text = value.strip()
+    if not text or text[0] not in "[{":
+        return False
+    try:
+        json.loads(text)
+    except json.JSONDecodeError:
+        return False
+    return True
 
 
 def _template_files(root) -> list[Path]:

@@ -452,7 +452,7 @@ _FORBIDDEN_SUITE_MANIFEST_FIELDS = {
     "module_type",
     "case_flows",
     "case_bodies",
-    "request_overrides",
+    "requests",
     "variables",
     "case_fixtures",
     "extra_imports",

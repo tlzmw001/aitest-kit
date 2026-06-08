@@ -45,7 +45,7 @@ Next step: create a target/module registry and a suite.yaml, or keep using legac
 
 - 基础请求体必须能被 `json.loads` 解析。
 - 变化字段填合法默认值。
-- case 级变化写到“请求覆盖”或 profile 的 `request_overrides`。
+- case 级变化写到“请求覆盖”或 profile 的 `requests.<case_id>.overrides/patches`。
 
 ## E002: 缺少基础请求体
 

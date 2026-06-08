@@ -54,7 +54,7 @@ test_workspace/tasks/{task}.yaml
 | suite profile 路径 | 约定路径 `{suite_dir}/profile_{suite}_suite.md` | `suite.yaml`、module profile |
 | `case_flows` | suite profile | module profile |
 | `case_bodies` | suite profile | module profile |
-| `request_overrides` | suite profile | module profile |
+| `requests` | suite profile | module profile |
 | `case_fixtures` | suite profile | module profile |
 | `variables.cases` | suite profile | module profile |
 | `variables.defaults` | module profile 或 suite profile | fixture 代码里硬编码 |
@@ -210,7 +210,7 @@ assertion_rules:
 ```yaml
 case_flows: {}
 case_bodies: {}
-request_overrides: {}
+requests: {}
 case_fixtures: {}
 variables:
   cases: {}
@@ -284,7 +284,7 @@ knowledge_refs:
 test_workspace/suites/{target}/{suite}/profile_{suite}_suite.md
 ```
 
-职责：只覆盖当前 suite 的 case_id，放本批用例的 `variables.cases`、`case_flows`、`case_bodies`、`request_overrides`。文件名必须以 `_suite.md` 结尾；YAML 中建议写 `profile_scope: case_suite`、`parent_module` 和 `suite`。
+职责：只覆盖当前 suite 的 case_id，放本批用例的 `variables.cases`、`requests`、`case_flows`、`case_bodies`。文件名必须以 `_suite.md` 结尾；YAML 中建议写 `profile_scope: case_suite`、`parent_module` 和 `suite`。
 
 ````markdown
 # profile_gateway_smoke_suite

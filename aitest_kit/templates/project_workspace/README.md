@@ -175,7 +175,7 @@ test_workspace/suites/<target>/<suite>/profile_<suite>_suite.md
 
 suite profile 跟随用例目录，module profile 保留模块级稳定能力。
 
-具体规则：`profile_{module}.md` 只放 L1 稳定能力；`profile_{suite}_suite.md` 放具体 TC-ID 绑定的 `variables.cases/case_flows/case_bodies/request_overrides/case_fixtures`。更多示例见 `aitest_config/refs/config-files.md`。
+具体规则：`profile_{module}.md` 只放 L1 稳定能力；`profile_{suite}_suite.md` 放具体 TC-ID 绑定的 `variables.cases/requests/case_flows/case_bodies/case_fixtures`。更多示例见 `aitest_config/refs/config-files.md`。
 
 ## 常用命令
 

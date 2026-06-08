@@ -143,7 +143,7 @@ mkdir -p .codex/skills && cp -R skills/. .codex/skills/     # Codex
 
 | 路线 | profile 配置 | 适用场景 |
 |---|---|---|
-| 默认 HTTP/gRPC | `request_overrides` | 单接口、请求结构稳定 |
+| 默认 HTTP/gRPC | `requests` | 单接口、请求结构稳定 |
 | 断言规则 | `assertion_rules` | 调用标准，断言需模板化 |
 | 结构化流程 | `case_flows` | 线性多步骤 |
 | 自定义代码 | `case_bodies` | 并发、mock、进程等复杂场景 |

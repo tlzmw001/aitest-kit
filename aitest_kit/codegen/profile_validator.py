@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import json
 from pathlib import Path
 from typing import Any
 
@@ -48,7 +49,7 @@ _TOP_LEVEL_KEYS = {
     "default_case_setup",
     "assertion_rules",
     "variables",
-    "request_overrides",
+    "requests",
     "extra_imports",
     "case_fixtures",
     "case_bodies",
@@ -101,9 +102,10 @@ def validate_profile_suite(
     suite_case_bodies = _mapping(suite_data, "case_bodies")
     suite_case_flows = _mapping(suite_data, "case_flows")
     suite_case_fixtures = _mapping(suite_data, "case_fixtures")
-    suite_request_overrides = _mapping(suite_data, "request_overrides")
+    suite_requests = _mapping(suite_data, "requests")
     suite_variables = _mapping(suite_data, "variables")
     runtime_case_bodies = _mapping(runtime_data, "case_bodies")
+    runtime_requests = _mapping(runtime_data, "requests")
     case_flow_defaults = case_flow_defaults_from_yaml(runtime_data)
     runtime_case_flows = apply_case_flow_defaults(
         _mapping(runtime_data, "case_flows"),
@@ -121,8 +123,10 @@ def validate_profile_suite(
     _validate_case_references(report, "case_bodies", suite_case_bodies)
     _validate_case_references(report, "case_flows", suite_case_flows)
     _validate_case_references(report, "case_fixtures", suite_case_fixtures)
-    _validate_case_references(report, "request_overrides", suite_request_overrides)
+    _validate_case_references(report, "requests", suite_requests)
     _validate_case_references(report, "variables.cases", _variable_cases(suite_variables))
+    _validate_request_refs(report, runtime_requests, runtime_case_flows)
+    _warn_json_string_request_kwargs(report, runtime_case_flows)
     _warn_feasibility_suspect_strategies(report, suite_case_bodies, suite_case_flows)
     _warn_manual_comment_only_flows(report, suite_case_flows)
     _validate_non_manual_executable_flows(report, suite_case_flows)
@@ -195,7 +199,7 @@ def _validate_top_level_shape(report: ProfileValidationReport, data: dict[str, A
         if key not in _TOP_LEVEL_KEYS:
             _error(report, "E501", f"unknown top-level field {key}", key)
 
-    _expect_mapping(report, data, "request_overrides")
+    _expect_mapping(report, data, "requests")
     _expect_mapping(report, data, "case_fixtures")
     _expect_mapping(report, data, "case_bodies")
     _expect_mapping(report, data, "case_flows")
@@ -213,7 +217,7 @@ def _validate_top_level_shape(report: ProfileValidationReport, data: dict[str, A
     _expect_rule_list(report, data)
     _expect_case_fixture_values(report, _mapping(data, "case_fixtures"))
     _expect_case_body_values(report, _mapping(data, "case_bodies"))
-    _expect_request_override_values(report, _mapping(data, "request_overrides"))
+    _expect_request_values(report, _mapping(data, "requests"))
 
 
 def _expect_mapping(report: ProfileValidationReport, data: dict[str, Any], key: str) -> None:
@@ -271,10 +275,40 @@ def _expect_case_body_values(report: ProfileValidationReport, bodies: dict[str, 
         _error(report, "E501", "case_bodies value must be a string or list of strings", source)
 
 
-def _expect_request_override_values(report: ProfileValidationReport, overrides: dict[str, Any]) -> None:
-    for case_id, value in overrides.items():
+def _expect_request_values(report: ProfileValidationReport, requests: dict[str, Any]) -> None:
+    for case_id, value in requests.items():
+        source = f"requests.{case_id}"
         if not isinstance(value, dict):
-            _error(report, "E501", "request_overrides value must be a mapping", f"request_overrides.{case_id}")
+            _error(report, "E501", "requests value must be a mapping", source)
+            continue
+        base = value.get("base")
+        if base is not None and base != "shared":
+            _error(report, "E501", "requests base currently supports only 'shared'", f"{source}.base")
+        overrides = value.get("overrides")
+        if overrides is not None and not isinstance(overrides, dict):
+            _error(report, "E501", "requests overrides must be a mapping", f"{source}.overrides")
+        patches = value.get("patches")
+        if patches is not None and not isinstance(patches, list):
+            _error(report, "E501", "requests patches must be a list", f"{source}.patches")
+            continue
+        for index, patch in enumerate(patches or []):
+            _expect_request_patch(report, patch, f"{source}.patches[{index}]")
+
+
+def _expect_request_patch(report: ProfileValidationReport, patch: Any, source: str) -> None:
+    if not isinstance(patch, dict):
+        _error(report, "E501", "request patch must be a mapping", source)
+        return
+    op = patch.get("op")
+    path = patch.get("path")
+    if op not in {"add", "replace", "remove"}:
+        _error(report, "E501", "request patch op must be one of add/replace/remove", source)
+    if not isinstance(path, str) or not path.startswith("/"):
+        _error(report, "E501", "request patch path must be a JSON Pointer", source)
+    if op in {"add", "replace"} and "value" not in patch:
+        _error(report, "E501", f"request patch {op} requires value", source)
+    if op == "remove" and "value" in patch:
+        _error(report, "E501", "request patch remove must not include value", source)
 
 
 def _validate_case_references(
@@ -299,7 +333,7 @@ def _validate_module_profile_scope(
         "case_bodies",
         "case_flows",
         "case_fixtures",
-        "request_overrides",
+        "requests",
     )
     for section in case_scoped_sections:
         values = _mapping(module_data, section)
@@ -478,6 +512,79 @@ def _is_declared_factory_setup(
     if first_step.get("call") != default_case_setup.get("call"):
         return False
     if first_step.get("save_as") != default_case_setup.get("save_as"):
+        return False
+    return True
+
+
+def _validate_request_refs(
+    report: ProfileValidationReport,
+    requests: dict[str, Any],
+    case_flows: dict[str, Any],
+) -> None:
+    for case_id, flow in case_flows.items():
+        for source, value in _iter_flow_values(flow, f"case_flows.{case_id}"):
+            if not isinstance(value, dict) or set(value) != {"request_ref"}:
+                continue
+            ref = value.get("request_ref")
+            if ref == "self":
+                continue
+            if not isinstance(ref, str) or not _CASE_ID_RE.match(ref):
+                _error(report, "E528", "request_ref must be self or a case id", source)
+                continue
+            if ref not in requests and ref not in report.case_ids:
+                _error(report, "E528", f"request_ref points to unknown case: {ref}", source)
+
+
+def _warn_json_string_request_kwargs(
+    report: ProfileValidationReport,
+    case_flows: dict[str, Any],
+) -> None:
+    request_like_keys = {"body", "json", "request", "payload"}
+    for case_id, flow in case_flows.items():
+        if not isinstance(flow, dict):
+            continue
+        steps = flow.get("steps")
+        if not isinstance(steps, list):
+            continue
+        for step_index, step in enumerate(steps):
+            if not isinstance(step, dict):
+                continue
+            kwargs = step.get("kwargs")
+            if not isinstance(kwargs, dict):
+                continue
+            for key, value in kwargs.items():
+                if key == "raw_body":
+                    continue
+                if key not in request_like_keys or not _looks_like_json_string(value):
+                    continue
+                _warn(
+                    report,
+                    "W506",
+                    "case_flow passes a JSON-looking string as request data; use a structured "
+                    "mapping or {request_ref: self}, unless this endpoint requires raw_body",
+                    f"case_flows.{case_id}.steps[{step_index}].kwargs.{key}",
+                )
+
+
+def _iter_flow_values(value: Any, source: str):
+    yield source, value
+    if isinstance(value, dict):
+        for key, item in value.items():
+            yield from _iter_flow_values(item, f"{source}.{key}")
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            yield from _iter_flow_values(item, f"{source}[{index}]")
+
+
+def _looks_like_json_string(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    text = value.strip()
+    if not text or text[0] not in "[{":
+        return False
+    try:
+        json.loads(text)
+    except json.JSONDecodeError:
         return False
     return True
 

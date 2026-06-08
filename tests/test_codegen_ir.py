@@ -56,32 +56,36 @@ def _parse_result(
 def test_profile_merge_merges_nested_lists_by_index():
     merged, diagnostics = merge_profile_yaml(
         {
-            "request_overrides": {
+            "requests": {
                 "TC-DEMO-001": {
-                    "messages": [
-                        {"role": "user", "content": "ping"},
-                        {"role": "assistant", "content": "pong"},
-                    ],
-                    "metadata": {"trace": True, "tags": ["base"]},
+                    "overrides": {
+                        "messages": [
+                            {"role": "user", "content": "ping"},
+                            {"role": "assistant", "content": "pong"},
+                        ],
+                        "metadata": {"trace": True, "tags": ["base"]},
+                    }
                 }
             }
         },
         {
-            "request_overrides": {
+            "requests": {
                 "TC-DEMO-001": {
-                    "messages": [
-                        {"content": "hello"},
-                        {"content": "world"},
-                        {"role": "tool", "content": "extra"},
-                    ],
-                    "metadata": {"tags": ["override"]},
+                    "overrides": {
+                        "messages": [
+                            {"content": "hello"},
+                            {"content": "world"},
+                            {"role": "tool", "content": "extra"},
+                        ],
+                        "metadata": {"tags": ["override"]},
+                    }
                 }
             }
         },
     )
 
     assert diagnostics == []
-    assert merged["request_overrides"]["TC-DEMO-001"] == {
+    assert merged["requests"]["TC-DEMO-001"]["overrides"] == {
         "messages": [
             {"role": "user", "content": "hello"},
             {"role": "assistant", "content": "world"},
@@ -95,12 +99,13 @@ def test_generated_req_deep_merges_request_override_lists(tmp_path):
     profile_path = tmp_path / "profile_demo_suite.md"
     _write_profile(
         profile_path,
-        """request_overrides:
+        """requests:
   TC-DEMO-001:
-    messages:
-      - content: hello
-    metadata:
-      trace_id: tc-001
+    overrides:
+      messages:
+        - content: hello
+      metadata:
+        trace_id: tc-001
 """,
     )
     parse_result = _parse_result(
@@ -129,7 +134,12 @@ def test_generated_req_deep_merges_request_override_lists(tmp_path):
     namespace: dict[str, object] = {}
     exec((tmp_path / "test_demo_business.py").read_text(encoding="utf-8"), namespace)
 
-    req = namespace["_req"](**_case(file_ir, "TC-DEMO-001").request.overrides)
+    request_ir = _case(file_ir, "TC-DEMO-001").request
+    req = namespace["_req"](
+        auto_fields=request_ir.auto_fields,
+        overrides=request_ir.overrides,
+        patches=[],
+    )
     assert req == {
         "messages": [{"role": "user", "content": "hello"}],
         "metadata": {"tenant": "demo", "trace_id": "tc-001"},
@@ -138,6 +148,127 @@ def test_generated_req_deep_merges_request_override_lists(tmp_path):
         "messages": [{"role": "user", "content": "ping"}],
         "metadata": {"tenant": "demo"},
     }
+
+
+def test_generated_req_applies_request_patches(tmp_path):
+    profile_path = tmp_path / "profile_demo_suite.md"
+    _write_profile(
+        profile_path,
+        """requests:
+  TC-DEMO-001:
+    overrides:
+      metadata:
+        trace_id: tc-001
+    patches:
+      - op: replace
+        path: /messages/0/content
+        value: hello
+      - op: add
+        path: /messages/-
+        value:
+          role: user
+          content: second
+      - op: remove
+        path: /debug
+""",
+    )
+    parse_result = _parse_result(
+        base_request_http={
+            "messages": [{"role": "user", "content": "ping"}],
+            "metadata": {"tenant": "demo"},
+            "debug": True,
+        },
+    )
+
+    project = ProjectConfig(default_request=DefaultRequestConfig(auto_fields={}))
+    file_ir = build_file_ir(
+        parse_result,
+        "business",
+        profile_path=profile_path,
+        project=project,
+    )
+    result = emit_file(
+        parse_result,
+        "business",
+        output_dir=tmp_path,
+        profile_path=profile_path,
+        project=project,
+    )
+
+    assert result.diagnostics == []
+    namespace: dict[str, object] = {}
+    exec((tmp_path / "test_demo_business.py").read_text(encoding="utf-8"), namespace)
+
+    request_ir = _case(file_ir, "TC-DEMO-001").request
+    patches = [
+        {
+            **{"op": patch.op, "path": patch.path},
+            **({"value": patch.value} if patch.has_value else {}),
+        }
+        for patch in request_ir.patches
+    ]
+    req = namespace["_req"](
+        auto_fields=request_ir.auto_fields,
+        overrides=request_ir.overrides,
+        patches=patches,
+    )
+    assert req == {
+        "messages": [
+            {"role": "user", "content": "hello"},
+            {"role": "user", "content": "second"},
+        ],
+        "metadata": {"tenant": "demo", "trace_id": "tc-001"},
+    }
+
+
+def test_case_flow_renders_request_ref_from_unified_request_binding(tmp_path):
+    profile_path = tmp_path / "profile_demo_suite.md"
+    _write_profile(
+        profile_path,
+        """requests:
+  TC-DEMO-001:
+    overrides:
+      user_id: u001
+case_flows:
+  TC-DEMO-001:
+    fixture: setup_demo
+    object: client
+    steps:
+      - call: client.create
+        kwargs:
+          body: {request_ref: self}
+        save_as: resp
+      - assert: 'assert resp["code"] == 0'
+""",
+    )
+    parse_result = _parse_result(
+        assertions=['`response.code == 0`'],
+        base_request_http={"user_id": "u_default", "items": []},
+    )
+    project = ProjectConfig(default_request=DefaultRequestConfig(auto_fields={}))
+
+    file_ir = build_file_ir(
+        parse_result,
+        "business",
+        profile_path=profile_path,
+        project=project,
+    )
+    case_ir = _case(file_ir, "TC-DEMO-001")
+    assert case_ir.strategy == "structured_case_flow"
+    assert "TC-DEMO-001" in case_ir.request_bindings
+    assert case_ir.request_bindings["TC-DEMO-001"].overrides == {"user_id": "u001"}
+
+    result = emit_file(
+        parse_result,
+        "business",
+        output_dir=tmp_path,
+        profile_path=profile_path,
+        project=project,
+    )
+    assert result.diagnostics == []
+    text = (tmp_path / "test_demo_business.py").read_text(encoding="utf-8")
+    assert '__request_tc_demo_001 = _req(overrides={"user_id": "u001"})' in text
+    assert "resp = client.create(body=__request_tc_demo_001)" in text
 
 
 def test_ir_marks_profile_case_flow_without_default_request_plan(tmp_path):

@@ -80,7 +80,14 @@ def merge_profile_yaml(
     if imports:
         merged["extra_imports"] = _dedupe_strings(imports)
 
-    for key in ("request_overrides", "case_flows"):
+    requests = _merge_profile_requests(
+        module_data.get("requests", {}),
+        suite_data.get("requests", {}),
+    )
+    if requests:
+        merged["requests"] = requests
+
+    for key in ("case_flows",):
         module_values = module_data.get(key, {})
         suite_values = suite_data.get(key, {})
         module_map = module_values if isinstance(module_values, dict) else {}
@@ -124,6 +131,41 @@ def _merge_case_maps(module_map: dict[str, Any], suite_map: dict[str, Any]) -> d
             result[case_id] = deepcopy(suite_map[case_id])
         else:
             result[case_id] = deepcopy(module_map[case_id])
+    return result
+
+
+def _merge_profile_requests(
+    module_requests: Any,
+    suite_requests: Any,
+) -> dict[str, Any]:
+    module_map = module_requests if isinstance(module_requests, dict) else {}
+    suite_map = suite_requests if isinstance(suite_requests, dict) else {}
+    result: dict[str, Any] = {}
+    for case_id in sorted(set(module_map) | set(suite_map)):
+        module_value = module_map.get(case_id, {}) if isinstance(module_map.get(case_id), dict) else {}
+        suite_value = suite_map.get(case_id, {}) if isinstance(suite_map.get(case_id), dict) else {}
+        merged: dict[str, Any] = {}
+
+        base = suite_value.get("base", module_value.get("base"))
+        if base is not None:
+            merged["base"] = deepcopy(base)
+
+        overrides = _deep_merge(
+            module_value.get("overrides", {}) if isinstance(module_value.get("overrides"), dict) else {},
+            suite_value.get("overrides", {}) if isinstance(suite_value.get("overrides"), dict) else {},
+        )
+        if overrides:
+            merged["overrides"] = overrides
+
+        patches = []
+        for raw in (module_value.get("patches", []), suite_value.get("patches", [])):
+            if isinstance(raw, list):
+                patches.extend(deepcopy(raw))
+        if patches:
+            merged["patches"] = patches
+
+        if merged:
+            result[case_id] = merged
     return result
 
 

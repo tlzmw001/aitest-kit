@@ -22,7 +22,6 @@ from aitest_kit.codegen.profile import (
     load_profile_case_flows,
     load_profile_extra_imports,
     load_profile_yaml,
-    load_profile_request_overrides,
     load_profile_rules,
     RuntimeProfile,
 )
@@ -96,7 +95,6 @@ def emit_file(
         )
 
     profile_rules = load_profile_rules(profile_path) if profile_path else []
-    request_overrides = load_profile_request_overrides(profile_path) if profile_path else {}
     extra_imports = load_profile_extra_imports(profile_path) if profile_path else []
     case_fixtures = load_profile_case_fixtures(profile_path) if profile_path else {}
     case_bodies = load_profile_case_bodies(profile_path) if profile_path else {}
@@ -111,7 +109,6 @@ def emit_file(
         shared_config=parse_result.shared_config,
         project=proj,
         profile_rules=profile_rules,
-        request_overrides=request_overrides,
         extra_imports=extra_imports,
         case_fixtures=case_fixtures,
         case_bodies=case_bodies,

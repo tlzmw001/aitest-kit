@@ -12,6 +12,7 @@ from aitest_kit.codegen.ir import (
     CustomBodyIR,
     DiagnosticIR,
     FileIR,
+    RequestPatchIR,
     RequestIR,
     SetupCallIR,
     SourceTraceIR,
@@ -23,7 +24,7 @@ from aitest_kit.codegen.profile import (
     load_profile_case_bodies,
     load_profile_case_fixtures,
     load_profile_case_flows,
-    load_profile_request_overrides,
+    load_profile_requests,
     load_profile_rules,
     load_profile_yaml,
     validate_case_flows,
@@ -149,25 +150,43 @@ def _request_for(
     module: str,
     category: str,
     tc: TestCase,
-    strategy: str,
     project: ProjectConfig,
-    request_overrides: dict[str, dict[str, Any]],
+    requests: dict[str, dict[str, Any]],
 ) -> RequestIR | None:
-    if strategy in {"skipped", "custom_case_body", "structured_case_flow", "manual"}:
+    request = requests.get(tc.id, {})
+    if request is None:
+        request = {}
+    if not isinstance(request, dict):
         return None
-
-    overrides = {
-        **_auto_fields_for(module, category, tc, project),
-        **dict(request_overrides.get(tc.id, {})),
-    }
+    auto_fields = _auto_fields_for(module, category, tc, project)
+    overrides = dict(request.get("overrides", {}) or {})
+    patches = _request_patches_for(request.get("patches", []) or [])
     return RequestIR(
         source=(
             "shared_config.base_request_http"
             " + project_config.default_request.auto_fields"
-            " + profile.request_overrides"
+            " + profile.requests"
         ),
+        auto_fields=auto_fields,
         overrides=overrides,
+        patches=patches,
     )
+
+
+def _request_patches_for(raw_patches: Any) -> list[RequestPatchIR]:
+    if not isinstance(raw_patches, list):
+        return []
+    patches: list[RequestPatchIR] = []
+    for patch in raw_patches:
+        if not isinstance(patch, dict):
+            continue
+        patches.append(RequestPatchIR(
+            op=str(patch.get("op", "") or ""),
+            path=str(patch.get("path", "") or ""),
+            value=patch.get("value"),
+            has_value="value" in patch,
+        ))
+    return patches
 
 
 def _call_for(strategy: str, protocol: str, project: ProjectConfig) -> CallIR | None:
@@ -180,6 +199,34 @@ def _call_for(strategy: str, protocol: str, project: ProjectConfig) -> CallIR | 
         target="http_base_url",
         api_path=project.api_path,
     )
+
+
+def _request_refs_in_value(value: Any, current_case_id: str) -> set[str]:
+    refs: set[str] = set()
+    if isinstance(value, dict):
+        if set(value) == {"request_ref"}:
+            ref = value.get("request_ref")
+            if ref == "self":
+                refs.add(current_case_id)
+            elif isinstance(ref, str):
+                refs.add(ref)
+            return refs
+        for item in value.values():
+            refs.update(_request_refs_in_value(item, current_case_id))
+    elif isinstance(value, list):
+        for item in value:
+            refs.update(_request_refs_in_value(item, current_case_id))
+    return refs
+
+
+def _request_refs_for_flow(flow: dict[str, Any], current_case_id: str) -> set[str]:
+    refs: set[str] = set()
+    steps = flow.get("steps")
+    if not isinstance(steps, list):
+        return refs
+    for step in steps:
+        refs.update(_request_refs_in_value(step, current_case_id))
+    return refs
 
 
 def _needed_variables(assertions: list[str], variables: dict[str, str]) -> set[str]:
@@ -291,6 +338,12 @@ def _case_diagnostics(case_ir: CaseIR, has_http_body: bool) -> list[DiagnosticIR
             layer="planner",
             message="default strategy requires shared_config.base_request_http",
         ))
+    if case_ir.strategy == "structured_case_flow" and case_ir.request_bindings and not has_http_body:
+        diagnostics.append(DiagnosticIR(
+            code="E202",
+            layer="planner",
+            message="case_flow request_ref requires shared_config.base_request_http",
+        ))
     for assertion in case_ir.assertions:
         if assertion.kind == "unparsed":
             diagnostics.append(DiagnosticIR(
@@ -310,7 +363,7 @@ def build_file_ir(
     """Build Case IR for one parsed Markdown file."""
     proj = project or DEFAULT_PROJECT
     profile_rules = load_profile_rules(profile_path) if profile_path else []
-    request_overrides = load_profile_request_overrides(profile_path) if profile_path else {}
+    requests = load_profile_requests(profile_path) if profile_path else {}
     case_fixtures = load_profile_case_fixtures(profile_path) if profile_path else {}
     case_bodies = load_profile_case_bodies(profile_path) if profile_path else {}
     case_flows = load_profile_case_flows(profile_path) if profile_path else {}
@@ -342,6 +395,8 @@ def build_file_ir(
         for error in validate_case_flow_variable_references(case_flows, profile_variables)
     )
 
+    cases_by_id = {tc.id: tc for tc in parse_result.cases}
+
     for tc in parse_result.cases:
         strategy, strategy_source, strategy_reason = _strategy_for(tc, case_bodies, case_flows)
         is_grpc, protocol_source, protocol_raw = _grpc_source(tc)
@@ -362,7 +417,22 @@ def build_file_ir(
             case_fixtures,
             case_flows,
         )
-        request = _request_for(parse_result.module, category, tc, strategy, proj, request_overrides)
+        request_refs: set[str] = set()
+        if strategy in {"default_http", "default_grpc"}:
+            request_refs.add(tc.id)
+        if strategy == "structured_case_flow":
+            request_refs.update(_request_refs_for_flow(case_flows.get(tc.id, {}), tc.id))
+
+        request_bindings: dict[str, RequestIR] = {}
+        for request_case_id in sorted(request_refs):
+            request_tc = cases_by_id.get(request_case_id)
+            if request_tc is None:
+                continue
+            request_binding = _request_for(parse_result.module, category, request_tc, proj, requests)
+            if request_binding is not None:
+                request_bindings[request_case_id] = request_binding
+
+        request = request_bindings.get(tc.id)
         call = _call_for(strategy, protocol, proj)
         needed = _needed_variables(tc.assertions, parse_result.shared_config.variables)
         variables = [
@@ -409,10 +479,10 @@ def build_file_ir(
             ),
             "fixtures": SourceTraceIR(fixtures, fixtures_source),
         }
-        if request is not None and tc.id in request_overrides:
-            source_trace["request_overrides"] = SourceTraceIR(
-                request_overrides[tc.id],
-                f"profile.request_overrides.{tc.id}",
+        if request is not None and tc.id in requests:
+            source_trace["requests"] = SourceTraceIR(
+                requests[tc.id],
+                f"profile.requests.{tc.id}",
             )
         if request is not None and proj.default_request.auto_fields:
             source_trace["default_request.auto_fields"] = SourceTraceIR(
@@ -445,6 +515,7 @@ def build_file_ir(
                 else None
             ),
             request=request,
+            request_bindings=request_bindings,
             call=call,
             variables=variables,
             profile_variables=case_profile_variables,
