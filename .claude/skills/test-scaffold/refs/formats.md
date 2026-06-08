@@ -145,9 +145,15 @@ variables:
       password:
         value: wrong-password
 
-request_overrides:
+requests:
   TC-XXX-001:
-    field_name: value
+    overrides:
+      field_name: value
+    patches:
+      - op: add
+        path: /items/-
+        value:
+          item_id: item_001
 
 assertion_rules:
   - name: "..."
@@ -182,9 +188,10 @@ case_bodies:
 - fixture 直接返回 Client 时，`default_object` 写 Client 对象名；fixture 返回 factory 时，`default_object` 写 factory 对象名，并用 `default_case_setup` 保存业务对象。
 - 单条 `case_flow` 仍可显式声明 `fixture` 或 `object` 覆盖默认值。
 - 单条 `case_flow` 顶层可写 `description` 作为 profile 可读性 metadata；它不会进入 generated pytest。需要生成代码注释时，用 step 的 `comment`。
+- `case_flow` 的 `args/kwargs` 需要完整请求体时，不要把 JSON 写成字符串；优先在 `requests.<case_id>` 声明 `overrides/patches`，再用 `{request_ref: self}` 或 `{request_ref: TC-XXX-001}` 引用。
 - 非 manual 用例的 `case_flow` 至少包含一个 `call` 或 `assert`；纯人工 `[manual]` 不写 flow，半自动 manual 才写带 `call/assert` 的 flow。
 - `{case_id}` 会由 codegen 替换成当前用例 ID。
-- module profile 只放 L1 稳定能力；具体 TC-ID 绑定的 `case_flows/case_bodies/request_overrides/case_fixtures/variables.cases` 必须写在 suite profile。
+- module profile 只放 L1 稳定能力；具体 TC-ID 绑定的 `requests/case_flows/case_bodies/case_fixtures/variables.cases` 必须写在 suite profile。
 
 ## Fixture 代码结构
 
@@ -233,7 +240,7 @@ api_map：
 
 profile 归属：
 - module profile: L1 稳定能力、module_type、默认 fixture/object、公共 assertion_rules
-- suite profile: TC-ID 绑定的 variables/case_flows/case_bodies/request_overrides/case_fixtures
+- suite profile: TC-ID 绑定的 variables/requests/case_flows/case_bodies/case_fixtures
 
 Client 方法：
 - {method_name}({params}) [auth: yes/no]

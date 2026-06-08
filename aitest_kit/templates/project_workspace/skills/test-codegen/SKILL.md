@@ -93,7 +93,7 @@ Markdown → AI 探索（可选）→ 回灌 fixture + profile → case_flows/ca
 
 target/suite 规则：
 
-1. module profile 放 L1 稳定能力；suite profile 放 `variables/case_flows/case_bodies/request_overrides`。
+1. module profile 放 L1 稳定能力；suite profile 放 `variables/requests/case_flows/case_bodies`。
 2. `suite.yaml` 只放 `target/module/suite/case_files/knowledge_refs`；其中 `knowledge_refs` 只写本 suite 相关 L2，L1 从 `module.yaml.knowledge_refs.l1` 合并。
 3. 生成文件名：`test_{module}_{suite}_{case_file_stem}.py`，输出到 `test_workspace/generated/{target}/`。
 4. target registry 不存在时，切到 `test-scaffold`，不回退旧路径。
@@ -148,7 +148,7 @@ fixture 能力足够但缺 suite profile 时，做最小补齐：
 1. 创建 `<suite_dir>/suite.yaml`。
 2. 读取 module fixture 的 client 方法签名，只使用已存在的方法。
 3. 必要时按“知识库读取边界”读取 `knowledge_refs`，只辅助理解和字段映射，不新增 Markdown 没写的断言。
-4. 逐条 case 选择 `variables`、`case_flow`、`request_overrides`、`skipped/manual`。
+4. 逐条 case 选择 `variables`、`requests`、`case_flow`、`skipped/manual`。
 5. 纯人工 `[manual]` 不写 profile entry；半自动 manual 写 `case_flow/case_body` 保留 manual marker。
 6. 可行性存疑保持 skipped，不为覆盖率强行写可执行 flow。
 7. 生成 `profile_{suite}_suite.md` 后立即跑 suite 级 profile gate 和 dump-ir。

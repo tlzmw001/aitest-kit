@@ -59,7 +59,7 @@ module_type 是能力门禁，不替代逐 case 路线判断。配置中写 `req
 
 ## 逐条 case 路线评估
 
-1. 默认模板够吗？→ 只需 request_overrides
+1. 默认模板够吗？→ 只需 `requests.<case_id>.overrides/patches`
 2. 加 assertion_rules 够吗？→ 增加 profile assertion_rules
 3. 需要 case_flow？→ 多步骤 / 特定 Client 方法 / 中间变量
 4. 需要 case_body？→ 条件分支、循环、mock、并发 → 记录保留原因

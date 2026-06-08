@@ -107,7 +107,7 @@ assertion_rules:
 | `promote_to_assertion_rule` | 请求/flow 已稳定，只有断言可模板化 | module profile 或 `aitest.yaml` |
 | `promote_to_case_flow` | 多步骤流程稳定，差异主要是参数和期望值 | suite profile |
 | `promote_to_helper` | 多个 body/flow 重复 Python 逻辑 | fixture/helper |
-| `promote_to_default_template` | 可退回 default_http/default_grpc，且默认模板真实适配 | suite profile request_overrides |
+| `promote_to_default_template` | 可退回 default_http/default_grpc，且默认模板真实适配 | suite profile requests |
 | `promote_to_named_template` | 需要受控 if/elif/else，且跨模块稳定 | emitter/renderer |
 | `keep_case_body` | 少见、复杂、并发、mock 等暂不晋升 | suite profile |
 
