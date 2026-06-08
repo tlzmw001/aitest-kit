@@ -148,6 +148,8 @@ mkdir -p .codex/skills && cp -R skills/. .codex/skills/     # Codex
 | 结构化流程 | `case_flows` | 线性多步骤 |
 | 自定义代码 | `case_bodies` | 并发、mock、进程等复杂场景 |
 
+`case_flows` 只做流程编排；临时文件、日志捕获、mock、并发和 cleanup 等运行器细节应封装到 fixture/helper。详见 [Profile Guide](docs/usebook/codegen_profile_guide.md)。
+
 推荐演进：`case_bodies → case_flows → assertion_rules / 默认模板`。详见 [Profile Guide](docs/usebook/codegen_profile_guide.md)。
 
 ## Workspace 结构

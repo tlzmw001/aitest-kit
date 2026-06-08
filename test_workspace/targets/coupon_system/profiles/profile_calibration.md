@@ -1,21 +1,10 @@
-# calibration module profile
-
-This profile stores calibration-specific deterministic assertion rules and target-local fixture imports.
+# profile_calibration
 
 ```yaml
 module_type: standard_recommend
 extra_imports:
-  - "from test_workspace.targets.coupon_system.fixtures.calibration import http_base_url, ab_base_url, grpc_target, assert_piecewise_cascade, assert_piecewise_only"
-assertion_rules:
-  - pattern: 'mid = round(clamp(k_pw * s + b_pw), 4)'
-    template: "assert_piecewise_cascade(s, cal, segments=[(0.3, 0.5, 0.1), (0.7, 1.0, 0.0), (1.0, 1.5, -0.2)], linear_k=1.2, linear_b=0.05)"
+  - "from test_workspace.targets.coupon_system.fixtures.calibration import setup_calibration"
 
-  - pattern: 'mid = k_pw * s + b_pw'
-    template: "assert_piecewise_cascade(s, cal, segments=[(0.3, 0.5, 0.1), (0.7, 1.0, 0.0), (1.0, 1.5, -0.2)], linear_k=1.2, linear_b=0.05)"
-
-  - pattern: 'cal == round(clamp(1.2 * mid + 0.05), 4)'
-    template: "# covered by assert_piecewise_cascade"
-
-  - pattern: '按 `s` 所在区间计算'
-    template: "assert_piecewise_only(s, cal, segments=[(0.3, 0.5, 0.1), (0.7, 1.0, 0.0), (1.0, 1.5, -0.2)])"
+default_fixture: setup_calibration
+default_object: client
 ```

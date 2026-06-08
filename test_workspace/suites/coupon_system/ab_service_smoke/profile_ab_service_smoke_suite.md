@@ -6,190 +6,93 @@ Suite-specific codegen profile generated from the existing reviewed case/profile
 profile_scope: case_suite
 parent_module: ab_service
 suite: ab_service_smoke
-extra_imports:
-- import httpx
-- import logging
-- import subprocess
-- import sys
-- from pathlib import Path
-- from ab_experiment_sdk import ABExperimentRequest
-- from ab_experiment_sdk.remote_client import RemoteABExperimentSDK
-- from test_workspace.targets.coupon_system.fixtures.ab_service import build_isolated_client, write_experiments_file
-case_fixtures:
-  TC-ABS-012:
-  - tmp_path
-  TC-ABS-018:
-  - tmp_path
-  TC-ABS-026:
-  - tmp_path
-  TC-ABS-027:
-  - tmp_path
-  - caplog
-  TC-ABS-028:
-  - tmp_path
-  TC-ABS-029:
-  - tmp_path
-  TC-ABS-033:
-  - tmp_path
-  TC-ABS-034:
-  - tmp_path
-  TC-ABS-035:
-  - setup_ab_service
-  - tmp_path
-  TC-ABS-036:
-  - setup_ab_service
-  - tmp_path
-  TC-ABS-037:
-  - setup_ab_service
-  - tmp_path
-  TC-ABS-038:
-  - setup_ab_service
-  - tmp_path
-  TC-ABS-039:
-  - setup_ab_service
-  - tmp_path
-case_bodies:
-  TC-ABS-012:
-  - client1, _, _ = build_isolated_client(tmp_path, experiments=[])
-  - 'payload = {"name": "exp_abs_persist", "strategies": [{"id": "s1", "hash_range": [0, 100], "params": {}}]}'
-  - resp = client1.post("/api/v1/ab/experiments", json=payload)
-  - assert resp.status_code == 200
-  - client1.close()
-  - client2, _, _ = build_isolated_client(tmp_path)
-  - resp = client2.get("/api/v1/ab/experiments/exp_abs_persist")
-  - assert resp.status_code == 200
-  - assert resp.json()["name"] == "exp_abs_persist"
-  - client2.close()
-  TC-ABS-018:
-  - client1, _, _ = build_isolated_client(tmp_path, experiments=[
-  - '    {"name": "exp_game", "strategies": [{"id": "game_on", "hash_range": [0, 100], "params": {}}]},'
-  - '])'
-  - 'resp = client1.put("/api/v1/ab/whitelist/u_abs_persist", json={"strategy_map": {"exp_game": "game_on"}})'
-  - assert resp.status_code == 200
-  - client1.close()
-  - client2, _, _ = build_isolated_client(tmp_path)
-  - resp = client2.get("/api/v1/ab/whitelist/u_abs_persist")
-  - assert resp.status_code == 200
-  - 'assert resp.json() == {"exp_game": "game_on"}'
-  - client2.close()
-  TC-ABS-026:
-  - experiments_path = tmp_path / "new" / "experiments.json"
-  - client, _, _ = build_isolated_client(experiments_path.parent)
-  - resp = client.get("/api/v1/ab/experiments")
-  - assert resp.status_code == 200
-  - assert resp.json() == []
-  - assert experiments_path.exists()
-  - client.close()
-  TC-ABS-027:
-  - caplog.set_level(logging.WARNING, logger="ab_experiment_sdk.service")
-  - client, _, _ = build_isolated_client(tmp_path, whitelist_text="{bad json")
-  - resp = client.get("/api/v1/ab/whitelist")
-  - assert resp.status_code == 200
-  - assert resp.json() == {}
-  - assert "白名单文件读取失败" in caplog.text
-  - client.close()
-  TC-ABS-028:
-  - client, _, _ = build_isolated_client(tmp_path, experiments=[
-  - '    {"name": "exp_abs_bad_hash", "strategies": [{"id": "s_bad", "hash_range": ["bad"], "params": {}}]},'
-  - '])'
-  - 'resp = client.post("/api/v1/ab/evaluate", json={"user_id": "u_abs_any_0", "experiment_names": ["exp_abs_bad_hash"]})'
-  - assert resp.status_code == 200
-  - assert resp.json()["assignments"]["exp_abs_bad_hash"]["strategy_id"] == "s_bad"
-  - client.close()
-  TC-ABS-029:
-  - client, _, _ = build_isolated_client(tmp_path, experiments=[
-  - '    {"name": "exp_abs_bad_params", "strategies": [{"id": "s_bad_params", "hash_range": [0, 100], "params": "bad"}]},'
-  - '])'
-  - 'resp = client.post("/api/v1/ab/evaluate", json={"user_id": "u_abs_any_0", "experiment_names": ["exp_abs_bad_params"]})'
-  - assert resp.status_code == 200
-  - assert resp.json()["assignments"]["exp_abs_bad_params"]["params"] == {}
-  - client.close()
-  TC-ABS-033:
-  - repo_root = Path(__file__).resolve().parents[3]
-  - src_pkg = repo_root / "ab_experiment_sdk"
-  - isolated_root = tmp_path / "isolated_pkg"
-  - isolated_pkg = isolated_root / "ab_experiment_sdk"
-  - isolated_pkg.mkdir(parents=True, exist_ok=True)
-  - 'for file in src_pkg.glob("*.py"):'
-  - '    (isolated_pkg / file.name).write_text(file.read_text(), encoding="utf-8")'
-  - run_dir = tmp_path / "run_import"
-  - run_dir.mkdir(parents=True, exist_ok=True)
-  - script = (
-  - '    "import os,sys;"'
-  - '    f"os.chdir({str(run_dir)!r});"'
-  - '    f"sys.path.insert(0,{str(isolated_root)!r});"'
-  - '    "import ab_experiment_sdk.service as s;"'
-  - '    "print(''ok'', s.__name__)"'
-  - )
-  - completed = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
-  - assert completed.returncode == 0, completed.stderr
-  - assert "ok ab_experiment_sdk.service" in completed.stdout
-  TC-ABS-034:
-  - repo_root = Path(__file__).resolve().parents[3]
-  - run_dir = tmp_path / "run_side_effect"
-  - run_dir.mkdir(parents=True, exist_ok=True)
-  - script = (
-  - '    "import os,sys,pathlib;"'
-  - '    f"os.chdir({str(run_dir)!r});"'
-  - '    f"sys.path.insert(0,{str(repo_root)!r});"'
-  - '    "import ab_experiment_sdk.service;"'
-  - '    "p=pathlib.Path(''coupon_system/config/experiments.json'');"'
-  - '    "print(''exists'', p.exists())"'
-  - )
-  - completed = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
-  - assert completed.returncode == 0, completed.stderr
-  - assert "exists False" in completed.stdout
-  TC-ABS-035:
-  - ab = setup_ab_service(case_id="TC-ABS-035")
-  - sdk, client = ab.remote_sdk(tmp_path)
-  - response = sdk.evaluate(ABExperimentRequest(user_id="u1", request_id="req_abs_035", experiment_names=["exp_game"]))
-  - assert response.request_id == "req_abs_035"
-  - assert response.assignments["exp_game"].strategy_id == "game_on"
-  - assert response.assignments["exp_game"].hit_reason == "whitelist"
-  - sdk.close()
-  - client.close()
-  TC-ABS-036:
-  - ab = setup_ab_service(case_id="TC-ABS-036")
-  - sdk, client = ab.remote_sdk(tmp_path)
-  - 'sdk.set_user_whitelist("u2", {"exp_cal": "cal_on"})'
-  - response = sdk.evaluate(ABExperimentRequest(user_id="u2", experiment_names=["exp_cal"]))
-  - assert response.assignments["exp_cal"].strategy_id == "cal_on"
-  - assert response.assignments["exp_cal"].hit_reason == "whitelist"
-  - sdk.close()
-  - client.close()
-  TC-ABS-037:
-  - ab = setup_ab_service(case_id="TC-ABS-037")
-  - sdk, client = ab.remote_sdk(tmp_path)
-  - 'sdk.set_user_whitelist("u2", {"exp_cal": "cal_on"})'
-  - sdk.clear_whitelist("u2")
-  - assert "u2" not in sdk.get_whitelist()
-  - sdk.close()
-  - client.close()
-  TC-ABS-038:
-  - ab = setup_ab_service(case_id="TC-ABS-038")
-  - sdk, client = ab.remote_sdk(tmp_path)
-  - 'sdk.set_whitelist({"u3": {"exp_game": "game_on"}})'
-  - 'assert sdk.get_whitelist() == {"u3": {"exp_game": "game_on"}}'
-  - sdk.close()
-  - client.close()
-  TC-ABS-039:
-  - ab = setup_ab_service(case_id="TC-ABS-039")
-  - sdk, client = ab.remote_sdk(tmp_path)
-  - 'sdk.set_whitelist({"u3": {"exp_game": "game_on"}})'
-  - sdk.clear_whitelist()
-  - assert sdk.get_whitelist() == {}
-  - sdk.close()
-  - client.close()
-  TC-ABS-040:
-  - 'def handler(request):'
-  - '    return httpx.Response(500, json={"detail": "internal error"})'
-  - ''
-  - mock_client = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://ab.test")
-  - sdk = RemoteABExperimentSDK(base_url="http://ab.test", client=mock_client)
-  - 'with pytest.raises(httpx.HTTPStatusError):'
-  - '    sdk.evaluate(ABExperimentRequest(user_id="u_err"))'
-  - sdk.close()
 case_flows:
+  TC-ABS-012:
+    steps:
+    - call: ab.isolated_experiment_persists_auto
+      save_as: result
+    - assert: assert result['create_status'] == 200
+    - assert: assert result['read_status'] == 200
+    - assert: assert result['name'] == 'exp_abs_persist'
+  TC-ABS-018:
+    steps:
+    - call: ab.isolated_whitelist_persists_auto
+      save_as: result
+    - assert: assert result['write_status'] == 200
+    - assert: assert result['read_status'] == 200
+    - assert: 'assert result[''body''] == {''exp_game'': ''game_on''}'
+  TC-ABS-026:
+    steps:
+    - call: ab.missing_experiments_file_is_created_auto
+      save_as: result
+    - assert: assert result['status'] == 200
+    - assert: assert result['body'] == []
+    - assert: assert result['exists']
+  TC-ABS-027:
+    steps:
+    - call: ab.malformed_whitelist_falls_back_empty_auto
+      save_as: result
+    - assert: assert result['status'] == 200
+    - assert: assert result['body'] == {}
+    - assert: assert '白名单文件读取失败' in result['logs']
+  TC-ABS-028:
+    steps:
+    - call: ab.bad_hash_range_still_evaluates_auto
+      save_as: result
+    - assert: assert result['status'] == 200
+    - assert: assert result['strategy_id'] == 's_bad'
+  TC-ABS-029:
+    steps:
+    - call: ab.bad_params_fall_back_empty_auto
+      save_as: result
+    - assert: assert result['status'] == 200
+    - assert: assert result['params'] == {}
+  TC-ABS-033:
+    steps:
+    - call: ab.import_works_from_other_cwd_auto
+      save_as: result
+    - assert: assert result['returncode'] == 0, result['stderr']
+    - assert: assert 'ok ab_experiment_sdk.service' in result['stdout']
+  TC-ABS-034:
+    steps:
+    - call: ab.import_has_no_default_file_side_effect_auto
+      save_as: result
+    - assert: assert result['returncode'] == 0, result['stderr']
+    - assert: assert 'exists False' in result['stdout']
+  TC-ABS-035:
+    steps:
+    - call: ab.remote_sdk_evaluate_whitelist_auto
+      save_as: result
+    - assert: assert result['request_id'] == 'req_abs_035'
+    - assert: assert result['strategy_id'] == 'game_on'
+    - assert: assert result['hit_reason'] == 'whitelist'
+  TC-ABS-036:
+    steps:
+    - call: ab.remote_sdk_set_user_whitelist_auto
+      save_as: result
+    - assert: assert result['strategy_id'] == 'cal_on'
+    - assert: assert result['hit_reason'] == 'whitelist'
+  TC-ABS-037:
+    steps:
+    - call: ab.remote_sdk_clear_user_whitelist_auto
+      save_as: result
+    - assert: assert 'u2' not in result['whitelist']
+  TC-ABS-038:
+    steps:
+    - call: ab.remote_sdk_replace_whitelist_auto
+      save_as: result
+    - assert: 'assert result[''whitelist''] == {''u3'': {''exp_game'': ''game_on''}}'
+  TC-ABS-039:
+    steps:
+    - call: ab.remote_sdk_clear_all_whitelist_auto
+      save_as: result
+    - assert: assert result['whitelist'] == {}
+  TC-ABS-040:
+    steps:
+    - call: ab.remote_sdk_raises_on_http_error
+      save_as: result
+    - assert: assert result['raised'] is True
+    - assert: assert result['status_code'] == 500
   TC-ABS-001:
     steps:
     - call: ab.get

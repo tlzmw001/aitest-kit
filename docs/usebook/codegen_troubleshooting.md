@@ -136,6 +136,26 @@ aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --
 - `case_bodies`、pure manual、skipped 用例不挂 `structured_assertions`。
 - 复杂业务计算不要扩展 YAML 控制流，封装到 fixture/helper 方法，再通过 `case_flow.call` 调用。
 
+## case_flow 引用未注入变量
+
+现象：
+
+```text
+NameError: name 'tmp_path' is not defined
+NameError: name 'caplog' is not defined
+```
+
+常见原因：
+
+- `case_flow.args` / `kwargs` 直接引用了 pytest fixture 名，例如 `tmp_path`、`caplog`、`monkeypatch`、`mocker`。
+- 当前 renderer 不会把这些名字自动加入 generated pytest 函数签名。
+
+处理：
+
+- `case_flow` 只引用 codegen 生成的变量：`object`、前序 `save_as`、`assign`、`{var: name}`、`{request_ref: ...}`。
+- 临时目录、日志捕获、mock、monkeypatch 和 cleanup 封装到 fixture/helper 方法。
+- suite profile 只调用该方法并断言返回结果。
+
 ## unknown module_type
 
 常见原因：

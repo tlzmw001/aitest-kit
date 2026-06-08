@@ -2,15 +2,6 @@
 # DO NOT EDIT — regenerate with: aitest codegen --suite-file test_workspace/suites/coupon_system/ab_service_smoke/suite.yaml
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
-from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
-import httpx
-import logging
-import subprocess
-import sys
-from pathlib import Path
-from ab_experiment_sdk import ABExperimentRequest
-from ab_experiment_sdk.remote_client import RemoteABExperimentSDK
-from test_workspace.targets.coupon_system.fixtures.ab_service import build_isolated_client, write_experiments_file
 from test_workspace.targets.coupon_system.fixtures.ab_service import setup_ab_service
 
 
@@ -251,7 +242,7 @@ class TestAbServiceBusiness:
         assert resp.status_code == 404
         assert resp.json()['detail'] == 'experiment not found'
 
-    def test_tc_abs_012(self, tmp_path):
+    def test_tc_abs_012(self, setup_ab_service):
         """TC-ABS-012：实验增删改持久化到文件并重启恢复"""
         __tc_meta__ = {
             "tc_id": "TC-ABS-012",
@@ -264,16 +255,12 @@ class TestAbServiceBusiness:
         }
         # SETUP: 环境覆盖：使用独立 AB_SERVICE_EXPERIMENTS_PATH 创建 exp_abs_persist，重启 AB 服务
 
-        client1, _, _ = build_isolated_client(tmp_path, experiments=[])
-        payload = {"name": "exp_abs_persist", "strategies": [{"id": "s1", "hash_range": [0, 100], "params": {}}]}
-        resp = client1.post("/api/v1/ab/experiments", json=payload)
-        assert resp.status_code == 200
-        client1.close()
-        client2, _, _ = build_isolated_client(tmp_path)
-        resp = client2.get("/api/v1/ab/experiments/exp_abs_persist")
-        assert resp.status_code == 200
-        assert resp.json()["name"] == "exp_abs_persist"
-        client2.close()
+        ab = setup_ab_service
+        ab = setup_ab_service(case_id="TC-ABS-012")
+        result = ab.isolated_experiment_persists_auto()
+        assert result['create_status'] == 200
+        assert result['read_status'] == 200
+        assert result['name'] == 'exp_abs_persist'
 
     # ── 三、白名单管理 ──
 
@@ -386,7 +373,7 @@ class TestAbServiceBusiness:
         assert resp.status_code == 200
         assert resp.json() == {}
 
-    def test_tc_abs_018(self, tmp_path):
+    def test_tc_abs_018(self, setup_ab_service):
         """TC-ABS-018：白名单持久化并重启恢复"""
         __tc_meta__ = {
             "tc_id": "TC-ABS-018",
@@ -399,17 +386,12 @@ class TestAbServiceBusiness:
         }
         # SETUP: 前置操作：设置 u_abs_persist 白名单后重启 AB 服务
 
-        client1, _, _ = build_isolated_client(tmp_path, experiments=[
-            {"name": "exp_game", "strategies": [{"id": "game_on", "hash_range": [0, 100], "params": {}}]},
-        ])
-        resp = client1.put("/api/v1/ab/whitelist/u_abs_persist", json={"strategy_map": {"exp_game": "game_on"}})
-        assert resp.status_code == 200
-        client1.close()
-        client2, _, _ = build_isolated_client(tmp_path)
-        resp = client2.get("/api/v1/ab/whitelist/u_abs_persist")
-        assert resp.status_code == 200
-        assert resp.json() == {"exp_game": "game_on"}
-        client2.close()
+        ab = setup_ab_service
+        ab = setup_ab_service(case_id="TC-ABS-018")
+        result = ab.isolated_whitelist_persists_auto()
+        assert result['write_status'] == 200
+        assert result['read_status'] == 200
+        assert result['body'] == {'exp_game': 'game_on'}
 
     # ── 四、错误场景 ──
 

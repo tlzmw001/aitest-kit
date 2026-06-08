@@ -330,6 +330,9 @@ case_flows:
 - `steps` 至少一项。
 - `assert` 必须写成可执行 Python 断言，例如 `'assert resp["code"] == 0'`；不要写裸表达式。
 - `kwargs` 中需要请求体时优先使用 `{request_ref: self}` 或 `{request_ref: TC-XXX-001}`。
+- `case_flow` 只能引用 codegen 生成的变量：`object`、前序 `save_as`、`assign`、`{var: name}` 和 `{request_ref: ...}`。
+- 不要直接引用 pytest fixture 变量，例如 `tmp_path`、`caplog`、`monkeypatch`、`mocker`。当前 renderer 不会把这些名字自动加入 generated pytest 函数签名。
+- 需要临时目录、日志捕获、mock、monkeypatch 或 cleanup 时，封装到 fixture/helper 方法，`case_flow` 只调用该方法并断言返回结果。
 
 适用：
 
@@ -337,6 +340,46 @@ case_flows:
 - 先写入再查询。
 - 先执行动作再验证状态。
 - 流程稳定，值得代码确定性生成。
+
+错误示例：
+
+```yaml
+case_flows:
+  TC-DEMO-004:
+    fixture: setup_demo_client
+    object: client
+    steps:
+      - call: client.load_from_temp_file
+        args:
+          - tmp_path
+        save_as: result
+      - assert: 'assert result is True'
+```
+
+这会生成类似 `client.load_from_temp_file(tmp_path)`，但测试函数签名没有 `tmp_path`，运行时报 `NameError`。
+
+正确做法是把 pytest 运行器细节下沉到 fixture/helper：
+
+```python
+def load_from_temp_file_auto(self) -> bool:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = Path(tmpdir) / "data.json"
+        path.write_text("{}")
+        return self.load_from_file(path)
+```
+
+suite profile 只保留编排：
+
+```yaml
+case_flows:
+  TC-DEMO-004:
+    fixture: setup_demo_client
+    object: client
+    steps:
+      - call: client.load_from_temp_file_auto
+        save_as: result
+      - assert: 'assert result is True'
+```
 
 ## case_bodies
 
@@ -363,6 +406,20 @@ case_bodies:
 ```text
 case_bodies -> case_flows -> structured_assertions / assertion_rules / aitest.yaml builtin rules
 ```
+
+## AI 编写 profile 的推荐顺序
+
+1. 读 `suite.yaml`，确认 `target`、`module`、`suite` 和 `case_files`。
+2. 读 `module.yaml`，确认 fixture、module_type 和 knowledge_refs。
+3. 读 module profile，复用默认 fixture/object、共享断言和稳定能力。
+4. 读 fixture/helper，优先复用已有动作方法。
+5. 只为当前 suite 写 suite profile。
+6. 请求差异优先写 `requests.<case_id>.patches`；简单字段覆盖可用 `overrides`。
+7. 多步骤流程写 `case_flows`。
+8. JSONPath、列表遍历和长度断言写 `structured_assertions`。
+9. 临时文件、日志、mock、并发、cleanup 和复杂计算先下沉 fixture/helper。
+10. 无法自然封装时才保留 `case_bodies`，并记录原因。
+11. 依次运行 `--validate-profile`、`--explain TC-ID`、`--check` 和 collect。
 
 ## strategy 优先级
 

@@ -3,7 +3,6 @@
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
-from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
 from test_workspace.targets.coupon_system.fixtures.ab_experiment import setup_ab_experiment
 
 
@@ -35,7 +34,7 @@ class TestAbExperimentBoundary:
 
     # ── 一、hash 区间边界 ──
 
-    def test_tc_ab_011(self, http_base_url, setup_ab_experiment):
+    def test_tc_ab_011(self, setup_ab_experiment):
         """TC-AB-011：hash 不命中区间右开边界"""
         __tc_meta__ = {
             "tc_id": "TC-AB-011",
@@ -49,9 +48,10 @@ class TestAbExperimentBoundary:
         # SETUP: 前置操作：通过 AB 服务创建实验 ab_boundary_right，策略 right_miss 的 hash_range=[0,H]
         # SETUP: 前置操作_2：选择 md5(user_id)%100 == H 的 user_id
         # SETUP: 前置操作_3：将 scene_id=1001 映射到该实验
-        setup_ab_experiment(case_id="TC-AB-011")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(auto_fields={"user_id": "u_ab_011", "reqId": "req_ab_011"}))
+        client = setup_ab_experiment
+        client.prepare_stock(coupon_id="COUPON_AB_BOUNDARY_001", stock=100)
+        resp = client.recommend_http(request_overrides={"user_id": "u_ab_boundary_right", "reqId": "req-ab-011", "items": [{"item_id": "COUPON_AB_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]})
         assert resp["code"] == 0
         assert "ab_boundary_right" not in resp["experiment_info"]
 

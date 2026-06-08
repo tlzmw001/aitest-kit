@@ -22,5 +22,7 @@ assertion_rules:
   template: assert resp["results"][0]["calibrated_score"] == 0.5
 module_type: standard_recommend
 extra_imports:
-- from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
+- from test_workspace.targets.coupon_system.fixtures.scene_routing import setup_scene_routing
+default_fixture: setup_scene_routing
+default_object: client
 ```

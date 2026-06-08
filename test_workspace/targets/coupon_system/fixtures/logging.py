@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -11,6 +12,7 @@ from typing import Any
 
 import pytest
 
+from aitest_kit.runtime_variables import require_envs
 from test_workspace.targets.coupon_system.helpers import grpc_ops
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 
@@ -86,6 +88,52 @@ class LoggingCase:
         )
         self._ensure_stock(body["items"])
         return grpc_ops.recommend(self.grpc_target, body)
+
+    def run_http_with_logs(
+        self,
+        *,
+        user_id: str,
+        req_id: str,
+        external: int = 0,
+        policy_id: str = "",
+        items: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        self.start_with_info_logging()
+        resp = self.request(
+            user_id=user_id,
+            req_id=req_id,
+            external=external,
+            policy_id=policy_id,
+            items=items,
+        )
+        return {"resp": resp, "logs": self.stop_and_logs()}
+
+    def run_grpc_with_logs(
+        self,
+        *,
+        user_id: str,
+        req_id: str,
+        external: int = 0,
+        policy_id: str = "",
+        items: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        self.start_with_info_logging()
+        resp = self.grpc_request(
+            user_id=user_id,
+            req_id=req_id,
+            external=external,
+            policy_id=policy_id,
+            items=items,
+        )
+        return {"resp": resp, "logs": self.stop_and_logs()}
+
+    def has_auto_req_id_log(self, logs: str) -> bool:
+        return bool(
+            re.search(
+                r"recommend request: reqId=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+                logs,
+            )
+        )
 
     def body(
         self,
@@ -188,16 +236,11 @@ class LoggingCase:
 
 
 @pytest.fixture
-def setup_logging(ab_base_url, redis_url):
+def setup_logging():
     """Prepare an isolated service process when a case needs stdout log capture."""
-    cases: list[LoggingCase] = []
-
-    def _setup(case_id: str) -> LoggingCase:
-        case = LoggingCase(ab_base_url=ab_base_url, redis_url=redis_url)
-        cases.append(case)
-        return case
-
-    yield _setup
-
-    for case in cases:
+    env = require_envs(["COUPON_AB_BASE_URL", "REDIS_URL"])
+    case = LoggingCase(ab_base_url=env["COUPON_AB_BASE_URL"], redis_url=env["REDIS_URL"])
+    try:
+        yield case
+    finally:
         case.stop_and_logs()

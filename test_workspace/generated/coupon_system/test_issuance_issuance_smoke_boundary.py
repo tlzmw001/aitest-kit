@@ -4,10 +4,8 @@ import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
 from test_workspace.targets.coupon_system.helpers import grpc_ops
-from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
-from concurrent.futures import ThreadPoolExecutor
-from test_workspace.targets.coupon_system.fixtures.issuance import issue_item, issue_items
 from test_workspace.targets.coupon_system.fixtures.issuance import setup_issuance
+from test_workspace.targets.coupon_system.fixtures.issuance import issue_item, issue_items
 
 
 BASE_REQUEST = {
@@ -55,7 +53,6 @@ class TestIssuanceBoundary:
         # SETUP: 请求覆盖：验证请求 max_claim_per_request=2、score_threshold=0.0
 
         issue = setup_issuance
-        issue = setup_issuance(case_id="TC-ISSUE-011")
         issue.set_stock("COUPON_ISSUE_A", 0)
         issue.set_stock("COUPON_ISSUE_B", 100)
         body = issue.request("u_issue_stock_next", "req_issue_011", items=issue_items('COUPON_ISSUE_A', 'COUPON_ISSUE_B'), score_threshold=0.0, max_claim_per_request=2, policy_id="policy_fallback_001")
@@ -80,7 +77,6 @@ class TestIssuanceBoundary:
         # SETUP: 请求覆盖：max_claim_per_request=2、score_threshold=0.0
 
         issue = setup_issuance
-        issue = setup_issuance(case_id="TC-ISSUE-012")
         issue.set_stock("COUPON_ISSUE_A", 0)
         issue.set_stock("COUPON_ISSUE_B", 0)
         body = issue.request("u_issue_all_empty", "req_issue_012", score_threshold=0.0, max_claim_per_request=2)
@@ -104,31 +100,12 @@ class TestIssuanceBoundary:
         # SETUP: 请求覆盖：两个不同 user_id 并发请求同一券
         # SETUP: 请求覆盖_2：score_threshold=0.0
 
-        issue = setup_issuance(case_id="TC-ISSUE-013")
-        issue.set_stock("COUPON_ISSUE_CONCURRENT", 1)
-        body_a = issue.request(
-            "u_issue_concurrent_a",
-            "req_issue_013a",
-            items=issue_items("COUPON_ISSUE_CONCURRENT"),
-            score_threshold=0.0,
-        )
-        body_b = issue.request(
-            "u_issue_concurrent_b",
-            "req_issue_013b",
-            items=issue_items("COUPON_ISSUE_CONCURRENT"),
-            score_threshold=0.0,
-        )
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            responses = list(pool.map(issue.post_recommend, [body_a, body_b]))
-        successes = [
-            r for r in responses
-            if r["coupon"] is not None and r["coupon"]["item_id"] == "COUPON_ISSUE_CONCURRENT"
-        ]
-        empty = [r for r in responses if r["coupon"] is None]
-        assert all(r["code"] == 0 for r in responses)
-        assert len(successes) == 1
-        assert len(empty) == 1
-        assert issue.stock("COUPON_ISSUE_CONCURRENT") == 0
+        issue = setup_issuance
+        result = issue.concurrent_issue_once()
+        assert all(r['code'] == 0 for r in result['responses'])
+        assert result['success_count'] == 1
+        assert result['empty_count'] == 1
+        assert result['stock'] == 0
 
     # ── 二、输入边界 ──
 
@@ -148,7 +125,6 @@ class TestIssuanceBoundary:
         # SETUP: 请求覆盖_2：成功发放
 
         issue = setup_issuance
-        issue = setup_issuance(case_id="TC-ISSUE-016")
         body = issue.request("u_issue_default_expire", "req_issue_016", items=[issue_item('COUPON_ISSUE_A', expire_days=None)], score_threshold=0.0)
         resp = issue.post_recommend(body)
         assert resp['code'] == 0
@@ -172,7 +148,6 @@ class TestIssuanceBoundary:
         # SETUP: 请求覆盖：验证请求 max_claim_per_request=10、score_threshold=0.0
 
         issue = setup_issuance
-        issue = setup_issuance(case_id="TC-ISSUE-017")
         issue.set_stock("COUPON_ISSUE_A", 0)
         issue.set_stock("COUPON_ISSUE_B", 100)
         body = issue.request("u_issue_max_gt_count", "req_issue_017", items=issue_items('COUPON_ISSUE_A', 'COUPON_ISSUE_B'), score_threshold=0.0, max_claim_per_request=10, policy_id="policy_fallback_001")
@@ -198,7 +173,6 @@ class TestIssuanceBoundary:
         # SETUP: 请求覆盖：验证请求 max_claim_per_request=2、score_threshold=0.0
 
         issue = setup_issuance
-        issue = setup_issuance(case_id="TC-ISSUE-018")
         issue.set_stock("COUPON_ISSUE_A", 0)
         issue.set_stock("COUPON_ISSUE_B", 100)
         body = issue.request("u_issue_grpc_stock_next", "req_issue_018", items=issue_items('COUPON_ISSUE_A', 'COUPON_ISSUE_B'), score_threshold=0.0, max_claim_per_request=2, policy_id="policy_fallback_001")
@@ -224,7 +198,6 @@ class TestIssuanceBoundary:
         # SETUP: 请求覆盖：max_claim_per_request=2、score_threshold=0.0
 
         issue = setup_issuance
-        issue = setup_issuance(case_id="TC-ISSUE-019")
         issue.set_stock("COUPON_ISSUE_A", 0)
         issue.set_stock("COUPON_ISSUE_B", 0)
         body = issue.request("u_issue_grpc_all_empty", "req_issue_019", score_threshold=0.0, max_claim_per_request=2)
@@ -249,7 +222,6 @@ class TestIssuanceBoundary:
         # SETUP: 请求覆盖：max_claim_per_request=10、score_threshold=0.0
 
         issue = setup_issuance
-        issue = setup_issuance(case_id="TC-ISSUE-020")
         body = issue.request("u_issue_grpc_max_gt_count", "req_issue_020", score_threshold=0.0, max_claim_per_request=10)
         resp = issue.grpc_recommend(body)
         assert resp['code'] == 0

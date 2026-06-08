@@ -148,6 +148,8 @@ mkdir -p .codex/skills && cp -R skills/. .codex/skills/     # Codex
 | Structured flow | `case_flows` | Linear multi-step workflows |
 | Custom body | `case_bodies` | Concurrency, subprocesses, mocks, file lifecycle |
 
+`case_flows` should only orchestrate steps; runtime details such as temporary files, log capture, mocks, concurrency, and cleanup belong in fixtures/helpers. See [Profile Guide](docs/usebook/codegen_profile_guide.md).
+
 Recommended evolution: `case_bodies → case_flows → assertion_rules / default templates`. See [Profile Guide](docs/usebook/codegen_profile_guide.md).
 
 ## Workspace Layout

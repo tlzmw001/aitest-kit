@@ -4,7 +4,6 @@ import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
 from test_workspace.targets.coupon_system.helpers import grpc_ops
-from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
 from test_workspace.targets.coupon_system.fixtures.feature_scoring import setup_feature_scoring
 
 
@@ -134,7 +133,7 @@ class TestFeatureScoringBusiness:
         # MANUAL CHECK: 内部打分服务收到明文 user_id="u_score_internal_grpc"
         pytest.skip("manual check required")
 
-    def test_tc_score_003(self, http_base_url, setup_feature_scoring):
+    def test_tc_score_003(self, setup_feature_scoring):
         """TC-SCORE-003：HTTP external=1 调用外部 HTTP 打分"""
         __tc_meta__ = {
             "tc_id": "TC-SCORE-003",
@@ -147,15 +146,16 @@ class TestFeatureScoringBusiness:
         }
         # SETUP: 协议：HTTP
         # SETUP: 请求覆盖：HTTP 请求 user_id="u_score_external_http"、external=1、reqId="req-score-003"
-        setup_feature_scoring(case_id="TC-SCORE-003")
 
-        resp = http_helper.post(http_base_url, "/api/v1/recommend", json=_req(auto_fields={"user_id": "u_feat_003", "reqId": "req_feat_003"}, overrides={"user_id": "u_score_external_http", "reqId": "req-score-003", "external": 1}))
-        assert resp["code"] == 0
+        client = setup_feature_scoring
+        client.prepare_user(user_id="u_score_external_http", features={"gender": "male", "age": 28, "total_spend": 30000, "purchase_frequency": 4, "register_days": 120, "is_new_user": True, "is_member": True})
+        client.prepare_stock(coupon_id="COUPON_FEAT_001", stock=100)
+        resp = client.recommend_http(request_overrides={"user_id": "u_score_external_http", "reqId": "req-score-003", "external": 1})
         assert resp["code"] == 0
         assert resp["results"][0]["score"] >= 0.2
         assert resp["experiment_info"] == {}
 
-    def test_tc_score_004(self, grpc_target, setup_feature_scoring):
+    def test_tc_score_004(self, setup_feature_scoring):
         """TC-SCORE-004：gRPC external=1 调用外部 HTTP 打分"""
         __tc_meta__ = {
             "tc_id": "TC-SCORE-004",
@@ -168,10 +168,11 @@ class TestFeatureScoringBusiness:
         }
         # SETUP: 协议：gRPC
         # SETUP: 请求覆盖：gRPC 请求 user_id="u_score_external_grpc"、external=1、req_id="req-score-004"
-        setup_feature_scoring(case_id="TC-SCORE-004")
 
-        resp = grpc_ops.recommend(grpc_target, _req(auto_fields={"user_id": "u_feat_004", "reqId": "req_feat_004"}, overrides={"user_id": "u_score_external_grpc", "req_id": "req-score-004", "external": 1}))
-        assert resp["code"] == 0
+        client = setup_feature_scoring
+        client.prepare_user(user_id="u_score_external_grpc", features={"gender": "male", "age": 28, "total_spend": 30000, "purchase_frequency": 4, "register_days": 120, "is_new_user": True, "is_member": True})
+        client.prepare_stock(coupon_id="COUPON_FEAT_001", stock=100)
+        resp = client.recommend_grpc(request_overrides={"user_id": "u_score_external_grpc", "req_id": "req-score-004", "external": 1})
         assert resp["code"] == 0
         assert resp["results"][0]["score"] >= 0.2
         assert resp["experiment_info"] == {}
