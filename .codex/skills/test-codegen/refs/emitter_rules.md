@@ -40,7 +40,7 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 2. **可用 API** — fixture 需要调用的管理接口或数据准备接口
 3. **隔离策略** — 每条用例的数据如何隔离（tmp_path、唯一 user_id、teardown 恢复）
 4. **teardown** — 所有副作用都能恢复（配置、测试数据、外部依赖状态）
-5. **profile 映射** — case_flows/case_bodies/request_overrides 是否覆盖当前用例
+5. **profile 映射** — requests/case_flows/case_bodies 是否覆盖当前用例
 6. **服务地址** — 从项目专属环境变量读取（如 `SERVICE_BASE_URL` 或 `{TARGET}_BASE_URL`），可兼容 `HTTP_BASE_URL`；不要硬编码端口或 URL
 7. **环境缺失** — 可执行 API 测试缺少服务地址时用 `pytest.fail`，不要用 `pytest.skip` 掩盖环境未配置
 8. **HTTP 客户端** — 使用 `httpx` 时显式指定 `httpx.HTTPTransport()`，避免 macOS/CI 系统代理影响本地 HTTP 测试
@@ -69,7 +69,7 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 
 1. 从共享配置取基础请求体，场景变量 `请求覆盖` 合并
 2. gRPC 用例通过场景变量中的 `协议：gRPC` 标识，Case IR 应记录该判断来源
-3. 共享配置中的 HTTP 基础请求体必须是合法 JSON，不使用 `{{placeholder}}`；case 级差异通过场景变量或 profile `request_overrides` 合并
+3. 共享配置中的 HTTP 基础请求体必须是合法 JSON，不使用 `{{placeholder}}`；case 级差异通过 profile `requests.<case_id>.overrides/patches` 合并。多步骤 `case_flow` 需要请求体时，用 `{request_ref: self}` 或 `{request_ref: TC-XXX-001}` 引用同一套请求绑定。
 
 ## case_body 与 case_flow
 
@@ -98,7 +98,7 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 
 - module profile：`test_workspace/targets/{target}/profiles/profile_{module}.md`，承载 L1 级稳定能力
 - suite profile：`{suite_dir}/profile_{suite}_suite.md`，只覆盖该 suite 的 case_id
-- `case_flows/case_bodies/request_overrides/case_fixtures/variables.cases` 是 TC-ID 绑定配置，必须写入 suite profile；如果写到 module profile 且引用当前 suite 的 case_id，profile gate 会报错。
+- `requests/case_flows/case_bodies/case_fixtures/variables.cases` 是 TC-ID 绑定配置，必须写入 suite profile；如果写到 module profile 且引用当前 suite 的 case_id，profile gate 会报错。
 
 profile 应包含：
 
