@@ -79,6 +79,7 @@ class AssertionIR:
     code_lines: list[str] = field(default_factory=list)
     resolved_by: str = ""
     variables: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

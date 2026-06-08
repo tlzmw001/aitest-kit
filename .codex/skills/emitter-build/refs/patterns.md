@@ -154,6 +154,7 @@ assertion_rules:
 ```bash
 python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> --validate-profile
 python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> --dump-ir
+python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> --explain <TC-ID>
 python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> --check
 python3 -m aitest_kit.cli run --suite-file <suite.yaml> -- --collect-only -q
 python3 -m aitest_kit.cli codegen --suite-file <suite.yaml> --health-report --write-report
@@ -176,6 +177,7 @@ python3 -m aitest_kit.cli codegen --target <target> --analyze-promotion --write-
 约束：
 
 - `--suggest-promotion-patch` 只建议 suite 级使用
+- 单条候选先用 `--explain <TC-ID>` 看 strategy、case_flow、structured assertions、request bindings 和 review hint
 - target/module 聚合适合发现趋势和候选组，不适合直接生成可应用 patch
 - `promotion_report.md/json` 用于解释和工具消费
 - `promotion_patch.md/diff` 是 review-only 草案，默认不自动修改 profile

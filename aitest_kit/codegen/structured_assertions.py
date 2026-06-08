@@ -1,6 +1,7 @@
 """Render structured profile structured assertions into deterministic Python."""
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from aitest_kit.codegen.render_utils import dict_to_python_compact
@@ -91,3 +92,16 @@ def structured_assertion_source(template: dict[str, Any]) -> str:
     if "values" in template:
         return f"{template_type} {target} {path} values={template.get('values')!r}"
     return f"{template_type} {target} {path}"
+
+
+def structured_assertion_metadata(template: dict[str, Any]) -> dict[str, Any]:
+    """Return stable metadata for structured assertion review surfaces."""
+    result: dict[str, Any] = {
+        "type": str(template.get("type", "") or ""),
+        "target": str(template.get("target", "") or ""),
+        "path": str(template.get("path", "") or ""),
+    }
+    for key in ("equals", "value", "values"):
+        if key in template:
+            result[key] = deepcopy(template[key])
+    return result

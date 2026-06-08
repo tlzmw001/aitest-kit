@@ -19,6 +19,7 @@ from aitest_kit.codegen.ir import (
     VariableIR,
 )
 from aitest_kit.codegen.structured_assertions import (
+    structured_assertion_metadata,
     structured_assertion_source,
     render_structured_assertion,
 )
@@ -350,6 +351,7 @@ def _structured_assertions_for(
             kind="structured_assertion",
             code_lines=render_structured_assertion(template),
             resolved_by=f"profile.structured_assertions.{tc.id}",
+            metadata=structured_assertion_metadata(template),
         ))
     return result
 

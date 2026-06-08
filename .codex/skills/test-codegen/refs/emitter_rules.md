@@ -93,7 +93,8 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 - 新增 `case_flow` 前必须能解释它比原 `case_body` 更稳定、更可读、更可校验。
 - 生成或迁移前显式运行 `--validate-profile`；普通生成也会自动硬门禁，用于提前发现 JSON Schema 格式、case_id 引用、case_flow assert 和 module_type 必需字段问题。
 - `--analyze-promotion --write-report` 和 `--suggest-promotion-patch` 的产物写入 `test_workspace/reports/codegen/latest/`，不要放到 `plans/`；patch 草案默认只供 review，不自动修改 profile。
-- `--health-report --write-report` 输出模块成熟度、case_flow/case_body/UNPARSED 和断言命中统计，用来决定下一轮沉淀优先级。
+- `--explain <TC-ID>` 输出单 case 诊断卡片，用于确认 strategy 来源、fixture、case_flow steps、request bindings、structured assertions target、generated assertion code 和 review hint。
+- `--health-report --write-report` 输出模块成熟度、case_flow/case_body/UNPARSED、structured assertion target、request binding 和 next_actions，用来决定下一轮沉淀优先级。
 
 ## 标记处理
 

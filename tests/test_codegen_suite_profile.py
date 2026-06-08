@@ -146,8 +146,11 @@ def test_codegen_cases_suite_validates_dumps_generates_and_checks(tmp_path):
 
         explain = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml"), "--explain", "TC-GW-041"])
         assert explain.exit_code == 0
-        assert "case_id: TC-GW-041" in explain.output
+        assert "Case: TC-GW-041" in explain.output
         assert "strategy: structured_case_flow" in explain.output
+        assert "Case flow:" in explain.output
+        assert 'code: assert resp["status"] == "ok"' in explain.output
+        assert "Review hint:" in explain.output
 
         report_dir = root / "reports"
         health = runner.invoke(
@@ -156,8 +159,119 @@ def test_codegen_cases_suite_validates_dumps_generates_and_checks(tmp_path):
         )
         assert health.exit_code == 0
         assert "suite: quota_billing_v2" in health.output
+        assert "next_actions:" in health.output
         assert (report_dir / "codegen_health_report.md").exists()
         assert (report_dir / "codegen_health_report.json").exists()
+
+
+def test_codegen_suite_explain_shows_structured_assertion_metadata(tmp_path):
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
+        root = Path(cwd)
+        _write_module_profile(root)
+        suite_dir = _write_suite(root)
+        (suite_dir / "profile_quota_billing_v2_suite.md").write_text(
+            """```yaml
+profile_scope: case_suite
+parent_module: gateway_api
+suite: quota_billing_v2
+case_flows:
+  TC-GW-041:
+    fixture: setup_gateway_api
+    object: client
+    steps:
+      - call: client.health
+        save_as: resp
+      - assert: 'assert resp["status"] == "ok"'
+structured_assertions:
+  TC-GW-041:
+    - type: jsonpath_equals
+      target: resp
+      path: $.status
+      equals: ok
+```
+""",
+            encoding="utf-8",
+        )
+
+        explain = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml"), "--explain", "TC-GW-041"])
+
+        assert explain.exit_code == 0, explain.output
+        assert "kind: structured_assertion" in explain.output
+        assert "metadata:" in explain.output
+        assert "type: jsonpath_equals" in explain.output
+        assert "target: resp" in explain.output
+        assert "path: $.status" in explain.output
+
+
+def test_codegen_suite_explain_reports_unparsed_case_flow_assertion(tmp_path):
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
+        root = Path(cwd)
+        _write_module_profile(root)
+        suite_dir = _write_suite(root)
+        module_dir = root / "test_workspace" / "targets" / "sub2api" / "modules"
+        profile_dir = root / "test_workspace" / "targets" / "sub2api" / "profiles"
+        (module_dir / "gateway_api.yaml").write_text(
+            """target: sub2api
+module: gateway_api
+module_type: standard_recommend
+fixture:
+  file: gateway_api.py
+  default_fixture: setup_gateway_api
+""",
+            encoding="utf-8",
+        )
+        (profile_dir / "profile_gateway_api.md").write_text(
+            """```yaml
+module_type: standard_recommend
+extra_imports:
+  - "from test_workspace.targets.sub2api.fixtures.gateway_api import setup_gateway_api"
+```
+""",
+            encoding="utf-8",
+        )
+        (suite_dir / "quota_billing_business.md").write_text(
+            """# quota billing cases
+
+## 共享配置
+
+**接口**：`POST /api/v1/demo`
+
+**基础请求体（HTTP）**：
+
+```json
+{
+  "request_id": "req_demo"
+}
+```
+
+---
+
+## 一、冒烟
+
+### TC-GW-041：health ok
+- **优先级**：P0
+- **断言**：所有 publishStatus 都是 0
+""",
+            encoding="utf-8",
+        )
+        (suite_dir / "profile_quota_billing_v2_suite.md").write_text(
+            """```yaml
+profile_scope: case_suite
+parent_module: gateway_api
+suite: quota_billing_v2
+```
+""",
+            encoding="utf-8",
+        )
+
+        explain = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml"), "--explain", "TC-GW-041"])
+
+        assert explain.exit_code == 0, explain.output
+        assert "Case: TC-GW-041" in explain.output
+        assert "UNPARSED" in explain.output
+        assert "Fix UNPARSED assertions" in explain.output
 
 
 def test_codegen_suite_dry_run_parses_cases_without_profile_gate(tmp_path):

@@ -231,6 +231,18 @@ structured_assertions:
         assertion.resolved_by == "profile.structured_assertions.TC-DEMO-001"
         for assertion in template_assertions
     )
+    assert template_assertions[0].metadata == {
+        "type": "jsonpath_all_equals",
+        "target": "resp",
+        "path": "$.data.items[*].publishStatus",
+        "equals": 0,
+    }
+    assert template_assertions[1].metadata == {
+        "type": "jsonpath_len_gte",
+        "target": "resp",
+        "path": "$.data.items",
+        "value": 2,
+    }
 
     result = emit_file(
         parse_result,

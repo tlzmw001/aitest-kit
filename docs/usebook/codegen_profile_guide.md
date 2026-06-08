@@ -148,6 +148,24 @@ structured_assertions:
 - `jsonpath_field_in_set` 使用非空数组 `values`。
 - 复杂业务计算应封装到 fixture/helper 断言方法，不在 YAML 里扩展循环或条件语言。
 
+调试方式：
+
+```bash
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --explain TC-GW-001
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --health-report
+```
+
+`--explain` 中应能看到：
+
+```text
+Assertions:
+  - kind: structured_assertion
+    source: jsonpath_all_equals resp $.data.items[*].publishStatus == 0
+    resolved_by: profile.structured_assertions.TC-GW-001
+```
+
+如果 `target` 写错，profile gate 会先报 `E530`，不会进入 IR/emitter。`--health-report` 会汇总 `structured_assertion_target_counts`，用于批量检查 structured assertion 主要绑定在哪些中间变量上。
+
 ## variables
 
 `variables` 是 suite/profile 的变量面板，适合把不同 case 使用的账号、密码、token、URL path、非法值等从 fixture 和 case_flow 里拆出来。

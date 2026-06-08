@@ -102,6 +102,12 @@ case_flows:
       - call: client.health
         save_as: resp
       - assert: 'assert resp["status"] == "ok"'
+structured_assertions:
+  TC-GW-001:
+    - type: jsonpath_equals
+      target: resp
+      path: $.status
+      equals: ok
 case_bodies:
   TC-GW-002: |
     assert True
@@ -128,6 +134,10 @@ def test_codegen_health_report_counts_case_flow_and_case_body(tmp_path, monkeypa
     assert module["case_body_count"] == 1
     assert module["maturity"] == "L3"
     assert module["profile_errors"] == 0
+    assert module["structured_assertion_target_counts"] == {"resp": 1}
+    assert module["case_body_cases"][0]["case_id"] == "TC-GW-002"
+    assert module["structured_assertion_cases"][0]["case_id"] == "TC-GW-001"
+    assert module["next_actions"]
 
 
 def test_codegen_health_report_cli_writes_artifacts(tmp_path):
@@ -157,3 +167,5 @@ def test_codegen_health_report_cli_writes_artifacts(tmp_path):
         payload = json.loads(json_path.read_text(encoding="utf-8"))
         assert payload["modules"][0]["module"] == "gateway_api"
         assert payload["modules"][0]["suite"] == "gateway_smoke"
+        assert payload["modules"][0]["structured_assertion_target_counts"] == {"resp": 1}
+        assert "P1: review 1 case_body case(s)" in "\n".join(payload["modules"][0]["next_actions"])

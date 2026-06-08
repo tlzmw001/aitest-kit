@@ -7,6 +7,7 @@
 ```bash
 aitest codegen --workspace /path/to/project --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
 aitest codegen --workspace /path/to/project --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --dump-ir
+aitest codegen --workspace /path/to/project --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --explain TC-XXX-001
 aitest codegen --workspace /path/to/project --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
 aitest codegen --workspace /path/to/project --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 aitest run --workspace /path/to/project --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --collect-only -q
@@ -79,6 +80,29 @@ Profile validation summary: modules=1, errors=1, warnings=0
 
 - 对照 [codegen_profile_guide.md](./codegen_profile_guide.md)。
 - 先修到 `--validate-profile` 为 OK，再继续 codegen。
+
+## 诊断入口怎么读
+
+profile gate 通过后，优先用这三个入口排查：
+
+```bash
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --explain TC-XXX-001
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --health-report
+aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --dump-ir
+```
+
+含义：
+
+- `--explain TC-ID`：人类可读的单 case 诊断卡片。重点看 `Strategy`、`Case flow`、`Request bindings`、`Assertions`、`Diagnostics`、`Review hint`。
+- `--health-report`：suite/module 健康度和下一步行动。重点看 `unparsed_cases`、`case_body_cases`、`manual_cases`、`structured_assertion_target_counts`、`next_actions`。
+- `--dump-ir`：机器可读 JSON。适合给 AI 或脚本做精确分析，不适合人工直接浏览大批 case。
+
+典型判断：
+
+- `Review hint` 提示 UNPARSED：优先补 `structured_assertions`、`assertion_rules` 或 fixture/helper。
+- `Case flow` 中没有预期的 `save_as`：修 suite profile 的 `case_flows.steps`。
+- `Request bindings` 没有预期 overrides/patches：修 suite profile 的 `requests.<case_id>`。
+- `structured_assertion_target_counts` 中 target 异常：检查 `structured_assertions.target` 是否应该来自 `resp`、`save_as` 或 `assign`。
 
 ## structured_assertions 错误
 

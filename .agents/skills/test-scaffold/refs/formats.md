@@ -160,6 +160,17 @@ assertion_rules:
     regex: "..."
     template: "..."
 
+structured_assertions:
+  TC-XXX-001:
+    - type: jsonpath_all_equals
+      target: resp
+      path: $.data.items[*].publishStatus
+      equals: 0
+    - type: jsonpath_len_gte
+      target: resp
+      path: $.data.items
+      value: 1
+
 case_flows:
   TC-XXX-001:
     description: 登录后查询当前用户信息
@@ -189,6 +200,9 @@ case_bodies:
 - 单条 `case_flow` 仍可显式声明 `fixture` 或 `object` 覆盖默认值。
 - 单条 `case_flow` 顶层可写 `description` 作为 profile 可读性 metadata；它不会进入 generated pytest。需要生成代码注释时，用 step 的 `comment`。
 - `case_flow` 的 `args/kwargs` 需要完整请求体时，不要把 JSON 写成字符串；优先在 `requests.<case_id>` 声明 `overrides/patches`，再用 `{request_ref: self}` 或 `{request_ref: TC-XXX-001}` 引用。
+- 集合遍历、JSONPath、字段存在性和长度断言优先写 `structured_assertions`，不要为了这类断言升级成 `case_body`。
+- default HTTP/gRPC 路线的 `structured_assertions.target` 只能写 `resp`；case_flow 路线只能写当前 flow 中 `save_as` 或 `assign` 产出的变量。
+- 复杂业务计算、循环/条件/等待逻辑封装到 fixture/helper 方法，再由 `case_flow.call` 调用；不要扩展 YAML 控制流。
 - 非 manual 用例的 `case_flow` 至少包含一个 `call` 或 `assert`；纯人工 `[manual]` 不写 flow，半自动 manual 才写带 `call/assert` 的 flow。
 - `{case_id}` 会由 codegen 替换成当前用例 ID。
 - module profile 只放 L1 稳定能力；具体 TC-ID 绑定的 `requests/case_flows/case_bodies/case_fixtures/variables.cases` 必须写在 suite profile。
@@ -260,6 +274,7 @@ Client 方法：
 
 验证结果：
 - validate-profile: {PASS/FAIL}
+- explain key cases: {PASS/FAIL}（strategy/case_flow/request bindings/structured assertions/review hint）
 - dump-ir strategy: {PASS/FAIL}
 - codegen --check: {PASS/FAIL}
 - suite collect: {N} / {可执行 case 数}

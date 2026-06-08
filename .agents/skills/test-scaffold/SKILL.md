@@ -183,7 +183,7 @@ api_map 是全流程的结构化中间文档，后续步骤从 api_map 读取，
 4. `default_fixture` 符号真实可 import
 5. module profile 只放 L1 稳定能力；suite profile 放 TC-ID 绑定内容
 6. `--validate-profile` 无 ERROR；WARNING 已列出并确认处理方式
-7. `--dump-ir` 中每条 case 的 strategy 符合 Step 4 路线
+7. `--explain <TC-ID>` 中关键 case 的 strategy、case_flow、request bindings、structured assertions 和 review hint 符合 Step 4 路线；`--dump-ir` 用于机器可读全量复核
 8. `codegen` 后 `codegen --check` 通过
 9. `aitest run --suite-file <suite.yaml> -- --collect-only -q` 通过；已注册 suite 还要通过 module selector 的 `--check` 和 collect
 

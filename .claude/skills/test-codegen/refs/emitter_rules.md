@@ -48,7 +48,7 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 
 ## 断言生成
 
-断言匹配优先级：profile assertion_rules > `aitest.yaml.codegen.builtin_assertion_rules` > named_templates。
+断言匹配优先级：profile assertion_rules > `aitest.yaml.codegen.builtin_assertion_rules` > UNPARSED。
 
 通用断言模式（框架内置）：
 
@@ -71,6 +71,14 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 2. gRPC 用例通过场景变量中的 `协议：gRPC` 标识，Case IR 应记录该判断来源
 3. 共享配置中的 HTTP 基础请求体必须是合法 JSON，不使用 `{{placeholder}}`；case 级差异通过 profile `requests.<case_id>.overrides/patches` 合并。多步骤 `case_flow` 需要请求体时，用 `{request_ref: self}` 或 `{request_ref: TC-XXX-001}` 引用同一套请求绑定。
 
+## 结构化断言
+
+- JSONPath、列表遍历、字段存在性和长度断言优先写 suite profile `structured_assertions`。
+- default HTTP/gRPC 路线的 `target` 只能是 `resp`。
+- `case_flow` 路线的 `target` 必须来自当前 flow 中的 `save_as` 或 `assign`。
+- `case_bodies`、pure manual、skipped 用例不挂 `structured_assertions`。
+- 复杂业务公式、循环、条件、等待和跨响应计算应封装到 fixture/helper 方法，再用 `case_flow.call` 调用；不要把 YAML 写成控制流语言。
+
 ## case_body 与 case_flow
 
 - `case_bodies` 是复杂场景的逃生通道，适合多端点、多请求、副作用、日志、隔离服务、并发等默认模板难以覆盖的用例。
@@ -85,7 +93,8 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 - 新增 `case_flow` 前必须能解释它比原 `case_body` 更稳定、更可读、更可校验。
 - 生成或迁移前显式运行 `--validate-profile`；普通生成也会自动硬门禁，用于提前发现 JSON Schema 格式、case_id 引用、case_flow assert 和 module_type 必需字段问题。
 - `--analyze-promotion --write-report` 和 `--suggest-promotion-patch` 的产物写入 `test_workspace/reports/codegen/latest/`，不要放到 `plans/`；patch 草案默认只供 review，不自动修改 profile。
-- `--health-report --write-report` 输出模块成熟度、case_flow/case_body/UNPARSED 和断言命中统计，用来决定下一轮沉淀优先级。
+- `--explain <TC-ID>` 输出单 case 诊断卡片，用于确认 strategy 来源、fixture、case_flow steps、request bindings、structured assertions target、generated assertion code 和 review hint。
+- `--health-report --write-report` 输出模块成熟度、case_flow/case_body/UNPARSED、structured assertion target、request binding 和 next_actions，用来决定下一轮沉淀优先级。
 
 ## 标记处理
 

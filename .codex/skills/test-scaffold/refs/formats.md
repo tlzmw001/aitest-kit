@@ -274,6 +274,7 @@ Client 方法：
 
 验证结果：
 - validate-profile: {PASS/FAIL}
+- explain key cases: {PASS/FAIL}（strategy/case_flow/request bindings/structured assertions/review hint）
 - dump-ir strategy: {PASS/FAIL}
 - codegen --check: {PASS/FAIL}
 - suite collect: {N} / {可执行 case 数}

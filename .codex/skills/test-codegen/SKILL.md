@@ -162,15 +162,16 @@ fixture 能力足够但缺 suite profile 时，做最小补齐：
 ```bash
 python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --validate-profile
 python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --dump-ir
+python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --explain <TC-ID>
 python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml
 python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --check
 ```
 
 profile 硬门禁有 ERROR 时不进入 IR/emitter，先修 profile。`profile not found`、占位路径、`--check stale` 都是回灌未完成信号。
 
-Case IR strategy 覆盖：`default_http`、`default_grpc`、`custom_case_body`、`structured_case_flow`、`manual`、`skipped`。CLI 支持 `--dump-ir`/`--explain` 时优先用它们排查。
+Case IR strategy 覆盖：`default_http`、`default_grpc`、`custom_case_body`、`structured_case_flow`、`manual`、`skipped`。CLI 支持 `--explain`/`--dump-ir` 时优先用它们排查：单条 case 先看 `--explain <TC-ID>` 的 Strategy、Case flow、Request bindings、Assertions、Review hint；需要机器可读全量信息时再看 `--dump-ir`。
 
-检查输出摘要中的 UNPARSED 数量，确认每条 case 的 strategy/protocol/fixtures 与预期一致。
+检查输出摘要和 `--health-report` 中的 UNPARSED、case_body、manual、structured_assertion_target_counts、next_actions，确认每条 case 的 strategy/protocol/fixtures 与预期一致。
 
 ## Step 3：UNPARSED 补写（子 Agent，>5 条时）
 
