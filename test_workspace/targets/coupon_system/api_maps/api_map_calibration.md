@@ -109,4 +109,3 @@ path: test_workspace/targets/coupon_system/api_maps/api_map_calibration.md
 | case_id | automation_status | reason_type | required_capability | cleanup_strategy | evidence_ref | resume_condition |
 |---------|-------------------|-------------|---------------------|------------------|--------------|------------------|
 | TC-CAL-001~014 | auto_executable | none | HTTP/gRPC API + AB 管理 API | fixture teardown restore | L1/calibration + docs/prd/0404_calibration.md | already executable |
-
