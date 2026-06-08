@@ -47,6 +47,7 @@ def _render_header(
     ctx: EmitContext,
     has_grpc: bool = False,
     has_profile_variables: bool = False,
+    has_structured_assertions: bool = False,
 ) -> list[str]:
     regenerate_hint = _regenerate_hint(ctx)
     lines = [
@@ -63,6 +64,8 @@ def _render_header(
         lines.append(ctx.project.grpc_helper_import)
     if has_profile_variables:
         lines.append("from aitest_kit.runtime_variables import resolve_profile_variables")
+    if has_structured_assertions:
+        lines.append("from aitest_kit.helpers import structured_assertions as aitest_assertions")
     lines.extend(ctx.extra_imports)
     return lines
 
@@ -306,6 +309,12 @@ def _render_case_flow(
             f"E301: emitter cannot render unsupported case_flow step in {case_ir.case_id}"
         )
 
+    for assertion in case_ir.assertions:
+        if assertion.kind != "structured_assertion":
+            continue
+        for cl in assertion.code_lines:
+            lines.append(f"        {cl}")
+
     return lines, unparsed, diagnostics
 
 
@@ -424,11 +433,17 @@ def render_file_from_ir(
     diagnostics: list[str] = []
 
     has_profile_variables = any(case.profile_variables for case in file_ir.cases)
+    has_structured_assertions = any(
+        assertion.kind == "structured_assertion"
+        for case in file_ir.cases
+        for assertion in case.assertions
+    )
 
     all_lines.extend(_render_header(
         ctx,
         has_grpc=has_grpc,
         has_profile_variables=has_profile_variables,
+        has_structured_assertions=has_structured_assertions,
     ))
     all_lines.extend(_render_base_request(ctx))
     if ctx.shared_config.base_request_http:

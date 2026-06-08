@@ -3,7 +3,7 @@
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
-from test_workspace.targets.coupon_system.fixtures.calibration import http_base_url, ab_base_url, grpc_target
+from test_workspace.targets.coupon_system.fixtures.calibration import http_base_url, ab_base_url, grpc_target, assert_piecewise_cascade, assert_piecewise_only
 from test_workspace.targets.coupon_system.fixtures.calibration import setup_calibration
 
 
@@ -74,14 +74,8 @@ class TestCalibrationBusiness:
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
-        if s < 0.3:
-            k_pw, b_pw = 0.5, 0.1
-        elif s < 0.7:
-            k_pw, b_pw = 1.0, 0.0
-        else:
-            k_pw, b_pw = 1.5, -0.2
-        mid = max(0, min(1, k_pw * s + b_pw))
-        assert cal == pytest.approx(max(0, min(1, 1.2 * mid + 0.05)), abs=1e-4)
+        assert_piecewise_cascade(s, cal, segments=[(0.3, 0.5, 0.1), (0.7, 1.0, 0.0), (1.0, 1.5, -0.2)], linear_k=1.2, linear_b=0.05)
+        # covered by assert_piecewise_cascade
 
     def test_tc_cal_003(self, http_base_url, setup_calibration):
         """TC-CAL-003：加载目录中序号最大的校准文件"""
@@ -271,13 +265,7 @@ class TestCalibrationBusiness:
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
-        if s < 0.3:
-            k, b = 0.5, 0.1
-        elif s < 0.7:
-            k, b = 1.0, 0.0
-        else:
-            k, b = 1.5, -0.2
-        assert cal == pytest.approx(max(0, min(1, k * s + b)), abs=1e-4)
+        assert_piecewise_only(s, cal, segments=[(0.3, 0.5, 0.1), (0.7, 1.0, 0.0), (1.0, 1.5, -0.2)])
 
     def test_tc_cal_012(self, http_base_url, setup_calibration):
         """TC-CAL-012：线性和分段都命中时先分段后线性"""
@@ -299,14 +287,8 @@ class TestCalibrationBusiness:
         assert resp["code"] == 0
         s = resp["results"][0]["score"]
         cal = resp["results"][0]["calibrated_score"]
-        if s < 0.3:
-            k_pw, b_pw = 0.5, 0.1
-        elif s < 0.7:
-            k_pw, b_pw = 1.0, 0.0
-        else:
-            k_pw, b_pw = 1.5, -0.2
-        mid = max(0, min(1, k_pw * s + b_pw))
-        assert cal == pytest.approx(max(0, min(1, 1.2 * mid + 0.05)), abs=1e-4)
+        assert_piecewise_cascade(s, cal, segments=[(0.3, 0.5, 0.1), (0.7, 1.0, 0.0), (1.0, 1.5, -0.2)], linear_k=1.2, linear_b=0.05)
+        # covered by assert_piecewise_cascade
 
     def test_tc_cal_013(self, http_base_url, setup_calibration):
         """TC-CAL-013：两类规则都不匹配时不校准"""

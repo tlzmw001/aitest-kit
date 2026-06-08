@@ -37,9 +37,21 @@ Unified Request Binding + JSON Patch
 3. 建立统一请求绑定层，让 `default_http/default_grpc` 和 `case_flows` 共用同一套请求构造能力。
 4. 使用结构化 YAML 表达请求差异，禁止把 JSON 对象伪装成字符串传入 profile。
 5. 使用 JSON Patch 覆盖嵌套 dict/list、删除字段、数组追加、整段替换等复杂请求变换。
-6. 引入结构化断言模板能力，减少常见集合断言对 raw Python assert 或 `case_bodies` 的依赖。
+6. 引入结构化断言能力，减少常见集合断言对 raw Python assert 或 `case_bodies` 的依赖。
 7. 保留 `case_bodies` 作为复杂控制流逃生通道，但让稳定重复模式有晋升路径。
 8. 新架构不追求老 profile 字段长期兼容，但必须提供 `aitest upgrade` 迁移路径。
+
+## 方案 A：Breaking Cleanup 决策
+
+本轮按方案 A 一次性收敛断言层，不保留旧模板兼容。
+
+1. `structured_assertions` 是唯一的结构化断言字段。
+2. 试验字段 `assertion_templates` 不兼容、不读取、不自动降级；旧 workspace 通过 `aitest upgrade` 或人工改 profile。
+3. `named_templates` 机制删除，不再由 `aitest.yaml.codegen.named_templates` 维护复杂断言宏。
+4. `assertion_rules.template` 只表示直接渲染的 Python assert 模板字符串，不再引用命名模板。
+5. 复杂公式、循环、条件、等待、跨响应业务计算不扩展 YAML 语言，沉淀到 fixture/helper 方法，再由 `case_flow.call` 调用。
+6. `structured_assertions.target` 必须能在当前生成策略下解析为真实运行时变量：default 路线只允许 `resp`，case_flow 路线只能引用该 flow 产生的 `save_as`/`assign` 变量。
+7. skills 按旧流程处理：先只改 `.codex`，用户 review 后再同步 `.claude`、`.agents` 和 init 模板 skills。
 
 ## 非目标
 
@@ -82,7 +94,7 @@ case_flows:
           body: {request_ref: self}
         save_as: resp
 
-assertion_templates:
+structured_assertions:
   TC-DEMO-001:
     - type: jsonpath_equals
       target: resp
@@ -109,8 +121,8 @@ profile execution binding
 │   └── 统一请求绑定：base + overrides + patches
 ├── case_flows
 │   └── 线性动作编排，可通过 request_ref 引用 requests
-├── assertion_rules / assertion_templates
-│   └── 结构化断言模板和自然语言/表达式断言映射
+├── assertion_rules / structured_assertions
+│   └── 结构化断言和自然语言/表达式断言映射
 └── case_bodies
     └── 复杂控制流逃生通道，稳定后由 emitter-build 评估晋升
 ```
@@ -246,12 +258,12 @@ request_binding: RequestBindingIR | None
 
 ### 断言层
 
-新增结构化断言模板，不通过 YAML 控制流表达循环。
+新增结构化断言，不通过 YAML 控制流表达循环。
 
-建议第一批模板：
+第一批 `structured_assertions` 类型：
 
 ```yaml
-assertion_templates:
+structured_assertions:
   TC-DEMO-001:
     - type: jsonpath_equals
       target: resp
@@ -284,8 +296,8 @@ assertion_templates:
 
 约束：
 
-- 断言模板生成确定性 Python assert。
-- 模板必须出现在 Case IR 中，`--dump-ir` / `--explain` 可审查。
+- 结构化断言生成确定性 Python assert。
+- 结构化断言必须出现在 Case IR 中，`--dump-ir` / `--explain` 可审查。
 - 复杂业务计算沉淀到 fixture/helper assertion 方法，不扩展 YAML 运算语言。
 
 ### case_flow 边界
@@ -331,7 +343,7 @@ case_flows:
 
 - `case_bodies` 不是默认路线。
 - 已稳定且重复出现的 body 应进入 `emitter-build` 分析。
-- 晋升方向优先级：fixture/helper -> assertion_templates -> case_flows -> builtin emitter。
+- 晋升方向优先级：fixture/helper -> structured_assertions -> case_flows -> builtin emitter。
 
 ## Upgrade 策略
 
@@ -396,17 +408,17 @@ aitest codegen --suite-file <suite.yaml> --check
 
 | 文件 | 影响 |
 |---|---|
-| `aitest_config/schemas/codegen_profile.schema.json` | 新增 canonical `requests`、`assertion_templates`；移除或禁止旧 `request_overrides` |
+| `aitest_config/schemas/codegen_profile.schema.json` | 新增 canonical `requests`、`structured_assertions`；移除或禁止旧 `request_overrides` |
 | `aitest_kit/codegen/profile_validator.py` | 校验 `requests`、`request_ref`、patch op/path/value、JSON 字符串 body warning |
-| `aitest_kit/codegen/profile.py` | 加载 `requests`、`assertion_templates` |
-| `aitest_kit/codegen/profile_merge.py` | 合并 module profile + suite profile 中的 `requests`、`assertion_templates` |
+| `aitest_kit/codegen/profile.py` | 加载 `requests`、`structured_assertions` |
+| `aitest_kit/codegen/profile_merge.py` | 合并 module profile + suite profile 中的 `requests`、`structured_assertions` |
 | `aitest_kit/codegen/planner.py` | 构造 RequestBindingIR；default 和 case_flow 都读取统一 request binding |
 | `aitest_kit/codegen/case_flow_planner.py` | 支持 `{request_ref: self|TC-ID}` |
-| `aitest_kit/codegen/ir.py` | 增加 RequestBindingIR、RequestPatchIR、AssertionTemplateIR 或扩展现有 IR |
-| `aitest_kit/codegen/ir_renderer.py` | 渲染统一 request builder、request_ref、assertion template |
+| `aitest_kit/codegen/ir.py` | 增加 RequestBindingIR、RequestPatchIR，结构化断言复用或扩展现有 AssertionIR |
+| `aitest_kit/codegen/ir_renderer.py` | 渲染统一 request builder、request_ref、structured assertion |
 | `aitest_kit/codegen/render_utils.py` | JSON Pointer/JSONPath 渲染辅助函数 |
 | `aitest_kit/codegen/suite_runner.py` | `--dump-ir`、`--explain`、`--check` 展示新增 IR |
-| `aitest_kit/codegen/profile_validation_report.py` | 展示 requests/assertion_templates 诊断摘要 |
+| `aitest_kit/codegen/profile_validation_report.py` | 展示 requests/structured_assertions 诊断摘要 |
 | `aitest_kit/upgrade/` 或现有 upgrade 模块 | 迁移旧 profile 字段到 canonical `requests` |
 
 ### 测试
@@ -423,7 +435,7 @@ aitest codegen --suite-file <suite.yaml> --check
 
 | 文件 | 影响 |
 |---|---|
-| `docs/usebook/codegen_profile_guide.md` | 增加 execution binding、requests、request_ref、assertion_templates |
+| `docs/usebook/codegen_profile_guide.md` | 增加 execution binding、requests、request_ref、structured_assertions |
 | `docs/usebook/codegen_troubleshooting.md` | 增加 request_ref、patch path、JSON 字符串 body 错误排查 |
 | `docs/usebook/aitest_getting_started.md` | 简短说明 profile 是 execution binding，不是手写 pytest 替代品 |
 | `README.md` / `README.en.md` | 更新 profile 能力和路线说明 |
@@ -436,9 +448,9 @@ skills 修改必须单独 review 后再改，不在 Phase 1 直接批量同步�
 
 | 文件 | 影响 |
 |---|---|
-| `.codex/skills/test-scaffold/SKILL.md` | 生成 suite profile 时优先使用 `requests`、`request_ref`、`assertion_templates` |
+| `.codex/skills/test-scaffold/SKILL.md` | 生成 suite profile 时优先使用 `requests`、`request_ref`、`structured_assertions` |
 | `.codex/skills/test-codegen/SKILL.md` | 解释新字段、dump-ir/check 验证路径 |
-| `.codex/skills/emitter-build/SKILL.md` | 从 case_body/raw assert 晋升到 assertion_templates 或 helper |
+| `.codex/skills/emitter-build/SKILL.md` | 从 case_body/raw assert 晋升到 structured_assertions 或 helper |
 | `.claude/skills/...` | 待 `.codex` review 通过后同步 |
 | `.agents/skills/...` | 待 `.codex` review 通过后同步 |
 | `aitest_kit/templates/project_workspace/skills/...` | 待运行中 skill review 通过后同步模板 |
@@ -494,13 +506,13 @@ python3 -m pytest tests -q
 python3 -m compileall aitest_kit
 ```
 
-### Phase 2：Assertion Templates
+### Phase 2：Structured Assertions
 
 目标：减少集合断言、JSONPath 断言对 raw assert/case_body 的依赖。
 
 实现项：
 
-1. schema 增加 `assertion_templates`。
+1. schema 增加 `structured_assertions`。
 2. validator 校验：
    - case_id 必须存在。
    - `type` 必须是支持集合。
@@ -508,8 +520,8 @@ python3 -m compileall aitest_kit
    - JSONPath 字段必须是非空字符串。
    - 不同 type 的必填字段明确。
 3. planner：
-   - 将 templates 转为 AssertionIR 或 AssertionTemplateIR。
-   - `resolved_by` 使用 `profile.assertion_templates.<case_id>`。
+   - 将 `structured_assertions` 转为 `AssertionIR(kind=structured_assertion)`。
+   - `resolved_by` 使用 `profile.structured_assertions.<case_id>`。
 4. renderer：
    - 生成 deterministic assert。
    - 使用 `jsonpath_ng` 或包内 helper。
@@ -532,7 +544,7 @@ python3 -m compileall aitest_kit
 
 实现项：
 
-1. `--dump-ir` 展示 request binding 和 assertion templates。
+1. `--dump-ir` 展示 request binding 和 structured assertions。
 2. `--explain TC-ID` 输出：
    - base request 来源
    - auto fields
@@ -540,11 +552,11 @@ python3 -m compileall aitest_kit
    - request patches
    - request_ref 使用点
    - case_flow steps
-   - assertion templates
+   - structured assertions
    - final strategy
 3. `--health-report` 增加：
    - raw assert 数量
-   - assertion_templates 数量
+   - structured_assertions 数量
    - case_bodies 数量
    - JSON string kwargs warning 数量
    - 可晋升候选提示
@@ -565,13 +577,13 @@ python3 -m compileall aitest_kit
    - 简单字段变化写 `requests.<case_id>.overrides`。
    - 深层 list/dict 删除/追加/整段替换写 `requests.<case_id>.patches`。
    - case_flow 调用请求体时使用 `{request_ref: self}`。
-   - 集合断言写 `assertion_templates`。
+   - 集合断言写 `structured_assertions`。
    - 循环/条件/等待封装到 helper，不在 profile 造控制流。
 2. `test-codegen`：
    - 新增 profile 字段排查说明。
-   - UNPARSED 断言优先回写 assertion_templates/assertion_rules。
+   - UNPARSED 断言优先回写 structured_assertions/assertion_rules。
 3. `emitter-build`：
-   - raw assert / case_body 可晋升到 assertion_templates 或 helper。
+   - raw assert / case_body 可晋升到 structured_assertions 或 helper。
 4. 文档：
    - profile 是 execution binding layer。
    - 人类主要 review Markdown、profile 摘要、Case IR，不默认手写整份 profile。
@@ -597,12 +609,12 @@ python3 -m compileall aitest_kit
 问题：
 
 - 断言入口分散，AI 容易直接写 raw assert。
-- 集合断言、JSONPath 断言、字段存在性断言缺少统一模板。
+- 集合断言、JSONPath 断言、字段存在性断言缺少统一结构化表达。
 - 人类 review 时难判断断言是业务意图、profile 映射还是 Python 逃生。
 
 建议：
 
-- Phase 2 先引入 `assertion_templates`。
+- Phase 2 先引入 `structured_assertions`。
 - 后续把“自然语言/表达式 -> assertion rule -> template -> Python assert”链路统一到一个 assertion planner。
 - raw assert 作为逃生，不作为推荐格式。
 
@@ -654,7 +666,7 @@ python3 -m compileall aitest_kit
 
 触发独立 spec 的条件：
 
-- `requests` / `request_ref` / `assertion_templates` 上线后，profile YAML 复杂度继续上升。
+- `requests` / `request_ref` / `structured_assertions` 上线后，profile YAML 复杂度继续上升。
 - 人工 review 主要卡在“看不懂这条 case 会生成什么 pytest”。
 
 ### 4. generated helper 复用
@@ -724,7 +736,7 @@ python3 -m compileall aitest_kit
 ## 风险和约束
 
 1. JSON Patch path 错误会导致运行时失败。profile gate 能检查格式，但在没有实际 base request 时不能保证所有 path 存在。
-2. 如果断言模板过多，会演变成 DSL 膨胀。第一阶段只做高频模板。
+2. 如果结构化断言类型过多，会演变成 DSL 膨胀。第一阶段只做高频类型。
 3. 如果把循环/条件下放到 profile，会破坏可维护性。复杂控制流必须留在 fixture/helper 或 `case_bodies`。
 4. 不做老字段长期兼容会影响已有 workspace，因此 upgrade 必须先实现并测试。
 5. 现有 generated pytest 不应手工迁移。能力上线后按 suite 重新 codegen。
@@ -734,7 +746,7 @@ python3 -m compileall aitest_kit
 1. Phase 1：Unified Request Binding。
 2. 用 coupon 或 discount 类小项目验证 default 和 case_flow 共用 request binding。
 3. 用真实迁移场景验证 JSON 字符串 kwargs warning 和 upgrade。
-4. Phase 2：Assertion Templates。
+4. Phase 2：Structured Assertions。
 5. Phase 3：Profile Review Surface。
 6. Phase 4：skills 与文档同步，先 `.codex` review，再同步其他目录。
 

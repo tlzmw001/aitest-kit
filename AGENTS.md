@@ -268,7 +268,7 @@ AI 的角色是测试工程师，不是被测系统的开发者。
 codegen 链路：suite context 加载 → profile 硬门禁 → parser 解析 Markdown → Case IR planner → emitter 渲染 → 生成后验证。agent 需要遵守的规则：
 
 - 生成策略优先级固定：`skipped` > `custom_case_body` > `structured_case_flow` > `manual` > `default_grpc` > `default_http`
-- 断言匹配优先级：profile assertion_rules > `aitest.yaml` builtin_assertion_rules > named_templates
+- 断言匹配优先级：profile assertion_rules > `aitest.yaml` builtin_assertion_rules > UNPARSED
 - profile 硬门禁有 ERROR 时不进入 IR/emitter，先修 profile
 - UNPARSED 断言应回写到 Markdown/profile/assertion_rules/emitter，不手改 generated
 - 测试稳定通过后调用 `/emitter-build`，人工 review 后再沉淀规则

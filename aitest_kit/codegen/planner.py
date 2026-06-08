@@ -18,12 +18,17 @@ from aitest_kit.codegen.ir import (
     SourceTraceIR,
     VariableIR,
 )
+from aitest_kit.codegen.structured_assertions import (
+    structured_assertion_source,
+    render_structured_assertion,
+)
 from aitest_kit.codegen.case_flow_planner import build_case_flow_ir
 from aitest_kit.codegen.parser import ParseResult, TestCase
 from aitest_kit.codegen.profile import (
     load_profile_case_bodies,
     load_profile_case_fixtures,
     load_profile_case_flows,
+    load_profile_structured_assertions,
     load_profile_requests,
     load_profile_rules,
     load_profile_yaml,
@@ -330,6 +335,25 @@ def _assertions_for(
     return result
 
 
+def _structured_assertions_for(
+    tc: TestCase,
+    strategy: str,
+    structured_assertions: dict[str, list[dict[str, Any]]],
+) -> list[AssertionIR]:
+    if strategy not in {"default_http", "default_grpc", "structured_case_flow"}:
+        return []
+    templates = structured_assertions.get(tc.id, [])
+    result: list[AssertionIR] = []
+    for template in templates:
+        result.append(AssertionIR(
+            source=structured_assertion_source(template),
+            kind="structured_assertion",
+            code_lines=render_structured_assertion(template),
+            resolved_by=f"profile.structured_assertions.{tc.id}",
+        ))
+    return result
+
+
 def _case_diagnostics(case_ir: CaseIR, has_http_body: bool) -> list[DiagnosticIR]:
     diagnostics: list[DiagnosticIR] = []
     if case_ir.strategy in {"default_http", "default_grpc"} and not has_http_body:
@@ -364,6 +388,7 @@ def build_file_ir(
     proj = project or DEFAULT_PROJECT
     profile_rules = load_profile_rules(profile_path) if profile_path else []
     requests = load_profile_requests(profile_path) if profile_path else {}
+    structured_assertions = load_profile_structured_assertions(profile_path) if profile_path else {}
     case_fixtures = load_profile_case_fixtures(profile_path) if profile_path else {}
     case_bodies = load_profile_case_bodies(profile_path) if profile_path else {}
     case_flows = load_profile_case_flows(profile_path) if profile_path else {}
@@ -448,6 +473,8 @@ def build_file_ir(
             proj,
             [var.name for var in variables],
         )
+        template_assertions = _structured_assertions_for(tc, strategy, structured_assertions)
+        assertions.extend(template_assertions)
         custom_body = None
         if strategy == "custom_case_body":
             custom_body = CustomBodyIR(
@@ -494,6 +521,11 @@ def build_file_ir(
                 [item.name for item in case_profile_variables],
                 "profile.variables",
                 "case_flow {var: name} references",
+            )
+        if template_assertions:
+            source_trace["structured_assertions"] = SourceTraceIR(
+                len(template_assertions),
+                f"profile.structured_assertions.{tc.id}",
             )
 
         case_ir = CaseIR(

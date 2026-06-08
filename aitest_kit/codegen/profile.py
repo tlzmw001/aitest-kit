@@ -104,6 +104,25 @@ def load_profile_requests(profile_path: ProfileSource) -> dict[str, dict[str, An
     return result
 
 
+def load_profile_structured_assertions(profile_path: ProfileSource) -> dict[str, list[dict[str, Any]]]:
+    """Extract structured structured assertions from a profile YAML block."""
+    data = load_profile_yaml(profile_path)
+    raw = data.get("structured_assertions", {})
+    if not isinstance(raw, dict):
+        return {}
+
+    result: dict[str, list[dict[str, Any]]] = {}
+    for case_id, templates in raw.items():
+        if not isinstance(case_id, str) or not isinstance(templates, list):
+            continue
+        result[case_id] = [
+            dict(item)
+            for item in templates
+            if isinstance(item, dict)
+        ]
+    return result
+
+
 def load_profile_extra_imports(profile_path: ProfileSource) -> list[str]:
     """Extract extra import lines from a profile YAML block."""
     data = load_profile_yaml(profile_path)

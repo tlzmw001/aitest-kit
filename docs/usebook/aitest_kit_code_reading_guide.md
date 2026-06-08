@@ -321,7 +321,6 @@ ProjectConfig(
     var_map={...},
     module_abbrevs={...},
     builtin_assertion_rules=[...],
-    named_templates={...},
     module_types={...},
     modules={...},
 )
@@ -418,7 +417,6 @@ planner 的策略优先级：
 ```text
 profile assertion_rules
   -> project_config builtin_assertion_rules
-  -> named_templates
   -> UNPARSED
 ```
 
@@ -724,7 +722,6 @@ renderer:
 | `api_path` | 默认 HTTP API path |
 | `var_map` | `s/cal` 等断言变量如何落到 Python 表达式 |
 | `module_abbrevs` | 默认 user_id/req_id 如何生成 |
-| `named_templates` | 复杂断言模板白名单 |
 | `module_types` | profile 的 module_type 合法值和 requires |
 | `builtin_assertion_rules` | Markdown 断言到 Python assert 的规则 |
 

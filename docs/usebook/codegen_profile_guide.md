@@ -79,7 +79,7 @@ assertion_rules:
 匹配优先级：
 
 ```text
-profile assertion_rules > aitest.yaml builtin_assertion_rules > named_templates
+profile assertion_rules > aitest.yaml builtin_assertion_rules > UNPARSED
 ```
 
 适用：
@@ -93,6 +93,60 @@ profile assertion_rules > aitest.yaml builtin_assertion_rules > named_templates
 - 需要多步骤前置动作。
 - 断言依赖复杂临时变量。
 - 只有一条用例临时出现，尚不值得沉淀。
+
+## structured_assertions
+
+`structured_assertions` 是 TC-ID 绑定的结构化断言，适合表达 JSONPath、集合遍历和长度断言。它的目标是减少这类断言退化为 raw assert 或 `case_bodies`。
+
+```yaml
+profile_scope: case_suite
+parent_module: gateway_api
+suite: publish_status_smoke
+
+case_flows:
+  TC-GW-001:
+    fixture: setup_gateway_api
+    object: client
+    steps:
+      - call: client.list_items
+        save_as: resp
+
+structured_assertions:
+  TC-GW-001:
+    - type: jsonpath_all_equals
+      target: resp
+      path: $.data.items[*].publishStatus
+      equals: 0
+    - type: jsonpath_len_gte
+      target: resp
+      path: $.data.items
+      value: 1
+```
+
+第一版支持：
+
+- `jsonpath_equals`
+- `jsonpath_exists`
+- `jsonpath_not_exists`
+- `jsonpath_all_equals`
+- `jsonpath_any_equals`
+- `jsonpath_len_equals`
+- `jsonpath_len_gte`
+- `jsonpath_field_in_set`
+
+约束：
+
+- `structured_assertions` 属于 suite profile，不写进 module profile。
+- key 必须是当前 suite Markdown 中存在的 case_id。
+- `target` 必须是当前 generated pytest 中已经存在的变量名。
+- default HTTP/gRPC 路线只允许 `target: resp`。
+- `case_flow` 路线只允许引用当前 flow 中 `save_as` 或 `assign` 产生的变量，例如 `resp`、`query_resp`。
+- `case_bodies`、manual、skipped 用例不使用 `structured_assertions`；复杂业务计算应封装到 fixture/helper 断言方法。
+- `path` 必须是合法 JSONPath。
+- `jsonpath_equals`、`jsonpath_all_equals`、`jsonpath_any_equals` 使用 `equals`。
+- `jsonpath_len_equals`、`jsonpath_len_gte` 使用非负整数 `value`。
+- `jsonpath_field_in_set` 使用非空数组 `values`。
+- 复杂业务计算应封装到 fixture/helper 断言方法，不在 YAML 里扩展循环或条件语言。
 
 ## variables
 
@@ -256,7 +310,7 @@ case_bodies:
 不建议长期滥用。稳定后应优先晋升为：
 
 ```text
-case_bodies -> case_flows -> assertion_rules / aitest.yaml builtin rules
+case_bodies -> case_flows -> structured_assertions / assertion_rules / aitest.yaml builtin rules
 ```
 
 ## strategy 优先级
@@ -275,6 +329,8 @@ profile gate 会阻断同一 case_id 同时存在 `case_bodies` 和 `case_flows`
 - `E502`：未知 `module_type`。
 - `E503`：module_type 要求复杂流程，但 profile 没有提供 `case_bodies` 或 `case_flows`。
 - `E510/E511`：`case_flows` 结构或断言格式不符合约定。
+- `E529`：`structured_assertions` 类型、必填字段、target 或 JSONPath 不合法。
+- `E530`：`structured_assertions.target` 在当前生成策略下不可用，例如 default 路线用了非 `resp` target，或 case_flow 未产出该变量。
 
 排查方式见 [codegen_troubleshooting.md](./codegen_troubleshooting.md)。
 
@@ -283,7 +339,7 @@ profile gate 会阻断同一 case_id 同时存在 `case_bodies` 和 `case_flows`
 v0.1 中，以下内容按稳定契约维护：
 
 - profile 文件路径：`test_workspace/targets/{target}/profiles/profile_{module}.md` 和 `{suite_dir}/profile_{suite}_suite.md`
-- YAML 顶层字段：`module_type`、`requests`、`assertion_rules`、`case_flows`、`case_bodies`
+- YAML 顶层字段：`module_type`、`requests`、`structured_assertions`、`assertion_rules`、`case_flows`、`case_bodies`
 - case_id 格式：`^TC-[A-Z0-9]+-[0-9]+$`
 - profile gate 的原则：ERROR 阻断生成，WARNING 允许继续但需要 review
 

@@ -19,7 +19,6 @@ codegen:
   grpc_helper_call: grpc_ops.call
   var_map: {}
   module_abbrevs: {}
-  named_templates: []
   module_types:
     standard_http:
       description: 默认单接口 HTTP 模块

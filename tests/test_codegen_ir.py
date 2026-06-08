@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from aitest_kit.codegen.emitter import emit_file
 from aitest_kit.codegen.ir import ir_to_dict
 from aitest_kit.codegen.parser import ParseResult, SharedConfig, TestCase as ParsedTestCase
@@ -17,6 +19,7 @@ from aitest_kit.codegen.project_config import (
     ProjectConfig,
     load_project_config,
 )
+from aitest_kit.helpers import structured_assertions as aitest_assertions
 
 
 def _case(file_ir, case_id: str):
@@ -95,6 +98,44 @@ def test_profile_merge_merges_nested_lists_by_index():
     }
 
 
+def test_profile_merge_merges_structured_assertions_by_case():
+    merged, diagnostics = merge_profile_yaml(
+        {
+            "structured_assertions": {
+                "TC-DEMO-001": [
+                    {
+                        "type": "jsonpath_exists",
+                        "target": "resp",
+                        "path": "$.data",
+                    }
+                ]
+            }
+        },
+        {
+            "structured_assertions": {
+                "TC-DEMO-001": [
+                    {
+                        "type": "jsonpath_all_equals",
+                        "target": "resp",
+                        "path": "$.data.items[*].publishStatus",
+                        "equals": 0,
+                    }
+                ]
+            }
+        },
+    )
+
+    assert diagnostics == []
+    assert merged["structured_assertions"]["TC-DEMO-001"] == [
+        {
+            "type": "jsonpath_all_equals",
+            "target": "resp",
+            "path": "$.data.items[*].publishStatus",
+            "equals": 0,
+        }
+    ]
+
+
 def test_generated_req_deep_merges_request_override_lists(tmp_path):
     profile_path = tmp_path / "profile_demo_suite.md"
     _write_profile(
@@ -148,6 +189,80 @@ def test_generated_req_deep_merges_request_override_lists(tmp_path):
         "messages": [{"role": "user", "content": "ping"}],
         "metadata": {"tenant": "demo"},
     }
+
+
+def test_structured_assertions_render_jsonpath_all_equals_and_len_gte(tmp_path):
+    profile_path = tmp_path / "profile_demo_suite.md"
+    _write_profile(
+        profile_path,
+        """case_flows:
+  TC-DEMO-001:
+    fixture: setup_demo
+    steps:
+      - assign: resp
+        expr: '{"data": {"items": [{"publishStatus": 0}, {"publishStatus": 0}]}}'
+structured_assertions:
+  TC-DEMO-001:
+    - type: jsonpath_all_equals
+      target: resp
+      path: $.data.items[*].publishStatus
+      equals: 0
+    - type: jsonpath_len_gte
+      target: resp
+      path: $.data.items
+      value: 2
+""",
+    )
+
+    parse_result = _parse_result(assertions=["所有 publishStatus 都是 0"])
+    file_ir = build_file_ir(
+        parse_result,
+        "business",
+        profile_path=profile_path,
+        project=load_project_config(),
+    )
+    case_ir = _case(file_ir, "TC-DEMO-001")
+    template_assertions = [
+        assertion for assertion in case_ir.assertions
+        if assertion.kind == "structured_assertion"
+    ]
+    assert len(template_assertions) == 2
+    assert all(
+        assertion.resolved_by == "profile.structured_assertions.TC-DEMO-001"
+        for assertion in template_assertions
+    )
+
+    result = emit_file(
+        parse_result,
+        "business",
+        profile_path=profile_path,
+        output_dir=tmp_path,
+        project=load_project_config(),
+    )
+
+    assert result.diagnostics == []
+    text = (tmp_path / "test_demo_business.py").read_text(encoding="utf-8")
+    assert "from aitest_kit.helpers import structured_assertions as aitest_assertions" in text
+    assert "aitest_assertions.assert_jsonpath_all_equals" in text
+    assert "aitest_assertions.assert_jsonpath_len_gte" in text
+
+    namespace: dict[str, object] = {}
+    exec(text, namespace)
+    namespace["TestDemoBusiness"]().test_tc_demo_001(object())
+
+
+def test_structured_assertion_failure_message_is_readable():
+    with pytest.raises(AssertionError) as exc:
+        aitest_assertions.assert_jsonpath_all_equals(
+            {"data": {"items": [{"publishStatus": 0}, {"publishStatus": 1}]}},
+            "$.data.items[*].publishStatus",
+            0,
+        )
+
+    message = str(exc.value)
+    assert "$.data.items[*].publishStatus" in message
+    assert "mismatches" in message
+    assert "(1, 1)" in message
 
 
 def test_generated_req_applies_request_patches(tmp_path):

@@ -55,6 +55,7 @@ test_workspace/tasks/{task}.yaml
 | `case_flows` | suite profile | module profile |
 | `case_bodies` | suite profile | module profile |
 | `requests` | suite profile | module profile |
+| `structured_assertions` | suite profile | module profile |
 | `case_fixtures` | suite profile | module profile |
 | `variables.cases` | suite profile | module profile |
 | `variables.defaults` | module profile 或 suite profile | fixture 代码里硬编码 |
@@ -211,6 +212,7 @@ assertion_rules:
 case_flows: {}
 case_bodies: {}
 requests: {}
+structured_assertions: {}
 case_fixtures: {}
 variables:
   cases: {}
@@ -284,7 +286,7 @@ knowledge_refs:
 test_workspace/suites/{target}/{suite}/profile_{suite}_suite.md
 ```
 
-职责：只覆盖当前 suite 的 case_id，放本批用例的 `variables.cases`、`requests`、`case_flows`、`case_bodies`。文件名必须以 `_suite.md` 结尾；YAML 中建议写 `profile_scope: case_suite`、`parent_module` 和 `suite`。
+职责：只覆盖当前 suite 的 case_id，放本批用例的 `variables.cases`、`requests`、`structured_assertions`、`case_flows`、`case_bodies`。文件名必须以 `_suite.md` 结尾；YAML 中建议写 `profile_scope: case_suite`、`parent_module` 和 `suite`。
 
 ````markdown
 # profile_gateway_smoke_suite
@@ -316,6 +318,17 @@ case_flows:
         expr: http_resp.json()
       - assert: 'assert http_resp.status_code == 200'
       - assert: 'assert resp["code"] == 0'
+
+structured_assertions:
+  TC-GW-001:
+    - type: jsonpath_all_equals
+      target: resp
+      path: $.data.items[*].publishStatus
+      equals: 0
+    - type: jsonpath_len_gte
+      target: resp
+      path: $.data.items
+      value: 1
 ```
 ````
 
@@ -332,6 +345,14 @@ case_flows:
 | `assert` | Python 断言，必须以 `assert ` 开头 |
 | `comment` | 生成代码中的注释；不能作为非 manual flow 的唯一内容 |
 | `description` | 单条 flow 的 profile 元数据，不进入 generated pytest；纯人工 `[manual]` 不写 flow，半自动 manual flow 至少包含 `call` 或 `assert` |
+
+`structured_assertions` 规则：
+
+- default HTTP/gRPC 路线只能写 `target: resp`。
+- `case_flow` 路线只能写当前 flow 中 `save_as` 或 `assign` 产出的变量。
+- `case_bodies`、pure manual、skipped 用例不写 `structured_assertions`。
+- JSONPath、集合遍历、字段存在性和长度断言优先写 `structured_assertions`。
+- 复杂业务计算、循环、条件和等待逻辑封装到 fixture/helper 方法，再通过 `case_flow.call` 调用。
 
 变量引用：
 

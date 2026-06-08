@@ -87,7 +87,7 @@ def merge_profile_yaml(
     if requests:
         merged["requests"] = requests
 
-    for key in ("case_flows",):
+    for key in ("case_flows", "structured_assertions"):
         module_values = module_data.get(key, {})
         suite_values = suite_data.get(key, {})
         module_map = module_values if isinstance(module_values, dict) else {}

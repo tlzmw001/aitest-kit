@@ -70,6 +70,18 @@
     "variables": {
       "$ref": "#/$defs/profileVariables"
     },
+    "structured_assertions": {
+      "type": "object",
+      "patternProperties": {
+        "^TC-[A-Z0-9]+-[0-9]+$": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/structuredAssertion"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "requests": {
       "type": "object",
       "patternProperties": {
@@ -208,6 +220,39 @@
           "items": {
             "$ref": "#/$defs/requestPatch"
           }
+        }
+      }
+    },
+    "structuredAssertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "target", "path"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "jsonpath_equals",
+            "jsonpath_exists",
+            "jsonpath_not_exists",
+            "jsonpath_all_equals",
+            "jsonpath_any_equals",
+            "jsonpath_len_equals",
+            "jsonpath_len_gte",
+            "jsonpath_field_in_set"
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/identifier"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "equals": true,
+        "value": true,
+        "values": {
+          "type": "array",
+          "items": true
         }
       }
     },

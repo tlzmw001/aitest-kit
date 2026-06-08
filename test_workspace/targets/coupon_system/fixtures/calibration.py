@@ -104,6 +104,43 @@ _CASE_CONFIGS = {
 }
 
 
+def _clamp_score(value: float) -> float:
+    return max(0, min(1, value))
+
+
+def _piecewise_k_b(score: float, segments: list[tuple[float, float, float]]) -> tuple[float, float]:
+    for threshold, k, b in segments[:-1]:
+        if score < threshold:
+            return k, b
+    _threshold, k, b = segments[-1]
+    return k, b
+
+
+def assert_piecewise_cascade(
+    score: float,
+    calibrated_score: float,
+    *,
+    segments: list[tuple[float, float, float]],
+    linear_k: float,
+    linear_b: float,
+) -> None:
+    k_pw, b_pw = _piecewise_k_b(score, segments)
+    mid = _clamp_score(k_pw * score + b_pw)
+    expected = _clamp_score(linear_k * mid + linear_b)
+    assert calibrated_score == pytest.approx(expected, abs=1e-4)
+
+
+def assert_piecewise_only(
+    score: float,
+    calibrated_score: float,
+    *,
+    segments: list[tuple[float, float, float]],
+) -> None:
+    k, b = _piecewise_k_b(score, segments)
+    expected = _clamp_score(k * score + b)
+    assert calibrated_score == pytest.approx(expected, abs=1e-4)
+
+
 @pytest.fixture
 def http_base_url() -> str:
     return os.environ.get("HTTP_BASE_URL", "http://127.0.0.1:8000")

@@ -48,7 +48,7 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 
 ## 断言生成
 
-断言匹配优先级：profile assertion_rules > `aitest.yaml.codegen.builtin_assertion_rules` > named_templates。
+断言匹配优先级：profile assertion_rules > `aitest.yaml.codegen.builtin_assertion_rules` > UNPARSED。
 
 通用断言模式（框架内置）：
 
@@ -70,6 +70,14 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 1. 从共享配置取基础请求体，场景变量 `请求覆盖` 合并
 2. gRPC 用例通过场景变量中的 `协议：gRPC` 标识，Case IR 应记录该判断来源
 3. 共享配置中的 HTTP 基础请求体必须是合法 JSON，不使用 `{{placeholder}}`；case 级差异通过 profile `requests.<case_id>.overrides/patches` 合并。多步骤 `case_flow` 需要请求体时，用 `{request_ref: self}` 或 `{request_ref: TC-XXX-001}` 引用同一套请求绑定。
+
+## 结构化断言
+
+- JSONPath、列表遍历、字段存在性和长度断言优先写 suite profile `structured_assertions`。
+- default HTTP/gRPC 路线的 `target` 只能是 `resp`。
+- `case_flow` 路线的 `target` 必须来自当前 flow 中的 `save_as` 或 `assign`。
+- `case_bodies`、pure manual、skipped 用例不挂 `structured_assertions`。
+- 复杂业务公式、循环、条件、等待和跨响应计算应封装到 fixture/helper 方法，再用 `case_flow.call` 调用；不要把 YAML 写成控制流语言。
 
 ## case_body 与 case_flow
 

@@ -108,6 +108,7 @@ _FORBIDDEN_SUITE_MANIFEST_FIELDS = {
     "case_fixtures",
     "extra_imports",
     "assertion_rules",
+    "structured_assertions",
     "default_fixture",
     "default_object",
     "default_case_setup",

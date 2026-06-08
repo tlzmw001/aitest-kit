@@ -117,47 +117,6 @@ def _result_set_accessor(path: str) -> str:
     return f'{{r{accessor} for r in resp["results"]}}'
 
 
-def _render_piecewise_segments(segments: list, var_k: str = "k_pw", var_b: str = "b_pw") -> list[str]:
-    lines = []
-    for i, seg in enumerate(segments):
-        threshold, k, b = seg[0], seg[1], seg[2]
-        if i == 0:
-            lines.append(f"if s < {threshold}:")
-            lines.append(f"    {var_k}, {var_b} = {k}, {b}")
-        elif i < len(segments) - 1:
-            lines.append(f"elif s < {threshold}:")
-            lines.append(f"    {var_k}, {var_b} = {k}, {b}")
-        else:
-            lines.append("else:")
-            lines.append(f"    {var_k}, {var_b} = {k}, {b}")
-    return lines
-
-
-def render_named_template(name: str, params: dict) -> list[str]:
-    """Render a named template with params from profile rules."""
-    segments = params.get("segments", [])
-
-    if name == "piecewise_cascade":
-        linear_k = params.get("linear_k", 1.0)
-        linear_b = params.get("linear_b", 0.0)
-        lines = _render_piecewise_segments(segments, "k_pw", "b_pw")
-        lines.append("mid = max(0, min(1, k_pw * s + b_pw))")
-        lines.append(
-            f"assert cal == pytest.approx(max(0, min(1, {linear_k} * mid + {linear_b})), abs=1e-4)"
-        )
-        return lines
-
-    if name == "piecewise_only":
-        lines = _render_piecewise_segments(segments, "k", "b")
-        lines.append("assert cal == pytest.approx(max(0, min(1, k * s + b)), abs=1e-4)")
-        return lines
-
-    if name == "skip":
-        return []
-
-    return [f"# UNKNOWN TEMPLATE: {name}"]
-
-
 def _match_rule(rule: AssertionRule, clean_text: str) -> dict[str, str] | None:
     if rule.regex:
         m = re.match(rule.regex, clean_text)
@@ -197,9 +156,6 @@ def _interpolate_template(template: str, values: dict[str, str]) -> str:
 
 def _render_rule(rule: AssertionRule, match_values: dict[str, str], project: ProjectConfig) -> list[str]:
     template = rule.template.strip()
-    if template in project.named_templates:
-        return render_named_template(template, rule.params)
-
     lines = list(rule.extract_vars)
     for template_line in template.splitlines():
         lines.append(_interpolate_template(template_line.strip(), match_values))
@@ -223,8 +179,5 @@ def resolve_assertion(
         match_values = _match_rule(rule, clean)
         if match_values is not None:
             return _render_rule(rule, match_values, project), rule.name or rule.regex or "builtin"
-
-    if clean in project.named_templates:
-        return render_named_template(clean, {}), clean
 
     return [f"# UNPARSED ASSERTION: {text}"], "UNPARSED"

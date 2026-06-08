@@ -80,6 +80,20 @@ Profile validation summary: modules=1, errors=1, warnings=0
 - 对照 [codegen_profile_guide.md](./codegen_profile_guide.md)。
 - 先修到 `--validate-profile` 为 OK，再继续 codegen。
 
+## structured_assertions 错误
+
+常见诊断：
+
+- `E529`：结构化断言字段不合法，例如 `type` 不支持、缺必填字段、`target` 不是变量名、JSONPath 不合法。
+- `E530`：结构化断言的 `target` 在当前生成策略下不可用。
+
+处理：
+
+- default HTTP/gRPC 用例只能写 `target: resp`。
+- `case_flow` 用例只能引用该 flow 中 `save_as` 或 `assign` 产出的变量。
+- `case_bodies`、pure manual、skipped 用例不挂 `structured_assertions`。
+- 复杂业务计算不要扩展 YAML 控制流，封装到 fixture/helper 方法，再通过 `case_flow.call` 调用。
+
 ## unknown module_type
 
 常见原因：

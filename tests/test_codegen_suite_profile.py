@@ -473,6 +473,7 @@ suite: quota_billing_v2
 case_files:
   - quota_billing_business.md
 case_flows: {}
+structured_assertions: {}
 env_file: .env.test
 """,
             encoding="utf-8",
@@ -483,6 +484,7 @@ env_file: .env.test
         assert validate.exit_code == 1
         assert "E610" in validate.output
         assert "must not contain generation or execution fields" in validate.output
+        assert "structured_assertions" in validate.output
         assert "case_flows" in validate.output
         assert "env_file" in validate.output
 

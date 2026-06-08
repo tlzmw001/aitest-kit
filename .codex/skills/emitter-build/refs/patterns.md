@@ -105,13 +105,13 @@ assertion_rules:
 | 晋升目标 | 适用场景 | 写入位置 |
 |----------|----------|----------|
 | `promote_to_assertion_rule` | 请求/flow 已稳定，只有断言可模板化 | module profile 或 `aitest.yaml` |
+| `promote_to_structured_assertions` | JSONPath、集合遍历、字段存在性、长度断言重复出现 | suite profile |
 | `promote_to_case_flow` | 多步骤流程稳定，差异主要是参数和期望值 | suite profile |
 | `promote_to_helper` | 多个 body/flow 重复 Python 逻辑 | fixture/helper |
 | `promote_to_default_template` | 可退回 default_http/default_grpc，且默认模板真实适配 | suite profile requests |
-| `promote_to_named_template` | 需要受控 if/elif/else，且跨模块稳定 | emitter/renderer |
 | `keep_case_body` | 少见、复杂、并发、mock 等暂不晋升 | suite profile |
 
-推荐顺序：assertion_rule → case_flow → fixture/helper → keep_case_body → emitter/renderer 规则最后。
+推荐顺序：structured_assertions / assertion_rule → case_flow → fixture/helper → keep_case_body → emitter/renderer 规则最后。
 
 不要因为 default_http/default_grpc 已存在就强行退回默认模板；多端点项目通常应优先使用 fixture Client + case_flow。
 
@@ -144,7 +144,7 @@ assertion_rules:
 - 只在 1 个模块出现、且属于 L1 稳定能力 → 模块特有，写入 module profile
 - 只服务当前 suite 或当前 TC-ID → 写入 suite profile
 - 多个 case 重复 Python 动作 → 抽 fixture/helper
-- 需要生成 if/elif/else 块且跨模块稳定 → named_template 或 emitter/renderer
+- 需要生成 if/elif/else 块且跨模块稳定 → 优先抽 fixture/helper；确认为跨项目框架能力后再评估 emitter/renderer
 - 简单"匹配文本 → 替换生成代码" → YAML assertion_rule
 
 ## 验证命令
