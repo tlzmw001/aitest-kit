@@ -45,7 +45,6 @@ class RenderedFile:
 
 def _render_header(
     ctx: EmitContext,
-    has_grpc: bool = False,
     has_profile_variables: bool = False,
     has_structured_assertions: bool = False,
 ) -> list[str]:
@@ -60,8 +59,6 @@ def _render_header(
     ])
     if ctx.shared_config.base_request_http:
         lines.append("from aitest_kit.helpers.request_binding import build_request")
-    if has_grpc:
-        lines.append(ctx.project.grpc_helper_import)
     if has_profile_variables:
         lines.append("from aitest_kit.runtime_variables import resolve_profile_variables")
     if has_structured_assertions:
@@ -187,7 +184,7 @@ def _split_default_assertions(
     case_ir: CaseIR,
     ctx: EmitContext,
 ) -> tuple[list[AssertionIR], list[AssertionIR]]:
-    if case_ir.strategy not in {"default_http", "default_grpc"}:
+    if case_ir.strategy != "default_http":
         return [], case_ir.assertions
     common_count = len(ctx.shared_config.common_assertions)
     return case_ir.assertions[:common_count], case_ir.assertions[common_count:]
@@ -387,13 +384,10 @@ def _render_default_body(
 
     req_call = _render_req_call(case_ir.request)
     lines.append("")
-    if case_ir.protocol == "grpc":
-        lines.append(f"        resp = {case_ir.call.helper}({case_ir.call.target}, {req_call})")
-    else:
-        lines.append(
-            f'        resp = {case_ir.call.helper}({case_ir.call.target}, '
-            f'"{case_ir.call.api_path}", json={req_call})'
-        )
+    lines.append(
+        f'        resp = {case_ir.call.helper}({case_ir.call.target}, '
+        f'"{case_ir.call.api_path}", json={req_call})'
+    )
 
     common_assertions, case_assertions = _split_default_assertions(case_ir, ctx)
     for cl in _render_assertions(common_assertions):
@@ -431,12 +425,6 @@ def render_file_from_ir(
 ) -> RenderedFile:
     """Render one pytest file from Case IR and parser case metadata."""
     tc_by_id = {tc.id: tc for tc in test_cases}
-    has_grpc = any(
-        any("gRPC" in value for value in tc.scenario_vars.values())
-        for tc in test_cases
-        if not any("可行性存疑" in marker for marker in tc.markers)
-    )
-
     all_lines: list[str] = []
     skipped: list[tuple[str, str]] = []
     skipped_meta: list[dict[str, Any]] = []
@@ -454,7 +442,6 @@ def render_file_from_ir(
 
     all_lines.extend(_render_header(
         ctx,
-        has_grpc=has_grpc,
         has_profile_variables=has_profile_variables,
         has_structured_assertions=has_structured_assertions,
     ))

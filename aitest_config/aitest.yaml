@@ -11,10 +11,8 @@ workspace:
     refs_dir: aitest_config/refs
 codegen:
   helper_import: from aitest_kit.helpers import http as http_helper
-  grpc_helper_import: from aitest_kit.helpers import grpc_ops
   api_path: /api/v1/recommend
   helper_call: http_helper.post
-  grpc_helper_call: grpc_ops.recommend
   var_map:
     s: resp["results"][0]["score"]
     cal: resp["results"][0]["calibrated_score"]

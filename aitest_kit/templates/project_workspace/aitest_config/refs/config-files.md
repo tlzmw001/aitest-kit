@@ -82,10 +82,8 @@ workspace:
 
 codegen:
   helper_import: from aitest_kit.helpers import http as http_helper
-  grpc_helper_import: from aitest_kit.helpers import grpc_ops
   api_path: /api/v1/replace-me
   helper_call: http_helper.post
-  grpc_helper_call: grpc_ops.call
   default_request:
     auto_fields: {}
   module_types:

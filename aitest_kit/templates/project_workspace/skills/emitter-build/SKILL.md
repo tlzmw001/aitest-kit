@@ -60,7 +60,7 @@ effort: high
 
 | strategy | 处理方向 |
 |---|---|
-| `default_http` / `default_grpc` | 提取 assertion_rules 或默认请求规则 |
+| `default_http` | 提取 assertion_rules 或默认请求规则 |
 | `structured_case_flow` | 对齐 flow，寻找可抽 helper 或更通用 flow 模式 |
 | `custom_case_body` | 分析是否保留 body、抽 helper 或晋升 flow |
 | `manual` | pure manual 不写 flow；半自动可保留 flow/body |

@@ -426,7 +426,7 @@ case_bodies -> case_flows -> structured_assertions / assertion_rules / aitest.ya
 当一条用例有多种生成线索时，planner 的策略优先级是：
 
 ```text
-manual/skipped > custom_case_body > structured_case_flow > default_grpc > default_http
+manual/skipped > custom_case_body > structured_case_flow > default_http
 ```
 
 profile gate 会阻断同一 case_id 同时存在 `case_bodies` 和 `case_flows` 的情况，避免迁移中间态让旧 `case_body` 悄悄覆盖新 `case_flow`。

@@ -52,7 +52,7 @@ def _case(file_ir: FileIR, case_id: str):
 
 
 class TestStrategyPriority:
-    """Verify strategy priority: skipped > custom_case_body > structured_case_flow > manual > default_grpc > default_http."""
+    """Verify strategy priority: skipped > custom_case_body > structured_case_flow > manual > default_http."""
 
     def test_skipped_overrides_everything(self, tmp_path):
         profile_path = tmp_path / "profile_demo_suite.md"
@@ -181,7 +181,7 @@ case_flows:
         assert case_ir.call is None
         assert case_ir.diagnostics == []
 
-    def test_grpc_overrides_http(self, tmp_path):
+    def test_grpc_marker_requires_explicit_flow_or_body(self, tmp_path):
         tc = TestCase(
             id="TC-DEMO-001",
             title="有 gRPC 场景变量",
@@ -195,8 +195,12 @@ case_flows:
             project=DEFAULT_PROJECT,
         )
         case_ir = _case(file_ir, "TC-DEMO-001")
-        assert case_ir.strategy == "default_grpc"
+        assert case_ir.strategy == "default_http"
         assert case_ir.protocol == "grpc"
+        assert any(
+            "gRPC cases require case_flows or case_bodies" in diag.message
+            for diag in file_ir.diagnostics
+        )
 
     def test_default_http_is_lowest_priority(self):
         tc = TestCase(
@@ -292,7 +296,7 @@ class TestFixtureSelection:
         file_ir = build_file_ir(_parse_result([tc]), "business", project=DEFAULT_PROJECT)
         assert _case(file_ir, "TC-DEMO-001").fixtures == ["http_base_url", "setup_demo"]
 
-    def test_default_grpc_fixtures(self):
+    def test_grpc_marker_does_not_switch_default_fixtures(self):
         tc = TestCase(
             id="TC-DEMO-001",
             title="grpc",
@@ -301,7 +305,7 @@ class TestFixtureSelection:
             section="fixture",
         )
         file_ir = build_file_ir(_parse_result([tc]), "business", project=DEFAULT_PROJECT)
-        assert _case(file_ir, "TC-DEMO-001").fixtures == ["grpc_target", "setup_demo"]
+        assert _case(file_ir, "TC-DEMO-001").fixtures == ["http_base_url", "setup_demo"]
 
     def test_case_flow_uses_flow_fixture(self, tmp_path):
         profile_path = tmp_path / "profile_demo_suite.md"

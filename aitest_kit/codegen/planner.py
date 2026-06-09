@@ -89,17 +89,13 @@ def _strategy_for(
         return "structured_case_flow", f"profile.case_flows.{tc.id}", "profile provides structured flow"
     if _has_marker(tc, "manual"):
         return "manual", "markers", "manual marker"
-    is_grpc, source, raw = _grpc_source(tc)
-    if is_grpc:
-        return "default_grpc", source, raw
-    return "default_http", "default", "no custom strategy or gRPC marker"
+    return "default_http", "default", "no custom strategy"
 
 
 def _fixtures_for(
     module: str,
     tc: TestCase,
     strategy: str,
-    protocol: str,
     case_fixtures: dict[str, list[str]],
     case_flows: dict[str, dict[str, Any]],
 ) -> tuple[list[str], str]:
@@ -116,8 +112,6 @@ def _fixtures_for(
         return [], f"profile.case_flows.{tc.id}.fixture"
     if strategy == "manual":
         return [], "manual marker"
-    if protocol == "grpc":
-        return ["grpc_target", f"setup_{module}"], "default gRPC fixtures"
     return ["http_base_url", f"setup_{module}"], "default HTTP fixtures"
 
 
@@ -198,11 +192,9 @@ def _request_patches_for(raw_patches: Any) -> list[RequestPatchIR]:
     return patches
 
 
-def _call_for(strategy: str, protocol: str, project: ProjectConfig) -> CallIR | None:
+def _call_for(strategy: str, project: ProjectConfig) -> CallIR | None:
     if strategy in {"skipped", "custom_case_body", "structured_case_flow", "manual"}:
         return None
-    if protocol == "grpc":
-        return CallIR(helper=project.grpc_helper_call, target="grpc_target")
     return CallIR(
         helper=project.helper_call,
         target="http_base_url",
@@ -365,7 +357,7 @@ def _structured_assertions_for(
     strategy: str,
     structured_assertions: dict[str, list[dict[str, Any]]],
 ) -> list[AssertionIR]:
-    if strategy not in {"default_http", "default_grpc", "structured_case_flow"}:
+    if strategy not in {"default_http", "structured_case_flow"}:
         return []
     templates = structured_assertions.get(tc.id, [])
     result: list[AssertionIR] = []
@@ -382,7 +374,7 @@ def _structured_assertions_for(
 
 def _case_diagnostics(case_ir: CaseIR, has_http_body: bool) -> list[DiagnosticIR]:
     diagnostics: list[DiagnosticIR] = []
-    if case_ir.strategy in {"default_http", "default_grpc"} and not has_http_body:
+    if case_ir.strategy == "default_http" and not has_http_body:
         diagnostics.append(DiagnosticIR(
             code="E202",
             layer="planner",
@@ -468,12 +460,11 @@ def build_file_ir(
             parse_result.module,
             tc,
             strategy,
-            protocol,
             case_fixtures,
             case_flows,
         )
         request_refs: set[str] = set()
-        if strategy in {"default_http", "default_grpc"}:
+        if strategy == "default_http":
             request_refs.add(tc.id)
         if strategy == "structured_case_flow":
             request_refs.update(_request_refs_for_flow(case_flows.get(tc.id, {}), tc.id))
@@ -488,7 +479,7 @@ def build_file_ir(
                 request_bindings[request_case_id] = request_binding
 
         request = request_bindings.get(tc.id)
-        call = _call_for(strategy, protocol, proj)
+        call = _call_for(strategy, proj)
         needed = _needed_variables(tc.assertions, parse_result.shared_config.variables)
         variables = [
             VariableIR(name=name, expression=proj.var_map[name], source="project_config.var_map")
@@ -569,7 +560,7 @@ def build_file_ir(
             fixtures=fixtures,
             setup_call=(
                 SetupCallIR(name=f"setup_{parse_result.module}", kwargs={"case_id": tc.id})
-                if strategy in {"default_http", "default_grpc"}
+                if strategy == "default_http"
                 else None
             ),
             request=request,
@@ -585,6 +576,17 @@ def build_file_ir(
         case_ir.diagnostics.extend(
             _case_diagnostics(case_ir, parse_result.shared_config.base_request_http is not None)
         )
+        if strategy == "default_http" and is_grpc:
+            diagnostic = DiagnosticIR(
+                code="E202",
+                layer="planner",
+                message=(
+                    f"{tc.id}: gRPC cases require case_flows or case_bodies; "
+                    "default_grpc has been removed"
+                ),
+            )
+            case_ir.diagnostics.append(diagnostic)
+            file_ir.diagnostics.append(diagnostic)
         file_ir.cases.append(case_ir)
 
     return file_ir

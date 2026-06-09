@@ -38,7 +38,7 @@ Next step: create a target/module registry and a suite.yaml, or keep using legac
 
 常见原因：
 
-- Markdown 的 `基础请求体（HTTP）` 不是合法 JSON。
+- Markdown 的 JSON 基础请求体不是合法 JSON。
 - JSON 中出现 `{{user_id}}` 这类模板占位符。
 - 使用了单引号、尾逗号、注释。
 
@@ -52,14 +52,27 @@ Next step: create a target/module registry and a suite.yaml, or keep using legac
 
 常见原因：
 
-- Markdown 没有 `基础请求体（HTTP）`。
-- 模块不是默认 HTTP/gRPC，但也没有 `case_bodies` 或 `case_flows`。
+- Markdown 没有 JSON 基础请求体；可写 `基础请求体`、`基础请求体（JSON）` 或兼容旧写法 `基础请求体（HTTP）`。
+- 模块不是默认 HTTP，或用例需要 gRPC/SDK/多端点动作，但也没有 `case_bodies` 或 `case_flows`。
 
 处理：
 
 - 单请求模块：补完整基础请求体。
 - 多步骤模块：在 profile 中补 `case_flows`。
 - 复杂控制流模块：临时使用 `case_bodies`。
+
+## E202: gRPC 用例缺少显式执行策略
+
+常见原因：
+
+- Markdown 场景变量写了 `协议：gRPC`。
+- suite profile 没有为该 case 配置 `case_flows` 或 `case_bodies`。
+
+处理：
+
+- 在 fixture/helper 中封装真实 gRPC 调用。
+- 在 suite profile 的 `case_flows` 中显式调用该 helper。
+- 若控制流复杂、需要 mock/并发/生命周期管理，先用 `case_bodies`，稳定后再评估是否晋升为 `case_flows`。
 
 ## profile schema 错误
 

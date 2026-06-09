@@ -30,10 +30,8 @@ class DefaultRequestConfig:
 @dataclass
 class ProjectConfig:
     helper_import: str = "from aitest_kit.helpers import http as http_helper"
-    api_path: str = "/api/v1/recommend"
+    api_path: str = "/api/v1/replace-me"
     helper_call: str = "http_helper.post"
-    grpc_helper_import: str = "from aitest_kit.helpers import grpc_ops"
-    grpc_helper_call: str = "grpc_ops.recommend"
     var_map: dict[str, str] = field(default_factory=dict)
     module_abbrevs: dict[str, str] = field(default_factory=dict)
     builtin_assertion_rules: list[AssertionRule] = field(default_factory=list)
@@ -43,31 +41,14 @@ class ProjectConfig:
 
 FALLBACK_PROJECT_CONFIG_DATA: dict[str, Any] = {
     "helper_import": "from aitest_kit.helpers import http as http_helper",
-    "grpc_helper_import": "from aitest_kit.helpers import grpc_ops",
-    "api_path": "/api/v1/recommend",
+    "api_path": "/api/v1/replace-me",
     "helper_call": "http_helper.post",
-    "grpc_helper_call": "grpc_ops.recommend",
-    "var_map": {
-        "s": 'resp["results"][0]["score"]',
-        "cal": 'resp["results"][0]["calibrated_score"]',
-    },
-    "module_abbrevs": {
-        "calibration": "cal",
-        "ab_experiment": "ab",
-        "ab_service": "abs",
-        "feature_scoring": "feat",
-        "issuance": "issue",
-        "logging": "log",
-        "rough_ranking": "rank",
-        "scene_routing": "route",
-        "validation_ratelimit": "val",
-        "e2e": "e2e",
-    },
+    "var_map": {},
+    "module_abbrevs": {},
     "module_types": {
-        "standard_recommend": {"description": "标准推荐接口模块"},
-        "multi_endpoint": {"description": "多端点服务模块", "requires": ["case_bodies"]},
-        "subprocess_capture": {"description": "需要隔离进程捕获输出", "requires": ["case_bodies"]},
-        "isolated_service": {"description": "需要隔离服务实例", "requires": ["case_bodies"]},
+        "standard_http": {"description": "默认单接口 HTTP 模块"},
+        "multi_endpoint": {"description": "多端点或自定义流程模块", "requires": ["case_bodies"]},
+        "isolated_service": {"description": "需要隔离服务/运行时控制的模块", "requires": ["case_bodies"]},
     },
     "default_request": {
         "auto_fields": {},
@@ -92,46 +73,6 @@ FALLBACK_PROJECT_CONFIG_DATA: dict[str, Any] = {
             "name": "full_body",
             "regex": r"^response\.body\s*==\s*(?P<value>.+)",
             "template": "assert resp == {value}",
-        },
-        {
-            "name": "coupon_null",
-            "regex": r"^(?:response\.body\.)?coupon\s*==\s*null$",
-            "template": 'assert resp["coupon"] is None',
-        },
-        {
-            "name": "coupon_top",
-            "regex": r"^(?=.*coupon\.item_id)(?=.*top_result).*$",
-            "template": 'assert resp["coupon"]["item_id"] == max(resp["results"], key=lambda r: r["score"])["item_id"]',
-        },
-        {
-            "name": "coupon_top_max",
-            "regex": r"^(?=.*coupon)(?=.*item_id)(?=.*max).*$",
-            "template": 'assert resp["coupon"]["item_id"] == max(resp["results"], key=lambda r: r["score"])["item_id"]',
-        },
-        {
-            "name": "set_match",
-            "regex": r"^set\(response\.(?P<path>.+?)\)\s*==\s*(?P<expected>\{.+\})$",
-            "template": "assert {result_set:path} == {expected}",
-        },
-        {
-            "name": "length",
-            "regex": r"^len\((?P<expr>.+?)\)\s*==\s*(?P<n>\d+)$",
-            "template": "assert len({expr}) == {n}",
-        },
-        {
-            "name": "linear_cal_with_b",
-            "regex": r"^cal\s*==\s*round\(clamp\((?P<k>[0-9.]+)\s*\*\s*s\s*\+\s*(?P<b>[0-9.]+)\)\s*,\s*4\)",
-            "template": "assert cal == pytest.approx(max(0, min(1, {k} * s + {b})), abs=1e-4)",
-        },
-        {
-            "name": "linear_cal_no_b",
-            "regex": r"^cal\s*==\s*round\(clamp\((?P<k>[0-9.]+)\s*\*\s*s\)\s*,\s*4\)",
-            "template": "assert cal == pytest.approx(max(0, min(1, {k} * s)), abs=1e-4)",
-        },
-        {
-            "name": "no_cal",
-            "regex": r"^cal\s*==\s*s\b.*$",
-            "template": "assert cal == pytest.approx(s)",
         },
         {
             "name": "comparison",
@@ -175,16 +116,25 @@ def _default_request_from(raw: Any) -> DefaultRequestConfig:
 
 
 def _project_from(data: dict[str, Any]) -> ProjectConfig:
+    var_map = data["var_map"] if isinstance(data.get("var_map"), dict) else FALLBACK_PROJECT_CONFIG_DATA["var_map"]
+    module_abbrevs = (
+        data["module_abbrevs"]
+        if isinstance(data.get("module_abbrevs"), dict)
+        else FALLBACK_PROJECT_CONFIG_DATA["module_abbrevs"]
+    )
+    module_types = (
+        data["module_types"]
+        if isinstance(data.get("module_types"), dict)
+        else FALLBACK_PROJECT_CONFIG_DATA["module_types"]
+    )
     return ProjectConfig(
         helper_import=data.get("helper_import", FALLBACK_PROJECT_CONFIG_DATA["helper_import"]),
         api_path=data.get("api_path", FALLBACK_PROJECT_CONFIG_DATA["api_path"]),
         helper_call=data.get("helper_call", FALLBACK_PROJECT_CONFIG_DATA["helper_call"]),
-        grpc_helper_import=data.get("grpc_helper_import", FALLBACK_PROJECT_CONFIG_DATA["grpc_helper_import"]),
-        grpc_helper_call=data.get("grpc_helper_call", FALLBACK_PROJECT_CONFIG_DATA["grpc_helper_call"]),
-        var_map=dict(data.get("var_map") or FALLBACK_PROJECT_CONFIG_DATA["var_map"]),
-        module_abbrevs=dict(data.get("module_abbrevs") or FALLBACK_PROJECT_CONFIG_DATA["module_abbrevs"]),
+        var_map=dict(var_map),
+        module_abbrevs=dict(module_abbrevs),
         builtin_assertion_rules=_rules_from(data.get("builtin_assertion_rules")),
-        module_types=dict(data.get("module_types") or FALLBACK_PROJECT_CONFIG_DATA["module_types"]),
+        module_types=dict(module_types),
         default_request=_default_request_from(data.get("default_request")),
     )
 

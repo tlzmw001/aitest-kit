@@ -29,14 +29,6 @@ def project_config_for_suite_target(context: SuiteContext, project: ProjectConfi
     )
     if http_import:
         updates["helper_import"] = http_import
-    grpc_import = _target_helper_import(
-        helper_dir,
-        module_name="grpc_ops",
-        import_clause="grpc_ops",
-        workspace_root=target_context.workspace_root,
-    )
-    if grpc_import:
-        updates["grpc_helper_import"] = grpc_import
     return replace(project, **updates) if updates else project
 
 

@@ -3,7 +3,6 @@
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
-from test_workspace.targets.coupon_system.helpers import grpc_ops
 from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
 from test_workspace.targets.coupon_system.fixtures.rough_ranking import setup_rough_ranking
 

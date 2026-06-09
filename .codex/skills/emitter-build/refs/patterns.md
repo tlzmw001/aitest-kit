@@ -108,12 +108,12 @@ assertion_rules:
 | `promote_to_structured_assertions` | JSONPath、集合遍历、字段存在性、长度断言重复出现 | suite profile |
 | `promote_to_case_flow` | 多步骤流程稳定，差异主要是参数和期望值 | suite profile |
 | `promote_to_helper` | 多个 body/flow 重复 Python 逻辑 | fixture/helper |
-| `promote_to_default_template` | 可退回 default_http/default_grpc，且默认模板真实适配 | suite profile requests |
+| `promote_to_default_template` | 可退回 default_http，且默认模板真实适配 | suite profile requests |
 | `keep_case_body` | 少见、复杂、并发、mock 等暂不晋升 | suite profile |
 
 推荐顺序：structured_assertions / assertion_rule → case_flow → fixture/helper → keep_case_body → emitter/renderer 规则最后。
 
-不要因为 default_http/default_grpc 已存在就强行退回默认模板；多端点项目通常应优先使用 fixture Client + case_flow。
+不要因为 default_http 已存在就强行退回默认模板；gRPC、多端点、SDK 项目通常应优先使用 fixture Client + case_flow。
 
 ## 晋升条件
 

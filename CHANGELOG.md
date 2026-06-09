@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.1 - 2026-06-09
+
+### Changed
+
+- Removed the incomplete `default_grpc` codegen strategy. gRPC, SDK, and multi-endpoint cases now require explicit fixture/helper wiring through `case_flows` or `case_bodies`.
+- Simplified the package fallback codegen config to a generic HTTP default instead of carrying coupon/recommend example semantics.
+- Updated bundled workspace templates, local agent skills, and user docs to describe `default_http` as the only built-in default strategy.
+
+### Fixed
+
+- Parsed `基础请求体` and `基础请求体（JSON）` as default JSON request bodies while keeping `基础请求体（HTTP）` as a compatible alias.
+- Refreshed coupon-system generated pytest files so freshness checks match the new HTTP-only default emitter output.
+
 ## 0.3.0 - 2026-06-08
 
 ### Added

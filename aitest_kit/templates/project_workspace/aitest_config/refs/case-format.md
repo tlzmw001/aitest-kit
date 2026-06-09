@@ -27,11 +27,11 @@
 
 **接口**：`POST /api/v1/recommend` / `gRPC coupon.CouponService/Recommend`
 
-**基础请求体（HTTP）**：
-（完整、合法的 JSON。变化字段写合法默认值，不使用 `{{placeholder}}`；默认请求路线中每条用例会替换的字段放到 suite profile 的 `requests`）
+**基础请求体（JSON）**：
+（完整、合法的 JSON。也兼容 `基础请求体` / `基础请求体（HTTP）` 写法；变化字段写合法默认值，不使用 `{{placeholder}}`；默认请求路线中每条用例会替换的字段放到 suite profile 的 `requests`）
 
 **基础请求体（gRPC）**：
-（完整 protobuf message 字段，如有两种接口）
+（可选的设计记录；默认 codegen 不再提供 gRPC 自动模板。gRPC 执行请在 suite profile 中用 `case_flows` 或 `case_bodies` 显式调用 fixture/helper）
 
 **标准前置**：
 - 所有用例共用的环境准备步骤（路由配置、库存初始化等）
@@ -75,7 +75,7 @@
 | 字段 | 必填 | 说明 |
 |------|------|------|
 | 接口 | 是 | 列出模块暴露的所有接口类型（HTTP endpoint + gRPC method） |
-| 基础请求体 | 默认请求路线必填 | 完整的请求 JSON/protobuf，每种接口一份；HTTP JSON 不允许 `{{var}}` 占位符。若全部用例由 `case_flows/case_bodies` 覆盖，生成时可以不依赖它，但仍建议保留合法共享配置 |
+| 基础请求体 | 默认 HTTP 路线必填 | 完整的 JSON 请求体；可写 `基础请求体` / `基础请求体（JSON）` / `基础请求体（HTTP）`，不允许 `{{var}}` 占位符。gRPC、SDK、多端点或全部由 `case_flows/case_bodies` 覆盖的用例不依赖默认请求体，但仍建议保留合法共享配置作为 review 输入 |
 | 标准前置 | 是 | 所有用例共用的环境准备（路由表、库存、基础配置等） |
 | 通用断言 | 是 | 每条用例都要检查的断言 |
 | 变量定义 | 按需 | 关系断言中的变量缩写，减少每条用例的重复 |

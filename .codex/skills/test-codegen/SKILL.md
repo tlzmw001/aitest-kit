@@ -170,7 +170,7 @@ python3 -m aitest_kit.cli codegen --suite-file <suite_dir>/suite.yaml --check
 
 profile 硬门禁有 ERROR 时不进入 IR/emitter，先修 profile。`profile not found`、占位路径、`--check stale` 都是回灌未完成信号。
 
-Case IR strategy 覆盖：`default_http`、`default_grpc`、`custom_case_body`、`structured_case_flow`、`manual`、`skipped`。CLI 支持 `--explain`/`--dump-ir` 时优先用它们排查：单条 case 先看 `--explain <TC-ID>` 的 Strategy、Case flow、Request bindings、Request review、Assertions、Review hint；需要机器可读全量信息时再看 `--dump-ir`。
+Case IR strategy 覆盖：`default_http`、`custom_case_body`、`structured_case_flow`、`manual`、`skipped`。gRPC、SDK、多端点或自定义动作库用例必须通过 `case_flows` 或 `case_bodies` 显式接线。CLI 支持 `--explain`/`--dump-ir` 时优先用它们排查：单条 case 先看 `--explain <TC-ID>` 的 Strategy、Case flow、Request bindings、Request review、Assertions、Review hint；需要机器可读全量信息时再看 `--dump-ir`。
 
 检查输出摘要和 `--health-report` 中的 UNPARSED、case_body、manual、structured_assertion_target_counts、request_binding_counts、profile_variable_counts、review_focus、next_actions，确认每条 case 的 strategy/protocol/fixtures/request binding 与预期一致。
 

@@ -70,3 +70,37 @@ def test_project_config_loads_codegen_section_from_aitest_yaml(tmp_path, monkeyp
     assert project.helper_import == "from custom.helpers import http as http_helper"
     assert project.api_path == "/custom"
     assert project.module_types == {"standard_http": {"description": "standard HTTP module"}}
+
+
+def test_project_config_fallback_is_generic_when_aitest_yaml_missing(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    project = load_project_config()
+
+    assert project.api_path == "/api/v1/replace-me"
+    assert project.var_map == {}
+    assert project.module_abbrevs == {}
+    assert "standard_recommend" not in project.module_types
+    assert {rule.name for rule in project.builtin_assertion_rules}.isdisjoint(
+        {"coupon_null", "coupon_top", "coupon_top_max", "linear_cal_with_b", "linear_cal_no_b", "no_cal"}
+    )
+
+
+def test_project_config_preserves_explicit_empty_codegen_maps(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    config_dir = tmp_path / "aitest_config"
+    config_dir.mkdir()
+    (config_dir / "aitest.yaml").write_text(
+        """codegen:
+  var_map: {}
+  module_abbrevs: {}
+  module_types: {}
+""",
+        encoding="utf-8",
+    )
+
+    project = load_project_config()
+
+    assert project.var_map == {}
+    assert project.module_abbrevs == {}
+    assert project.module_types == {}

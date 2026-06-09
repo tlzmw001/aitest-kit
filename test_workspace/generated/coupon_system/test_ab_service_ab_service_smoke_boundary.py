@@ -2,7 +2,25 @@
 # DO NOT EDIT — regenerate with: aitest codegen --suite-file test_workspace/suites/coupon_system/ab_service_smoke/suite.yaml
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
+from aitest_kit.helpers.request_binding import build_request
 from test_workspace.targets.coupon_system.fixtures.ab_service import setup_ab_service
+
+
+BASE_REQUEST = {
+    "user_id": None,
+    "request_id": "req_abs_default",
+    "context": {},
+    "experiment_names": None,
+}
+
+
+def _req(*, auto_fields=None, overrides=None, patches=None) -> dict:
+    return build_request(
+        BASE_REQUEST,
+        auto_fields=auto_fields or {},
+        overrides=overrides or {},
+        patches=patches or [],
+    )
 
 
 class TestAbServiceBoundary:

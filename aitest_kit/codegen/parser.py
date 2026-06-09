@@ -180,6 +180,8 @@ def _parse_shared_config(lines: list[str]) -> tuple[SharedConfig, int, list[str]
 
         elif line.startswith("**基础请求体"):
             body, i, json_error = _extract_json_block(lines, i + 1)
+            if body is not None and cfg.base_request_http is None:
+                cfg.base_request_http = body
             if body is None and json_error:
                 errors.append(_format_json_error(_shared_field_name(line), json_error))
             continue

@@ -316,8 +316,6 @@ ProjectConfig(
     helper_import=...,
     api_path=...,
     helper_call=...,
-    grpc_helper_import=...,
-    grpc_helper_call=...,
     var_map={...},
     module_abbrevs={...},
     builtin_assertion_rules=[...],
@@ -330,7 +328,7 @@ ProjectConfig(
 
 - `FALLBACK_PROJECT_CONFIG_DATA` 是兼容默认值，不是当前项目配置的主编辑入口。
 - 当前项目的主配置入口是 `aitest_config/aitest.yaml`。
-- `load_project_config()` 会把 fallback 和 YAML 合并。
+- `load_project_config()` 会把通用 HTTP fallback 和 YAML 合并；显式空 mapping 不会被历史示例默认值覆盖。
 - `builtin_assertion_rules` 会被转换成 `AssertionRule` 对象。
 
 ### 6.4 第四层：Case IR planner
@@ -373,7 +371,6 @@ planner 的策略优先级：
   > profile.case_bodies custom_case_body
   > profile.case_flows structured_case_flow
   > manual
-  > gRPC marker default_grpc
   > default_http
 ```
 
@@ -426,7 +423,7 @@ profile assertion_rules
 |---|---|
 | `custom_case_body` | `_render_custom_body()` |
 | `structured_case_flow` | `_render_case_flow()` |
-| `default_http/default_grpc/manual` | `_render_default_body()` |
+| `default_http/manual` | `_render_default_body()` |
 
 普通生成调用链：
 
@@ -717,8 +714,6 @@ renderer:
 |---|---|
 | `helper_import` | generated 文件 import 哪个 HTTP helper |
 | `helper_call` | 默认 HTTP 分支如何调用请求 |
-| `grpc_helper_import` | gRPC generated 文件 import |
-| `grpc_helper_call` | 默认 gRPC 分支如何调用 |
 | `api_path` | 默认 HTTP API path |
 | `var_map` | `s/cal` 等断言变量如何落到 Python 表达式 |
 | `module_abbrevs` | 默认 user_id/req_id 如何生成 |

@@ -258,7 +258,8 @@ generated pytest 是编译产物。生成结果不对时，应回到对应源头
 
 | 场景 | 推荐路线 |
 |---|---|
-| 单接口、固定 endpoint、只改请求字段 | `default_http / default_grpc` |
+| 单接口、固定 HTTP endpoint、只改请求字段 | `default_http` |
+| gRPC、SDK、多端点或自定义动作库 | fixture/helper + `case_flows` |
 | 多端点但流程线性、需要保存中间变量 | `case_flows` |
 | if/else、for、try/finally 控制流 | 封装到 helper/fixture 或 `case_bodies` |
 | 进程、mock、临时文件生命周期 | `case_bodies` |

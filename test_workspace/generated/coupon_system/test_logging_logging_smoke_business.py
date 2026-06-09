@@ -3,7 +3,6 @@
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
-from test_workspace.targets.coupon_system.helpers import grpc_ops
 from test_workspace.targets.coupon_system.fixtures.logging import setup_logging
 
 

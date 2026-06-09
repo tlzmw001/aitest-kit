@@ -462,7 +462,7 @@ def _validate_structured_assertion_targets(
                 _error(
                     report,
                     "E530",
-                    "structured_assertions only render for default_http/default_grpc "
+                    "structured_assertions only render for default_http "
                     "or structured_case_flow cases; use case_bodies or manual notes for "
                     f"{strategy} cases",
                     source,
@@ -493,11 +493,11 @@ def _strategy_name_for_case(
         return "skipped"
     if _case_has_marker(report, case_id, "manual"):
         return "manual"
-    return "default_http/default_grpc"
+    return "default_http"
 
 
 def _allowed_structured_assertion_targets(strategy: str, flow: Any) -> set[str]:
-    if strategy == "default_http/default_grpc":
+    if strategy == "default_http":
         return {"resp"}
     if strategy != "structured_case_flow":
         return set()

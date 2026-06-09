@@ -35,7 +35,7 @@ def test_environment_grpc_dependency_does_not_force_grpc_protocol():
     assert case_ir.source_trace["protocol"].source == "default"
 
 
-def test_protocol_field_can_still_select_grpc():
+def test_protocol_field_requires_explicit_grpc_flow_or_body():
     tc = TestCase(
         id="TC-DEMO-002",
         title="gRPC request",
@@ -44,8 +44,19 @@ def test_protocol_field_can_still_select_grpc():
         section="协议检测",
     )
 
-    case_ir = _single_case_ir(tc)
+    result = ParseResult(
+        module="demo",
+        source_file="test_workspace/suites/demo_target/demo_suite/business.md",
+        shared_config=SharedConfig(base_request_http={"user_id": "", "reqId": ""}),
+        cases=[tc],
+    )
+    file_ir = build_file_ir(result, "business", project=DEFAULT_PROJECT)
+    case_ir = file_ir.cases[0]
 
-    assert case_ir.strategy == "default_grpc"
+    assert case_ir.strategy == "default_http"
     assert case_ir.protocol == "grpc"
     assert case_ir.source_trace["protocol"].source == "scenario_vars.协议"
+    assert any(
+        "gRPC cases require case_flows or case_bodies" in diag.message
+        for diag in file_ir.diagnostics
+    )

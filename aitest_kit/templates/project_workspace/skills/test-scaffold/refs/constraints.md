@@ -52,7 +52,7 @@
 
 | module_type | 基线路线 |
 |-------------|----------|
-| `standard_recommend` | 默认模板 |
+| `standard_http` 或项目自定义单接口类型 | default_http |
 | `multi_endpoint` | case_flow |
 | `subprocess_capture` | case_flow |
 | `isolated_service` | case_flow |

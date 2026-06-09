@@ -298,7 +298,7 @@ def test_codegen_suite_explain_reports_unparsed_case_flow_assertion(tmp_path):
         (module_dir / "gateway_api.yaml").write_text(
             """target: sub2api
 module: gateway_api
-module_type: standard_recommend
+module_type: standard_http
 fixture:
   file: gateway_api.py
   default_fixture: setup_gateway_api
@@ -307,7 +307,7 @@ fixture:
         )
         (profile_dir / "profile_gateway_api.md").write_text(
             """```yaml
-module_type: standard_recommend
+module_type: standard_http
 extra_imports:
   - "from test_workspace.targets.sub2api.fixtures.gateway_api import setup_gateway_api"
 ```
