@@ -47,6 +47,7 @@ def _render_header(
     ctx: EmitContext,
     has_profile_variables: bool = False,
     has_structured_assertions: bool = False,
+    has_default_http: bool = False,
 ) -> list[str]:
     regenerate_hint = _regenerate_hint(ctx)
     lines = [
@@ -59,6 +60,8 @@ def _render_header(
     ])
     if ctx.shared_config.base_request_http:
         lines.append("from aitest_kit.helpers.request_binding import build_request")
+    if has_default_http:
+        lines.append("from aitest_kit.helpers.capture import capture_io")
     if has_profile_variables:
         lines.append("from aitest_kit.runtime_variables import resolve_profile_variables")
     if has_structured_assertions:
@@ -383,10 +386,40 @@ def _render_default_body(
         return lines, unparsed, diagnostics
 
     req_call = _render_req_call(case_ir.request)
+    api_path = dict_to_python_compact(case_ir.call.api_path)
     lines.append("")
+    lines.append(f"        __aitest_request = {req_call}")
+    lines.append("        __aitest_response = None")
+    lines.append("        try:")
+    if case_ir.call.helper == "http_helper.post":
+        lines.append('            if hasattr(http_helper, "post_response"):')
+        lines.append(
+            f"                __aitest_response = http_helper.post_response("
+            f"{case_ir.call.target}, {api_path}, json=__aitest_request)"
+        )
+        lines.append("                __aitest_response.raise_for_status()")
+        lines.append("                resp = __aitest_response.json()")
+        lines.append("            else:")
+        lines.append(
+            f"                resp = {case_ir.call.helper}("
+            f"{case_ir.call.target}, {api_path}, json=__aitest_request)"
+        )
+        lines.append("                __aitest_response = resp")
+    else:
+        lines.append(
+            f"            resp = {case_ir.call.helper}("
+            f"{case_ir.call.target}, {api_path}, json=__aitest_request)"
+        )
+        lines.append("            __aitest_response = resp")
+    lines.append("        except Exception as exc:")
     lines.append(
-        f'        resp = {case_ir.call.helper}({case_ir.call.target}, '
-        f'"{case_ir.call.api_path}", json={req_call})'
+        f'            capture_io(__tc_meta__["tc_id"], label={api_path}, protocol="http", '
+        "request=__aitest_request, response=__aitest_response, exception=exc)"
+    )
+    lines.append("            raise")
+    lines.append(
+        f'        capture_io(__tc_meta__["tc_id"], label={api_path}, protocol="http", '
+        "request=__aitest_request, response=__aitest_response)"
     )
 
     common_assertions, case_assertions = _split_default_assertions(case_ir, ctx)
@@ -439,11 +472,13 @@ def render_file_from_ir(
         for case in file_ir.cases
         for assertion in case.assertions
     )
+    has_default_http = any(case.strategy == "default_http" for case in file_ir.cases)
 
     all_lines.extend(_render_header(
         ctx,
         has_profile_variables=has_profile_variables,
         has_structured_assertions=has_structured_assertions,
+        has_default_http=has_default_http,
     ))
     all_lines.extend(_render_base_request(ctx))
     if ctx.shared_config.base_request_http:

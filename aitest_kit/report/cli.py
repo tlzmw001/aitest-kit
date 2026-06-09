@@ -18,6 +18,12 @@ from aitest_kit.report.codegen_check import run_codegen_check
 from aitest_kit.report.collector import blocked_result, collect_result, generated_nodeids_for_case_ids
 from aitest_kit.report.paths import selector_report_bucket, suite_report_bucket, task_report_bucket
 from aitest_kit.report.renderer import render_markdown
+from aitest_kit.helpers.capture import (
+    CaptureSettings,
+    capture_env,
+    capture_file_for_run,
+    load_capture_settings,
+)
 from aitest_kit.runtime_variables import (
     ProfileVariableError,
     dotenv_path,
@@ -69,6 +75,7 @@ def _load_paths() -> ReportPaths:
 @click.option("--module", "module_name", help="Run active suites registered under one module")
 @click.option("--all", "all_suites", is_flag=True, help="Run all active suites in the registry")
 @click.option("--case-id", "case_ids", multiple=True, help="Run one case id; can be repeated")
+@click.option("--capture", is_flag=True, help="Write runtime request/response capture to capture.jsonl")
 @click.option("--workspace", type=click.Path(file_okay=False, dir_okay=True), help="Run from another AITest workspace root")
 @click.argument("args", nargs=-1, type=click.UNPROCESSED, metavar="[PYTEST_ARGS]...")
 def run_command(
@@ -80,6 +87,7 @@ def run_command(
     module_name: str | None,
     all_suites: bool,
     case_ids: tuple[str, ...],
+    capture: bool,
     workspace: str | None,
     args: tuple[str, ...],
 ):
@@ -107,6 +115,7 @@ def run_command(
                 module_name=module_name,
                 all_suites=all_suites,
                 case_ids=case_ids,
+                capture=capture,
             )
     except (FileNotFoundError, NotADirectoryError) as exc:
         raise click.ClickException(str(exc)) from exc
@@ -127,6 +136,10 @@ def _run_command_impl(
     report_run_dir: Path | None = None,
     run_id_override: str | None = None,
     update_latest: bool = True,
+    capture: bool = False,
+    capture_settings: CaptureSettings | None = None,
+    capture_file_path: Path | None = None,
+    echo_capture_path: bool = True,
 ) -> None:
     extra_args = list(args)
     if suite_file and task_file:
@@ -149,6 +162,8 @@ def _run_command_impl(
             task_file,
             extra_args,
             case_ids=list(case_ids),
+            capture=capture,
+            capture_settings=capture_settings,
         )
         return
     if selector_used:
@@ -167,6 +182,8 @@ def _run_command_impl(
             include_manual=include_manual,
             skip_codegen_check=skip_codegen_check,
             extra_args=extra_args,
+            capture=capture,
+            capture_settings=capture_settings,
         )
         return
     paths = _load_paths()
@@ -202,8 +219,18 @@ def _run_command_impl(
     else:
         run_id, run_dir = _create_run_dir(paths.reports_dir)
 
+    effective_capture = capture_settings or load_capture_settings(enabled_override=capture)
+    capture_file = capture_file_for_run(
+        run_dir,
+        effective_capture,
+        capture_file=capture_file_path,
+    )
+
+    command_parts = ["aitest", "run", "--suite-file", suite_file or ""]
+    if effective_capture.enabled:
+        command_parts.append("--capture")
     command = _format_run_command(
-        ["aitest", "run", "--suite-file", suite_file or ""],
+        command_parts,
         case_ids=case_ids,
         pytest_args=extra_args,
     )
@@ -229,6 +256,8 @@ def _run_command_impl(
         _write_result(run_dir, paths.reports_dir, result, update_latest=update_latest)
         click.echo(f"BLOCKED_RUN: {exc}")
         raise SystemExit(10) from exc
+    if capture_file is not None:
+        pytest_env.update(capture_env(effective_capture, capture_file))
 
     codegen_check = run_codegen_check(
         skip_codegen_check,
@@ -306,6 +335,8 @@ def _run_command_impl(
         f"Report written: {run_dir / 'report.md'} "
         f"(passed={summary['passed']}, failed={summary['failed']}, error={summary['error']})"
     )
+    if echo_capture_path and capture_file is not None and capture_file.exists():
+        click.echo(f"Capture written: {capture_file}")
     raise SystemExit(completed.returncode)
 
 @click.command(name="report")

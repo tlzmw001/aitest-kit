@@ -104,6 +104,7 @@ aitest codegen --suite-file <suite.yaml> --validate-profile  # profile gate
 aitest codegen --suite-file <suite.yaml>                     # generate pytest
 aitest codegen --suite-file <suite.yaml> --check             # check generated freshness
 aitest run --suite-file <suite.yaml>                         # run one suite
+aitest run --suite-file <suite.yaml> --capture               # run and write capture.jsonl
 aitest run --target <target> [--module <module>]             # run by target/module
 aitest run --all                                             # run all active suites
 aitest report --suite-file/--target/--all ...                # re-render reports
@@ -116,6 +117,11 @@ AITEST_ENV_FILE=/tmp/test.env aitest run --suite-file <suite.yaml>
 ```
 
 Reports record variable names only, never values. Full options: `aitest --help`.
+
+For failure debugging, add `--capture`; the run directory will contain one `capture.jsonl`.
+The framework auto-captures default HTTP cases only. Custom fixtures, gRPC, or SDK calls can
+call `aitest_kit.helpers.capture.capture_io()` manually. Capture does not redact; redact in
+your fixture before writing sensitive data.
 
 ## AI Skills
 

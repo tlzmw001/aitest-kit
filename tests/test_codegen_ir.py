@@ -826,3 +826,32 @@ def test_emitter_can_render_structured_case_flow(tmp_path):
     assert 'locs = [item["loc"] for item in resp["detail"]]' in text
     assert "# MANUAL CHECK: inspect logs" in text
     assert 'assert resp["code"] == 0' in text
+    assert "capture_io" not in text
+
+
+def test_emitter_auto_captures_only_default_http(tmp_path):
+    project = load_project_config()
+    project.api_path = "/demo"
+    project.default_request = DefaultRequestConfig(auto_fields={})
+    result = emit_file(
+        _parse_result(
+            assertions=["`response.code == 0`"],
+            base_request_http={"user_id": "", "reqId": ""},
+        ),
+        "business",
+        output_dir=tmp_path,
+        project=project,
+    )
+
+    assert result.diagnostics == []
+    text = (tmp_path / "test_demo_business.py").read_text(encoding="utf-8")
+    assert "from aitest_kit.helpers.capture import capture_io" in text
+    assert "__aitest_request = _req()" in text
+    assert 'if hasattr(http_helper, "post_response"):' in text
+    assert 'http_helper.post_response(http_base_url, "/demo", json=__aitest_request)' in text
+    assert (
+        'capture_io(__tc_meta__["tc_id"], label="/demo", protocol="http", '
+        in text
+    )
+    assert "resp = __aitest_response.json()" in text
+    assert 'assert resp["code"] == 0' in text

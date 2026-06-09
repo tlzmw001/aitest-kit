@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import textwrap
@@ -496,6 +497,173 @@ case_files:
     assert result["command"] == (
         f"aitest run --suite-file {suite_file} --case-id TC-GW-041 -- --collect-only -q"
     )
+
+
+def test_run_capture_writes_suite_capture_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("AITEST_ENV_FILE", raising=False)
+    repo_root = Path(__file__).resolve().parents[1]
+    pythonpath = os.pathsep.join(filter(None, [str(repo_root), os.environ.get("PYTHONPATH", "")]))
+    monkeypatch.setenv("PYTHONPATH", pythonpath)
+    suite_dir = tmp_path / "test_workspace" / "suites" / "sub2api" / "capture_smoke"
+    suite_dir.mkdir(parents=True)
+    suite_file = suite_dir / "suite.yaml"
+    suite_file.write_text(
+        """target: sub2api
+module: gateway_api
+suite: capture_smoke
+case_files:
+  - business.md
+""",
+        encoding="utf-8",
+    )
+    (suite_dir / "business.md").write_text(
+        """# capture smoke
+
+### TC-GW-041：capture case
+- **优先级**：P0
+- **断言**：`response.status == "ok"`
+""",
+        encoding="utf-8",
+    )
+    generated = tmp_path / "test_workspace" / "generated"
+    generated.mkdir(parents=True)
+    (generated / "test_gateway_api_capture_smoke_business.py").write_text(
+        textwrap.dedent(
+            '''
+            from aitest_kit.helpers.capture import capture_io
+
+
+            class TestGatewayApiCaptureSmokeBusiness:
+                def test_tc_gw_041(self):
+                    capture_io(
+                        "TC-GW-041",
+                        label="manual fixture capture",
+                        protocol="grpc",
+                        request={"user_id": "u1"},
+                        response={"code": 0},
+                    )
+                    assert True
+
+
+            __codegen_skipped__ = []
+            '''
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        _run_command_impl(False, True, (), suite_file=str(suite_file), capture=True)
+
+    assert exc_info.value.code == 0
+    result_path = (
+        tmp_path
+        / "test_workspace"
+        / "reports"
+        / "sub2api"
+        / "gateway_api"
+        / "suites"
+        / "capture_smoke"
+        / "latest"
+        / "result.json"
+    )
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    assert result["summary"]["passed"] == 1
+    assert result["command"] == f"aitest run --suite-file {suite_file} --capture"
+    capture_path = result_path.parent / "capture.jsonl"
+    record = json.loads(capture_path.read_text(encoding="utf-8").strip())
+    assert record["case_id"] == "TC-GW-041"
+    assert record["label"] == "manual fixture capture"
+    assert record["protocol"] == "grpc"
+    assert record["request"] == {"user_id": "u1"}
+    assert record["response"] == {"code": 0}
+
+
+def test_run_task_capture_uses_aggregate_capture_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("AITEST_ENV_FILE", raising=False)
+    repo_root = Path(__file__).resolve().parents[1]
+    pythonpath = os.pathsep.join(filter(None, [str(repo_root), os.environ.get("PYTHONPATH", "")]))
+    monkeypatch.setenv("PYTHONPATH", pythonpath)
+    suite_dir = tmp_path / "external_suites" / "capture_task"
+    suite_dir.mkdir(parents=True)
+    suite_file = suite_dir / "suite.yaml"
+    suite_file.write_text(
+        """target: sub2api
+module: gateway_api
+suite: capture_task
+case_files:
+  - business.md
+""",
+        encoding="utf-8",
+    )
+    (suite_dir / "business.md").write_text(
+        """# capture task
+
+### TC-GW-041：capture case
+- **优先级**：P0
+- **断言**：`response.status == "ok"`
+""",
+        encoding="utf-8",
+    )
+    generated = tmp_path / "test_workspace" / "generated"
+    generated.mkdir(parents=True)
+    (generated / "test_gateway_api_capture_task_business.py").write_text(
+        textwrap.dedent(
+            '''
+            from aitest_kit.helpers.capture import capture_io
+
+
+            class TestGatewayApiCaptureTaskBusiness:
+                def test_tc_gw_041(self):
+                    __tc_meta__ = {
+                        "tc_id": "TC-GW-041",
+                        "module": "gateway_api",
+                        "suite": "capture_task",
+                        "category": "business",
+                        "source": "external_suites/capture_task/business.md",
+                        "title": "capture case",
+                        "priority": "P0",
+                        "markers": [],
+                    }
+                    capture_io("TC-GW-041", label="task capture", request={"x": 1})
+                    assert True
+
+
+            __codegen_skipped__ = []
+            '''
+        ),
+        encoding="utf-8",
+    )
+    task_dir = tmp_path / "test_workspace" / "tasks"
+    task_dir.mkdir(parents=True)
+    task_file = task_dir / "capture_task.yaml"
+    task_file.write_text(
+        f"""task: capture_task
+units:
+  - name: selected
+    suite_file: {suite_file}
+    case_ids:
+      - TC-GW-041
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        _run_command_impl(False, True, (), task_file=str(task_file), capture=True)
+
+    assert exc_info.value.code == 0
+    result_path = tmp_path / "test_workspace" / "reports" / "tasks" / "capture_task" / "latest" / "result.json"
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    assert result["summary"]["passed"] == 1
+    assert result["command"] == f"aitest run --task-file {task_file} --capture"
+    capture_path = result_path.parent / "capture.jsonl"
+    record = json.loads(capture_path.read_text(encoding="utf-8").strip())
+    assert record["case_id"] == "TC-GW-041"
+    assert record["request"] == {"x": 1}
+    unit_path = Path(result["task"]["units"][0]["result_path"])
+    assert unit_path.exists()
+    assert not (unit_path.parent / "capture.jsonl").exists()
 
 
 def test_run_target_module_selector_and_report(tmp_path, monkeypatch):

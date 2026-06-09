@@ -8,6 +8,9 @@
 aitest_config/aitest.yaml
   全局 workspace 路径、codegen 默认规则、module_type、通用断言规则
 
+aitest_config/capture.yaml
+  可选运行捕获配置，控制 aitest run 是否写 capture.jsonl 以及写哪些字段
+
 test_workspace/targets/{target}/target.yaml
   一个目标系统的默认目录、文档引用、知识库引用
 
@@ -61,6 +64,7 @@ test_workspace/tasks/{task}.yaml
 | `variables.defaults` | module profile 或 suite profile | fixture 代码里硬编码 |
 | `default_fixture/default_object/default_case_setup` | module profile 或 suite profile | suite.yaml |
 | 环境变量真实值 | 本地 shell、`.env` 或 `AITEST_ENV_FILE` | profile、fixture、Markdown 用例 |
+| run capture 开关和输出文件名 | `aitest_config/capture.yaml` 或 `aitest run --capture` | fixture 代码里硬编码绝对路径 |
 | 多 suite 组合执行 | `test_workspace/tasks/{task}.yaml` | module profile |
 
 ## `aitest_config/aitest.yaml`
@@ -103,6 +107,34 @@ targets: {}
 - 新项目不要急着配置 `default_request.auto_fields`。只有字段命名稳定且跨用例一致时才配置。
 - 多端点模块优先使用 fixture Client + suite profile `case_flows`。
 - `api_path: /api/v1/replace-me` 是占位默认值，真实 suite 不应依赖它。
+
+## `aitest_config/capture.yaml`
+
+职责：可选控制 `aitest run` 的运行捕获。缺省不需要创建该文件；临时排查可直接使用 `aitest run --capture`。
+
+```yaml
+enabled: false
+
+include:
+  request: true
+  response: true
+  exception: true
+  metadata: true
+
+limits:
+  string_length: 4096
+
+output:
+  file: capture.jsonl
+```
+
+规则：
+
+- CLI `--capture` 优先级高于 `enabled: false`。
+- capture 文件始终写到当前 run 目录下，例如 `runs/<run_id>/capture.jsonl`。
+- task、module、target 和 `--all` 聚合运行只在聚合 run 目录写一个 capture 文件，不在每个 unit 下重复写。
+- 默认自动捕获只覆盖框架生成的 `default_http` 用例；`case_flow`、`case_body`、gRPC、SDK 和特殊 fixture 由用户 fixture 手动调用 `capture_io()`。
+- capture 不自动脱敏；敏感字段应在 fixture 中处理后再传给 `capture_io()`。
 
 ## `target.yaml`
 

@@ -182,6 +182,15 @@ AITEST_ENV_FILE=/tmp/your-project-test.env aitest run --suite-file test_workspac
 
 `aitest run` 会先做 freshness check，Markdown/profile 变了但 generated 没更新会生成 `BLOCKED_RUN` 并停止。env 文件变量注入 pytest 子进程；报告只记录变量名，不记录变量值。
 
+需要把运行时请求/响应留给人工排查时，加 `--capture`：
+
+```bash
+AITEST_ENV_FILE=/tmp/your-project-test.env \
+  aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --capture
+```
+
+capture 写入当前 run 目录下的 `capture.jsonl`；task、module、target 和 `--all` 聚合运行写入聚合 run 目录。框架只自动捕获默认 HTTP 用例，`case_flow`、`case_body`、gRPC、SDK 或特殊 fixture 不自动捕获，用户可在自己的 fixture 中调用 `aitest_kit.helpers.capture.capture_io()`。capture 不自动脱敏，敏感字段应在 fixture 中处理后再写入。
+
 ## 四、失败分流
 
 失败后先分流，不直接改 generated pytest。

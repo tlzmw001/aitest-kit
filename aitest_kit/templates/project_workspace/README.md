@@ -188,6 +188,7 @@ aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
 
 aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --capture
 aitest run --task-file test_workspace/tasks/<task>.yaml
 aitest report
 ```
@@ -199,6 +200,8 @@ AITEST_ENV_FILE=/tmp/your-system-test.env aitest run --suite-file test_workspace
 ```
 
 `aitest run` 会把 env 文件注入 pytest 子进程；报告只记录变量名，不记录变量值。真实 shell 环境变量优先于 env 文件。
+
+排查失败时可加 `--capture`，当前 run 目录会写入一个 `capture.jsonl`。默认只自动捕获框架生成的 HTTP 用例；自定义 fixture、gRPC 或 SDK 调用可以手动调用 `aitest_kit.helpers.capture.capture_io()`。capture 不自动脱敏，敏感字段应先在 fixture 中处理。
 
 从本目录外执行时，追加：
 

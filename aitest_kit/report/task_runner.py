@@ -9,6 +9,7 @@ from typing import Any
 
 import click
 
+from aitest_kit.helpers.capture import CaptureSettings, capture_file_for_run, load_capture_settings
 from aitest_kit.registry import load_task_context
 from aitest_kit.registry.models import TaskContext, TaskUnit
 from aitest_kit.registry.selection import filter_task_context_by_case_ids
@@ -21,6 +22,8 @@ def run_task_command_impl(
     task_file: str,
     extra_args: list[str],
     case_ids: list[str] | None = None,
+    capture: bool = False,
+    capture_settings: CaptureSettings | None = None,
 ) -> None:
     """Run each suite unit in a task, then write a task-level aggregate report."""
     task = load_task_context(task_file)
@@ -37,6 +40,8 @@ def run_task_command_impl(
         include_manual=include_manual,
         skip_codegen_check=skip_codegen_check,
         extra_args=extra_args,
+        capture=capture,
+        capture_settings=capture_settings,
     )
 
 
@@ -46,6 +51,8 @@ def run_task_context_command_impl(
     include_manual: bool,
     skip_codegen_check: bool,
     extra_args: list[str],
+    capture: bool = False,
+    capture_settings: CaptureSettings | None = None,
 ) -> None:
     """Run a pre-resolved task context and write a task-level aggregate report."""
     from aitest_kit.report.cli import _create_run_dir, _load_paths, _run_command_impl, _write_result
@@ -63,6 +70,8 @@ def run_task_context_command_impl(
     paths = _load_paths()
     task_reports_dir = _task_reports_dir(task, paths.reports_dir)
     task_run_id, task_run_dir = _create_run_dir(task_reports_dir)
+    effective_capture = capture_settings or load_capture_settings(enabled_override=capture)
+    capture_file = capture_file_for_run(task_run_dir, effective_capture)
     started = time.monotonic()
     unit_results: list[dict[str, Any]] = []
     exit_code = 0
@@ -79,6 +88,9 @@ def run_task_context_command_impl(
             _run_command_impl,
             task_run_id,
             task_run_dir,
+            capture=effective_capture.enabled,
+            capture_settings=effective_capture,
+            capture_file_path=capture_file,
         )
         unit_results.append(result)
         if code:
@@ -92,6 +104,7 @@ def run_task_context_command_impl(
         exit_code=exit_code,
         include_manual=include_manual,
         extra_args=extra_args,
+        capture=effective_capture.enabled,
     )
     _write_result(task_run_dir, task_reports_dir, aggregate)
     summary = aggregate["summary"]
@@ -99,6 +112,8 @@ def run_task_context_command_impl(
         f"Task report written: {task_run_dir / 'report.md'} "
         f"(passed={summary['passed']}, failed={summary['failed']}, error={summary['error']})"
     )
+    if capture_file is not None and capture_file.exists():
+        click.echo(f"Capture written: {capture_file}")
     raise SystemExit(exit_code)
 
 
@@ -112,6 +127,10 @@ def _run_task_unit(
     run_suite,
     task_run_id: str,
     task_run_dir: Path,
+    *,
+    capture: bool = False,
+    capture_settings: CaptureSettings | None = None,
+    capture_file_path: Path | None = None,
 ) -> tuple[dict[str, Any], int]:
     if unit.suite_file is None:
         click.echo(f"\n[{index}] task unit requires suite_file")
@@ -141,6 +160,10 @@ def _run_task_unit(
             report_run_dir=unit_dir,
             run_id_override=task_run_id,
             update_latest=False,
+            capture=capture,
+            capture_settings=capture_settings,
+            capture_file_path=capture_file_path,
+            echo_capture_path=False,
         )
         code = 0
     except SystemExit as exc:
@@ -170,6 +193,7 @@ def _task_result(
     exit_code: int,
     include_manual: bool,
     extra_args: list[str],
+    capture: bool = False,
 ) -> dict[str, Any]:
     cases: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
@@ -210,7 +234,7 @@ def _task_result(
         "status": "COMPLETED" if exit_code == 0 else "FAILED_RUN",
         "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
         "duration_seconds": duration_seconds,
-        "command": _task_command(task, extra_args),
+        "command": _task_command(task, extra_args, capture=capture),
         "task_file": str(task.task_path),
         "run_scope": run_scope,
         "project_config_version": unit_results[0].get("project_config_version", "missing") if unit_results else "missing",
@@ -234,7 +258,7 @@ def _task_result(
     }
 
 
-def _task_command(task: TaskContext, extra_args: list[str] | None = None) -> str:
+def _task_command(task: TaskContext, extra_args: list[str] | None = None, *, capture: bool = False) -> str:
     selector = task.metadata.get("selector") if isinstance(task.metadata, dict) else None
     if isinstance(selector, dict):
         parts = ["aitest", "run"]
@@ -246,6 +270,8 @@ def _task_command(task: TaskContext, extra_args: list[str] | None = None) -> str
             parts.extend(["--target", str(target)])
         if module:
             parts.extend(["--module", str(module)])
+        if capture:
+            parts.append("--capture")
         for case_id in selector.get("case_ids") or []:
             parts.extend(["--case-id", str(case_id)])
         if extra_args:
@@ -254,6 +280,8 @@ def _task_command(task: TaskContext, extra_args: list[str] | None = None) -> str
         return " ".join(parts)
 
     parts = ["aitest", "run", "--task-file", str(task.task_path)]
+    if capture:
+        parts.append("--capture")
     for case_id in task.metadata.get("case_ids", []) if isinstance(task.metadata, dict) else []:
         parts.extend(["--case-id", str(case_id)])
     if extra_args:
