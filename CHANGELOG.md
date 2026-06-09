@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.3 - 2026-06-09
+
+### Added
+
+- Added `aitest run --capture` to write runtime request/response capture records to `capture.jsonl` under the current run directory.
+- Added `aitest_kit.helpers.capture.capture_io()` so user fixtures and helpers can capture custom HTTP, gRPC, SDK, or other protocol data without framework-specific assumptions.
+- Added optional `aitest_config/capture.yaml` settings for capture enablement, included fields, output file name, and string truncation.
+
+### Changed
+
+- Default HTTP generated tests now auto-capture request, response, and exceptions when run capture is enabled.
+- Task, target, module, and all-suite aggregate runs share one capture file in the aggregate run directory instead of writing per-unit capture files.
+- Documented that capture does not redact automatically; users should sanitize sensitive data in their own fixtures before calling `capture_io()`.
+
 ## 0.3.2 - 2026-06-09
 
 ### Fixed
