@@ -359,7 +359,7 @@ structured_assertions:
 
 `structured_assertions` 规则：
 
-- default HTTP/gRPC 路线只能写 `target: resp`。
+- default HTTP 路线只能写 `target: resp`。
 - `case_flow` 路线只能写当前 flow 中 `save_as` 或 `assign` 产出的变量。
 - `case_bodies`、pure manual、skipped 用例不写 `structured_assertions`。
 - JSONPath、集合遍历、字段存在性和长度断言优先写 `structured_assertions`。

@@ -181,7 +181,7 @@ case_flows:
         assert case_ir.call is None
         assert case_ir.diagnostics == []
 
-    def test_grpc_marker_requires_explicit_flow_or_body(self, tmp_path):
+    def test_grpc_marker_does_not_block_default_http_strategy(self, tmp_path):
         tc = TestCase(
             id="TC-DEMO-001",
             title="有 gRPC 场景变量",
@@ -197,10 +197,8 @@ case_flows:
         case_ir = _case(file_ir, "TC-DEMO-001")
         assert case_ir.strategy == "default_http"
         assert case_ir.protocol == "grpc"
-        assert any(
-            "gRPC cases require case_flows or case_bodies" in diag.message
-            for diag in file_ir.diagnostics
-        )
+        assert case_ir.request is not None
+        assert file_ir.diagnostics == []
 
     def test_default_http_is_lowest_priority(self):
         tc = TestCase(

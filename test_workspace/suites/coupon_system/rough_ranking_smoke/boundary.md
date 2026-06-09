@@ -31,16 +31,6 @@
 }
 ```
 
-**基础请求体（gRPC）**：
-
-```text
-coupon.RecommendRequest{
-  user_id:"{{user_id}}", scene_name:"game", device:"mobile", policy_id:"", external:0,
-  req_id:"{{req_id}}", score_threshold:0.0, max_claim_per_request:1,
-  items: {{items}}
-}
-```
-
 **标准前置**：
 - 主服务、AB 实验服务、Redis、打分服务均已启动
 - 粗排策略通过 AB 白名单强制命中，校准实验关闭

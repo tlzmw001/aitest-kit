@@ -207,7 +207,7 @@ case_bodies:
 - `requests.patches` 使用 JSON Patch 子集：`add` / `replace` / `remove`。`add/replace` 必须且只能写 `value` 或 `value_from`；`remove` 不写值。`value_from` 引用 `variables.defaults` 或 `variables.cases.<case_id>`。
 - `overrides` 只适合简单字段覆盖；涉及 list 追加/指定位置、删除字段、dict 整体替换或变量注入时使用 `patches`。
 - 集合遍历、JSONPath、字段存在性和长度断言优先写 `structured_assertions`，不要为了这类断言升级成 `case_body`。
-- default HTTP/gRPC 路线的 `structured_assertions.target` 只能写 `resp`；case_flow 路线只能写当前 flow 中 `save_as` 或 `assign` 产出的变量。
+- default HTTP 路线的 `structured_assertions.target` 只能写 `resp`；case_flow 路线只能写当前 flow 中 `save_as` 或 `assign` 产出的变量。
 - 复杂业务计算、循环/条件/等待逻辑封装到 fixture/helper 方法，再由 `case_flow.call` 调用；不要扩展 YAML 控制流。
 - 非 manual 用例的 `case_flow` 至少包含一个 `call` 或 `assert`；纯人工 `[manual]` 不写 flow，半自动 manual 才写带 `call/assert` 的 flow。
 - `{case_id}` 会由 codegen 替换成当前用例 ID。
@@ -266,7 +266,7 @@ Client 方法：
 - {method_name}({params}) [auth: yes/no]
 
 路线分布：
-- default_http/grpc：{N} 条
+- default_http：{N} 条
 - structured_case_flow：{N} 条
 - custom_case_body：{N} 条（附保留原因）
 - manual：{N} 条

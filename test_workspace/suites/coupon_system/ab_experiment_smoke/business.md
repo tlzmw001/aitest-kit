@@ -29,23 +29,6 @@
 }
 ```
 
-**基础请求体（gRPC）**：
-
-```text
-coupon.RecommendRequest{
-  user_id: "{{user_id}}"
-  scene_name: "{{scene_name}}"
-  device: "{{device}}"
-  policy_id: ""
-  external: {{external}}
-  req_id: "{{req_id}}"
-  score_threshold: 0.0
-  max_claim_per_request: 1
-  context: {}
-  items: [{item_id:"COUPON_AB_001", coupon_type:"discount", value:80, min_spend:5000, expire_days:7}]
-}
-```
-
 **标准前置**：
 - 主服务、AB 实验服务、Redis、打分服务均已启动；AB 服务地址使用项目配置或环境变量
 - 初始化库存：`SET coupon:stock:COUPON_AB_001 100 EX 86400`

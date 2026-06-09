@@ -350,7 +350,7 @@ IR 是 codegen 的中间表示。它回答一个问题：
 |---|---|
 | `FileIR` | 一个 business/boundary 文件的计划 |
 | `CaseIR` | 一条用例的计划 |
-| `RequestIR` | 默认 HTTP/gRPC 模板需要的请求数据 |
+| `RequestIR` | 默认 HTTP 模板需要的请求数据 |
 | `CallIR` | 默认模板调用哪个 helper |
 | `AssertionIR` | 断言源文本、生成代码、解析来源 |
 | `CaseFlowIR` | profile `case_flows` 的结构化流程 |
@@ -829,7 +829,7 @@ report/renderer.py::render_markdown
 | planner | `planner.py::_case_flow_for` | YAML steps 如何变成 IR |
 | render utils | `render_utils.py::resolve_assertion` | 断言匹配优先级 |
 | renderer | `ir_renderer.py::render_file_from_ir` | 文件整体结构如何生成 |
-| renderer | `ir_renderer.py::_render_default_body` | 默认 HTTP/gRPC pytest 体 |
+| renderer | `ir_renderer.py::_render_default_body` | 默认 HTTP pytest 体 |
 | renderer | `ir_renderer.py::_render_case_flow` | case_flow pytest 体 |
 | emitter | `emitter.py::emit_file` | 生成前阻断和落盘 |
 | run | `report/cli.py::_run_command_impl` | freshness check、pytest、报告写入 |
@@ -843,8 +843,8 @@ report/renderer.py::render_markdown
 
 ### 15.1 “parser 为什么不直接生成 pytest？”
 
-parser 只负责把 Markdown 变成结构化事实。  
-是否走默认 HTTP、gRPC、case_flow、case_body，是 planner 的职责。  
+parser 只负责把 Markdown 变成结构化事实。
+是否走默认 HTTP、case_flow、case_body，是 planner 的职责。
 这样排查时可以分层：
 
 ```text

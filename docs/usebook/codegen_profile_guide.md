@@ -40,7 +40,7 @@ module_types:
 
 ## requests
 
-`requests` 是统一请求绑定层。默认 HTTP/gRPC 路线和 `case_flows` 都可以使用它构造请求体。
+`requests` 是统一请求绑定层。默认 HTTP 路线和 `case_flows` 都可以使用它构造请求体。
 
 当前确定性 codegen 生成真实请求体时，以这里的 `requests.<case_id>` 为准；Markdown 场景变量中的“请求覆盖”主要用于人类 review 和 trace。
 
@@ -156,7 +156,7 @@ structured_assertions:
 - `structured_assertions` 属于 suite profile，不写进 module profile。
 - key 必须是当前 suite Markdown 中存在的 case_id。
 - `target` 必须是当前 generated pytest 中已经存在的变量名。
-- default HTTP/gRPC 路线只允许 `target: resp`。
+- default HTTP 路线只允许 `target: resp`。
 - `case_flow` 路线只允许引用当前 flow 中 `save_as` 或 `assign` 产生的变量，例如 `resp`、`query_resp`。
 - `case_bodies`、manual、skipped 用例不使用 `structured_assertions`；复杂业务计算应封装到 fixture/helper 断言方法。
 - `path` 必须是合法 JSONPath。

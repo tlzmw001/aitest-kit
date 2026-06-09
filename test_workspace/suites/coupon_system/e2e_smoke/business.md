@@ -29,9 +29,6 @@
 }
 ```
 
-**基础请求体（gRPC）**：
-`RecommendRequest(user_id="{{user_id}}", scene_name="{{scene_name}}", device="{{device}}", policy_id="{{policy_id}}", context={{context}}, items={{items}}, score_threshold={{score_threshold}}, max_claim_per_request={{max_claim_per_request}}, external={{external}}, req_id="{{req_id}}")`
-
 **标准前置**：
 - 使用独立 e2e 测试环境启动 Redis、主服务、AB 实验服务和所需打分服务。
 - HTTP 主服务地址使用 `{{http_base_url}}`，gRPC 主服务地址使用 `{{grpc_target}}`，AB 服务地址使用 `{{ab_base_url}}`。

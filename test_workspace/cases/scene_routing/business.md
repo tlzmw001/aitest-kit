@@ -27,16 +27,6 @@
 }
 ```
 
-**基础请求体（gRPC）**：
-
-```text
-coupon.RecommendRequest{
-  user_id:"{{user_id}}", scene_name:"{{scene_name}}", device:"{{device}}", policy_id:"{{policy_id}}",
-  external:{{external}}, req_id:"{{req_id}}", score_threshold:0.0, max_claim_per_request:1,
-  items:[{item_id:"COUPON_ROUTE_001", coupon_type:"discount", value:80, min_spend:5000, expire_days:7}]
-}
-```
-
 **标准前置**：
 - 主服务、Redis、打分服务可用；非 `external=1` 用例要求 AB 服务可用
 - 默认路由表：`game/mobile -> 1001`、`ad/pc -> 2002`，兜底 `fallback_scene_id=3001`

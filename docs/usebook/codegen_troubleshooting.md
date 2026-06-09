@@ -41,19 +41,21 @@ Next step: create a target/module registry and a suite.yaml, or keep using legac
 - Markdown 的 JSON 基础请求体不是合法 JSON。
 - JSON 中出现 `{{user_id}}` 这类模板占位符。
 - 使用了单引号、尾逗号、注释。
+- `基础请求体（gRPC）` 后面不是合法 JSON；该标签只作为兼容标签，仍按 JSON 基础请求体解析。
 
 处理：
 
 - 基础请求体必须能被 `json.loads` 解析。
 - 变化字段填合法默认值。
 - case 级变化写到“请求覆盖”供 review；真实执行差异优先写 profile 的 `requests.<case_id>.patches`，简单字段覆盖可用 `overrides`。
+- `基础请求体（gRPC）` 可以保留，但代码块必须是合法 JSON；它不会启用 `default_grpc`。用例场景变量写 `协议：gRPC` 也不会阻断默认 JSON 请求绑定；只有需要真实 gRPC/SDK/多端点调用时，才需要通过 suite profile 的 `case_flows` 或 `case_bodies` 显式调用 fixture/helper。
 
 ## E002: 缺少基础请求体
 
 常见原因：
 
 - Markdown 没有 JSON 基础请求体；可写 `基础请求体`、`基础请求体（JSON）` 或兼容旧写法 `基础请求体（HTTP）`。
-- 模块不是默认 HTTP，或用例需要 gRPC/SDK/多端点动作，但也没有 `case_bodies` 或 `case_flows`。
+- 模块无法使用默认 HTTP 请求，或用例需要真实 gRPC/SDK/多端点动作，但也没有 `case_bodies` 或 `case_flows`。
 
 处理：
 
@@ -144,7 +146,7 @@ aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --
 
 处理：
 
-- default HTTP/gRPC 用例只能写 `target: resp`。
+- default HTTP 用例只能写 `target: resp`。
 - `case_flow` 用例只能引用该 flow 中 `save_as` 或 `assign` 产出的变量。
 - `case_bodies`、pure manual、skipped 用例不挂 `structured_assertions`。
 - 复杂业务计算不要扩展 YAML 控制流，封装到 fixture/helper 方法，再通过 `case_flow.call` 调用。

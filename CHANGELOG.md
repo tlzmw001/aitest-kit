@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.2 - 2026-06-09
+
+### Fixed
+
+- Removed the legacy `base_request_grpc` parser field so gRPC-labeled request bodies no longer create a separate default gRPC request path.
+- Kept `基础请求体（gRPC）` as a compatible Markdown label when it contains valid JSON, routing it into the unified JSON request binding used by default HTTP and `case_flow` `request_ref`.
+- Removed the planner diagnostic that blocked default request generation for cases whose scenario variables mention gRPC.
+- Removed legacy text-format gRPC base request blocks from bundled coupon-system cases and suites.
+
+### Changed
+
+- Updated case-format docs, troubleshooting docs, bundled templates, and local agent skills to describe `default_http` plus explicit `case_flows` / `case_bodies` as the supported gRPC path.
+
 ## 0.3.1 - 2026-06-09
 
 ### Changed

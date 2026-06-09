@@ -31,16 +31,6 @@
 }
 ```
 
-**基础请求体（gRPC）**：
-
-```text
-coupon.RecommendRequest{
-  user_id:"{{user_id}}", scene_name:"game", device:"mobile", policy_id:"", external:0,
-  req_id:"{{req_id}}", score_threshold:0.0, max_claim_per_request:1,
-  items: {{items}}
-}
-```
-
 **标准前置**：
 - 主服务、AB 实验服务、Redis、打分服务均已启动
 - 候选券默认集合：`COUPON_RANK_A(value=100,min_spend=9000,type=discount)`、`COUPON_RANK_B(value=80,min_spend=1000,type=fixed,isPrior=true)`、`COUPON_RANK_C(value=50,min_spend=500,type=free_shipping)`

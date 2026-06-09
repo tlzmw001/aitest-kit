@@ -75,7 +75,7 @@ target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{
 ## 结构化断言
 
 - JSONPath、列表遍历、字段存在性和长度断言优先写 suite profile `structured_assertions`。
-- default HTTP/gRPC 路线的 `target` 只能是 `resp`。
+- default HTTP 路线的 `target` 只能是 `resp`。
 - `case_flow` 路线的 `target` 必须来自当前 flow 中的 `save_as` 或 `assign`。
 - `case_bodies`、pure manual、skipped 用例不挂 `structured_assertions`。
 - 复杂业务公式、循环、条件、等待和跨响应计算应封装到 fixture/helper 方法，再用 `case_flow.call` 调用；不要把 YAML 写成控制流语言。

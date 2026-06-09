@@ -15,7 +15,6 @@ from pathlib import Path
 class SharedConfig:
     interfaces: list[str] = field(default_factory=list)
     base_request_http: dict | None = None
-    base_request_grpc: str | None = None
     preconditions: list[str] = field(default_factory=list)
     common_assertions: list[str] = field(default_factory=list)
     variables: dict[str, str] = field(default_factory=dict)
@@ -99,26 +98,6 @@ def _find_template_placeholders(value: object, path: str = "$") -> list[str]:
     return found
 
 
-def _extract_text_block(lines: list[str], start: int) -> tuple[str | None, int]:
-    """Extract a ```text ... ``` or ``` ... ``` code block."""
-    i = start
-    while i < len(lines):
-        stripped = lines[i].strip()
-        if stripped.startswith("```text") or (stripped == "```" and i > start):
-            break
-        if stripped.startswith("```") and not stripped.startswith("```json"):
-            break
-        i += 1
-    else:
-        return None, start
-    i += 1
-    text_lines = []
-    while i < len(lines) and not lines[i].strip().startswith("```"):
-        text_lines.append(lines[i])
-        i += 1
-    return "\n".join(text_lines), i + 1
-
-
 # ---------------------------------------------------------------------------
 # Shared config parsing
 # ---------------------------------------------------------------------------
@@ -171,11 +150,6 @@ def _parse_shared_config(lines: list[str]) -> tuple[SharedConfig, int, list[str]
             cfg.base_request_http = body
             if body is None and json_error:
                 errors.append(_format_json_error("基础请求体（HTTP）", json_error))
-            continue
-
-        elif line.startswith("**基础请求体（gRPC）**") or line.startswith("**基础请求体(gRPC)**"):
-            text, i = _extract_text_block(lines, i + 1)
-            cfg.base_request_grpc = text
             continue
 
         elif line.startswith("**基础请求体"):
@@ -363,7 +337,6 @@ if __name__ == "__main__":
     cfg = result.shared_config
     print(f"  Interfaces: {cfg.interfaces}")
     print(f"  HTTP body keys: {list(cfg.base_request_http.keys()) if cfg.base_request_http else 'None'}")
-    print(f"  gRPC body: {'yes' if cfg.base_request_grpc else 'no'}")
     print(f"  Preconditions: {len(cfg.preconditions)}")
     print(f"  Common assertions: {cfg.common_assertions}")
     print(f"  Variables: {cfg.variables}")

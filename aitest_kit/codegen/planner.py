@@ -576,17 +576,6 @@ def build_file_ir(
         case_ir.diagnostics.extend(
             _case_diagnostics(case_ir, parse_result.shared_config.base_request_http is not None)
         )
-        if strategy == "default_http" and is_grpc:
-            diagnostic = DiagnosticIR(
-                code="E202",
-                layer="planner",
-                message=(
-                    f"{tc.id}: gRPC cases require case_flows or case_bodies; "
-                    "default_grpc has been removed"
-                ),
-            )
-            case_ir.diagnostics.append(diagnostic)
-            file_ir.diagnostics.append(diagnostic)
         file_ir.cases.append(case_ir)
 
     return file_ir

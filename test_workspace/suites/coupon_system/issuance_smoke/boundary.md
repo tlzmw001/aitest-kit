@@ -30,16 +30,6 @@
 }
 ```
 
-**基础请求体（gRPC）**：
-
-```text
-coupon.RecommendRequest{
-  user_id:"{{user_id}}", scene_name:"game", device:"mobile", policy_id:"", external:0,
-  req_id:"{{req_id}}", score_threshold:0.5, max_claim_per_request:{{max_claim_per_request}},
-  items: {{items}}
-}
-```
-
 **标准前置**：
 - 主服务、AB 实验服务、Redis、打分服务均已启动；粗排和校准实验关闭
 - 每条用例使用唯一 `user_id` 和唯一 coupon id，避免领取记录互相影响

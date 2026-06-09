@@ -121,7 +121,7 @@ test_workspace/reports/tasks/<task_or_selector>/latest/report.md
 
 ### calibration：默认模板 + 断言规则
 
-`calibration` 代表标准推荐接口模块。它主要走默认 HTTP/gRPC 模板，复杂点在断言公式。
+`calibration` 代表标准推荐接口模块。它主要走默认 HTTP 模板，复杂点在断言公式。
 
 相关文件：
 

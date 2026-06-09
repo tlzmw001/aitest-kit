@@ -134,7 +134,7 @@ effort: high
 
 分析结果：
 - 总 case：{total}
-- default_http/grpc：{N}
+- default_http：{N}
 - case_flows：{N}
 - case_bodies：{N}
 - manual：{N}

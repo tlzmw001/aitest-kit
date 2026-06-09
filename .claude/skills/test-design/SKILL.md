@@ -79,7 +79,7 @@ effort: high
 10. 区分可控输入与系统中间产物：请求参数、配置、测试数据、外部依赖状态属于可控输入，可在前置条件中指定具体值；系统运行时计算结果（如派生值、聚合值、排序位次）属于中间产物，不能在前置条件或场景变量中假设其具体值，只能通过调整可控输入间接影响；对中间产物的断言必须使用范围断言或关系断言
 11. 断言选择遵循 `aitest_config/refs/assertion-strategy.md` 的三种策略
 
-**接口覆盖**：查看 L1 "接口"章节，确认模块暴露的接口类型（HTTP / gRPC / 两者）。两种接口都有时，共享配置必须列出两种接口，每个功能场景必须生成 HTTP 和 gRPC 两组用例（可共享场景变量，仅接口和请求格式不同）。
+**接口覆盖**：查看 L1 "接口"章节，确认模块暴露的接口类型（HTTP / gRPC / 两者）。共享配置可以列出多种接口，但默认 Markdown 用例只生成 JSON 基础请求体；写 `协议：gRPC` 或 `基础请求体（gRPC）` 不会阻断默认 JSON 路径，真实 gRPC、SDK 或多端点执行再在后续 suite profile 中通过 `case_flows` 或 `case_bodies` 显式接线。
 
 **输出格式**：默认输出到 `$suite_dir/business.md`；如果用户指定需求 suite，可输出为 `{suite_name}_business.md` 等带语义的文件名。按 `aitest_config/refs/case-format.md` 的"共享配置 + 精简用例"格式。每条用例只写 **优先级 / 场景变量 / 断言** 三个字段（有特殊状态时加 **标记** 字段）。场景变量必须写成 `key：value` 条目列表，`[manual]`、`[!可行性存疑]` 等标记写在独立的标记字段，不内联到场景变量或断言中。test-design 只产出 Markdown 用例，不写 `suite.yaml` 和 suite profile；这些由 `test-scaffold` / `test-codegen` 接线。
 

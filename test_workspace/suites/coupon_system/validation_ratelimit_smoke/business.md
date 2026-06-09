@@ -35,31 +35,6 @@
 }
 ```
 
-**基础请求体（gRPC）**：
-
-```text
-coupon.RecommendRequest{
-  user_id: "{{user_id}}"
-  scene_name: "game"
-  device: "mobile"
-  policy_id: ""
-  external: {{external}}
-  req_id: "{{req_id}}"
-  score_threshold: {{score_threshold}}
-  max_claim_per_request: {{max_claim_per_request}}
-  context: {}
-  items: [
-    {
-      item_id: "COUPON_VAL_001"
-      coupon_type: "discount"
-      value: 80
-      min_spend: 5000
-      expire_days: 7
-    }
-  ]
-}
-```
-
 **标准前置**：
 - 主服务按项目命令启动：`python -m coupon_system.main`；HTTP 使用配置中的 `http://localhost:8000`，gRPC 使用 `localhost:50051`
 - Redis 使用配置前缀 `coupon:`；每条用例执行前清理限流 key：`DEL coupon:rate:global coupon:rate:user:{{user_id}}`
