@@ -134,7 +134,7 @@ output:
 - capture 文件始终写到当前 run 目录下，例如 `runs/<run_id>/capture.jsonl`。
 - task、module、target 和 `--all` 聚合运行只在聚合 run 目录写一个 capture 文件，不在每个 unit 下重复写。
 - 默认自动捕获只覆盖框架生成的 `default_http` 用例；`case_flow`、`case_body`、gRPC、SDK 和特殊 fixture 由用户 fixture/client/helper 方法手动调用 `capture_io()`。在 generated 测试函数体内调用时，`capture_io()` 可从运行时 case context 推断当前 `case_id`；显式传入 `case_id` 仍然有效。pytest fixture setup/teardown 阶段不在该 context 内。
-- `default_http` 不自动执行 `setup_{module}(case_id=...)`；需要 per-case 数据准备、factory setup、SDK/gRPC/custom client 或多步骤调用时，用 `case_flow` / `case_body` 显式表达。
+- `default_http` 不自动注入或执行 `setup_{module}`；需要 per-case 数据准备、factory setup、SDK/gRPC/custom client 或多步骤调用时，用 `case_flow` / `case_body` 显式表达。
 - 运行时 case context 只用于 capture/log 归因，不用于让 fixture 按 case_id 拼请求体、选择账号或改变业务分支；这些差异应写入 `requests` 或 profile variables。
 - capture 不自动脱敏；敏感字段应在 fixture 中处理后再传给 `capture_io()`。
 
@@ -422,7 +422,7 @@ kwargs:
 - `remove` 不写 `value` 或 `value_from`。
 - `value_from` 引用 profile `variables.defaults` 或 `variables.cases.<case_id>`。
 - `overrides` 只用于简单字段覆盖；涉及 list 追加/指定位置、删除字段、dict 整体替换或变量注入时使用 `patches`。
-- `default_http` 只消费这些请求差异和断言；它不会因为存在 `setup_{module}` fixture 就自动调用 per-case setup。
+- `default_http` 只消费这些请求差异和断言；它不会因为存在 `setup_{module}` fixture 就自动注入或调用 per-case setup。
 
 ## task manifest
 

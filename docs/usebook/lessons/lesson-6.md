@@ -160,12 +160,12 @@ return "default_http", "default", "no custom strategy or gRPC marker"
 | `skipped` | `[]` |
 | `custom_case_body` | profile 的 `case_fixtures`，没有则默认 `setup_{module}` |
 | `structured_case_flow` | `case_flows.{case_id}.fixture` |
-| `default_http` | `http_base_url` + `setup_{module}` 进入函数签名，但不自动调用 per-case setup |
+| `default_http` | `http_base_url` |
 
 例如 `calibration` 默认 HTTP 用例：
 
 ```json
-"fixtures": ["http_base_url", "setup_calibration"]
+"fixtures": ["http_base_url"]
 ```
 
 例如 `ab_service` 的 case_flow：

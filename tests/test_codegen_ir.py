@@ -939,6 +939,8 @@ def test_emitter_auto_captures_only_default_http(tmp_path):
     text = (tmp_path / "test_demo_business.py").read_text(encoding="utf-8")
     assert "from aitest_kit.helpers.capture import capture_io" in text
     assert "from aitest_kit.runtime_context import reset_case_context, set_case_context" in text
+    assert "def test_tc_demo_001(self, http_base_url):" in text
+    assert "setup_demo" not in text
     assert "setup_demo(case_id=" not in text
     assert "__aitest_request = _req()" in text
     assert 'if hasattr(http_helper, "post_response"):' in text

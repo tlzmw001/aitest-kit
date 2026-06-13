@@ -86,7 +86,7 @@ def _fixtures_for(
         return [], f"profile.case_flows.{tc.id}.fixture"
     if strategy == STRATEGY_MANUAL:
         return [], "manual marker"
-    return ["http_base_url", f"setup_{module}"], "default HTTP fixtures"
+    return ["http_base_url"], "default HTTP fixtures"
 
 
 class _SafeFormatDict(dict[str, Any]):

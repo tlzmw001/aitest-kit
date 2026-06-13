@@ -421,8 +421,13 @@ def render_file_from_ir(
 
     all_lines.append("")
     all_lines.append("")
+    default_fixture_name = f"setup_{ctx.module}"
+    needs_default_fixture = any(
+        default_fixture_name in case.fixtures
+        for case in file_ir.cases
+    )
     fixture_path = ctx.fixture_dir / f"{ctx.module}.py"
-    if not fixture_path.exists():
+    if needs_default_fixture and not fixture_path.exists():
         all_lines.append(
             f"# TODO: setup_{ctx.module} fixture 需要手写实现（→ tests/fixtures/{ctx.module}.py）"
         )

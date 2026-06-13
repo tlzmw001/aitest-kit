@@ -247,7 +247,7 @@ def _render_test_function(case_ir, tc, ctx):
 `_render_default_body()` 生成的结构大致是：
 
 ```python
-def test_tc_cal_001(self, http_base_url, setup_calibration):
+def test_tc_cal_001(self, http_base_url):
     """TC-CAL-001：..."""
     __tc_meta__ = {...}
 

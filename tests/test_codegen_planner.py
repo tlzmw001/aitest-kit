@@ -293,7 +293,7 @@ class TestFixtureSelection:
     def test_default_http_fixtures(self):
         tc = TestCase(id="TC-DEMO-001", title="http", priority="P1", section="fixture")
         file_ir = build_file_ir(_parse_result([tc]), "business", project=DEFAULT_PROJECT)
-        assert _case(file_ir, "TC-DEMO-001").fixtures == ["http_base_url", "setup_demo"]
+        assert _case(file_ir, "TC-DEMO-001").fixtures == ["http_base_url"]
 
     def test_grpc_marker_does_not_switch_default_fixtures(self):
         tc = TestCase(
@@ -304,7 +304,7 @@ class TestFixtureSelection:
             section="fixture",
         )
         file_ir = build_file_ir(_parse_result([tc]), "business", project=DEFAULT_PROJECT)
-        assert _case(file_ir, "TC-DEMO-001").fixtures == ["http_base_url", "setup_demo"]
+        assert _case(file_ir, "TC-DEMO-001").fixtures == ["http_base_url"]
 
     def test_case_flow_uses_flow_fixture(self, tmp_path):
         profile_path = tmp_path / "profile_demo_suite.md"

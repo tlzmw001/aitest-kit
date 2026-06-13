@@ -44,6 +44,8 @@ Make setup ownership explicit:
 
 - `default_http` is a simple single-request strategy.
 - `default_http` does not generate `setup_{module}(case_id=...)`.
+- `default_http` does not inject `setup_{module}` into the pytest function
+  signature.
 - `case_flow` remains the strategy for per-case setup, factory calls, state
   preparation, multi-step calls, SDK/gRPC/custom clients, and actions whose
   result is consumed by later steps.
@@ -84,7 +86,7 @@ def test_tc_demo_001(self, http_base_url, setup_demo):
 After:
 
 ```python
-def test_tc_demo_001(self, http_base_url, setup_demo):
+def test_tc_demo_001(self, http_base_url):
     __tc_meta__ = {...}
     __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
     try:
@@ -95,9 +97,9 @@ def test_tc_demo_001(self, http_base_url, setup_demo):
         reset_case_context(__aitest_ctx_token)
 ```
 
-The default fixture can still be passed into the pytest function when existing
-fixture selection requires it, but codegen will not call it with a hidden
-`case_id`.
+After the cleanup is complete, `default_http` only needs `http_base_url` in the
+pytest function signature. Module fixtures are still available to explicit
+`case_flow`, `case_body`, and profile-declared custom paths.
 
 ### case_flow
 
@@ -136,18 +138,24 @@ resp = case.get("/health")
 - `aitest_kit/codegen/planner.py`
   - Stop importing `SetupCallIR`.
   - Stop assigning implicit `setup_call` for `default_http`.
+  - Stop adding `setup_{module}` to default HTTP fixture lists.
 - `aitest_kit/codegen/ir_renderer.py`
   - Remove `_render_setup_call()`.
   - Stop rendering setup calls in `_render_default_body()`.
+  - Emit missing `setup_{module}` TODO comments only when a rendered case
+    actually declares that fixture.
 
 ### Affected Tests
 
 - `tests/test_codegen_planner.py`
   - Replace `case_ir.setup_call is None` assertions with behavior checks that
     default HTTP IR has request/call data and no setup field in serialized IR.
+  - Assert default HTTP fixtures contain `http_base_url` only.
 - `tests/test_codegen_ir.py`
   - Add or update default HTTP rendering coverage to assert generated code does
     not contain `setup_demo(case_id=...)`.
+  - Assert default HTTP generated function signatures do not contain
+    `setup_demo`.
   - Keep existing `default_case_setup` case_flow tests unchanged except for any
     import or IR shape cleanup.
 
@@ -169,6 +177,8 @@ resp = case.get("/health")
 Documentation should state:
 
 - `default_http` does not auto-run per-case setup.
+- `default_http` does not require `setup_{module}` in the generated pytest
+  function signature.
 - Request differences belong in `requests` and `variables`.
 - Per-case setup, factory calls, state preparation, SDK/gRPC/custom clients, and
   multi-step logic belong in `case_flow` or `case_body`.
@@ -180,6 +190,9 @@ Documentation should state:
 - No production code references `SetupCallIR` or `CaseIR.setup_call`.
 - No default HTTP generated test contains an implicit
   `setup_{module}(case_id=...)` call.
+- No default HTTP generated test requires `setup_{module}` in the pytest
+  function signature.
+- No default HTTP-only generated file emits a missing `setup_{module}` TODO.
 - `case_flow` `default_case_setup` still expands and renders as an explicit
   first step.
 - Generated suites remain fresh.

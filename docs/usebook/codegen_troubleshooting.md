@@ -247,7 +247,7 @@ fixture 'setup_xxx' not found
 
 常见原因：
 
-- generated pytest 引用了 `setup_{module}`，通常来自 module registry 的默认 fixture、`case_flow.fixture`、`default_fixture` 或显式 `default_case_setup`；`default_http` 不再隐式调用 `setup_{module}(case_id=...)`。
+- generated pytest 引用了 `setup_{module}`，通常来自 `case_flow.fixture`、`default_fixture`、显式 `default_case_setup` 或 `case_body` 默认 fixture；`default_http` 不再隐式注入或调用 `setup_{module}`。
 - target/suite 模式下，`test_workspace/targets/{target}/fixtures/{module}.py` 没有定义该 fixture，或 `module.yaml.fixture.default_fixture` 写错。
 - 旧 workspace 模块模式下，`test_workspace/tests/fixtures/{module}.py` 没有定义该 fixture，或 fixture 文件没有被 `test_workspace/tests/conftest.py` 注册。
 
