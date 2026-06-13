@@ -16,19 +16,12 @@ from aitest_kit.codegen.module_type import (
 )
 from aitest_kit.codegen.parser import ParseResult
 from aitest_kit.codegen.planner import build_file_ir
-from aitest_kit.codegen.profile import (
-    load_profile_case_bodies,
-    load_profile_case_fixtures,
-    load_profile_case_flows,
-    load_profile_extra_imports,
-    load_profile_yaml,
-    load_profile_rules,
-    RuntimeProfile,
-)
+from aitest_kit.codegen.profile import RuntimeProfile
 from aitest_kit.codegen.project_config import (
     DEFAULT_PROJECT,
     ProjectConfig,
 )
+from aitest_kit.codegen.resolved_profile import resolve_profile
 
 
 # ---------------------------------------------------------------------------
@@ -94,12 +87,13 @@ def emit_file(
             diagnostics=list(profile_path.diagnostics),
         )
 
-    profile_rules = load_profile_rules(profile_path) if profile_path else []
-    extra_imports = load_profile_extra_imports(profile_path) if profile_path else []
-    case_fixtures = load_profile_case_fixtures(profile_path) if profile_path else {}
-    case_bodies = load_profile_case_bodies(profile_path) if profile_path else {}
-    case_flows = load_profile_case_flows(profile_path) if profile_path else {}
-    profile_data = load_profile_yaml(profile_path) if profile_path else {}
+    resolved_profile = resolve_profile(profile_path)
+    profile_rules = resolved_profile.rules
+    extra_imports = resolved_profile.extra_imports
+    case_fixtures = resolved_profile.case_fixtures
+    case_bodies = resolved_profile.case_bodies
+    case_flows = resolved_profile.case_flows
+    profile_data = resolved_profile.raw
     proj = project or DEFAULT_PROJECT
 
     ctx = EmitContext(

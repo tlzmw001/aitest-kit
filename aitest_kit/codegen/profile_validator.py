@@ -18,9 +18,6 @@ from aitest_kit.codegen.module_type import (
     validate_module_type_requirements,
 )
 from aitest_kit.codegen.profile import (
-    apply_case_flow_defaults,
-    case_flow_defaults_from_yaml,
-    load_profile_yaml,
     validate_case_flows,
     validate_profile_strategy_conflicts,
 )
@@ -38,6 +35,7 @@ from aitest_kit.codegen.profile_validation_report import (
     render_profile_validation_markdown,
     write_profile_validation_report,
 )
+from aitest_kit.codegen.resolved_profile import resolve_profile
 from aitest_kit.codegen.suite import load_suite_context_for_paths, parse_suite_case_file
 from aitest_kit.codegen.strategy import (
     PROFILE_INTENT_NONE,
@@ -113,9 +111,8 @@ def validate_profile_suite(
             _validate_profile_schema(report, suite_data)
             _validate_top_level_shape(report, suite_data)
 
-    runtime_data = context.runtime_profile.data
-    if module_data is not None:
-        runtime_data = load_profile_yaml(context.runtime_profile)
+    resolved = resolve_profile(context.runtime_profile)
+    runtime_data = resolved.raw
 
     suite_case_bodies = _mapping(suite_data, "case_bodies")
     suite_case_flows = _mapping(suite_data, "case_flows")
@@ -123,15 +120,12 @@ def validate_profile_suite(
     suite_requests = _mapping(suite_data, "requests")
     suite_structured_assertions = _mapping(suite_data, "structured_assertions")
     suite_variables = _mapping(suite_data, "variables")
-    runtime_case_bodies = _mapping(runtime_data, "case_bodies")
-    runtime_requests = _mapping(runtime_data, "requests")
-    runtime_structured_assertions = _mapping(runtime_data, "structured_assertions")
-    case_flow_defaults = case_flow_defaults_from_yaml(runtime_data)
-    runtime_case_flows = apply_case_flow_defaults(
-        _mapping(runtime_data, "case_flows"),
-        case_flow_defaults,
-    )
-    runtime_variables = _mapping(runtime_data, "variables")
+    runtime_case_bodies = resolved.case_bodies
+    runtime_requests = resolved.requests
+    runtime_structured_assertions = resolved.structured_assertions
+    case_flow_defaults = resolved.case_flow_defaults
+    runtime_case_flows = resolved.case_flows
+    runtime_variables = resolved.variables
 
     for message in validate_profile_strategy_conflicts(suite_case_bodies, suite_case_flows):
         _error(report, "E502", message)

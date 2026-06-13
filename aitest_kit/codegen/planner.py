@@ -26,19 +26,11 @@ from aitest_kit.codegen.structured_assertions import (
 from aitest_kit.codegen.case_flow_planner import build_case_flow_ir
 from aitest_kit.codegen.parser import ParseResult, TestCase
 from aitest_kit.codegen.profile import (
-    load_profile_case_bodies,
-    load_profile_case_fixtures,
-    load_profile_case_flows,
-    load_profile_structured_assertions,
-    load_profile_requests,
-    load_profile_rules,
-    load_profile_yaml,
     validate_case_flows,
     validate_profile_strategy_conflicts,
 )
 from aitest_kit.codegen.profile_variables import (
     case_flow_variable_refs,
-    load_profile_variables,
     profile_variable_irs_for_case,
     request_variable_refs,
     validate_request_variable_references,
@@ -46,6 +38,7 @@ from aitest_kit.codegen.profile_variables import (
     validate_profile_variables,
 )
 from aitest_kit.codegen.project_config import DEFAULT_PROJECT, AssertionRule, ProjectConfig
+from aitest_kit.codegen.resolved_profile import resolve_profile
 from aitest_kit.codegen.render_utils import (
     module_abbrev,
     resolve_assertion,
@@ -395,13 +388,14 @@ def build_file_ir(
 ) -> FileIR:
     """Build Case IR for one parsed Markdown file."""
     proj = project or DEFAULT_PROJECT
-    profile_rules = load_profile_rules(profile_path) if profile_path else []
-    requests = load_profile_requests(profile_path) if profile_path else {}
-    structured_assertions = load_profile_structured_assertions(profile_path) if profile_path else {}
-    case_fixtures = load_profile_case_fixtures(profile_path) if profile_path else {}
-    case_bodies = load_profile_case_bodies(profile_path) if profile_path else {}
-    case_flows = load_profile_case_flows(profile_path) if profile_path else {}
-    profile_variables = load_profile_variables(load_profile_yaml(profile_path)) if profile_path else {}
+    profile = resolve_profile(profile_path)
+    profile_rules = profile.rules
+    requests = profile.requests
+    structured_assertions = profile.structured_assertions
+    case_fixtures = profile.case_fixtures
+    case_bodies = profile.case_bodies
+    case_flows = profile.case_flows
+    profile_variables = profile.variables
 
     file_ir = FileIR(
         module=parse_result.module,

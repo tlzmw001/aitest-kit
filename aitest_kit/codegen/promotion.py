@@ -6,11 +6,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from aitest_kit.codegen.profile import (
-    load_profile_case_bodies,
-    load_profile_case_fixtures,
-    load_profile_case_flows,
-)
+from aitest_kit.codegen.resolved_profile import resolve_profile
 
 
 @dataclass
@@ -152,15 +148,16 @@ def analyze_case_body_promotion(
 
     This function is intentionally read-only. It never edits profile YAML.
     """
-    bodies = load_profile_case_bodies(profile_path)
+    resolved_profile = resolve_profile(profile_path)
+    bodies = resolved_profile.case_bodies
     if case_ids is not None:
         bodies = {
             case_id: lines
             for case_id, lines in bodies.items()
             if case_id in case_ids
         }
-    case_fixtures = load_profile_case_fixtures(profile_path)
-    case_flows = load_profile_case_flows(profile_path)
+    case_fixtures = resolved_profile.case_fixtures
+    case_flows = resolved_profile.case_flows
     object_names = _profile_object_names(case_fixtures, case_flows)
     grouped: dict[str, list[PromotionCase]] = {}
     group_meta: dict[str, tuple[str, str, list[str], list[str]]] = {}

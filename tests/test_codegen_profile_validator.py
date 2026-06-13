@@ -759,6 +759,45 @@ case_flows:
     assert report.errors == []
 
 
+def test_profile_validator_uses_module_case_flow_defaults_in_runtime_view(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(
+        tmp_path,
+        module_profile="""module_type: standard_http
+default_fixture: setup_gateway_api
+default_object: client
+default_case_setup:
+  call: client.seed
+  kwargs:
+    case_id: "{case_id}"
+""",
+    )
+    suite_dir = _write_suite(
+        tmp_path,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+case_flows:
+  TC-GW-001:
+    steps:
+      - call: client.health
+        save_as: resp
+structured_assertions:
+  TC-GW-001:
+    - type: jsonpath_exists
+      target: resp
+      path: $.status
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert report.errors == []
+
+
 def test_profile_validator_rejects_suite_case_flow_in_module_profile(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     profile_dir = _write_target(
