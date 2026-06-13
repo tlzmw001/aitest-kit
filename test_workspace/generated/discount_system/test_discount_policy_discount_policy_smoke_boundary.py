@@ -3,6 +3,7 @@
 import pytest
 from aitest_kit.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
+from aitest_kit.runtime_context import reset_case_context, set_case_context
 from test_workspace.targets.discount_system.fixtures.discount_policy import setup_discount_policy
 
 
@@ -42,17 +43,21 @@ class TestDiscountPolicyBoundary:
             "priority": "P2",
             "markers": [],
         }
-        # SETUP: 请求覆盖：{"user_id": "u_dp_009", "item_price": 0, "stock": 5, "request_id": "req_dp_009"}
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 请求覆盖：{"user_id": "u_dp_009", "item_price": 0, "stock": 5, "request_id": "req_dp_009"}
 
-        dp = setup_discount_policy
-        dp = setup_discount_policy(case_id="TC-DP-009")
-        payload = dp.payload(user_id="u_dp_009", item_price=0, stock=5, request_id="req_dp_009")
-        resp = dp.evaluate(payload)
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["code"] == 0
-        assert body["reason_code"] == "DEFAULT"
-        assert body["request_id"] == "req_dp_009"
+            dp = setup_discount_policy
+            dp = setup_discount_policy(case_id="TC-DP-009")
+            payload = dp.payload(user_id="u_dp_009", item_price=0, stock=5, request_id="req_dp_009")
+            resp = dp.evaluate(payload)
+            assert resp.status_code == 200
+            body = resp.json()
+            assert body["code"] == 0
+            assert body["reason_code"] == "DEFAULT"
+            assert body["request_id"] == "req_dp_009"
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_dp_010(self, setup_discount_policy):
         """TC-DP-010：非法 user_level 触发校验错误且不存储"""
@@ -65,17 +70,21 @@ class TestDiscountPolicyBoundary:
             "priority": "P1 / 异常",
             "markers": [],
         }
-        # SETUP: 请求覆盖：{"user_id": "u_dp_010", "user_level": "gold", "request_id": "req_dp_010"}
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 请求覆盖：{"user_id": "u_dp_010", "user_level": "gold", "request_id": "req_dp_010"}
 
-        dp = setup_discount_policy
-        dp = setup_discount_policy(case_id="TC-DP-010")
-        payload = dp.payload(user_id="u_dp_010", user_level="gold", request_id="req_dp_010")
-        resp = dp.evaluate(payload)
-        assert resp.status_code >= 400
-        query_resp = dp.query("req_dp_010")
-        assert query_resp.status_code == 404
-        body = query_resp.json()
-        assert body["error"] == "DECISION_NOT_FOUND"
+            dp = setup_discount_policy
+            dp = setup_discount_policy(case_id="TC-DP-010")
+            payload = dp.payload(user_id="u_dp_010", user_level="gold", request_id="req_dp_010")
+            resp = dp.evaluate(payload)
+            assert resp.status_code >= 400
+            query_resp = dp.query("req_dp_010")
+            assert query_resp.status_code == 404
+            body = query_resp.json()
+            assert body["error"] == "DECISION_NOT_FOUND"
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_dp_011(self, setup_discount_policy):
         """TC-DP-011：非法 scene 触发校验错误且不存储"""
@@ -88,17 +97,21 @@ class TestDiscountPolicyBoundary:
             "priority": "P1 / 异常",
             "markers": [],
         }
-        # SETUP: 请求覆盖：{"user_id": "u_dp_011", "scene": "unknown", "request_id": "req_dp_011"}
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 请求覆盖：{"user_id": "u_dp_011", "scene": "unknown", "request_id": "req_dp_011"}
 
-        dp = setup_discount_policy
-        dp = setup_discount_policy(case_id="TC-DP-011")
-        payload = dp.payload(user_id="u_dp_011", scene="unknown", request_id="req_dp_011")
-        resp = dp.evaluate(payload)
-        assert resp.status_code >= 400
-        query_resp = dp.query("req_dp_011")
-        assert query_resp.status_code == 404
-        body = query_resp.json()
-        assert body["error"] == "DECISION_NOT_FOUND"
+            dp = setup_discount_policy
+            dp = setup_discount_policy(case_id="TC-DP-011")
+            payload = dp.payload(user_id="u_dp_011", scene="unknown", request_id="req_dp_011")
+            resp = dp.evaluate(payload)
+            assert resp.status_code >= 400
+            query_resp = dp.query("req_dp_011")
+            assert query_resp.status_code == 404
+            body = query_resp.json()
+            assert body["error"] == "DECISION_NOT_FOUND"
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_dp_012(self, setup_discount_policy):
         """TC-DP-012：负数 item_price 触发校验错误且不存储"""
@@ -111,17 +124,21 @@ class TestDiscountPolicyBoundary:
             "priority": "P1 / 异常",
             "markers": [],
         }
-        # SETUP: 请求覆盖：{"user_id": "u_dp_012", "item_price": -0.01, "request_id": "req_dp_012"}
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 请求覆盖：{"user_id": "u_dp_012", "item_price": -0.01, "request_id": "req_dp_012"}
 
-        dp = setup_discount_policy
-        dp = setup_discount_policy(case_id="TC-DP-012")
-        payload = dp.payload(user_id="u_dp_012", item_price=-0.01, request_id="req_dp_012")
-        resp = dp.evaluate(payload)
-        assert resp.status_code >= 400
-        query_resp = dp.query("req_dp_012")
-        assert query_resp.status_code == 404
-        body = query_resp.json()
-        assert body["error"] == "DECISION_NOT_FOUND"
+            dp = setup_discount_policy
+            dp = setup_discount_policy(case_id="TC-DP-012")
+            payload = dp.payload(user_id="u_dp_012", item_price=-0.01, request_id="req_dp_012")
+            resp = dp.evaluate(payload)
+            assert resp.status_code >= 400
+            query_resp = dp.query("req_dp_012")
+            assert query_resp.status_code == 404
+            body = query_resp.json()
+            assert body["error"] == "DECISION_NOT_FOUND"
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_dp_013(self, setup_discount_policy):
         """TC-DP-013：负数 stock 触发校验错误且不存储"""
@@ -134,17 +151,21 @@ class TestDiscountPolicyBoundary:
             "priority": "P1 / 异常",
             "markers": [],
         }
-        # SETUP: 请求覆盖：{"user_id": "u_dp_013", "stock": -1, "request_id": "req_dp_013"}
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 请求覆盖：{"user_id": "u_dp_013", "stock": -1, "request_id": "req_dp_013"}
 
-        dp = setup_discount_policy
-        dp = setup_discount_policy(case_id="TC-DP-013")
-        payload = dp.payload(user_id="u_dp_013", stock=-1, request_id="req_dp_013")
-        resp = dp.evaluate(payload)
-        assert resp.status_code >= 400
-        query_resp = dp.query("req_dp_013")
-        assert query_resp.status_code == 404
-        body = query_resp.json()
-        assert body["error"] == "DECISION_NOT_FOUND"
+            dp = setup_discount_policy
+            dp = setup_discount_policy(case_id="TC-DP-013")
+            payload = dp.payload(user_id="u_dp_013", stock=-1, request_id="req_dp_013")
+            resp = dp.evaluate(payload)
+            assert resp.status_code >= 400
+            query_resp = dp.query("req_dp_013")
+            assert query_resp.status_code == 404
+            body = query_resp.json()
+            assert body["error"] == "DECISION_NOT_FOUND"
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_dp_014(self, setup_discount_policy):
         """TC-DP-014：缺少必填字段触发校验错误且不存储"""
@@ -157,17 +178,21 @@ class TestDiscountPolicyBoundary:
             "priority": "P1 / 异常",
             "markers": [],
         }
-        # SETUP: 请求体：删除 user_id，保留 request_id="req_dp_014"
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 请求体：删除 user_id，保留 request_id="req_dp_014"
 
-        dp = setup_discount_policy
-        dp = setup_discount_policy(case_id="TC-DP-014")
-        payload = dp.payload_without("user_id", request_id="req_dp_014")
-        resp = dp.evaluate(payload)
-        assert resp.status_code >= 400
-        query_resp = dp.query("req_dp_014")
-        assert query_resp.status_code == 404
-        body = query_resp.json()
-        assert body["error"] == "DECISION_NOT_FOUND"
+            dp = setup_discount_policy
+            dp = setup_discount_policy(case_id="TC-DP-014")
+            payload = dp.payload_without("user_id", request_id="req_dp_014")
+            resp = dp.evaluate(payload)
+            assert resp.status_code >= 400
+            query_resp = dp.query("req_dp_014")
+            assert query_resp.status_code == 404
+            body = query_resp.json()
+            assert body["error"] == "DECISION_NOT_FOUND"
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     # ── 二、决策记录边界 ──
 
@@ -182,16 +207,20 @@ class TestDiscountPolicyBoundary:
             "priority": "P1 / 异常",
             "markers": [],
         }
-        # SETUP: 接口调用：GET /api/v1/discount/decisions/req_dp_missing_015
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 接口调用：GET /api/v1/discount/decisions/req_dp_missing_015
 
-        dp = setup_discount_policy
-        dp = setup_discount_policy(case_id="TC-DP-015")
-        resp = dp.query("req_dp_missing_015")
-        assert resp.status_code == 404
-        body = resp.json()
-        assert body["found"] is False
-        assert body["request_id"] == "req_dp_missing_015"
-        assert body["error"] == "DECISION_NOT_FOUND"
+            dp = setup_discount_policy
+            dp = setup_discount_policy(case_id="TC-DP-015")
+            resp = dp.query("req_dp_missing_015")
+            assert resp.status_code == 404
+            body = resp.json()
+            assert body["found"] is False
+            assert body["request_id"] == "req_dp_missing_015"
+            assert body["error"] == "DECISION_NOT_FOUND"
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_dp_016(self, setup_discount_policy):
         """TC-DP-016：删除不存在决策返回 deleted false"""
@@ -204,15 +233,19 @@ class TestDiscountPolicyBoundary:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 接口调用：DELETE /api/v1/discount/decisions/req_dp_missing_016
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 接口调用：DELETE /api/v1/discount/decisions/req_dp_missing_016
 
-        dp = setup_discount_policy
-        dp = setup_discount_policy(case_id="TC-DP-016")
-        resp = dp.delete("req_dp_missing_016")
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["deleted"] is False
-        assert body["request_id"] == "req_dp_missing_016"
+            dp = setup_discount_policy
+            dp = setup_discount_policy(case_id="TC-DP-016")
+            resp = dp.delete("req_dp_missing_016")
+            assert resp.status_code == 200
+            body = resp.json()
+            assert body["deleted"] is False
+            assert body["request_id"] == "req_dp_missing_016"
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
 
 # TODO: setup_discount_policy fixture 需要手写实现（→ tests/fixtures/discount_policy.py）

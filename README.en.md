@@ -120,8 +120,10 @@ Reports record variable names only, never values. Full options: `aitest --help`.
 
 For failure debugging, add `--capture`; the run directory will contain one `capture.jsonl`.
 The framework auto-captures default HTTP cases only. Custom fixtures, gRPC, or SDK calls can
-call `aitest_kit.helpers.capture.capture_io()` manually. Capture does not redact; redact in
-your fixture before writing sensitive data.
+call `aitest_kit.helpers.capture.capture_io()` manually. When called inside a generated test
+function body, `capture_io()` can infer the current case; explicit `case_id` still works and
+wins. Pytest fixture setup/teardown runs outside this context. Capture does not redact; redact
+in your fixture before writing sensitive data.
 
 ## AI Skills
 

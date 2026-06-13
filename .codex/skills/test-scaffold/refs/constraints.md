@@ -8,6 +8,7 @@
 4. **不 import 待测系统内部模块**
 5. **不硬编码 URL、端口、API key、密码**
 6. **registry L3 接线** — `module.yaml.fixture.file/default_fixture` 必须存在，且 `default_fixture` 符号可 import
+7. **case context 只做归因** — generated 测试函数体内调用的 fixture/client/helper 方法可让 `capture_io()` 使用运行时 case context 归因；pytest fixture setup/teardown 阶段不在该 context 内；不要用 `current_case_id()` 拼请求体、选择账号/token 或改变业务分支
 
 ## 测试数据分类
 
@@ -40,6 +41,7 @@
 - `{var: name}` 只引用 suite/module profile 的 `variables.defaults` 或 `variables.cases.{case_id}`；缺 env 且 `.env` / `AITEST_ENV_FILE` 也无法提供时，会在运行时失败并只显示 env 名，不显示值
 - 请求体差异优先写 `requests.<case_id>.patches`。`value_from` 引用同一套 profile variables；不要让 fixture 根据 case_id 拼装不同请求体
 - 不用 fixture 按 case_id 选择账号/token；不同 case 的数据差异放到 profile variables
+- 运行时 case context 只服务 capture/log 归因，不是 profile 数据输入；不要在 case_flow 或 fixture/client/helper 中把它当作请求差异来源
 - 单条 case_flow 可以显式写 `fixture` 或 `object` 覆盖顶层默认值；否则必须能从 `default_fixture` 得到 fixture
 
 ## auto_fields 判断

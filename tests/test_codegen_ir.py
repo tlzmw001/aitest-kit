@@ -20,6 +20,7 @@ from aitest_kit.codegen.project_config import (
     load_project_config,
 )
 from aitest_kit.helpers import structured_assertions as aitest_assertions
+from aitest_kit.runtime_context import current_case_id
 
 
 def _case(file_ir, case_id: str):
@@ -692,6 +693,38 @@ case_flows:
     assert any("defined in both case_bodies and case_flows" in d for d in result.diagnostics)
 
 
+def test_generated_case_context_wraps_custom_case_body(tmp_path):
+    profile_path = tmp_path / "profile_demo_suite.md"
+    _write_profile(
+        profile_path,
+        """extra_imports:
+  - "from aitest_kit.runtime_context import current_case_id"
+case_bodies:
+  TC-DEMO-001: |
+    seen.append(current_case_id())
+    assert current_case_id() == "TC-DEMO-001"
+""",
+    )
+
+    result = emit_file(
+        _parse_result(),
+        "business",
+        profile_path=profile_path,
+        output_dir=tmp_path,
+        project=load_project_config(),
+    )
+
+    assert result.diagnostics == []
+    text = (tmp_path / "test_demo_business.py").read_text(encoding="utf-8")
+    assert '__aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)' in text
+    namespace: dict[str, object] = {"seen": []}
+    exec(text, namespace)
+    namespace["TestDemoBusiness"]().test_tc_demo_001(None)
+
+    assert namespace["seen"] == ["TC-DEMO-001"]
+    assert current_case_id() is None
+
+
 def test_case_flow_profile_validation_rejects_bare_assert_expression():
     errors = validate_case_flows({
         "TC-DEMO-001": {
@@ -820,13 +853,72 @@ def test_emitter_can_render_structured_case_flow(tmp_path):
 
     assert result.diagnostics == []
     text = (tmp_path / "test_demo_business.py").read_text(encoding="utf-8")
+    assert "from aitest_kit.runtime_context import reset_case_context, set_case_context" in text
     assert "def test_tc_demo_001(self, setup_demo):" in text
+    assert '__aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)' in text
     assert "case = setup_demo" in text
     assert 'resp = case.http("u_demo", req_id="req-demo")' in text
     assert 'locs = [item["loc"] for item in resp["detail"]]' in text
     assert "# MANUAL CHECK: inspect logs" in text
     assert 'assert resp["code"] == 0' in text
+    assert "finally:" in text
+    assert "reset_case_context(__aitest_ctx_token)" in text
     assert "capture_io" not in text
+
+    seen_case_ids: list[str | None] = []
+
+    class DemoClient:
+        def http(self, user_id: str, *, req_id: str) -> dict:
+            seen_case_ids.append(current_case_id())
+            assert user_id == "u_demo"
+            assert req_id == "req-demo"
+            return {"code": 0, "detail": [{"loc": "hangzhou"}]}
+
+    namespace: dict[str, object] = {}
+    exec(text, namespace)
+    namespace["TestDemoBusiness"]().test_tc_demo_001(DemoClient())
+
+    assert seen_case_ids == ["TC-DEMO-001"]
+    assert current_case_id() is None
+
+
+def test_generated_case_context_resets_when_case_flow_raises(tmp_path):
+    profile_path = tmp_path / "profile_demo_suite.md"
+    _write_profile(
+        profile_path,
+        """case_flows:
+  TC-DEMO-001:
+    fixture: setup_demo
+    object: case
+    steps:
+      - call: case.fail
+""",
+    )
+
+    result = emit_file(
+        _parse_result(),
+        "business",
+        profile_path=profile_path,
+        output_dir=tmp_path,
+        project=load_project_config(),
+    )
+
+    assert result.diagnostics == []
+    text = (tmp_path / "test_demo_business.py").read_text(encoding="utf-8")
+    seen_case_ids: list[str | None] = []
+
+    class FailingClient:
+        def fail(self) -> None:
+            seen_case_ids.append(current_case_id())
+            raise RuntimeError("boom")
+
+    namespace: dict[str, object] = {}
+    exec(text, namespace)
+    with pytest.raises(RuntimeError, match="boom"):
+        namespace["TestDemoBusiness"]().test_tc_demo_001(FailingClient())
+
+    assert seen_case_ids == ["TC-DEMO-001"]
+    assert current_case_id() is None
 
 
 def test_emitter_auto_captures_only_default_http(tmp_path):
@@ -846,6 +938,7 @@ def test_emitter_auto_captures_only_default_http(tmp_path):
     assert result.diagnostics == []
     text = (tmp_path / "test_demo_business.py").read_text(encoding="utf-8")
     assert "from aitest_kit.helpers.capture import capture_io" in text
+    assert "from aitest_kit.runtime_context import reset_case_context, set_case_context" in text
     assert "__aitest_request = _req()" in text
     assert 'if hasattr(http_helper, "post_response"):' in text
     assert 'http_helper.post_response(http_base_url, "/demo", json=__aitest_request)' in text

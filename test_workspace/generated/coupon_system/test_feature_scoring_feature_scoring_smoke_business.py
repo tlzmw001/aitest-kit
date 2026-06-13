@@ -3,6 +3,7 @@
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
+from aitest_kit.runtime_context import reset_case_context, set_case_context
 from test_workspace.targets.coupon_system.fixtures.feature_scoring import setup_feature_scoring
 
 
@@ -48,12 +49,16 @@ class TestFeatureScoringBusiness:
             "priority": "P1",
             "markers": ["`[manual]`"],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 请求覆盖：HTTP 请求 user_id="u_feat_http"、external=0
-        # SETUP: 前置操作：Redis 设置 gender=male、total_spend=1200
-        # MANUAL CHECK: response.body.code == 0
-        # MANUAL CHECK: 打分服务收到的 user_features 包含 gender="male"、total_spend="1200"
-        pytest.skip("manual check required")
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 请求覆盖：HTTP 请求 user_id="u_feat_http"、external=0
+            # SETUP: 前置操作：Redis 设置 gender=male、total_spend=1200
+            # MANUAL CHECK: response.body.code == 0
+            # MANUAL CHECK: 打分服务收到的 user_features 包含 gender="male"、total_spend="1200"
+            pytest.skip("manual check required")
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     @pytest.mark.manual
     def test_tc_feat_002(self):
@@ -67,12 +72,16 @@ class TestFeatureScoringBusiness:
             "priority": "P1",
             "markers": ["`[manual]`"],
         }
-        # SETUP: 协议：gRPC
-        # SETUP: 请求覆盖：gRPC 请求 user_id="u_feat_grpc"、external=0
-        # SETUP: 前置操作：Redis 设置 age=30、is_member=true
-        # MANUAL CHECK: response.code == 0
-        # MANUAL CHECK: 打分服务收到的 user_features 包含 age="30"、is_member="true"
-        pytest.skip("manual check required")
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：gRPC
+            # SETUP: 请求覆盖：gRPC 请求 user_id="u_feat_grpc"、external=0
+            # SETUP: 前置操作：Redis 设置 age=30、is_member=true
+            # MANUAL CHECK: response.code == 0
+            # MANUAL CHECK: 打分服务收到的 user_features 包含 age="30"、is_member="true"
+            pytest.skip("manual check required")
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     @pytest.mark.manual
     def test_tc_feat_003(self):
@@ -86,11 +95,15 @@ class TestFeatureScoringBusiness:
             "priority": "P1",
             "markers": ["`[manual]`"],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 请求覆盖：HTTP 请求 item 为 COUPON_FEAT_001，请求体包含 coupon_type="discount"、value=80、min_spend=5000、expire_days=7
-        # SETUP: 前置操作：TSV 中存在该 item 的其他特征
-        # MANUAL CHECK: 打分服务收到的 item features 同时包含 TSV 特征和请求体中的 coupon_type/value/min_spend/expire_days
-        pytest.skip("manual check required")
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 请求覆盖：HTTP 请求 item 为 COUPON_FEAT_001，请求体包含 coupon_type="discount"、value=80、min_spend=5000、expire_days=7
+            # SETUP: 前置操作：TSV 中存在该 item 的其他特征
+            # MANUAL CHECK: 打分服务收到的 item features 同时包含 TSV 特征和请求体中的 coupon_type/value/min_spend/expire_days
+            pytest.skip("manual check required")
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     # ── 二、打分路由 ──
 
@@ -106,12 +119,16 @@ class TestFeatureScoringBusiness:
             "priority": "P1",
             "markers": ["`[manual]`"],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 请求覆盖：HTTP 请求 user_id="u_score_internal_http"、external=0、reqId="req-score-001"
-        # MANUAL CHECK: response.body.code == 0
-        # MANUAL CHECK: response.body.results[0].score >= 0.1
-        # MANUAL CHECK: 内部打分服务收到明文 user_id="u_score_internal_http"
-        pytest.skip("manual check required")
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 请求覆盖：HTTP 请求 user_id="u_score_internal_http"、external=0、reqId="req-score-001"
+            # MANUAL CHECK: response.body.code == 0
+            # MANUAL CHECK: response.body.results[0].score >= 0.1
+            # MANUAL CHECK: 内部打分服务收到明文 user_id="u_score_internal_http"
+            pytest.skip("manual check required")
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     @pytest.mark.manual
     def test_tc_score_002(self):
@@ -125,12 +142,16 @@ class TestFeatureScoringBusiness:
             "priority": "P1",
             "markers": ["`[manual]`"],
         }
-        # SETUP: 协议：gRPC
-        # SETUP: 请求覆盖：gRPC 请求 user_id="u_score_internal_grpc"、external=0、req_id="req-score-002"
-        # MANUAL CHECK: response.code == 0
-        # MANUAL CHECK: response.results[0].score >= 0.1
-        # MANUAL CHECK: 内部打分服务收到明文 user_id="u_score_internal_grpc"
-        pytest.skip("manual check required")
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：gRPC
+            # SETUP: 请求覆盖：gRPC 请求 user_id="u_score_internal_grpc"、external=0、req_id="req-score-002"
+            # MANUAL CHECK: response.code == 0
+            # MANUAL CHECK: response.results[0].score >= 0.1
+            # MANUAL CHECK: 内部打分服务收到明文 user_id="u_score_internal_grpc"
+            pytest.skip("manual check required")
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_score_003(self, setup_feature_scoring):
         """TC-SCORE-003：HTTP external=1 调用外部 HTTP 打分"""
@@ -143,16 +164,20 @@ class TestFeatureScoringBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 请求覆盖：HTTP 请求 user_id="u_score_external_http"、external=1、reqId="req-score-003"
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 请求覆盖：HTTP 请求 user_id="u_score_external_http"、external=1、reqId="req-score-003"
 
-        client = setup_feature_scoring
-        client.prepare_user(user_id="u_score_external_http", features={"gender": "male", "age": 28, "total_spend": 30000, "purchase_frequency": 4, "register_days": 120, "is_new_user": True, "is_member": True})
-        client.prepare_stock(coupon_id="COUPON_FEAT_001", stock=100)
-        resp = client.recommend_http(request_overrides={"user_id": "u_score_external_http", "reqId": "req-score-003", "external": 1})
-        assert resp["code"] == 0
-        assert resp["results"][0]["score"] >= 0.2
-        assert resp["experiment_info"] == {}
+            client = setup_feature_scoring
+            client.prepare_user(user_id="u_score_external_http", features={"gender": "male", "age": 28, "total_spend": 30000, "purchase_frequency": 4, "register_days": 120, "is_new_user": True, "is_member": True})
+            client.prepare_stock(coupon_id="COUPON_FEAT_001", stock=100)
+            resp = client.recommend_http(request_overrides={"user_id": "u_score_external_http", "reqId": "req-score-003", "external": 1})
+            assert resp["code"] == 0
+            assert resp["results"][0]["score"] >= 0.2
+            assert resp["experiment_info"] == {}
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_score_004(self, setup_feature_scoring):
         """TC-SCORE-004：gRPC external=1 调用外部 HTTP 打分"""
@@ -165,16 +190,20 @@ class TestFeatureScoringBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 协议：gRPC
-        # SETUP: 请求覆盖：gRPC 请求 user_id="u_score_external_grpc"、external=1、req_id="req-score-004"
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：gRPC
+            # SETUP: 请求覆盖：gRPC 请求 user_id="u_score_external_grpc"、external=1、req_id="req-score-004"
 
-        client = setup_feature_scoring
-        client.prepare_user(user_id="u_score_external_grpc", features={"gender": "male", "age": 28, "total_spend": 30000, "purchase_frequency": 4, "register_days": 120, "is_new_user": True, "is_member": True})
-        client.prepare_stock(coupon_id="COUPON_FEAT_001", stock=100)
-        resp = client.recommend_grpc(request_overrides={"user_id": "u_score_external_grpc", "req_id": "req-score-004", "external": 1})
-        assert resp["code"] == 0
-        assert resp["results"][0]["score"] >= 0.2
-        assert resp["experiment_info"] == {}
+            client = setup_feature_scoring
+            client.prepare_user(user_id="u_score_external_grpc", features={"gender": "male", "age": 28, "total_spend": 30000, "purchase_frequency": 4, "register_days": 120, "is_new_user": True, "is_member": True})
+            client.prepare_stock(coupon_id="COUPON_FEAT_001", stock=100)
+            resp = client.recommend_grpc(request_overrides={"user_id": "u_score_external_grpc", "req_id": "req-score-004", "external": 1})
+            assert resp["code"] == 0
+            assert resp["results"][0]["score"] >= 0.2
+            assert resp["experiment_info"] == {}
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     @pytest.mark.manual
     def test_tc_score_005(self):
@@ -188,12 +217,16 @@ class TestFeatureScoringBusiness:
             "priority": "P1",
             "markers": ["`[manual]`"],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 请求覆盖：HTTP 请求 user_id="u_score_encrypt"、external=1
-        # SETUP: 请求覆盖_2：外部打分服务 salt 使用默认 coupon_external_uid_salt
-        # MANUAL CHECK: 外部打分服务收到的 user_id == sha256("coupon_external_uid_salt:u_score_encrypt")
-        # MANUAL CHECK: 不包含明文 u_score_encrypt
-        pytest.skip("manual check required")
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 请求覆盖：HTTP 请求 user_id="u_score_encrypt"、external=1
+            # SETUP: 请求覆盖_2：外部打分服务 salt 使用默认 coupon_external_uid_salt
+            # MANUAL CHECK: 外部打分服务收到的 user_id == sha256("coupon_external_uid_salt:u_score_encrypt")
+            # MANUAL CHECK: 不包含明文 u_score_encrypt
+            pytest.skip("manual check required")
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
 
 # TODO: setup_feature_scoring fixture 需要手写实现（→ tests/fixtures/feature_scoring.py）

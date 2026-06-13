@@ -3,6 +3,7 @@
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
+from aitest_kit.runtime_context import reset_case_context, set_case_context
 from test_workspace.targets.coupon_system.fixtures.logging import setup_logging
 
 
@@ -45,17 +46,21 @@ class TestLoggingBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_http_internal"、external=0、reqId="req-log-001"
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_http_internal"、external=0、reqId="req-log-001"
 
-        case = setup_logging
-        result = case.run_http_with_logs(user_id="u_log_http_internal", req_id="req-log-001", external=0)
-        assert result["resp"]["code"] == 0
-        assert "recommend request: reqId=req-log-001" in result["logs"]
-        assert "user_id=u_log_http_internal" in result["logs"]
-        assert "item_ids=COUPON_LOG_001,COUPON_LOG_002" in result["logs"]
-        assert "route=1" in result["logs"]
-        assert "scene_id=1001" in result["logs"]
+            case = setup_logging
+            result = case.run_http_with_logs(user_id="u_log_http_internal", req_id="req-log-001", external=0)
+            assert result["resp"]["code"] == 0
+            assert "recommend request: reqId=req-log-001" in result["logs"]
+            assert "user_id=u_log_http_internal" in result["logs"]
+            assert "item_ids=COUPON_LOG_001,COUPON_LOG_002" in result["logs"]
+            assert "route=1" in result["logs"]
+            assert "scene_id=1001" in result["logs"]
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_log_002(self, setup_logging):
         """TC-LOG-002：gRPC 内部打分请求记录 route=1"""
@@ -68,16 +73,20 @@ class TestLoggingBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 协议：gRPC
-        # SETUP: 请求覆盖：gRPC 请求 user_id="u_log_grpc_internal"、external=0、req_id="req-log-002"
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：gRPC
+            # SETUP: 请求覆盖：gRPC 请求 user_id="u_log_grpc_internal"、external=0、req_id="req-log-002"
 
-        case = setup_logging
-        result = case.run_grpc_with_logs(user_id="u_log_grpc_internal", req_id="req-log-002", external=0)
-        assert result["resp"]["code"] == 0
-        assert "recommend request: reqId=req-log-002" in result["logs"]
-        assert "user_id=u_log_grpc_internal" in result["logs"]
-        assert "route=1" in result["logs"]
-        assert "scene_id=1001" in result["logs"]
+            case = setup_logging
+            result = case.run_grpc_with_logs(user_id="u_log_grpc_internal", req_id="req-log-002", external=0)
+            assert result["resp"]["code"] == 0
+            assert "recommend request: reqId=req-log-002" in result["logs"]
+            assert "user_id=u_log_grpc_internal" in result["logs"]
+            assert "route=1" in result["logs"]
+            assert "scene_id=1001" in result["logs"]
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_log_003(self, setup_logging):
         """TC-LOG-003：HTTP 外部打分请求记录 route=2"""
@@ -90,16 +99,20 @@ class TestLoggingBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_http_external"、external=1、reqId="req-log-003"
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_http_external"、external=1、reqId="req-log-003"
 
-        case = setup_logging
-        result = case.run_http_with_logs(user_id="u_log_http_external", req_id="req-log-003", external=1)
-        assert result["resp"]["code"] == 0
-        assert "recommend request: reqId=req-log-003" in result["logs"]
-        assert "user_id=u_log_http_external" in result["logs"]
-        assert "route=2" in result["logs"]
-        assert "scene_id=1001" in result["logs"]
+            case = setup_logging
+            result = case.run_http_with_logs(user_id="u_log_http_external", req_id="req-log-003", external=1)
+            assert result["resp"]["code"] == 0
+            assert "recommend request: reqId=req-log-003" in result["logs"]
+            assert "user_id=u_log_http_external" in result["logs"]
+            assert "route=2" in result["logs"]
+            assert "scene_id=1001" in result["logs"]
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_log_004(self, setup_logging):
         """TC-LOG-004：gRPC 外部打分请求记录 route=2"""
@@ -112,16 +125,20 @@ class TestLoggingBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 协议：gRPC
-        # SETUP: 请求覆盖：gRPC 请求 user_id="u_log_grpc_external"、external=1、req_id="req-log-004"
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：gRPC
+            # SETUP: 请求覆盖：gRPC 请求 user_id="u_log_grpc_external"、external=1、req_id="req-log-004"
 
-        case = setup_logging
-        result = case.run_grpc_with_logs(user_id="u_log_grpc_external", req_id="req-log-004", external=1)
-        assert result["resp"]["code"] == 0
-        assert "recommend request: reqId=req-log-004" in result["logs"]
-        assert "user_id=u_log_grpc_external" in result["logs"]
-        assert "route=2" in result["logs"]
-        assert "scene_id=1001" in result["logs"]
+            case = setup_logging
+            result = case.run_grpc_with_logs(user_id="u_log_grpc_external", req_id="req-log-004", external=1)
+            assert result["resp"]["code"] == 0
+            assert "recommend request: reqId=req-log-004" in result["logs"]
+            assert "user_id=u_log_grpc_external" in result["logs"]
+            assert "route=2" in result["logs"]
+            assert "scene_id=1001" in result["logs"]
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     # ── 二、reqId ──
 
@@ -136,13 +153,17 @@ class TestLoggingBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_auto_reqid"、external=0、reqId=""
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_auto_reqid"、external=0、reqId=""
 
-        case = setup_logging
-        result = case.run_http_with_logs(user_id="u_log_auto_reqid", req_id="", external=0)
-        assert result["resp"]["code"] == 0
-        assert case.has_auto_req_id_log(result["logs"])
+            case = setup_logging
+            result = case.run_http_with_logs(user_id="u_log_auto_reqid", req_id="", external=0)
+            assert result["resp"]["code"] == 0
+            assert case.has_auto_req_id_log(result["logs"])
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_log_006(self, setup_logging):
         """TC-LOG-006：兜底场景也记录 scene_id"""
@@ -155,14 +176,18 @@ class TestLoggingBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_fallback"、policy_id="policy_fallback_001"、external=0、reqId="req-log-006"
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_fallback"、policy_id="policy_fallback_001"、external=0、reqId="req-log-006"
 
-        case = setup_logging
-        result = case.run_http_with_logs(user_id="u_log_fallback", req_id="req-log-006", external=0, policy_id="policy_fallback_001")
-        assert result["resp"]["code"] == 0
-        assert "recommend request: reqId=req-log-006" in result["logs"]
-        assert "scene_id=3001" in result["logs"]
+            case = setup_logging
+            result = case.run_http_with_logs(user_id="u_log_fallback", req_id="req-log-006", external=0, policy_id="policy_fallback_001")
+            assert result["resp"]["code"] == 0
+            assert "recommend request: reqId=req-log-006" in result["logs"]
+            assert "scene_id=3001" in result["logs"]
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     # ── 三、route 隔离 ──
 
@@ -178,10 +203,14 @@ class TestLoggingBusiness:
             "priority": "P1",
             "markers": ["`[manual]`"],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_no_route_internal"、external=0、reqId="req-log-007"
-        # MANUAL CHECK: 内部打分服务收到的请求字段中不存在 route
-        pytest.skip("manual check required")
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_no_route_internal"、external=0、reqId="req-log-007"
+            # MANUAL CHECK: 内部打分服务收到的请求字段中不存在 route
+            pytest.skip("manual check required")
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     @pytest.mark.manual
     def test_tc_log_008(self):
@@ -195,10 +224,14 @@ class TestLoggingBusiness:
             "priority": "P1",
             "markers": ["`[manual]`"],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_no_route_external"、external=1、reqId="req-log-008"
-        # MANUAL CHECK: 外部打分服务收到的 JSON body 中不存在 route
-        pytest.skip("manual check required")
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_no_route_external"、external=1、reqId="req-log-008"
+            # MANUAL CHECK: 外部打分服务收到的 JSON body 中不存在 route
+            pytest.skip("manual check required")
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
 
 # TODO: setup_logging fixture 需要手写实现（→ tests/fixtures/logging.py）

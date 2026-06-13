@@ -10,6 +10,7 @@ from aitest_kit.helpers.capture import (
     capture_io,
     load_capture_settings,
 )
+from aitest_kit.runtime_context import current_case_id, reset_case_context, set_case_context
 
 
 def test_capture_io_is_noop_when_disabled(tmp_path, monkeypatch):
@@ -48,6 +49,60 @@ def test_capture_io_writes_jsonl_when_enabled(tmp_path, monkeypatch):
             "metadata": {"failure_reason": "manual"},
         }
     ]
+
+
+def test_runtime_case_context_sets_and_resets_case_id():
+    assert current_case_id() is None
+
+    token = set_case_context("TC-DEMO-CTX", {"title": "demo"})
+    try:
+        assert current_case_id() == "TC-DEMO-CTX"
+    finally:
+        reset_case_context(token)
+
+    assert current_case_id() is None
+
+
+def test_capture_io_uses_runtime_case_context(tmp_path, monkeypatch):
+    capture_file = tmp_path / "capture.jsonl"
+    monkeypatch.setenv("AITEST_CAPTURE", "1")
+    monkeypatch.setenv("AITEST_CAPTURE_FILE", str(capture_file))
+
+    token = set_case_context("TC-DEMO-CTX", {"title": "demo"})
+    try:
+        capture_io(label="ctx capture", request={"x": 1})
+    finally:
+        reset_case_context(token)
+
+    record = json.loads(capture_file.read_text(encoding="utf-8").strip())
+    assert record["case_id"] == "TC-DEMO-CTX"
+    assert record["label"] == "ctx capture"
+    assert record["request"] == {"x": 1}
+
+
+def test_capture_io_explicit_case_id_wins_over_runtime_context(tmp_path, monkeypatch):
+    capture_file = tmp_path / "capture.jsonl"
+    monkeypatch.setenv("AITEST_CAPTURE", "1")
+    monkeypatch.setenv("AITEST_CAPTURE_FILE", str(capture_file))
+
+    token = set_case_context("TC-DEMO-CTX")
+    try:
+        capture_io("TC-EXPLICIT-001", label="explicit")
+    finally:
+        reset_case_context(token)
+
+    record = json.loads(capture_file.read_text(encoding="utf-8").strip())
+    assert record["case_id"] == "TC-EXPLICIT-001"
+
+
+def test_capture_io_writes_nothing_when_enabled_without_case_identity(tmp_path, monkeypatch):
+    capture_file = tmp_path / "capture.jsonl"
+    monkeypatch.setenv("AITEST_CAPTURE", "1")
+    monkeypatch.setenv("AITEST_CAPTURE_FILE", str(capture_file))
+
+    capture_io(label="missing identity", request={"x": 1})
+
+    assert not capture_file.exists()
 
 
 def test_capture_io_serializes_http_response_exception_and_truncates(tmp_path, monkeypatch):

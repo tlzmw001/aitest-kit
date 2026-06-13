@@ -118,7 +118,7 @@ AITEST_ENV_FILE=/tmp/test.env aitest run --suite-file <suite.yaml>
 
 报告只记录变量名，不记录变量值。完整选项见 `aitest --help`。
 
-排查失败时可加 `--capture`，运行目录下会生成一个 `capture.jsonl`。框架只自动捕获默认 HTTP 用例；自定义 fixture、gRPC 或 SDK 调用可以手动调用 `aitest_kit.helpers.capture.capture_io()`。capture 不自动脱敏，敏感字段应在用户 fixture 中处理后再写入。
+排查失败时可加 `--capture`，运行目录下会生成一个 `capture.jsonl`。框架只自动捕获默认 HTTP 用例；自定义 fixture、gRPC 或 SDK 调用可以手动调用 `aitest_kit.helpers.capture.capture_io()`。在 generated 测试函数体内调用时，`capture_io()` 可自动归因到当前 case；显式传入 `case_id` 仍然有效。pytest fixture setup/teardown 阶段不在该 context 内。capture 不自动脱敏，敏感字段应在用户 fixture 中处理后再写入。
 
 ## AI Skills
 

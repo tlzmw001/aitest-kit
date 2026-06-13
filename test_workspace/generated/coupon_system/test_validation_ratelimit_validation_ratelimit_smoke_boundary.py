@@ -3,6 +3,7 @@
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
+from aitest_kit.runtime_context import reset_case_context, set_case_context
 from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
 from test_workspace.targets.coupon_system.fixtures.validation_ratelimit import BOUNDARY_ITEM, ERR, LIMITED
 from test_workspace.targets.coupon_system.fixtures.validation_ratelimit import setup_validation_ratelimit
@@ -47,20 +48,24 @@ class TestValidationRatelimitBoundary:
             "priority": "P2",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 环境覆盖：服务配置 rate_limit.enabled=true、max_qps=100、per_user_qps=1、window_seconds=1
-        # SETUP: 请求覆盖：HTTP 请求固定 user_id="u_rate_http_window"
-        # SETUP: 请求覆盖_2：第 2 次请求触发限流后，轮询 EXISTS coupon:rate:user:u_rate_http_window 直到返回 0，最长等待 3 秒，再发送第 3 次请求
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 环境覆盖：服务配置 rate_limit.enabled=true、max_qps=100、per_user_qps=1、window_seconds=1
+            # SETUP: 请求覆盖：HTTP 请求固定 user_id="u_rate_http_window"
+            # SETUP: 请求覆盖_2：第 2 次请求触发限流后，轮询 EXISTS coupon:rate:user:u_rate_http_window 直到返回 0，最长等待 3 秒，再发送第 3 次请求
 
-        client_factory = setup_validation_ratelimit
-        case = client_factory(case_id="TC-RATE-006")
-        r1 = case.http("u_rate_http_window", "req-rate-006-1", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
-        r2 = case.http("u_rate_http_window", "req-rate-006-2", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
-        case.wait_rate_key_gone("u_rate_http_window")
-        r3 = case.http("u_rate_http_window", "req-rate-006-3", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
-        assert r1['code'] == 0
-        assert r2 == LIMITED
-        assert r3['code'] == 0
+            client_factory = setup_validation_ratelimit
+            case = client_factory(case_id="TC-RATE-006")
+            r1 = case.http("u_rate_http_window", "req-rate-006-1", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
+            r2 = case.http("u_rate_http_window", "req-rate-006-2", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
+            case.wait_rate_key_gone("u_rate_http_window")
+            r3 = case.http("u_rate_http_window", "req-rate-006-3", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
+            assert r1['code'] == 0
+            assert r2 == LIMITED
+            assert r3['code'] == 0
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_rate_007(self, setup_validation_ratelimit):
         """TC-RATE-007：gRPC 用户级限流窗口过期后恢复请求"""
@@ -73,20 +78,24 @@ class TestValidationRatelimitBoundary:
             "priority": "P2",
             "markers": [],
         }
-        # SETUP: 协议：gRPC
-        # SETUP: 环境覆盖：服务配置 rate_limit.enabled=true、max_qps=100、per_user_qps=1、window_seconds=1
-        # SETUP: 请求覆盖：gRPC 请求固定 user_id="u_rate_grpc_window"
-        # SETUP: 请求覆盖_2：第 2 次请求触发限流后，轮询 EXISTS coupon:rate:user:u_rate_grpc_window 直到返回 0，最长等待 3 秒，再发送第 3 次请求
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：gRPC
+            # SETUP: 环境覆盖：服务配置 rate_limit.enabled=true、max_qps=100、per_user_qps=1、window_seconds=1
+            # SETUP: 请求覆盖：gRPC 请求固定 user_id="u_rate_grpc_window"
+            # SETUP: 请求覆盖_2：第 2 次请求触发限流后，轮询 EXISTS coupon:rate:user:u_rate_grpc_window 直到返回 0，最长等待 3 秒，再发送第 3 次请求
 
-        client_factory = setup_validation_ratelimit
-        case = client_factory(case_id="TC-RATE-007")
-        r1 = case.grpc("u_rate_grpc_window", "req-rate-007-1", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
-        r2 = case.grpc("u_rate_grpc_window", "req-rate-007-2", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
-        case.wait_rate_key_gone("u_rate_grpc_window")
-        r3 = case.grpc("u_rate_grpc_window", "req-rate-007-3", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
-        assert r1['code'] == 0
-        assert r2 == LIMITED
-        assert r3['code'] == 0
+            client_factory = setup_validation_ratelimit
+            case = client_factory(case_id="TC-RATE-007")
+            r1 = case.grpc("u_rate_grpc_window", "req-rate-007-1", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
+            r2 = case.grpc("u_rate_grpc_window", "req-rate-007-2", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
+            case.wait_rate_key_gone("u_rate_grpc_window")
+            r3 = case.grpc("u_rate_grpc_window", "req-rate-007-3", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
+            assert r1['code'] == 0
+            assert r2 == LIMITED
+            assert r3['code'] == 0
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
 
 # TODO: setup_validation_ratelimit fixture 需要手写实现（→ tests/fixtures/validation_ratelimit.py）

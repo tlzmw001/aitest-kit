@@ -3,6 +3,7 @@
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
+from aitest_kit.runtime_context import reset_case_context, set_case_context
 from test_workspace.targets.coupon_system.fixtures.scene_routing import setup_scene_routing
 
 
@@ -45,17 +46,21 @@ class TestSceneRoutingBoundary:
             "priority": "P2 / 异常",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 前置操作：执行 DEL coupon:fallback:score:3001 和 SET coupon:fallback:score:default not-a-number
-        # SETUP: 请求覆盖：HTTP 请求命中 policy_fallback_001
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 前置操作：执行 DEL coupon:fallback:score:3001 和 SET coupon:fallback:score:default not-a-number
+            # SETUP: 请求覆盖：HTTP 请求命中 policy_fallback_001
 
-        client = setup_scene_routing
-        client.set_fallback_scores({"coupon:fallback:score:default": "not-a-number"})
-        client.prepare_stock(coupon_id="COUPON_ROUTE_BOUNDARY_001")
-        resp = client.recommend_http(request_overrides={"user_id": "u_route_011", "reqId": "req-route-011", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0, "items": [{"item_id": "COUPON_ROUTE_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]})
-        assert resp["code"] == 0
-        assert resp["scene_id"] == 3001
-        assert resp["results"][0]["score"] == 0.5
+            client = setup_scene_routing
+            client.set_fallback_scores({"coupon:fallback:score:default": "not-a-number"})
+            client.prepare_stock(coupon_id="COUPON_ROUTE_BOUNDARY_001")
+            resp = client.recommend_http(request_overrides={"user_id": "u_route_011", "reqId": "req-route-011", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0, "items": [{"item_id": "COUPON_ROUTE_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]})
+            assert resp["code"] == 0
+            assert resp["scene_id"] == 3001
+            assert resp["results"][0]["score"] == 0.5
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     # ── 二、路由匹配边界 ──
 
@@ -70,14 +75,18 @@ class TestSceneRoutingBoundary:
             "priority": "P2",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 请求覆盖：HTTP 请求 scene_name="game"、device="mobile"、policy_id=""
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 请求覆盖：HTTP 请求 scene_name="game"、device="mobile"、policy_id=""
 
-        client = setup_scene_routing
-        client.prepare_stock(coupon_id="COUPON_ROUTE_BOUNDARY_001")
-        resp = client.recommend_http(request_overrides={"user_id": "u_route_013", "reqId": "req-route-013", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 0, "items": [{"item_id": "COUPON_ROUTE_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]})
-        assert resp["code"] == 0
-        assert resp["scene_id"] == 1001
+            client = setup_scene_routing
+            client.prepare_stock(coupon_id="COUPON_ROUTE_BOUNDARY_001")
+            resp = client.recommend_http(request_overrides={"user_id": "u_route_013", "reqId": "req-route-013", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 0, "items": [{"item_id": "COUPON_ROUTE_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]})
+            assert resp["code"] == 0
+            assert resp["scene_id"] == 1001
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_route_014(self, setup_scene_routing):
         """TC-ROUTE-014：scene_name 大小写不同视为未匹配并走兜底"""
@@ -90,15 +99,19 @@ class TestSceneRoutingBoundary:
             "priority": "P2 / 异常",
             "markers": [],
         }
-        # SETUP: 协议：gRPC
-        # SETUP: 请求覆盖：gRPC 请求 scene_name="Game"、device="mobile"、policy_id=""
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：gRPC
+            # SETUP: 请求覆盖：gRPC 请求 scene_name="Game"、device="mobile"、policy_id=""
 
-        client = setup_scene_routing
-        client.prepare_stock(coupon_id="COUPON_ROUTE_BOUNDARY_001")
-        resp = client.recommend_grpc(request_overrides={"user_id": "u_route_014", "req_id": "req-route-014", "scene_name": "Game", "device": "mobile", "policy_id": "", "external": 0, "items": [{"item_id": "COUPON_ROUTE_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]})
-        assert resp["code"] == 0
-        assert resp["scene_id"] == 3001
-        assert resp["experiment_info"] == {}
+            client = setup_scene_routing
+            client.prepare_stock(coupon_id="COUPON_ROUTE_BOUNDARY_001")
+            resp = client.recommend_grpc(request_overrides={"user_id": "u_route_014", "req_id": "req-route-014", "scene_name": "Game", "device": "mobile", "policy_id": "", "external": 0, "items": [{"item_id": "COUPON_ROUTE_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]})
+            assert resp["code"] == 0
+            assert resp["scene_id"] == 3001
+            assert resp["experiment_info"] == {}
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     # ── 三、配置生命周期 ──
 
@@ -113,14 +126,18 @@ class TestSceneRoutingBoundary:
             "priority": "P2",
             "markers": [],
         }
-        # SETUP: 协议：gRPC
-        # SETUP: 请求覆盖：gRPC 请求 scene_name="game"、device="mobile"、policy_id=""
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：gRPC
+            # SETUP: 请求覆盖：gRPC 请求 scene_name="game"、device="mobile"、policy_id=""
 
-        client = setup_scene_routing
-        client.prepare_stock(coupon_id="COUPON_ROUTE_BOUNDARY_001")
-        resp = client.recommend_grpc(request_overrides={"user_id": "u_route_018", "req_id": "req-route-018", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 0, "items": [{"item_id": "COUPON_ROUTE_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]})
-        assert resp["code"] == 0
-        assert resp["scene_id"] == 1001
+            client = setup_scene_routing
+            client.prepare_stock(coupon_id="COUPON_ROUTE_BOUNDARY_001")
+            resp = client.recommend_grpc(request_overrides={"user_id": "u_route_018", "req_id": "req-route-018", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 0, "items": [{"item_id": "COUPON_ROUTE_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]})
+            assert resp["code"] == 0
+            assert resp["scene_id"] == 1001
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
 
 # TODO: setup_scene_routing fixture 需要手写实现（→ tests/fixtures/scene_routing.py）

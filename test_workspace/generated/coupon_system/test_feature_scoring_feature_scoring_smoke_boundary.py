@@ -3,6 +3,7 @@
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
+from aitest_kit.runtime_context import reset_case_context, set_case_context
 from test_workspace.targets.coupon_system.fixtures.feature_scoring import setup_feature_scoring
 
 
@@ -46,12 +47,16 @@ class TestFeatureScoringBoundary:
             "priority": "P2",
             "markers": ["`[manual]`"],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 前置操作：删除用户全部特征 key：DEL coupon:user_feature:gender:u_feat_missing ...
-        # SETUP: 请求覆盖：HTTP 请求 user_id="u_feat_missing"、item_id="COUPON_FEAT_MISSING"
-        # MANUAL CHECK: response.body.code == 0
-        # MANUAL CHECK: 打分服务收到的 user_features == {}
-        pytest.skip("manual check required")
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 前置操作：删除用户全部特征 key：DEL coupon:user_feature:gender:u_feat_missing ...
+            # SETUP: 请求覆盖：HTTP 请求 user_id="u_feat_missing"、item_id="COUPON_FEAT_MISSING"
+            # MANUAL CHECK: response.body.code == 0
+            # MANUAL CHECK: 打分服务收到的 user_features == {}
+            pytest.skip("manual check required")
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     # ── 二、Item 特征文件降级 ──
 
@@ -67,12 +72,16 @@ class TestFeatureScoringBoundary:
             "priority": "P2 / 异常",
             "markers": ["`[manual]`"],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 环境覆盖：使用独立测试配置启动服务，item_feature_file="/tmp/not_exists_item_features.tsv"
-        # SETUP: 请求覆盖：HTTP 请求 item_id="COUPON_FEAT_NO_FILE"
-        # MANUAL CHECK: response.body.code == 0
-        # MANUAL CHECK: 应用日志包含 item 特征文件不存在
-        pytest.skip("manual check required")
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 环境覆盖：使用独立测试配置启动服务，item_feature_file="/tmp/not_exists_item_features.tsv"
+            # SETUP: 请求覆盖：HTTP 请求 item_id="COUPON_FEAT_NO_FILE"
+            # MANUAL CHECK: response.body.code == 0
+            # MANUAL CHECK: 应用日志包含 item 特征文件不存在
+            pytest.skip("manual check required")
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     @pytest.mark.manual
     def test_tc_feat_007(self):
@@ -86,12 +95,16 @@ class TestFeatureScoringBoundary:
             "priority": "P2 / 异常",
             "markers": ["`[manual]`"],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 前置操作：测试 TSV 内容包含一行 BAD_LINE_WITHOUT_TAB 和一行合法 COUPON_FEAT_OK\t{"brand":"A"}
-        # SETUP: 请求覆盖：HTTP 请求 item_id="COUPON_FEAT_OK"
-        # MANUAL CHECK: response.body.code == 0
-        # MANUAL CHECK: 日志包含 item 特征文件第 1 行格式错误
-        pytest.skip("manual check required")
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 前置操作：测试 TSV 内容包含一行 BAD_LINE_WITHOUT_TAB 和一行合法 COUPON_FEAT_OK\t{"brand":"A"}
+            # SETUP: 请求覆盖：HTTP 请求 item_id="COUPON_FEAT_OK"
+            # MANUAL CHECK: response.body.code == 0
+            # MANUAL CHECK: 日志包含 item 特征文件第 1 行格式错误
+            pytest.skip("manual check required")
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     @pytest.mark.manual
     def test_tc_feat_008(self):
@@ -105,12 +118,16 @@ class TestFeatureScoringBoundary:
             "priority": "P2 / 异常",
             "markers": ["`[manual]`"],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 前置操作：测试 TSV 内容包含 COUPON_FEAT_BAD\t{bad json
-        # SETUP: 请求覆盖：HTTP 请求 item_id="COUPON_FEAT_BAD"
-        # MANUAL CHECK: response.body.code == 0
-        # MANUAL CHECK: 日志包含 JSON 解析失败
-        pytest.skip("manual check required")
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 前置操作：测试 TSV 内容包含 COUPON_FEAT_BAD\t{bad json
+            # SETUP: 请求覆盖：HTTP 请求 item_id="COUPON_FEAT_BAD"
+            # MANUAL CHECK: response.body.code == 0
+            # MANUAL CHECK: 日志包含 JSON 解析失败
+            pytest.skip("manual check required")
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_feat_009(self, setup_feature_scoring):
         """TC-FEAT-009：不存在的 item 返回空特征但 pipeline 不中断"""
@@ -123,15 +140,19 @@ class TestFeatureScoringBoundary:
             "priority": "P2",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 前置操作：HTTP 请求 item_id="COUPON_FEAT_NOT_IN_TSV"，该 item 不在 TSV 中
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 前置操作：HTTP 请求 item_id="COUPON_FEAT_NOT_IN_TSV"，该 item 不在 TSV 中
 
-        client = setup_feature_scoring
-        client.prepare_user(user_id="u_feat_not_in_tsv", features={"gender": "male", "age": 28, "total_spend": 30000, "purchase_frequency": 4, "register_days": 120, "is_new_user": True, "is_member": True})
-        client.prepare_stock(coupon_id="COUPON_FEAT_NOT_IN_TSV", stock=100)
-        resp = client.recommend_http(request_overrides={"user_id": "u_feat_not_in_tsv", "items": [{"item_id": "COUPON_FEAT_NOT_IN_TSV", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]})
-        assert resp["code"] == 0
-        assert resp["results"][0]["item_id"] == "COUPON_FEAT_NOT_IN_TSV"
+            client = setup_feature_scoring
+            client.prepare_user(user_id="u_feat_not_in_tsv", features={"gender": "male", "age": 28, "total_spend": 30000, "purchase_frequency": 4, "register_days": 120, "is_new_user": True, "is_member": True})
+            client.prepare_stock(coupon_id="COUPON_FEAT_NOT_IN_TSV", stock=100)
+            resp = client.recommend_http(request_overrides={"user_id": "u_feat_not_in_tsv", "items": [{"item_id": "COUPON_FEAT_NOT_IN_TSV", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]})
+            assert resp["code"] == 0
+            assert resp["results"][0]["item_id"] == "COUPON_FEAT_NOT_IN_TSV"
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
 
 # TODO: setup_feature_scoring fixture 需要手写实现（→ tests/fixtures/feature_scoring.py）

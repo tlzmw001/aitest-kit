@@ -131,7 +131,6 @@ User fixtures and helpers can capture any protocol by calling:
 
 ```python
 capture_io(
-    case_id="TC-ITEM-001",
     label="grpc CouponService/Recommend",
     protocol="grpc",
     request=req,
@@ -141,7 +140,10 @@ capture_io(
 )
 ```
 
-When capture is disabled, `capture_io()` is a no-op.
+Inside generated test functions, `capture_io()` can infer the current case id
+from the runtime case context. Explicit `case_id="TC-ITEM-001"` remains valid
+and wins when users call the helper outside generated tests or want to override
+the inferred identity. When capture is disabled, `capture_io()` is a no-op.
 
 Users define business failure themselves:
 
@@ -149,7 +151,6 @@ Users define business failure themselves:
 resp = client.call(req)
 if resp.code != 0:
     capture_io(
-        case_id=case_id,
         label="business failure",
         protocol="grpc",
         request=req,
@@ -192,6 +193,7 @@ Capture does not redact. It serializes a safe copy for writing:
   - import capture helper
   - auto-capture only `default_http`
   - use response-level HTTP helper so 4xx/5xx response bodies can be captured before `raise_for_status()`
+  - set generated test case identity context for fixture-owned capture/logging
 
 - Docs and tests
   - document `aitest run --capture`

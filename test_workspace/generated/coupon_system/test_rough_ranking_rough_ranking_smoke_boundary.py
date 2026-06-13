@@ -3,6 +3,7 @@
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
+from aitest_kit.runtime_context import reset_case_context, set_case_context
 from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
 from test_workspace.targets.coupon_system.fixtures.rough_ranking import setup_rough_ranking
 
@@ -46,15 +47,19 @@ class TestRoughRankingBoundary:
             "priority": "P2 / 异常",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 请求覆盖：HTTP 请求 items=[]
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 请求覆盖：HTTP 请求 items=[]
 
-        case = setup_rough_ranking
-        case = setup_rough_ranking(case_id="TC-RANK-013")
-        resp = case.recommend_http()
-        assert resp['code'] == 1001
-        assert resp['results'] == []
-        assert case.rank_input_items == []
+            case = setup_rough_ranking
+            case = setup_rough_ranking(case_id="TC-RANK-013")
+            resp = case.recommend_http()
+            assert resp['code'] == 1001
+            assert resp['results'] == []
+            assert case.rank_input_items == []
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_rank_014(self, setup_rough_ranking):
         """TC-RANK-014：truncate_count 小于等于 0 时返回空推荐结果"""
@@ -67,17 +72,21 @@ class TestRoughRankingBoundary:
             "priority": "P2 / 异常",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":0,"truncate_rule":"top_value"}
-        # SETUP: 请求覆盖：HTTP 请求传入 3 张合法券
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":0,"truncate_rule":"top_value"}
+            # SETUP: 请求覆盖：HTTP 请求传入 3 张合法券
 
-        case = setup_rough_ranking
-        case = setup_rough_ranking(case_id="TC-RANK-014")
-        resp = case.recommend_http()
-        assert resp['code'] == 0
-        assert resp['results'] == []
-        assert resp['coupon'] is None
-        assert case.rank_input_items == []
+            case = setup_rough_ranking
+            case = setup_rough_ranking(case_id="TC-RANK-014")
+            resp = case.recommend_http()
+            assert resp['code'] == 0
+            assert resp['results'] == []
+            assert resp['coupon'] is None
+            assert case.rank_input_items == []
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_rank_015(self, setup_rough_ranking):
         """TC-RANK-015：truncate_count 非数字时默认不截断"""
@@ -90,15 +99,19 @@ class TestRoughRankingBoundary:
             "priority": "P2 / 异常",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":"bad","truncate_rule":"top_value"}
-        # SETUP: 请求覆盖：HTTP 请求传入 3 张合法券
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":"bad","truncate_rule":"top_value"}
+            # SETUP: 请求覆盖：HTTP 请求传入 3 张合法券
 
-        case = setup_rough_ranking
-        case = setup_rough_ranking(case_id="TC-RANK-015")
-        resp = case.recommend_http()
-        assert resp['code'] == 0
-        assert len(case.rank_input_items) == 3
+            case = setup_rough_ranking
+            case = setup_rough_ranking(case_id="TC-RANK-015")
+            resp = case.recommend_http()
+            assert resp['code'] == 0
+            assert len(case.rank_input_items) == 3
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     # ── 二、异常规则降级 ──
 
@@ -114,16 +127,20 @@ class TestRoughRankingBoundary:
             "priority": "P2 / 异常",
             "markers": ["`[manual]`"],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":2,"truncate_rule":"unknown_rule"}
-        # SETUP: 请求覆盖：HTTP 请求传入 A/B/C
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":2,"truncate_rule":"unknown_rule"}
+            # SETUP: 请求覆盖：HTTP 请求传入 A/B/C
 
-        case = setup_rough_ranking
-        case = setup_rough_ranking(case_id="TC-RANK-016")
-        resp = case.recommend_http()
-        assert resp['code'] == 0
-        assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
-        # MANUAL CHECK: 应用日志包含 未知粗排规则
+            case = setup_rough_ranking
+            case = setup_rough_ranking(case_id="TC-RANK-016")
+            resp = case.recommend_http()
+            assert resp['code'] == 0
+            assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
+            # MANUAL CHECK: 应用日志包含 未知粗排规则
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_rank_017(self, setup_rough_ranking):
         """TC-RANK-017：sort_keys 格式异常时跳过异常 key"""
@@ -136,13 +153,17 @@ class TestRoughRankingBoundary:
             "priority": "P2 / 异常",
             "markers": [],
         }
-        # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":2,"sort_keys":["bad",{"field":123,"weight":1},{"field":"value","weight":"bad"}]}
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":2,"sort_keys":["bad",{"field":123,"weight":1},{"field":"value","weight":"bad"}]}
 
-        case = setup_rough_ranking
-        case = setup_rough_ranking(case_id="TC-RANK-017")
-        resp = case.recommend_http()
-        assert resp['code'] == 0
-        assert len(case.rank_input_items) == 2
+            case = setup_rough_ranking
+            case = setup_rough_ranking(case_id="TC-RANK-017")
+            resp = case.recommend_http()
+            assert resp['code'] == 0
+            assert len(case.rank_input_items) == 2
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     @pytest.mark.manual
     def test_tc_rank_018(self, setup_rough_ranking):
@@ -156,15 +177,19 @@ class TestRoughRankingBoundary:
             "priority": "P2 / 异常",
             "markers": ["`[manual]`"],
         }
-        # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":3,"filters":[{"field":"value","op":"bad_op","value":80}]}
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":3,"filters":[{"field":"value","op":"bad_op","value":80}]}
 
-        case = setup_rough_ranking
-        case = setup_rough_ranking(case_id="TC-RANK-018")
-        resp = case.recommend_http()
-        assert resp['code'] == 0
-        assert resp['results'] == []
-        assert case.rank_input_items == []
-        # MANUAL CHECK: 应用日志包含 未知过滤操作符
+            case = setup_rough_ranking
+            case = setup_rough_ranking(case_id="TC-RANK-018")
+            resp = case.recommend_http()
+            assert resp['code'] == 0
+            assert resp['results'] == []
+            assert case.rank_input_items == []
+            # MANUAL CHECK: 应用日志包含 未知过滤操作符
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_rank_019(self, setup_rough_ranking):
         """TC-RANK-019：diversity 参数异常时跳过打散"""
@@ -177,13 +202,17 @@ class TestRoughRankingBoundary:
             "priority": "P2 / 异常",
             "markers": [],
         }
-        # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":2,"truncate_rule":"top_value","diversity":{"enabled":true,"group_field":123,"max_per_group":0}}
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":2,"truncate_rule":"top_value","diversity":{"enabled":true,"group_field":123,"max_per_group":0}}
 
-        case = setup_rough_ranking
-        case = setup_rough_ranking(case_id="TC-RANK-019")
-        resp = case.recommend_http()
-        assert resp['code'] == 0
-        assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
+            case = setup_rough_ranking
+            case = setup_rough_ranking(case_id="TC-RANK-019")
+            resp = case.recommend_http()
+            assert resp['code'] == 0
+            assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     @pytest.mark.manual
     def test_tc_rank_020(self, setup_rough_ranking):
@@ -197,15 +226,19 @@ class TestRoughRankingBoundary:
             "priority": "P2 / 异常",
             "markers": ["`[manual]`"],
         }
-        # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":1,"prior_count":3,"prior_rule":"top_value"}
-        # SETUP: 请求覆盖：B 为 isPrior=true
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":1,"prior_count":3,"prior_rule":"top_value"}
+            # SETUP: 请求覆盖：B 为 isPrior=true
 
-        case = setup_rough_ranking
-        case = setup_rough_ranking(case_id="TC-RANK-020")
-        resp = case.recommend_http()
-        assert resp['code'] == 0
-        assert case.rank_input_items == ['COUPON_RANK_B']
-        # MANUAL CHECK: 应用日志包含 prior_count=3 大于 truncate_count=1
+            case = setup_rough_ranking
+            case = setup_rough_ranking(case_id="TC-RANK-020")
+            resp = case.recommend_http()
+            assert resp['code'] == 0
+            assert case.rank_input_items == ['COUPON_RANK_B']
+            # MANUAL CHECK: 应用日志包含 prior_count=3 大于 truncate_count=1
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_rank_021(self, setup_rough_ranking):
         """TC-RANK-021：gRPC truncate_count 非数字时默认不截断"""
@@ -218,15 +251,19 @@ class TestRoughRankingBoundary:
             "priority": "P2 / 异常",
             "markers": [],
         }
-        # SETUP: 协议：gRPC
-        # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":"bad","truncate_rule":"top_value"}
-        # SETUP: 请求覆盖：gRPC 请求传入 3 张合法券
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：gRPC
+            # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":"bad","truncate_rule":"top_value"}
+            # SETUP: 请求覆盖：gRPC 请求传入 3 张合法券
 
-        case = setup_rough_ranking
-        case = setup_rough_ranking(case_id="TC-RANK-021")
-        resp = case.recommend_grpc()
-        assert resp['code'] == 0
-        assert len(case.rank_input_items) == 3
+            case = setup_rough_ranking
+            case = setup_rough_ranking(case_id="TC-RANK-021")
+            resp = case.recommend_grpc()
+            assert resp['code'] == 0
+            assert len(case.rank_input_items) == 3
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     @pytest.mark.manual
     def test_tc_rank_022(self, setup_rough_ranking):
@@ -240,16 +277,20 @@ class TestRoughRankingBoundary:
             "priority": "P2 / 异常",
             "markers": ["`[manual]`"],
         }
-        # SETUP: 协议：gRPC
-        # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":2,"truncate_rule":"unknown_rule"}
-        # SETUP: 请求覆盖：gRPC 请求传入 A/B/C
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：gRPC
+            # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":2,"truncate_rule":"unknown_rule"}
+            # SETUP: 请求覆盖：gRPC 请求传入 A/B/C
 
-        case = setup_rough_ranking
-        case = setup_rough_ranking(case_id="TC-RANK-022")
-        resp = case.recommend_grpc()
-        assert resp['code'] == 0
-        assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
-        # MANUAL CHECK: 应用日志包含 未知粗排规则
+            case = setup_rough_ranking
+            case = setup_rough_ranking(case_id="TC-RANK-022")
+            resp = case.recommend_grpc()
+            assert resp['code'] == 0
+            assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
+            # MANUAL CHECK: 应用日志包含 未知粗排规则
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     @pytest.mark.manual
     def test_tc_rank_023(self, setup_rough_ranking):
@@ -263,16 +304,20 @@ class TestRoughRankingBoundary:
             "priority": "P2 / 异常",
             "markers": ["`[manual]`"],
         }
-        # SETUP: 协议：gRPC
-        # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":1,"prior_count":3,"prior_rule":"top_value"}
-        # SETUP: 请求覆盖：gRPC 请求中 COUPON_RANK_B.is_prior=true
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：gRPC
+            # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":1,"prior_count":3,"prior_rule":"top_value"}
+            # SETUP: 请求覆盖：gRPC 请求中 COUPON_RANK_B.is_prior=true
 
-        case = setup_rough_ranking
-        case = setup_rough_ranking(case_id="TC-RANK-023")
-        resp = case.recommend_grpc()
-        assert resp['code'] == 0
-        assert case.rank_input_items == ['COUPON_RANK_B']
-        # MANUAL CHECK: 应用日志包含 prior_count=3 大于 truncate_count=1
+            case = setup_rough_ranking
+            case = setup_rough_ranking(case_id="TC-RANK-023")
+            resp = case.recommend_grpc()
+            assert resp['code'] == 0
+            assert case.rank_input_items == ['COUPON_RANK_B']
+            # MANUAL CHECK: 应用日志包含 prior_count=3 大于 truncate_count=1
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
 
 # TODO: setup_rough_ranking fixture 需要手写实现（→ tests/fixtures/rough_ranking.py）

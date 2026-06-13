@@ -3,6 +3,7 @@
 import pytest
 from aitest_kit.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
+from aitest_kit.runtime_context import reset_case_context, set_case_context
 from test_workspace.targets.discount_system.fixtures.discount_policy import setup_discount_policy
 
 
@@ -42,14 +43,18 @@ class TestDiscountPolicyBusiness:
             "priority": "P0",
             "markers": [],
         }
-        # SETUP: 接口调用：GET /health
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 接口调用：GET /health
 
-        dp = setup_discount_policy
-        dp = setup_discount_policy(case_id="TC-DP-001")
-        resp = dp.health()
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body == {'status': 'ok'}
+            dp = setup_discount_policy
+            dp = setup_discount_policy(case_id="TC-DP-001")
+            resp = dp.health()
+            assert resp.status_code == 200
+            body = resp.json()
+            assert body == {'status': 'ok'}
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_dp_002(self, setup_discount_policy):
         """TC-DP-002：黑名单用户优先于活动和库存"""
@@ -62,19 +67,23 @@ class TestDiscountPolicyBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 请求覆盖：{"user_id": "u_dp_002", "user_level": "black", "scene": "campaign", "stock": 0, "request_id": "req_dp_002"}
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 请求覆盖：{"user_id": "u_dp_002", "user_level": "black", "scene": "campaign", "stock": 0, "request_id": "req_dp_002"}
 
-        dp = setup_discount_policy
-        dp = setup_discount_policy(case_id="TC-DP-002")
-        payload = dp.payload(user_id="u_dp_002", user_level="black", scene="campaign", stock=0, request_id="req_dp_002")
-        resp = dp.evaluate(payload)
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["code"] == 0
-        assert body["eligible"] is False
-        assert body["discount_rate"] == pytest.approx(1.0)
-        assert body["reason_code"] == "USER_BLOCKED"
-        assert body["request_id"] == "req_dp_002"
+            dp = setup_discount_policy
+            dp = setup_discount_policy(case_id="TC-DP-002")
+            payload = dp.payload(user_id="u_dp_002", user_level="black", scene="campaign", stock=0, request_id="req_dp_002")
+            resp = dp.evaluate(payload)
+            assert resp.status_code == 200
+            body = resp.json()
+            assert body["code"] == 0
+            assert body["eligible"] is False
+            assert body["discount_rate"] == pytest.approx(1.0)
+            assert body["reason_code"] == "USER_BLOCKED"
+            assert body["request_id"] == "req_dp_002"
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_dp_003(self, setup_discount_policy):
         """TC-DP-003：库存为空优先于活动规则"""
@@ -87,19 +96,23 @@ class TestDiscountPolicyBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 请求覆盖：{"user_id": "u_dp_003", "user_level": "vip", "scene": "campaign", "stock": 0, "request_id": "req_dp_003"}
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 请求覆盖：{"user_id": "u_dp_003", "user_level": "vip", "scene": "campaign", "stock": 0, "request_id": "req_dp_003"}
 
-        dp = setup_discount_policy
-        dp = setup_discount_policy(case_id="TC-DP-003")
-        payload = dp.payload(user_id="u_dp_003", user_level="vip", scene="campaign", stock=0, request_id="req_dp_003")
-        resp = dp.evaluate(payload)
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["code"] == 0
-        assert body["eligible"] is False
-        assert body["discount_rate"] == pytest.approx(1.0)
-        assert body["reason_code"] == "STOCK_EMPTY"
-        assert body["request_id"] == "req_dp_003"
+            dp = setup_discount_policy
+            dp = setup_discount_policy(case_id="TC-DP-003")
+            payload = dp.payload(user_id="u_dp_003", user_level="vip", scene="campaign", stock=0, request_id="req_dp_003")
+            resp = dp.evaluate(payload)
+            assert resp.status_code == 200
+            body = resp.json()
+            assert body["code"] == 0
+            assert body["eligible"] is False
+            assert body["discount_rate"] == pytest.approx(1.0)
+            assert body["reason_code"] == "STOCK_EMPTY"
+            assert body["request_id"] == "req_dp_003"
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_dp_004(self, setup_discount_policy):
         """TC-DP-004：活动场景命中八折"""
@@ -112,19 +125,23 @@ class TestDiscountPolicyBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 请求覆盖：{"user_id": "u_dp_004", "user_level": "normal", "scene": "campaign", "stock": 5, "request_id": "req_dp_004"}
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 请求覆盖：{"user_id": "u_dp_004", "user_level": "normal", "scene": "campaign", "stock": 5, "request_id": "req_dp_004"}
 
-        dp = setup_discount_policy
-        dp = setup_discount_policy(case_id="TC-DP-004")
-        payload = dp.payload(user_id="u_dp_004", user_level="normal", scene="campaign", stock=5, request_id="req_dp_004")
-        resp = dp.evaluate(payload)
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["code"] == 0
-        assert body["eligible"] is True
-        assert body["discount_rate"] == pytest.approx(0.8)
-        assert body["reason_code"] == "CAMPAIGN"
-        assert body["request_id"] == "req_dp_004"
+            dp = setup_discount_policy
+            dp = setup_discount_policy(case_id="TC-DP-004")
+            payload = dp.payload(user_id="u_dp_004", user_level="normal", scene="campaign", stock=5, request_id="req_dp_004")
+            resp = dp.evaluate(payload)
+            assert resp.status_code == 200
+            body = resp.json()
+            assert body["code"] == 0
+            assert body["eligible"] is True
+            assert body["discount_rate"] == pytest.approx(0.8)
+            assert body["reason_code"] == "CAMPAIGN"
+            assert body["request_id"] == "req_dp_004"
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_dp_005(self, setup_discount_policy):
         """TC-DP-005：VIP 结算命中九折"""
@@ -137,19 +154,23 @@ class TestDiscountPolicyBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 请求覆盖：{"user_id": "u_dp_005", "user_level": "vip", "scene": "checkout", "stock": 5, "request_id": "req_dp_005"}
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 请求覆盖：{"user_id": "u_dp_005", "user_level": "vip", "scene": "checkout", "stock": 5, "request_id": "req_dp_005"}
 
-        dp = setup_discount_policy
-        dp = setup_discount_policy(case_id="TC-DP-005")
-        payload = dp.payload(user_id="u_dp_005", user_level="vip", scene="checkout", stock=5, request_id="req_dp_005")
-        resp = dp.evaluate(payload)
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["code"] == 0
-        assert body["eligible"] is True
-        assert body["discount_rate"] == pytest.approx(0.9)
-        assert body["reason_code"] == "VIP_CHECKOUT"
-        assert body["request_id"] == "req_dp_005"
+            dp = setup_discount_policy
+            dp = setup_discount_policy(case_id="TC-DP-005")
+            payload = dp.payload(user_id="u_dp_005", user_level="vip", scene="checkout", stock=5, request_id="req_dp_005")
+            resp = dp.evaluate(payload)
+            assert resp.status_code == 200
+            body = resp.json()
+            assert body["code"] == 0
+            assert body["eligible"] is True
+            assert body["discount_rate"] == pytest.approx(0.9)
+            assert body["reason_code"] == "VIP_CHECKOUT"
+            assert body["request_id"] == "req_dp_005"
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_dp_006(self, setup_discount_policy):
         """TC-DP-006：普通结算走默认规则"""
@@ -162,19 +183,23 @@ class TestDiscountPolicyBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 请求覆盖：{"user_id": "u_dp_006", "user_level": "normal", "scene": "checkout", "stock": 5, "request_id": "req_dp_006"}
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 请求覆盖：{"user_id": "u_dp_006", "user_level": "normal", "scene": "checkout", "stock": 5, "request_id": "req_dp_006"}
 
-        dp = setup_discount_policy
-        dp = setup_discount_policy(case_id="TC-DP-006")
-        payload = dp.payload(user_id="u_dp_006", user_level="normal", scene="checkout", stock=5, request_id="req_dp_006")
-        resp = dp.evaluate(payload)
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["code"] == 0
-        assert body["eligible"] is True
-        assert body["discount_rate"] == pytest.approx(1.0)
-        assert body["reason_code"] == "DEFAULT"
-        assert body["request_id"] == "req_dp_006"
+            dp = setup_discount_policy
+            dp = setup_discount_policy(case_id="TC-DP-006")
+            payload = dp.payload(user_id="u_dp_006", user_level="normal", scene="checkout", stock=5, request_id="req_dp_006")
+            resp = dp.evaluate(payload)
+            assert resp.status_code == 200
+            body = resp.json()
+            assert body["code"] == 0
+            assert body["eligible"] is True
+            assert body["discount_rate"] == pytest.approx(1.0)
+            assert body["reason_code"] == "DEFAULT"
+            assert body["request_id"] == "req_dp_006"
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     # ── 二、决策生命周期 ──
 
@@ -189,21 +214,25 @@ class TestDiscountPolicyBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 接口调用：先 POST /api/v1/discount/policy，再 GET /api/v1/discount/decisions/req_dp_007
-        # SETUP: 请求覆盖：{"user_id": "u_dp_007", "user_level": "vip", "scene": "checkout", "stock": 5, "request_id": "req_dp_007"}
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 接口调用：先 POST /api/v1/discount/policy，再 GET /api/v1/discount/decisions/req_dp_007
+            # SETUP: 请求覆盖：{"user_id": "u_dp_007", "user_level": "vip", "scene": "checkout", "stock": 5, "request_id": "req_dp_007"}
 
-        dp = setup_discount_policy
-        dp = setup_discount_policy(case_id="TC-DP-007")
-        payload = dp.payload(user_id="u_dp_007", user_level="vip", scene="checkout", stock=5, request_id="req_dp_007")
-        eval_resp = dp.evaluate(payload)
-        assert eval_resp.status_code == 200
-        query_resp = dp.query("req_dp_007")
-        assert query_resp.status_code == 200
-        body = query_resp.json()
-        assert body["found"] is True
-        assert body["request_id"] == "req_dp_007"
-        assert body["decision"]["reason_code"] == "VIP_CHECKOUT"
-        assert body["decision"]["request_id"] == "req_dp_007"
+            dp = setup_discount_policy
+            dp = setup_discount_policy(case_id="TC-DP-007")
+            payload = dp.payload(user_id="u_dp_007", user_level="vip", scene="checkout", stock=5, request_id="req_dp_007")
+            eval_resp = dp.evaluate(payload)
+            assert eval_resp.status_code == 200
+            query_resp = dp.query("req_dp_007")
+            assert query_resp.status_code == 200
+            body = query_resp.json()
+            assert body["found"] is True
+            assert body["request_id"] == "req_dp_007"
+            assert body["decision"]["reason_code"] == "VIP_CHECKOUT"
+            assert body["decision"]["request_id"] == "req_dp_007"
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_dp_008(self, setup_discount_policy):
         """TC-DP-008：删除决策后查询返回不存在"""
@@ -216,23 +245,27 @@ class TestDiscountPolicyBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 接口调用：先 POST /api/v1/discount/policy，再 DELETE /api/v1/discount/decisions/req_dp_008，最后查询同一 request_id
-        # SETUP: 请求覆盖：{"user_id": "u_dp_008", "user_level": "normal", "scene": "campaign", "stock": 5, "request_id": "req_dp_008"}
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 接口调用：先 POST /api/v1/discount/policy，再 DELETE /api/v1/discount/decisions/req_dp_008，最后查询同一 request_id
+            # SETUP: 请求覆盖：{"user_id": "u_dp_008", "user_level": "normal", "scene": "campaign", "stock": 5, "request_id": "req_dp_008"}
 
-        dp = setup_discount_policy
-        dp = setup_discount_policy(case_id="TC-DP-008")
-        payload = dp.payload(user_id="u_dp_008", user_level="normal", scene="campaign", stock=5, request_id="req_dp_008")
-        eval_resp = dp.evaluate(payload)
-        assert eval_resp.status_code == 200
-        delete_resp = dp.delete("req_dp_008")
-        assert delete_resp.status_code == 200
-        deleted = delete_resp.json()
-        assert deleted["deleted"] is True
-        query_resp = dp.query("req_dp_008")
-        assert query_resp.status_code == 404
-        body = query_resp.json()
-        assert body["found"] is False
-        assert body["error"] == "DECISION_NOT_FOUND"
+            dp = setup_discount_policy
+            dp = setup_discount_policy(case_id="TC-DP-008")
+            payload = dp.payload(user_id="u_dp_008", user_level="normal", scene="campaign", stock=5, request_id="req_dp_008")
+            eval_resp = dp.evaluate(payload)
+            assert eval_resp.status_code == 200
+            delete_resp = dp.delete("req_dp_008")
+            assert delete_resp.status_code == 200
+            deleted = delete_resp.json()
+            assert deleted["deleted"] is True
+            query_resp = dp.query("req_dp_008")
+            assert query_resp.status_code == 404
+            body = query_resp.json()
+            assert body["found"] is False
+            assert body["error"] == "DECISION_NOT_FOUND"
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
 
 # TODO: setup_discount_policy fixture 需要手写实现（→ tests/fixtures/discount_policy.py）

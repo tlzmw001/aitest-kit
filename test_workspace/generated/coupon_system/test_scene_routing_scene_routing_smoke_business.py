@@ -3,6 +3,7 @@
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
+from aitest_kit.runtime_context import reset_case_context, set_case_context
 from test_workspace.targets.coupon_system.fixtures.scene_routing import setup_scene_routing
 
 
@@ -45,14 +46,18 @@ class TestSceneRoutingBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 请求覆盖：HTTP 请求 user_id="u_route_game_mobile"、scene_name="game"、device="mobile"、policy_id=""、external=0
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 请求覆盖：HTTP 请求 user_id="u_route_game_mobile"、scene_name="game"、device="mobile"、policy_id=""、external=0
 
-        client = setup_scene_routing
-        client.prepare_stock(coupon_id="COUPON_ROUTE_001")
-        resp = client.recommend_http(request_overrides={"user_id": "u_route_game_mobile", "reqId": "req-route-001", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 0})
-        assert resp["code"] == 0
-        assert resp["scene_id"] == 1001
+            client = setup_scene_routing
+            client.prepare_stock(coupon_id="COUPON_ROUTE_001")
+            resp = client.recommend_http(request_overrides={"user_id": "u_route_game_mobile", "reqId": "req-route-001", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 0})
+            assert resp["code"] == 0
+            assert resp["scene_id"] == 1001
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_route_002(self, setup_scene_routing):
         """TC-ROUTE-002：gRPC ad/pc 路由到 scene_id=2002"""
@@ -65,14 +70,18 @@ class TestSceneRoutingBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 协议：gRPC
-        # SETUP: 请求覆盖：gRPC 请求 user_id="u_route_ad_pc"、scene_name="ad"、device="pc"、policy_id=""、external=0
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：gRPC
+            # SETUP: 请求覆盖：gRPC 请求 user_id="u_route_ad_pc"、scene_name="ad"、device="pc"、policy_id=""、external=0
 
-        client = setup_scene_routing
-        client.prepare_stock(coupon_id="COUPON_ROUTE_001")
-        resp = client.recommend_grpc(request_overrides={"user_id": "u_route_ad_pc", "req_id": "req-route-002", "scene_name": "ad", "device": "pc", "policy_id": "", "external": 0})
-        assert resp["code"] == 0
-        assert resp["scene_id"] == 2002
+            client = setup_scene_routing
+            client.prepare_stock(coupon_id="COUPON_ROUTE_001")
+            resp = client.recommend_grpc(request_overrides={"user_id": "u_route_ad_pc", "req_id": "req-route-002", "scene_name": "ad", "device": "pc", "policy_id": "", "external": 0})
+            assert resp["code"] == 0
+            assert resp["scene_id"] == 2002
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_route_003(self, setup_scene_routing):
         """TC-ROUTE-003：external=1 时场景路由正常计算"""
@@ -85,14 +94,18 @@ class TestSceneRoutingBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 请求覆盖：HTTP 请求 user_id="u_route_external"、scene_name="game"、device="mobile"、policy_id=""、external=1
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 请求覆盖：HTTP 请求 user_id="u_route_external"、scene_name="game"、device="mobile"、policy_id=""、external=1
 
-        client = setup_scene_routing
-        client.prepare_stock(coupon_id="COUPON_ROUTE_001")
-        resp = client.recommend_http(request_overrides={"user_id": "u_route_external", "reqId": "req-route-003", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 1})
-        assert resp["code"] == 0
-        assert resp["scene_id"] == 1001
+            client = setup_scene_routing
+            client.prepare_stock(coupon_id="COUPON_ROUTE_001")
+            resp = client.recommend_http(request_overrides={"user_id": "u_route_external", "reqId": "req-route-003", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 1})
+            assert resp["code"] == 0
+            assert resp["scene_id"] == 1001
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     # ── 二、兜底策略 ──
 
@@ -107,16 +120,20 @@ class TestSceneRoutingBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 请求覆盖：HTTP 请求 user_id="u_route_policy_fb"、scene_name="game"、device="mobile"、policy_id="policy_fallback_001"、external=0
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 请求覆盖：HTTP 请求 user_id="u_route_policy_fb"、scene_name="game"、device="mobile"、policy_id="policy_fallback_001"、external=0
 
-        client = setup_scene_routing
-        client.prepare_stock(coupon_id="COUPON_ROUTE_001")
-        resp = client.recommend_http(request_overrides={"user_id": "u_route_policy_fb", "reqId": "req-route-004", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0})
-        assert resp["code"] == 0
-        assert resp["scene_id"] == 3001
-        assert resp["experiment_info"] == {}
-        assert resp["results"][0]["score"] == resp["results"][0]["calibrated_score"]
+            client = setup_scene_routing
+            client.prepare_stock(coupon_id="COUPON_ROUTE_001")
+            resp = client.recommend_http(request_overrides={"user_id": "u_route_policy_fb", "reqId": "req-route-004", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0})
+            assert resp["code"] == 0
+            assert resp["scene_id"] == 3001
+            assert resp["experiment_info"] == {}
+            assert resp["results"][0]["score"] == resp["results"][0]["calibrated_score"]
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_route_005(self, setup_scene_routing):
         """TC-ROUTE-005：兜底发放时 user_id 正确传递"""
@@ -129,15 +146,19 @@ class TestSceneRoutingBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 请求覆盖：HTTP 请求 user_id="u_fallback"、scene_name="game"、device="mobile"、policy_id="policy_fallback_001"、external=0、score_threshold=0.0
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 请求覆盖：HTTP 请求 user_id="u_fallback"、scene_name="game"、device="mobile"、policy_id="policy_fallback_001"、external=0、score_threshold=0.0
 
-        client = setup_scene_routing
-        client.prepare_stock(coupon_id="COUPON_ROUTE_001")
-        resp = client.recommend_http(request_overrides={"user_id": "u_fallback", "reqId": "req-route-005", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0, "score_threshold": 0.0})
-        assert resp["code"] == 0
-        assert resp["coupon"] is not None
-        assert resp["coupon"]["user_id"] == "u_fallback"
+            client = setup_scene_routing
+            client.prepare_stock(coupon_id="COUPON_ROUTE_001")
+            resp = client.recommend_http(request_overrides={"user_id": "u_fallback", "reqId": "req-route-005", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0, "score_threshold": 0.0})
+            assert resp["code"] == 0
+            assert resp["coupon"] is not None
+            assert resp["coupon"]["user_id"] == "u_fallback"
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_route_006(self, setup_scene_routing):
         """TC-ROUTE-006：未知场景组合走兜底场景"""
@@ -150,15 +171,19 @@ class TestSceneRoutingBusiness:
             "priority": "P1 / 异常",
             "markers": [],
         }
-        # SETUP: 协议：gRPC
-        # SETUP: 请求覆盖：gRPC 请求 user_id="u_route_unknown"、scene_name="unknown_scene"、device="unknown_device"、policy_id=""、external=0
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：gRPC
+            # SETUP: 请求覆盖：gRPC 请求 user_id="u_route_unknown"、scene_name="unknown_scene"、device="unknown_device"、policy_id=""、external=0
 
-        client = setup_scene_routing
-        client.prepare_stock(coupon_id="COUPON_ROUTE_001")
-        resp = client.recommend_grpc(request_overrides={"user_id": "u_route_unknown", "req_id": "req-route-006", "scene_name": "unknown_scene", "device": "unknown_device", "policy_id": "", "external": 0})
-        assert resp["code"] == 0
-        assert resp["scene_id"] == 3001
-        assert resp["experiment_info"] == {}
+            client = setup_scene_routing
+            client.prepare_stock(coupon_id="COUPON_ROUTE_001")
+            resp = client.recommend_grpc(request_overrides={"user_id": "u_route_unknown", "req_id": "req-route-006", "scene_name": "unknown_scene", "device": "unknown_device", "policy_id": "", "external": 0})
+            assert resp["code"] == 0
+            assert resp["scene_id"] == 3001
+            assert resp["experiment_info"] == {}
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     # ── 三、兜底分三级读取 ──
 
@@ -173,17 +198,21 @@ class TestSceneRoutingBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 前置操作：执行 SET coupon:fallback:score:3001 0.8 和 SET coupon:fallback:score:default 0.6
-        # SETUP: 请求覆盖：HTTP 请求命中 policy_fallback_001
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 前置操作：执行 SET coupon:fallback:score:3001 0.8 和 SET coupon:fallback:score:default 0.6
+            # SETUP: 请求覆盖：HTTP 请求命中 policy_fallback_001
 
-        client = setup_scene_routing
-        client.set_fallback_scores({"coupon:fallback:score:3001": "0.8", "coupon:fallback:score:default": "0.6"})
-        client.prepare_stock(coupon_id="COUPON_ROUTE_001")
-        resp = client.recommend_http(request_overrides={"user_id": "u_route_007", "reqId": "req-route-007", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0})
-        assert resp["code"] == 0
-        assert resp["results"][0]["score"] == 0.8
-        assert resp["results"][0]["calibrated_score"] == 0.8
+            client = setup_scene_routing
+            client.set_fallback_scores({"coupon:fallback:score:3001": "0.8", "coupon:fallback:score:default": "0.6"})
+            client.prepare_stock(coupon_id="COUPON_ROUTE_001")
+            resp = client.recommend_http(request_overrides={"user_id": "u_route_007", "reqId": "req-route-007", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0})
+            assert resp["code"] == 0
+            assert resp["results"][0]["score"] == 0.8
+            assert resp["results"][0]["calibrated_score"] == 0.8
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_route_008(self, setup_scene_routing):
         """TC-ROUTE-008：场景级不存在时使用 Redis 全局兜底分"""
@@ -196,17 +225,21 @@ class TestSceneRoutingBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 前置操作：执行 DEL coupon:fallback:score:3001 和 SET coupon:fallback:score:default 0.6
-        # SETUP: 请求覆盖：HTTP 请求命中 policy_fallback_001
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 前置操作：执行 DEL coupon:fallback:score:3001 和 SET coupon:fallback:score:default 0.6
+            # SETUP: 请求覆盖：HTTP 请求命中 policy_fallback_001
 
-        client = setup_scene_routing
-        client.set_fallback_scores({"coupon:fallback:score:default": "0.6"})
-        client.prepare_stock(coupon_id="COUPON_ROUTE_001")
-        resp = client.recommend_http(request_overrides={"user_id": "u_route_008", "reqId": "req-route-008", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0})
-        assert resp["code"] == 0
-        assert resp["results"][0]["score"] == 0.6
-        assert resp["results"][0]["calibrated_score"] == 0.6
+            client = setup_scene_routing
+            client.set_fallback_scores({"coupon:fallback:score:default": "0.6"})
+            client.prepare_stock(coupon_id="COUPON_ROUTE_001")
+            resp = client.recommend_http(request_overrides={"user_id": "u_route_008", "reqId": "req-route-008", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0})
+            assert resp["code"] == 0
+            assert resp["results"][0]["score"] == 0.6
+            assert resp["results"][0]["calibrated_score"] == 0.6
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_route_009(self, setup_scene_routing):
         """TC-ROUTE-009：Redis 兜底分都不存在时使用配置默认值"""
@@ -219,17 +252,21 @@ class TestSceneRoutingBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 前置操作：执行 DEL coupon:fallback:score:3001 coupon:fallback:score:default
-        # SETUP: 请求覆盖：HTTP 请求命中 policy_fallback_001
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 前置操作：执行 DEL coupon:fallback:score:3001 coupon:fallback:score:default
+            # SETUP: 请求覆盖：HTTP 请求命中 policy_fallback_001
 
-        client = setup_scene_routing
-        client.clear_fallback_scores()
-        client.prepare_stock(coupon_id="COUPON_ROUTE_001")
-        resp = client.recommend_http(request_overrides={"user_id": "u_route_009", "reqId": "req-route-009", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0})
-        assert resp["code"] == 0
-        assert resp["results"][0]["score"] == 0.5
-        assert resp["results"][0]["calibrated_score"] == 0.5
+            client = setup_scene_routing
+            client.clear_fallback_scores()
+            client.prepare_stock(coupon_id="COUPON_ROUTE_001")
+            resp = client.recommend_http(request_overrides={"user_id": "u_route_009", "reqId": "req-route-009", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0})
+            assert resp["code"] == 0
+            assert resp["results"][0]["score"] == 0.5
+            assert resp["results"][0]["calibrated_score"] == 0.5
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
 
 # TODO: setup_scene_routing fixture 需要手写实现（→ tests/fixtures/scene_routing.py）

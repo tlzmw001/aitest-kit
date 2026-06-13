@@ -3,6 +3,7 @@
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
+from aitest_kit.runtime_context import reset_case_context, set_case_context
 from test_workspace.targets.coupon_system.fixtures.calibration import setup_calibration
 
 
@@ -45,12 +46,16 @@ class TestCalibrationBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 前置操作：线性校准文件规则 conditions={"device":"mobile"}、k=1.2、b=0.1
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 前置操作：线性校准文件规则 conditions={"device":"mobile"}、k=1.2、b=0.1
 
-        client = setup_calibration
-        resp = client.run_http_calibration(case_id="TC-CAL-001", linear_files={1: [{"conditions": {"device": "mobile"}, "k": 1.2, "b": 0.1}]})
-        assert resp["code"] == 0
-        assert client.matches_linear(resp, k=1.2, b=0.1)
+            client = setup_calibration
+            resp = client.run_http_calibration(case_id="TC-CAL-001", linear_files={1: [{"conditions": {"device": "mobile"}, "k": 1.2, "b": 0.1}]})
+            assert resp["code"] == 0
+            assert client.matches_linear(resp, k=1.2, b=0.1)
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_cal_002(self, setup_calibration):
         """TC-CAL-002：分段和线性串联校准"""
@@ -63,13 +68,17 @@ class TestCalibrationBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 前置操作：分段文件配置 [0,0.3)->k=0.5,b=0.1、[0.3,0.7)->k=1.0,b=0.0、[0.7,1.0]->k=1.5,b=-0.2
-        # SETUP: 前置操作_2：线性规则 k=1.2,b=0.05
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 前置操作：分段文件配置 [0,0.3)->k=0.5,b=0.1、[0.3,0.7)->k=1.0,b=0.0、[0.7,1.0]->k=1.5,b=-0.2
+            # SETUP: 前置操作_2：线性规则 k=1.2,b=0.05
 
-        client = setup_calibration
-        resp = client.run_http_calibration(case_id="TC-CAL-002", piecewise_files={1: [{"conditions": {"device": "mobile"}, "segments": [{"range": [0.0, 0.3], "k": 0.5, "b": 0.1}, {"range": [0.3, 0.7], "k": 1.0, "b": 0.0}, {"range": [0.7, 1.0], "k": 1.5, "b": -0.2}]}]}, linear_files={1: [{"conditions": {"device": "mobile"}, "k": 1.2, "b": 0.05}]})
-        assert resp["code"] == 0
-        assert client.matches_piecewise_then_linear(resp, linear_k=1.2, linear_b=0.05)
+            client = setup_calibration
+            resp = client.run_http_calibration(case_id="TC-CAL-002", piecewise_files={1: [{"conditions": {"device": "mobile"}, "segments": [{"range": [0.0, 0.3], "k": 0.5, "b": 0.1}, {"range": [0.3, 0.7], "k": 1.0, "b": 0.0}, {"range": [0.7, 1.0], "k": 1.5, "b": -0.2}]}]}, linear_files={1: [{"conditions": {"device": "mobile"}, "k": 1.2, "b": 0.05}]})
+            assert resp["code"] == 0
+            assert client.matches_piecewise_then_linear(resp, linear_k=1.2, linear_b=0.05)
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_cal_003(self, setup_calibration):
         """TC-CAL-003：加载目录中序号最大的校准文件"""
@@ -82,12 +91,16 @@ class TestCalibrationBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 前置操作：线性目录同时存在 1.json 规则 k=0.8,b=0 和 3.json 规则 k=1.3,b=0，二者均匹配
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 前置操作：线性目录同时存在 1.json 规则 k=0.8,b=0 和 3.json 规则 k=1.3,b=0，二者均匹配
 
-        client = setup_calibration
-        resp = client.run_http_calibration(case_id="TC-CAL-003", linear_files={1: [{"conditions": {"device": "mobile"}, "k": 0.8, "b": 0.0}], 3: [{"conditions": {"device": "mobile"}, "k": 1.3, "b": 0.0}]})
-        assert resp["code"] == 0
-        assert client.matches_linear(resp, k=1.3, b=0.0)
+            client = setup_calibration
+            resp = client.run_http_calibration(case_id="TC-CAL-003", linear_files={1: [{"conditions": {"device": "mobile"}, "k": 0.8, "b": 0.0}], 3: [{"conditions": {"device": "mobile"}, "k": 1.3, "b": 0.0}]})
+            assert resp["code"] == 0
+            assert client.matches_linear(resp, k=1.3, b=0.0)
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_cal_004(self, setup_calibration):
         """TC-CAL-004：无效 condition 字段不匹配"""
@@ -100,12 +113,16 @@ class TestCalibrationBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 前置操作：线性规则 conditions={"unknown":"x"}、k=2.0,b=0.0
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 前置操作：线性规则 conditions={"unknown":"x"}、k=2.0,b=0.0
 
-        client = setup_calibration
-        resp = client.run_http_calibration(case_id="TC-CAL-004", linear_files={1: [{"conditions": {"unknown": "x"}, "k": 2.0, "b": 0.0}]})
-        assert resp["code"] == 0
-        assert client.matches_unchanged(resp)
+            client = setup_calibration
+            resp = client.run_http_calibration(case_id="TC-CAL-004", linear_files={1: [{"conditions": {"unknown": "x"}, "k": 2.0, "b": 0.0}]})
+            assert resp["code"] == 0
+            assert client.matches_unchanged(resp)
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     # ── 二、实验控制 ──
 
@@ -120,12 +137,16 @@ class TestCalibrationBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 环境覆盖：校准实验参数 {"enable_calibration":false,"calibration_dir":{"linear":"/tmp/cal_linear_001"}}，线性文件存在且匹配 device=mobile
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 环境覆盖：校准实验参数 {"enable_calibration":false,"calibration_dir":{"linear":"/tmp/cal_linear_001"}}，线性文件存在且匹配 device=mobile
 
-        client = setup_calibration
-        resp = client.run_http_calibration(case_id="TC-CAL-005", enable_calibration=False, linear_files={1: [{"conditions": {"device": "mobile"}, "k": 2.0, "b": 0.0}]})
-        assert resp["code"] == 0
-        assert client.matches_unchanged(resp)
+            client = setup_calibration
+            resp = client.run_http_calibration(case_id="TC-CAL-005", enable_calibration=False, linear_files={1: [{"conditions": {"device": "mobile"}, "k": 2.0, "b": 0.0}]})
+            assert resp["code"] == 0
+            assert client.matches_unchanged(resp)
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_cal_006(self, setup_calibration):
         """TC-CAL-006：gRPC 根据 scene_id 选择 game 校准实验"""
@@ -138,13 +159,17 @@ class TestCalibrationBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 前置操作：scene_id=1001 的 calibration_exp_game 启用，线性规则 k=1.5,b=0.1,conditions={"device":"mobile"}
-        # SETUP: 请求覆盖：ad 校准实验配置不同参数
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 前置操作：scene_id=1001 的 calibration_exp_game 启用，线性规则 k=1.5,b=0.1,conditions={"device":"mobile"}
+            # SETUP: 请求覆盖：ad 校准实验配置不同参数
 
-        client = setup_calibration
-        resp = client.run_grpc_calibration(case_id="TC-CAL-006", linear_files={1: [{"conditions": {"device": "mobile"}, "k": 1.5, "b": 0.1}]})
-        assert resp["code"] == 0
-        assert client.matches_linear(resp, k=1.5, b=0.1)
+            client = setup_calibration
+            resp = client.run_grpc_calibration(case_id="TC-CAL-006", linear_files={1: [{"conditions": {"device": "mobile"}, "k": 1.5, "b": 0.1}]})
+            assert resp["code"] == 0
+            assert client.matches_linear(resp, k=1.5, b=0.1)
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     # ── 三、条件匹配 ──
 
@@ -159,12 +184,16 @@ class TestCalibrationBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 前置操作：线性文件两条规则都匹配：第 1 条 k=1.2,b=0.0，第 2 条 k=2.0,b=0.0
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 前置操作：线性文件两条规则都匹配：第 1 条 k=1.2,b=0.0，第 2 条 k=2.0,b=0.0
 
-        client = setup_calibration
-        resp = client.run_http_calibration(case_id="TC-CAL-007", linear_files={1: [{"conditions": {"device": "mobile"}, "k": 1.2, "b": 0.0}, {"conditions": {"device": "mobile"}, "k": 2.0, "b": 0.0}]})
-        assert resp["code"] == 0
-        assert client.matches_linear(resp, k=1.2, b=0.0)
+            client = setup_calibration
+            resp = client.run_http_calibration(case_id="TC-CAL-007", linear_files={1: [{"conditions": {"device": "mobile"}, "k": 1.2, "b": 0.0}, {"conditions": {"device": "mobile"}, "k": 2.0, "b": 0.0}]})
+            assert resp["code"] == 0
+            assert client.matches_linear(resp, k=1.2, b=0.0)
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_cal_008(self, setup_calibration):
         """TC-CAL-008：条件字段缺失时规则不匹配"""
@@ -177,13 +206,17 @@ class TestCalibrationBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 前置操作：线性规则 conditions={"gender":"male"}
-        # SETUP: 前置操作_2：Redis 不设置用户 gender 特征
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 前置操作：线性规则 conditions={"gender":"male"}
+            # SETUP: 前置操作_2：Redis 不设置用户 gender 特征
 
-        client = setup_calibration
-        resp = client.run_http_calibration(case_id="TC-CAL-008", linear_files={1: [{"conditions": {"gender": "male"}, "k": 2.0, "b": 0.0}]})
-        assert resp["code"] == 0
-        assert client.matches_unchanged(resp)
+            client = setup_calibration
+            resp = client.run_http_calibration(case_id="TC-CAL-008", linear_files={1: [{"conditions": {"gender": "male"}, "k": 2.0, "b": 0.0}]})
+            assert resp["code"] == 0
+            assert client.matches_unchanged(resp)
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_cal_009(self, setup_calibration):
         """TC-CAL-009：条件字段不在白名单时规则不匹配"""
@@ -196,12 +229,16 @@ class TestCalibrationBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 前置操作：线性规则 conditions={"unknown_field":"x"}，k=2.0,b=0.0
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 前置操作：线性规则 conditions={"unknown_field":"x"}，k=2.0,b=0.0
 
-        client = setup_calibration
-        resp = client.run_http_calibration(case_id="TC-CAL-009", linear_files={1: [{"conditions": {"unknown_field": "x"}, "k": 2.0, "b": 0.0}]})
-        assert resp["code"] == 0
-        assert client.matches_unchanged(resp)
+            client = setup_calibration
+            resp = client.run_http_calibration(case_id="TC-CAL-009", linear_files={1: [{"conditions": {"unknown_field": "x"}, "k": 2.0, "b": 0.0}]})
+            assert resp["code"] == 0
+            assert client.matches_unchanged(resp)
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     # ── 四、校准计算 ──
 
@@ -216,13 +253,17 @@ class TestCalibrationBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 前置操作：只配置线性目录
-        # SETUP: 前置操作_2：规则 conditions={"device":"mobile"}、k=1.5、b=0.0
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 前置操作：只配置线性目录
+            # SETUP: 前置操作_2：规则 conditions={"device":"mobile"}、k=1.5、b=0.0
 
-        client = setup_calibration
-        resp = client.run_http_calibration(case_id="TC-CAL-010", linear_files={1: [{"conditions": {"device": "mobile"}, "k": 1.5, "b": 0.0}]})
-        assert resp["code"] == 0
-        assert client.matches_linear(resp, k=1.5, b=0.0)
+            client = setup_calibration
+            resp = client.run_http_calibration(case_id="TC-CAL-010", linear_files={1: [{"conditions": {"device": "mobile"}, "k": 1.5, "b": 0.0}]})
+            assert resp["code"] == 0
+            assert client.matches_linear(resp, k=1.5, b=0.0)
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_cal_011(self, setup_calibration):
         """TC-CAL-011：仅命中分段函数校准"""
@@ -235,13 +276,17 @@ class TestCalibrationBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 前置操作：只配置分段目录
-        # SETUP: 前置操作_2：分段 [0,0.3)->k=0.5,b=0.1、[0.3,0.7)->k=1.0,b=0.0、[0.7,1.0]->k=1.5,b=-0.2，条件 device=mobile
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 前置操作：只配置分段目录
+            # SETUP: 前置操作_2：分段 [0,0.3)->k=0.5,b=0.1、[0.3,0.7)->k=1.0,b=0.0、[0.7,1.0]->k=1.5,b=-0.2，条件 device=mobile
 
-        client = setup_calibration
-        resp = client.run_http_calibration(case_id="TC-CAL-011", piecewise_files={1: [{"conditions": {"device": "mobile"}, "segments": [{"range": [0.0, 0.3], "k": 0.5, "b": 0.1}, {"range": [0.3, 0.7], "k": 1.0, "b": 0.0}, {"range": [0.7, 1.0], "k": 1.5, "b": -0.2}]}]})
-        assert resp["code"] == 0
-        assert client.matches_piecewise(resp)
+            client = setup_calibration
+            resp = client.run_http_calibration(case_id="TC-CAL-011", piecewise_files={1: [{"conditions": {"device": "mobile"}, "segments": [{"range": [0.0, 0.3], "k": 0.5, "b": 0.1}, {"range": [0.3, 0.7], "k": 1.0, "b": 0.0}, {"range": [0.7, 1.0], "k": 1.5, "b": -0.2}]}]})
+            assert resp["code"] == 0
+            assert client.matches_piecewise(resp)
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_cal_012(self, setup_calibration):
         """TC-CAL-012：线性和分段都命中时先分段后线性"""
@@ -254,14 +299,18 @@ class TestCalibrationBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 前置操作：分段同 TC-CAL-011
-        # SETUP: 前置操作_2：线性规则 k=1.2,b=0.05
-        # SETUP: 请求覆盖：二者都匹配 device=mobile
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 前置操作：分段同 TC-CAL-011
+            # SETUP: 前置操作_2：线性规则 k=1.2,b=0.05
+            # SETUP: 请求覆盖：二者都匹配 device=mobile
 
-        client = setup_calibration
-        resp = client.run_http_calibration(case_id="TC-CAL-012", piecewise_files={1: [{"conditions": {"device": "mobile"}, "segments": [{"range": [0.0, 0.3], "k": 0.5, "b": 0.1}, {"range": [0.3, 0.7], "k": 1.0, "b": 0.0}, {"range": [0.7, 1.0], "k": 1.5, "b": -0.2}]}]}, linear_files={1: [{"conditions": {"device": "mobile"}, "k": 1.2, "b": 0.05}]})
-        assert resp["code"] == 0
-        assert client.matches_piecewise_then_linear(resp, linear_k=1.2, linear_b=0.05)
+            client = setup_calibration
+            resp = client.run_http_calibration(case_id="TC-CAL-012", piecewise_files={1: [{"conditions": {"device": "mobile"}, "segments": [{"range": [0.0, 0.3], "k": 0.5, "b": 0.1}, {"range": [0.3, 0.7], "k": 1.0, "b": 0.0}, {"range": [0.7, 1.0], "k": 1.5, "b": -0.2}]}]}, linear_files={1: [{"conditions": {"device": "mobile"}, "k": 1.2, "b": 0.05}]})
+            assert resp["code"] == 0
+            assert client.matches_piecewise_then_linear(resp, linear_k=1.2, linear_b=0.05)
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_cal_013(self, setup_calibration):
         """TC-CAL-013：两类规则都不匹配时不校准"""
@@ -274,12 +323,16 @@ class TestCalibrationBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 前置操作：线性和分段规则条件均为 device=ios，请求为 mobile
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 前置操作：线性和分段规则条件均为 device=ios，请求为 mobile
 
-        client = setup_calibration
-        resp = client.run_http_calibration(case_id="TC-CAL-013", piecewise_files={1: [{"conditions": {"device": "ios"}, "segments": [{"range": [0.0, 0.3], "k": 0.5, "b": 0.1}, {"range": [0.3, 0.7], "k": 1.0, "b": 0.0}, {"range": [0.7, 1.0], "k": 1.5, "b": -0.2}]}]}, linear_files={1: [{"conditions": {"device": "ios"}, "k": 1.2, "b": 0.05}]})
-        assert resp["code"] == 0
-        assert client.matches_unchanged(resp)
+            client = setup_calibration
+            resp = client.run_http_calibration(case_id="TC-CAL-013", piecewise_files={1: [{"conditions": {"device": "ios"}, "segments": [{"range": [0.0, 0.3], "k": 0.5, "b": 0.1}, {"range": [0.3, 0.7], "k": 1.0, "b": 0.0}, {"range": [0.7, 1.0], "k": 1.5, "b": -0.2}]}]}, linear_files={1: [{"conditions": {"device": "ios"}, "k": 1.2, "b": 0.05}]})
+            assert resp["code"] == 0
+            assert client.matches_unchanged(resp)
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_cal_014(self, setup_calibration):
         """TC-CAL-014：目录中选取序号最大的版本文件"""
@@ -292,12 +345,16 @@ class TestCalibrationBusiness:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 前置操作：线性目录包含 1.json 规则 k=1.1,b=0 和 3.json 规则 k=1.8,b=0，均匹配 device=mobile
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 前置操作：线性目录包含 1.json 规则 k=1.1,b=0 和 3.json 规则 k=1.8,b=0，均匹配 device=mobile
 
-        client = setup_calibration
-        resp = client.run_http_calibration(case_id="TC-CAL-014", linear_files={1: [{"conditions": {"device": "mobile"}, "k": 1.1, "b": 0.0}], 3: [{"conditions": {"device": "mobile"}, "k": 1.8, "b": 0.0}]})
-        assert resp["code"] == 0
-        assert client.matches_linear(resp, k=1.8, b=0.0)
+            client = setup_calibration
+            resp = client.run_http_calibration(case_id="TC-CAL-014", linear_files={1: [{"conditions": {"device": "mobile"}, "k": 1.1, "b": 0.0}], 3: [{"conditions": {"device": "mobile"}, "k": 1.8, "b": 0.0}]})
+            assert resp["code"] == 0
+            assert client.matches_linear(resp, k=1.8, b=0.0)
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
 
 # TODO: setup_calibration fixture 需要手写实现（→ tests/fixtures/calibration.py）

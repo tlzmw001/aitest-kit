@@ -3,6 +3,7 @@
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
+from aitest_kit.runtime_context import reset_case_context, set_case_context
 from test_workspace.targets.coupon_system.fixtures.ab_service import setup_ab_service
 
 
@@ -39,14 +40,18 @@ class TestAbServiceBoundary:
             "priority": "P2",
             "markers": [],
         }
-        # SETUP: 请求覆盖：实验 exp_abs_overlap 策略顺序为 s_first [0,80)、s_second [50,100)
-        # SETUP: 前置操作：选择 hash=60 的 user_id
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 请求覆盖：实验 exp_abs_overlap 策略顺序为 s_first [0,80)、s_second [50,100)
+            # SETUP: 前置操作：选择 hash=60 的 user_id
 
-        ab = setup_ab_service
-        ab = setup_ab_service(case_id="TC-ABS-023")
-        resp = ab.post("/api/v1/ab/evaluate", {"user_id": "u_abs_overlap_243", "request_id": "req_abs_023", "experiment_names": ["exp_abs_overlap"]})
-        assert resp.status_code == 200
-        assert resp.json()['assignments']['exp_abs_overlap']['strategy_id'] == 's_first'
+            ab = setup_ab_service
+            ab = setup_ab_service(case_id="TC-ABS-023")
+            resp = ab.post("/api/v1/ab/evaluate", {"user_id": "u_abs_overlap_243", "request_id": "req_abs_023", "experiment_names": ["exp_abs_overlap"]})
+            assert resp.status_code == 200
+            assert resp.json()['assignments']['exp_abs_overlap']['strategy_id'] == 's_first'
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_abs_024(self, setup_ab_service):
         """TC-ABS-024：空策略实验评估后不返回 assignment"""
@@ -59,14 +64,18 @@ class TestAbServiceBoundary:
             "priority": "P2 / 异常",
             "markers": [],
         }
-        # SETUP: 前置操作：创建实验 exp_abs_empty，strategies=[]
-        # SETUP: 接口调用：evaluate 指定该实验
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 前置操作：创建实验 exp_abs_empty，strategies=[]
+            # SETUP: 接口调用：evaluate 指定该实验
 
-        ab = setup_ab_service
-        ab = setup_ab_service(case_id="TC-ABS-024")
-        resp = ab.post("/api/v1/ab/evaluate", {"user_id": "u_abs_hash_0", "request_id": "req_abs_024", "experiment_names": ["exp_abs_empty"]})
-        assert resp.status_code == 200
-        assert resp.json()['assignments'] == {}
+            ab = setup_ab_service
+            ab = setup_ab_service(case_id="TC-ABS-024")
+            resp = ab.post("/api/v1/ab/evaluate", {"user_id": "u_abs_hash_0", "request_id": "req_abs_024", "experiment_names": ["exp_abs_empty"]})
+            assert resp.status_code == 200
+            assert resp.json()['assignments'] == {}
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_abs_025(self, setup_ab_service):
         """TC-ABS-025：evaluate 指定不存在实验名时静默跳过"""
@@ -79,13 +88,17 @@ class TestAbServiceBoundary:
             "priority": "P2 / 异常",
             "markers": [],
         }
-        # SETUP: 接口调用：evaluate experiment_names=["not_exists_exp"]
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 接口调用：evaluate experiment_names=["not_exists_exp"]
 
-        ab = setup_ab_service
-        ab = setup_ab_service(case_id="TC-ABS-025")
-        resp = ab.post("/api/v1/ab/evaluate", {"user_id": "u_abs_hash_0", "request_id": "req_abs_025", "experiment_names": ["not_exists_exp"]})
-        assert resp.status_code == 200
-        assert resp.json()['assignments'] == {}
+            ab = setup_ab_service
+            ab = setup_ab_service(case_id="TC-ABS-025")
+            resp = ab.post("/api/v1/ab/evaluate", {"user_id": "u_abs_hash_0", "request_id": "req_abs_025", "experiment_names": ["not_exists_exp"]})
+            assert resp.status_code == 200
+            assert resp.json()['assignments'] == {}
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     # ── 二、文件容错 ──
 
@@ -100,14 +113,18 @@ class TestAbServiceBoundary:
             "priority": "P2",
             "markers": [],
         }
-        # SETUP: 环境覆盖：使用不存在的 AB_SERVICE_EXPERIMENTS_PATH=/tmp/aitest_ab_service_boundary/new/experiments.json 启动服务
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 环境覆盖：使用不存在的 AB_SERVICE_EXPERIMENTS_PATH=/tmp/aitest_ab_service_boundary/new/experiments.json 启动服务
 
-        ab = setup_ab_service
-        ab = setup_ab_service(case_id="TC-ABS-026")
-        result = ab.missing_experiments_file_is_created_auto()
-        assert result['status'] == 200
-        assert result['body'] == []
-        assert result['exists']
+            ab = setup_ab_service
+            ab = setup_ab_service(case_id="TC-ABS-026")
+            result = ab.missing_experiments_file_is_created_auto()
+            assert result['status'] == 200
+            assert result['body'] == []
+            assert result['exists']
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     @pytest.mark.manual
     def test_tc_abs_027(self, setup_ab_service):
@@ -121,14 +138,18 @@ class TestAbServiceBoundary:
             "priority": "P2 / 异常",
             "markers": ["`[manual]`"],
         }
-        # SETUP: 环境覆盖：白名单文件内容为 {bad json，启动服务
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 环境覆盖：白名单文件内容为 {bad json，启动服务
 
-        ab = setup_ab_service
-        ab = setup_ab_service(case_id="TC-ABS-027")
-        result = ab.malformed_whitelist_falls_back_empty_auto()
-        assert result['status'] == 200
-        assert result['body'] == {}
-        assert '白名单文件读取失败' in result['logs']
+            ab = setup_ab_service
+            ab = setup_ab_service(case_id="TC-ABS-027")
+            result = ab.malformed_whitelist_falls_back_empty_auto()
+            assert result['status'] == 200
+            assert result['body'] == {}
+            assert '白名单文件读取失败' in result['logs']
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_abs_028(self, setup_ab_service):
         """TC-ABS-028：实验策略 hash_range 格式异常时回退到 [0,100]"""
@@ -141,13 +162,17 @@ class TestAbServiceBoundary:
             "priority": "P2 / 异常",
             "markers": [],
         }
-        # SETUP: 请求覆盖：实验配置文件中策略 s_bad 的 hash_range=["bad"]
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 请求覆盖：实验配置文件中策略 s_bad 的 hash_range=["bad"]
 
-        ab = setup_ab_service
-        ab = setup_ab_service(case_id="TC-ABS-028")
-        result = ab.bad_hash_range_still_evaluates_auto()
-        assert result['status'] == 200
-        assert result['strategy_id'] == 's_bad'
+            ab = setup_ab_service
+            ab = setup_ab_service(case_id="TC-ABS-028")
+            result = ab.bad_hash_range_still_evaluates_auto()
+            assert result['status'] == 200
+            assert result['strategy_id'] == 's_bad'
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_abs_029(self, setup_ab_service):
         """TC-ABS-029：实验策略 params 非 dict 时回退为空 dict"""
@@ -160,13 +185,17 @@ class TestAbServiceBoundary:
             "priority": "P2 / 异常",
             "markers": [],
         }
-        # SETUP: 请求覆盖：实验配置文件中策略 s_bad_params 的 params="bad"
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 请求覆盖：实验配置文件中策略 s_bad_params 的 params="bad"
 
-        ab = setup_ab_service
-        ab = setup_ab_service(case_id="TC-ABS-029")
-        result = ab.bad_params_fall_back_empty_auto()
-        assert result['status'] == 200
-        assert result['params'] == {}
+            ab = setup_ab_service
+            ab = setup_ab_service(case_id="TC-ABS-029")
+            result = ab.bad_params_fall_back_empty_auto()
+            assert result['status'] == 200
+            assert result['params'] == {}
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     # ── 三、Schema 校验 ──
 
@@ -181,13 +210,17 @@ class TestAbServiceBoundary:
             "priority": "P2 / 异常",
             "markers": [],
         }
-        # SETUP: 接口调用：POST /api/v1/ab/evaluate body 缺少 user_id
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 接口调用：POST /api/v1/ab/evaluate body 缺少 user_id
 
-        ab = setup_ab_service
-        ab = setup_ab_service(case_id="TC-ABS-030")
-        resp = ab.post("/api/v1/ab/evaluate", {"request_id": "req_abs_030", "experiment_names": ["exp_ab_basic"]})
-        assert resp.status_code == 422
-        assert ['body', 'user_id'] in [item['loc'] for item in resp.json()['detail']]
+            ab = setup_ab_service
+            ab = setup_ab_service(case_id="TC-ABS-030")
+            resp = ab.post("/api/v1/ab/evaluate", {"request_id": "req_abs_030", "experiment_names": ["exp_ab_basic"]})
+            assert resp.status_code == 422
+            assert ['body', 'user_id'] in [item['loc'] for item in resp.json()['detail']]
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_abs_031(self, setup_ab_service):
         """TC-ABS-031：创建实验 strategies 类型错误返回 422"""
@@ -200,12 +233,16 @@ class TestAbServiceBoundary:
             "priority": "P2 / 异常",
             "markers": [],
         }
-        # SETUP: 接口调用：POST /api/v1/ab/experiments body {"name":"exp_abs_bad_schema","strategies":"bad"}
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 接口调用：POST /api/v1/ab/experiments body {"name":"exp_abs_bad_schema","strategies":"bad"}
 
-        ab = setup_ab_service
-        ab = setup_ab_service(case_id="TC-ABS-031")
-        resp = ab.post("/api/v1/ab/experiments", {"name": "exp_abs_bad_schema", "strategies": "bad"})
-        assert resp.status_code == 422
+            ab = setup_ab_service
+            ab = setup_ab_service(case_id="TC-ABS-031")
+            resp = ab.post("/api/v1/ab/experiments", {"name": "exp_abs_bad_schema", "strategies": "bad"})
+            assert resp.status_code == 422
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_abs_032(self, setup_ab_service):
         """TC-ABS-032：单用户白名单 strategy_map 类型错误返回 422"""
@@ -218,12 +255,16 @@ class TestAbServiceBoundary:
             "priority": "P2 / 异常",
             "markers": [],
         }
-        # SETUP: 接口调用：PUT /api/v1/ab/whitelist/u_abs_bad_schema body {"strategy_map":"bad"}
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 接口调用：PUT /api/v1/ab/whitelist/u_abs_bad_schema body {"strategy_map":"bad"}
 
-        ab = setup_ab_service
-        ab = setup_ab_service(case_id="TC-ABS-032")
-        resp = ab.put("/api/v1/ab/whitelist/u_abs_bad_schema", {"strategy_map": "bad"})
-        assert resp.status_code == 422
+            ab = setup_ab_service
+            ab = setup_ab_service(case_id="TC-ABS-032")
+            resp = ab.put("/api/v1/ab/whitelist/u_abs_bad_schema", {"strategy_map": "bad"})
+            assert resp.status_code == 422
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     # ── 四、服务隔离与远程 SDK ──
 
@@ -238,13 +279,17 @@ class TestAbServiceBoundary:
             "priority": "P2",
             "markers": [],
         }
-        # SETUP: 请求覆盖：在仅包含 ab_experiment_sdk 包的隔离 Python 进程中执行 import ab_experiment_sdk.service
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 请求覆盖：在仅包含 ab_experiment_sdk 包的隔离 Python 进程中执行 import ab_experiment_sdk.service
 
-        ab = setup_ab_service
-        ab = setup_ab_service(case_id="TC-ABS-033")
-        result = ab.import_works_from_other_cwd_auto()
-        assert result['returncode'] == 0, result['stderr']
-        assert 'ok ab_experiment_sdk.service' in result['stdout']
+            ab = setup_ab_service
+            ab = setup_ab_service(case_id="TC-ABS-033")
+            result = ab.import_works_from_other_cwd_auto()
+            assert result['returncode'] == 0, result['stderr']
+            assert 'ok ab_experiment_sdk.service' in result['stdout']
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_abs_034(self, setup_ab_service):
         """TC-ABS-034：service 导入不在当前目录产生副作用文件"""
@@ -257,13 +302,17 @@ class TestAbServiceBoundary:
             "priority": "P2",
             "markers": [],
         }
-        # SETUP: 前置操作：在临时目录中执行 import ab_experiment_sdk.service，随后检查当前工作目录
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 前置操作：在临时目录中执行 import ab_experiment_sdk.service，随后检查当前工作目录
 
-        ab = setup_ab_service
-        ab = setup_ab_service(case_id="TC-ABS-034")
-        result = ab.import_has_no_default_file_side_effect_auto()
-        assert result['returncode'] == 0, result['stderr']
-        assert 'exists False' in result['stdout']
+            ab = setup_ab_service
+            ab = setup_ab_service(case_id="TC-ABS-034")
+            result = ab.import_has_no_default_file_side_effect_auto()
+            assert result['returncode'] == 0, result['stderr']
+            assert 'exists False' in result['stdout']
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_abs_035(self, setup_ab_service):
         """TC-ABS-035：Remote SDK evaluate 端到端调用"""
@@ -276,15 +325,19 @@ class TestAbServiceBoundary:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 前置操作：AB 服务启动，白名单 u1 -> {"exp_game":"game_on"}
-        # SETUP: 请求覆盖：调用 RemoteABExperimentSDK.evaluate(user_id="u1", experiment_names=["exp_game"])
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 前置操作：AB 服务启动，白名单 u1 -> {"exp_game":"game_on"}
+            # SETUP: 请求覆盖：调用 RemoteABExperimentSDK.evaluate(user_id="u1", experiment_names=["exp_game"])
 
-        ab = setup_ab_service
-        ab = setup_ab_service(case_id="TC-ABS-035")
-        result = ab.remote_sdk_evaluate_whitelist_auto()
-        assert result['request_id'] == 'req_abs_035'
-        assert result['strategy_id'] == 'game_on'
-        assert result['hit_reason'] == 'whitelist'
+            ab = setup_ab_service
+            ab = setup_ab_service(case_id="TC-ABS-035")
+            result = ab.remote_sdk_evaluate_whitelist_auto()
+            assert result['request_id'] == 'req_abs_035'
+            assert result['strategy_id'] == 'game_on'
+            assert result['hit_reason'] == 'whitelist'
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_abs_036(self, setup_ab_service):
         """TC-ABS-036：Remote SDK 设置单用户白名单并验证 evaluate"""
@@ -297,13 +350,17 @@ class TestAbServiceBoundary:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 接口调用：调用 sdk.set_user_whitelist("u2", {"exp_cal":"cal_on"})，随后 evaluate user_id="u2"、experiment_names=["exp_cal"]
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 接口调用：调用 sdk.set_user_whitelist("u2", {"exp_cal":"cal_on"})，随后 evaluate user_id="u2"、experiment_names=["exp_cal"]
 
-        ab = setup_ab_service
-        ab = setup_ab_service(case_id="TC-ABS-036")
-        result = ab.remote_sdk_set_user_whitelist_auto()
-        assert result['strategy_id'] == 'cal_on'
-        assert result['hit_reason'] == 'whitelist'
+            ab = setup_ab_service
+            ab = setup_ab_service(case_id="TC-ABS-036")
+            result = ab.remote_sdk_set_user_whitelist_auto()
+            assert result['strategy_id'] == 'cal_on'
+            assert result['hit_reason'] == 'whitelist'
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_abs_037(self, setup_ab_service):
         """TC-ABS-037：Remote SDK 清除单用户白名单"""
@@ -316,13 +373,17 @@ class TestAbServiceBoundary:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 前置操作：u2 白名单已存在
-        # SETUP: 请求覆盖：调用 sdk.clear_whitelist("u2")
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 前置操作：u2 白名单已存在
+            # SETUP: 请求覆盖：调用 sdk.clear_whitelist("u2")
 
-        ab = setup_ab_service
-        ab = setup_ab_service(case_id="TC-ABS-037")
-        result = ab.remote_sdk_clear_user_whitelist_auto()
-        assert 'u2' not in result['whitelist']
+            ab = setup_ab_service
+            ab = setup_ab_service(case_id="TC-ABS-037")
+            result = ab.remote_sdk_clear_user_whitelist_auto()
+            assert 'u2' not in result['whitelist']
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_abs_038(self, setup_ab_service):
         """TC-ABS-038：Remote SDK 批量覆盖白名单"""
@@ -335,13 +396,17 @@ class TestAbServiceBoundary:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 前置操作：已有白名单数据
-        # SETUP: 请求覆盖：调用 sdk.set_whitelist({"u3":{"exp_game":"game_on"}})
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 前置操作：已有白名单数据
+            # SETUP: 请求覆盖：调用 sdk.set_whitelist({"u3":{"exp_game":"game_on"}})
 
-        ab = setup_ab_service
-        ab = setup_ab_service(case_id="TC-ABS-038")
-        result = ab.remote_sdk_replace_whitelist_auto()
-        assert result['whitelist'] == {'u3': {'exp_game': 'game_on'}}
+            ab = setup_ab_service
+            ab = setup_ab_service(case_id="TC-ABS-038")
+            result = ab.remote_sdk_replace_whitelist_auto()
+            assert result['whitelist'] == {'u3': {'exp_game': 'game_on'}}
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_abs_039(self, setup_ab_service):
         """TC-ABS-039：Remote SDK 清空全部白名单"""
@@ -354,13 +419,17 @@ class TestAbServiceBoundary:
             "priority": "P1",
             "markers": [],
         }
-        # SETUP: 前置操作：已有白名单数据
-        # SETUP: 请求覆盖：调用 sdk.clear_whitelist()
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 前置操作：已有白名单数据
+            # SETUP: 请求覆盖：调用 sdk.clear_whitelist()
 
-        ab = setup_ab_service
-        ab = setup_ab_service(case_id="TC-ABS-039")
-        result = ab.remote_sdk_clear_all_whitelist_auto()
-        assert result['whitelist'] == {}
+            ab = setup_ab_service
+            ab = setup_ab_service(case_id="TC-ABS-039")
+            result = ab.remote_sdk_clear_all_whitelist_auto()
+            assert result['whitelist'] == {}
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
     def test_tc_abs_040(self, setup_ab_service):
         """TC-ABS-040：Remote SDK 遇到服务端 500 时抛出 HTTPStatusError"""
@@ -373,15 +442,19 @@ class TestAbServiceBoundary:
             "priority": "P2 / 异常",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 请求覆盖：mock AB 服务端对 /api/v1/ab/evaluate 固定返回 HTTP 500
-        # SETUP: 请求覆盖_2：调用 sdk.evaluate(user_id="u_err")
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 请求覆盖：mock AB 服务端对 /api/v1/ab/evaluate 固定返回 HTTP 500
+            # SETUP: 请求覆盖_2：调用 sdk.evaluate(user_id="u_err")
 
-        ab = setup_ab_service
-        ab = setup_ab_service(case_id="TC-ABS-040")
-        result = ab.remote_sdk_raises_on_http_error()
-        assert result['raised'] is True
-        assert result['status_code'] == 500
+            ab = setup_ab_service
+            ab = setup_ab_service(case_id="TC-ABS-040")
+            result = ab.remote_sdk_raises_on_http_error()
+            assert result['raised'] is True
+            assert result['status_code'] == 500
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
 
 # TODO: setup_ab_service fixture 需要手写实现（→ tests/fixtures/ab_service.py）

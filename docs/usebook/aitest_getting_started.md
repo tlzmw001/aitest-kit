@@ -189,7 +189,7 @@ AITEST_ENV_FILE=/tmp/your-project-test.env \
   aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --capture
 ```
 
-capture 写入当前 run 目录下的 `capture.jsonl`；task、module、target 和 `--all` 聚合运行写入聚合 run 目录。框架只自动捕获默认 HTTP 用例，`case_flow`、`case_body`、gRPC、SDK 或特殊 fixture 不自动捕获，用户可在自己的 fixture 中调用 `aitest_kit.helpers.capture.capture_io()`。capture 不自动脱敏，敏感字段应在 fixture 中处理后再写入。
+capture 写入当前 run 目录下的 `capture.jsonl`；task、module、target 和 `--all` 聚合运行写入聚合 run 目录。框架只自动捕获默认 HTTP 用例，`case_flow`、`case_body`、gRPC、SDK 或特殊 fixture 不自动捕获，用户可在自己的 fixture/client/helper 方法中调用 `aitest_kit.helpers.capture.capture_io()`。在 generated 测试函数体内调用时，`capture_io()` 可自动归因到当前 case；显式传入 `case_id` 仍然有效。pytest fixture setup/teardown 阶段不在该 context 内。capture 不自动脱敏，敏感字段应在 fixture 中处理后再写入。
 
 ## 四、失败分流
 

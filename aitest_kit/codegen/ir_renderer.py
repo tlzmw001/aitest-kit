@@ -5,16 +5,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from aitest_kit.codegen.file_rendering import (
+    render_base_request,
+    render_header,
+    render_req_helper,
+)
+from aitest_kit.codegen.flow_rendering import render_flow_call, request_var_name
+from aitest_kit.codegen.function_rendering import render_case_function
 from aitest_kit.codegen.ir import AssertionIR, CaseIR, FileIR, RequestIR
 from aitest_kit.codegen.parser import SharedConfig, TestCase
 from aitest_kit.codegen.project_config import AssertionRule, ProjectConfig
 from aitest_kit.codegen.render_utils import (
-    dict_to_python,
     dict_to_python_compact,
     module_class_name,
     render_assignment,
     strip_backticks,
-    tc_func_name,
 )
 
 
@@ -41,67 +46,6 @@ class RenderedFile:
     unparsed: list[tuple[str, str]]
     manual_count: int
     diagnostics: list[str] = field(default_factory=list)
-
-
-def _render_header(
-    ctx: EmitContext,
-    has_profile_variables: bool = False,
-    has_structured_assertions: bool = False,
-    has_default_http: bool = False,
-) -> list[str]:
-    regenerate_hint = _regenerate_hint(ctx)
-    lines = [
-        f"# Auto-generated from {ctx.source_path}",
-        f"# DO NOT EDIT — regenerate with: {regenerate_hint}",
-    ]
-    lines.extend([
-        "import pytest",
-        ctx.project.helper_import,
-    ])
-    if ctx.shared_config.base_request_http:
-        lines.append("from aitest_kit.helpers.request_binding import build_request")
-    if has_default_http:
-        lines.append("from aitest_kit.helpers.capture import capture_io")
-    if has_profile_variables:
-        lines.append("from aitest_kit.runtime_variables import resolve_profile_variables")
-    if has_structured_assertions:
-        lines.append("from aitest_kit.helpers import structured_assertions as aitest_assertions")
-    lines.extend(ctx.extra_imports)
-    return lines
-
-
-def _regenerate_hint(ctx: EmitContext) -> str:
-    suite_manifest = Path(ctx.source_path).parent / "suite.yaml"
-    if suite_manifest.exists():
-        return f"aitest codegen --suite-file {suite_manifest}"
-    return "aitest codegen --suite-file <suite.yaml>"
-
-
-def _render_base_request(ctx: EmitContext) -> list[str]:
-    body = ctx.shared_config.base_request_http
-    if not body:
-        return []
-    lines = ["", ""]
-    sanitized = dict(body)
-    for key in ctx.project.default_request.auto_fields:
-        if key in sanitized:
-            sanitized[key] = None
-    lines.append(f"BASE_REQUEST = {dict_to_python(sanitized)}")
-    return lines
-
-
-def _render_req_helper(ctx: EmitContext) -> list[str]:
-    return [
-        "",
-        "",
-        "def _req(*, auto_fields=None, overrides=None, patches=None) -> dict:",
-        "    return build_request(",
-        "        BASE_REQUEST,",
-        "        auto_fields=auto_fields or {},",
-        "        overrides=overrides or {},",
-        "        patches=patches or [],",
-        "    )",
-    ]
 
 
 def _case_meta(tc: TestCase, ctx: EmitContext) -> dict[str, Any]:
@@ -194,65 +138,21 @@ def _split_default_assertions(
 
 
 def _render_custom_body(case_ir: CaseIR, tc: TestCase, ctx: EmitContext) -> list[str]:
-    lines: list[str] = []
-    if _has_manual_marker(case_ir):
-        lines.append("    @pytest.mark.manual")
-
     fixtures = case_ir.fixtures or [f"setup_{ctx.module}"]
-    signature = ", ".join(["self", *fixtures])
-    lines.append(f"    def {tc_func_name(case_ir.case_id)}({signature}):")
-    lines.append(f'        """{case_ir.case_id}：{case_ir.title}"""')
-    lines.extend(render_assignment("__tc_meta__", _case_meta(tc, ctx), indent=2))
-    lines.extend(_render_setup_comments(tc))
-    lines.append("")
+    body_lines: list[str] = []
+    body_lines.extend(_render_setup_comments(tc))
+    body_lines.append("")
     body = case_ir.custom_body.lines if case_ir.custom_body else []
     for body_line in body:
-        lines.append(f"        {body_line}" if body_line else "")
-    return lines
-
-
-def _request_var_name(case_id: str) -> str:
-    return "__request_" + case_id.lower().replace("-", "_")
-
-
-def _render_flow_value(value: Any, *, current_case_id: str, request_vars: dict[str, str]) -> str:
-    if isinstance(value, dict):
-        keys = set(value)
-        if keys == {"request_ref"}:
-            ref = value["request_ref"]
-            ref_case_id = current_case_id if ref == "self" else str(ref)
-            return request_vars.get(ref_case_id, _request_var_name(ref_case_id))
-        if keys == {"ref"}:
-            return str(value["ref"])
-        if keys == {"expr"}:
-            return str(value["expr"])
-        if keys == {"var"}:
-            return f"__tc_vars__[{dict_to_python_compact(value['var'])}]"
-        pairs = [
-            f"{dict_to_python_compact(key)}: {_render_flow_value(item, current_case_id=current_case_id, request_vars=request_vars)}"
-            for key, item in value.items()
-        ]
-        return "{" + ", ".join(pairs) + "}"
-    if isinstance(value, list):
-        return "[" + ", ".join(
-            _render_flow_value(item, current_case_id=current_case_id, request_vars=request_vars)
-            for item in value
-        ) + "]"
-    return dict_to_python_compact(value)
-
-
-def _render_flow_call(step: Any, *, current_case_id: str, request_vars: dict[str, str]) -> str:
-    args = [
-        _render_flow_value(item, current_case_id=current_case_id, request_vars=request_vars)
-        for item in step.args
-    ]
-    kwargs = [
-        f"{key}={_render_flow_value(value, current_case_id=current_case_id, request_vars=request_vars)}"
-        for key, value in step.kwargs.items()
-    ]
-    params = ", ".join([*args, *kwargs])
-    call = f"{step.call}({params})"
-    return f"{step.save_as} = {call}" if step.save_as else call
+        body_lines.append(f"        {body_line}" if body_line else "")
+    return render_case_function(
+        case_id=case_ir.case_id,
+        title=case_ir.title,
+        fixtures=fixtures,
+        manual=_has_manual_marker(case_ir),
+        metadata=_case_meta(tc, ctx),
+        body_lines=body_lines,
+    )
 
 
 def _render_case_flow(
@@ -262,56 +162,49 @@ def _render_case_flow(
 ) -> tuple[list[str], list[str], list[str]]:
     diagnostics: list[str] = []
     unparsed: list[str] = []
-    lines: list[str] = []
+    body_lines: list[str] = []
 
     if case_ir.case_flow is None:
-        return lines, unparsed, [
+        return body_lines, unparsed, [
             f"E301: emitter cannot render {case_ir.case_id} without case_flow IR"
         ]
 
-    if _has_manual_marker(case_ir):
-        lines.append("    @pytest.mark.manual")
-
-    signature = ", ".join(["self", *case_ir.fixtures])
-    lines.append(f"    def {tc_func_name(case_ir.case_id)}({signature}):")
-    lines.append(f'        """{case_ir.case_id}：{case_ir.title}"""')
-    lines.extend(render_assignment("__tc_meta__", _case_meta(tc, ctx), indent=2))
     if case_ir.profile_variables:
-        lines.append(
+        body_lines.append(
             "        __tc_vars__ = resolve_profile_variables("
             f"{dict_to_python_compact(_profile_variable_specs(case_ir))})"
         )
-    lines.extend(_render_setup_comments(tc))
-    lines.append("")
+    body_lines.extend(_render_setup_comments(tc))
+    body_lines.append("")
     if case_ir.case_flow.object_name and case_ir.fixtures:
         fixture_name = case_ir.fixtures[0]
         if case_ir.case_flow.object_name != fixture_name:
-            lines.append(f"        {case_ir.case_flow.object_name} = {fixture_name}")
+            body_lines.append(f"        {case_ir.case_flow.object_name} = {fixture_name}")
 
     request_vars: dict[str, str] = {}
     for request_case_id, request_binding in case_ir.request_bindings.items():
-        var_name = _request_var_name(request_case_id)
+        var_name = request_var_name(request_case_id)
         request_vars[request_case_id] = var_name
-        lines.append(f"        {var_name} = {_render_req_call(request_binding)}")
+        body_lines.append(f"        {var_name} = {_render_req_call(request_binding)}")
 
     for step in case_ir.case_flow.steps:
         if step.kind == "call":
-            lines.append(
-                f"        {_render_flow_call(step, current_case_id=case_ir.case_id, request_vars=request_vars)}"
+            body_lines.append(
+                f"        {render_flow_call(step, current_case_id=case_ir.case_id, request_vars=request_vars)}"
             )
             continue
         if step.kind == "assert" and step.assertion is not None:
             for cl in step.assertion.code_lines:
-                lines.append(f"        {cl}")
+                body_lines.append(f"        {cl}")
             if step.assertion.kind == "unparsed":
                 unparsed.append(step.assertion.source)
             continue
         if step.kind == "assign":
-            lines.append(f"        {step.target} = {step.expr}")
+            body_lines.append(f"        {step.target} = {step.expr}")
             continue
         if step.kind == "comment":
             comment = step.comment.strip()
-            lines.append(f"        # {comment}")
+            body_lines.append(f"        # {comment}")
             continue
         diagnostics.append(
             f"E301: emitter cannot render unsupported case_flow step in {case_ir.case_id}"
@@ -321,25 +214,35 @@ def _render_case_flow(
         if assertion.kind != "structured_assertion":
             continue
         for cl in assertion.code_lines:
-            lines.append(f"        {cl}")
+            body_lines.append(f"        {cl}")
 
+    lines = render_case_function(
+        case_id=case_ir.case_id,
+        title=case_ir.title,
+        fixtures=case_ir.fixtures,
+        manual=_has_manual_marker(case_ir),
+        metadata=_case_meta(tc, ctx),
+        body_lines=body_lines,
+    )
     return lines, unparsed, diagnostics
 
 
 def _render_manual_body(case_ir: CaseIR, tc: TestCase, ctx: EmitContext) -> list[str]:
-    lines: list[str] = []
-    lines.append("    @pytest.mark.manual")
-    signature = ", ".join(["self", *case_ir.fixtures])
-    lines.append(f"    def {tc_func_name(case_ir.case_id)}({signature}):")
-    lines.append(f'        """{case_ir.case_id}：{case_ir.title}"""')
-    lines.extend(render_assignment("__tc_meta__", _case_meta(tc, ctx), indent=2))
-    lines.extend(_render_setup_comments(tc))
+    body_lines: list[str] = []
+    body_lines.extend(_render_setup_comments(tc))
 
     for assertion in case_ir.assertions:
         for cl in assertion.code_lines:
-            lines.append(f"        {cl}")
-    lines.append('        pytest.skip("manual check required")')
-    return lines
+            body_lines.append(f"        {cl}")
+    body_lines.append('        pytest.skip("manual check required")')
+    return render_case_function(
+        case_id=case_ir.case_id,
+        title=case_ir.title,
+        fixtures=case_ir.fixtures,
+        manual=True,
+        metadata=_case_meta(tc, ctx),
+        body_lines=body_lines,
+    )
 
 
 def _profile_variable_specs(case_ir: CaseIR) -> dict[str, dict[str, Any]]:
@@ -358,82 +261,83 @@ def _render_default_body(
     ctx: EmitContext,
 ) -> tuple[list[str], list[str], list[str]]:
     diagnostics: list[str] = []
-    lines: list[str] = []
+    body_lines: list[str] = []
     unparsed: list[str] = []
 
-    if _has_manual_marker(case_ir):
-        lines.append("    @pytest.mark.manual")
-
-    signature = ", ".join(["self", *case_ir.fixtures])
-    lines.append(f"    def {tc_func_name(case_ir.case_id)}({signature}):")
-    lines.append(f'        """{case_ir.case_id}：{case_ir.title}"""')
-    lines.extend(render_assignment("__tc_meta__", _case_meta(tc, ctx), indent=2))
     if case_ir.profile_variables:
-        lines.append(
+        body_lines.append(
             "        __tc_vars__ = resolve_profile_variables("
             f"{dict_to_python_compact(_profile_variable_specs(case_ir))})"
         )
-    lines.extend(_render_setup_comments(tc))
+    body_lines.extend(_render_setup_comments(tc))
 
     setup_call = _render_setup_call(case_ir)
     if setup_call:
-        lines.append(f"        {setup_call}")
+        body_lines.append(f"        {setup_call}")
 
     if case_ir.request is None or case_ir.call is None:
         diagnostics.append(
             f"E301: emitter cannot render {case_ir.case_id} without request/call IR"
         )
-        return lines, unparsed, diagnostics
+        return body_lines, unparsed, diagnostics
 
     req_call = _render_req_call(case_ir.request)
     api_path = dict_to_python_compact(case_ir.call.api_path)
-    lines.append("")
-    lines.append(f"        __aitest_request = {req_call}")
-    lines.append("        __aitest_response = None")
-    lines.append("        try:")
+    body_lines.append("")
+    body_lines.append(f"        __aitest_request = {req_call}")
+    body_lines.append("        __aitest_response = None")
+    body_lines.append("        try:")
     if case_ir.call.helper == "http_helper.post":
-        lines.append('            if hasattr(http_helper, "post_response"):')
-        lines.append(
+        body_lines.append('            if hasattr(http_helper, "post_response"):')
+        body_lines.append(
             f"                __aitest_response = http_helper.post_response("
             f"{case_ir.call.target}, {api_path}, json=__aitest_request)"
         )
-        lines.append("                __aitest_response.raise_for_status()")
-        lines.append("                resp = __aitest_response.json()")
-        lines.append("            else:")
-        lines.append(
+        body_lines.append("                __aitest_response.raise_for_status()")
+        body_lines.append("                resp = __aitest_response.json()")
+        body_lines.append("            else:")
+        body_lines.append(
             f"                resp = {case_ir.call.helper}("
             f"{case_ir.call.target}, {api_path}, json=__aitest_request)"
         )
-        lines.append("                __aitest_response = resp")
+        body_lines.append("                __aitest_response = resp")
     else:
-        lines.append(
+        body_lines.append(
             f"            resp = {case_ir.call.helper}("
             f"{case_ir.call.target}, {api_path}, json=__aitest_request)"
         )
-        lines.append("            __aitest_response = resp")
-    lines.append("        except Exception as exc:")
-    lines.append(
+        body_lines.append("            __aitest_response = resp")
+    body_lines.append("        except Exception as exc:")
+    body_lines.append(
         f'            capture_io(__tc_meta__["tc_id"], label={api_path}, protocol="http", '
         "request=__aitest_request, response=__aitest_response, exception=exc)"
     )
-    lines.append("            raise")
-    lines.append(
+    body_lines.append("            raise")
+    body_lines.append(
         f'        capture_io(__tc_meta__["tc_id"], label={api_path}, protocol="http", '
         "request=__aitest_request, response=__aitest_response)"
     )
 
     common_assertions, case_assertions = _split_default_assertions(case_ir, ctx)
     for cl in _render_assertions(common_assertions):
-        lines.append(f"        {cl}")
+        body_lines.append(f"        {cl}")
     unparsed.extend(_unparsed_sources(common_assertions))
 
     for var in case_ir.variables:
-        lines.append(f"        {var.name} = {var.expression}")
+        body_lines.append(f"        {var.name} = {var.expression}")
 
     for cl in _render_assertions(case_assertions):
-        lines.append(f"        {cl}")
+        body_lines.append(f"        {cl}")
     unparsed.extend(_unparsed_sources(case_assertions))
 
+    lines = render_case_function(
+        case_id=case_ir.case_id,
+        title=case_ir.title,
+        fixtures=case_ir.fixtures,
+        manual=_has_manual_marker(case_ir),
+        metadata=_case_meta(tc, ctx),
+        body_lines=body_lines,
+    )
     return lines, unparsed, diagnostics
 
 
@@ -473,16 +377,18 @@ def render_file_from_ir(
         for assertion in case.assertions
     )
     has_default_http = any(case.strategy == "default_http" for case in file_ir.cases)
+    has_case_context = any(case.strategy != "skipped" for case in file_ir.cases)
 
-    all_lines.extend(_render_header(
+    all_lines.extend(render_header(
         ctx,
         has_profile_variables=has_profile_variables,
         has_structured_assertions=has_structured_assertions,
         has_default_http=has_default_http,
+        has_case_context=has_case_context,
     ))
-    all_lines.extend(_render_base_request(ctx))
+    all_lines.extend(render_base_request(ctx))
     if ctx.shared_config.base_request_http:
-        all_lines.extend(_render_req_helper(ctx))
+        all_lines.extend(render_req_helper())
 
     class_name = module_class_name(ctx.module, ctx.file_type)
     category_label = {

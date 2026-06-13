@@ -3,6 +3,7 @@
 import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
+from aitest_kit.runtime_context import reset_case_context, set_case_context
 from test_workspace.targets.coupon_system.fixtures.logging import setup_logging
 
 
@@ -45,14 +46,18 @@ class TestLoggingBoundary:
             "priority": "P2",
             "markers": [],
         }
-        # SETUP: 协议：HTTP
-        # SETUP: 环境覆盖：测试启动入口显式配置 logging.basicConfig(level=logging.INFO) 后启动服务
-        # SETUP: 请求覆盖：HTTP 请求 reqId="req-log-010"
+        __aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)
+        try:
+            # SETUP: 协议：HTTP
+            # SETUP: 环境覆盖：测试启动入口显式配置 logging.basicConfig(level=logging.INFO) 后启动服务
+            # SETUP: 请求覆盖：HTTP 请求 reqId="req-log-010"
 
-        case = setup_logging
-        result = case.run_http_with_logs(user_id="u_log_010", req_id="req-log-010", external=0, items=[{"item_id": "COUPON_LOG_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}])
-        assert result["resp"]["code"] == 0
-        assert "recommend request: reqId=req-log-010" in result["logs"]
+            case = setup_logging
+            result = case.run_http_with_logs(user_id="u_log_010", req_id="req-log-010", external=0, items=[{"item_id": "COUPON_LOG_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}])
+            assert result["resp"]["code"] == 0
+            assert "recommend request: reqId=req-log-010" in result["logs"]
+        finally:
+            reset_case_context(__aitest_ctx_token)
 
 
 # TODO: setup_logging fixture 需要手写实现（→ tests/fixtures/logging.py）

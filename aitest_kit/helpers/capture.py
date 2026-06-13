@@ -10,6 +10,8 @@ from typing import Any
 
 import yaml
 
+from aitest_kit.runtime_context import current_case_id
+
 
 CAPTURE_CONFIG_PATH = Path("aitest_config/capture.yaml")
 _UNSET = object()
@@ -90,7 +92,7 @@ def capture_file_for_run(
 
 
 def capture_io(
-    case_id: str,
+    case_id: str | None = None,
     *,
     label: str = "",
     protocol: str = "",
@@ -109,13 +111,16 @@ def capture_io(
     capture_path = os.environ.get("AITEST_CAPTURE_FILE", "")
     if not capture_path:
         return
+    resolved_case_id = str(case_id or current_case_id() or "")
+    if not resolved_case_id:
+        return
 
     try:
         include = _include_settings()
         limit = _positive_int(os.environ.get("AITEST_CAPTURE_STRING_LENGTH"), 4096)
         record: dict[str, Any] = {
             "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
-            "case_id": str(case_id),
+            "case_id": resolved_case_id,
         }
         if label:
             record["label"] = str(label)
