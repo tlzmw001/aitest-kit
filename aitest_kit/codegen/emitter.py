@@ -22,6 +22,7 @@ from aitest_kit.codegen.project_config import (
     ProjectConfig,
 )
 from aitest_kit.codegen.resolved_profile import resolve_profile
+from aitest_kit.codegen.strategy import has_marker, skip_reason_from_markers
 
 
 # ---------------------------------------------------------------------------
@@ -144,8 +145,8 @@ def emit_file(
     if ctx.shared_config.base_request_http is None:
         uncovered = [
             tc.id for tc in parse_result.cases
-            if not any("可行性存疑" in m for m in tc.markers)
-            and not any("manual" in m.lower() for m in tc.markers)
+            if not skip_reason_from_markers(tc.markers)
+            and not has_marker(tc.markers, "manual")
             and tc.id not in ctx.case_bodies
             and tc.id not in case_flows
         ]

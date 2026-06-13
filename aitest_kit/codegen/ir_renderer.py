@@ -21,6 +21,7 @@ from aitest_kit.codegen.render_utils import (
     render_assignment,
     strip_backticks,
 )
+from aitest_kit.codegen.strategy import has_marker
 
 
 @dataclass
@@ -61,7 +62,7 @@ def _case_meta(tc: TestCase, ctx: EmitContext) -> dict[str, Any]:
 
 
 def _has_manual_marker(case_ir: CaseIR) -> bool:
-    return any("manual" in marker.lower() for marker in case_ir.markers)
+    return has_marker(case_ir.markers, "manual")
 
 
 def _render_setup_comments(tc: TestCase) -> list[str]:

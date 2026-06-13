@@ -32,6 +32,7 @@ from aitest_kit.codegen.profile_validator import (
     write_profile_validation_report,
 )
 from aitest_kit.codegen.project_config import ProjectConfig
+from aitest_kit.codegen.strategy import has_marker, skip_reason_from_markers
 from aitest_kit.codegen.suite import (
     SuiteContext,
     load_suite_context_for_paths,
@@ -280,9 +281,16 @@ def _dry_run_suite(context: SuiteContext) -> int:
     click.echo(f"Suite: {context.suite}")
     click.echo(f"Module: {context.module}")
     for path, parse_result in _parse_suite_files(context):
-        skipped = [tc for tc in parse_result.cases if any("可行性存疑" in m for m in tc.markers)]
-        manual = [tc for tc in parse_result.cases if any("manual" in m.lower() for m in tc.markers)]
-        auto = [tc for tc in parse_result.cases if tc not in skipped and tc not in manual]
+        skipped = []
+        manual = []
+        auto = []
+        for tc in parse_result.cases:
+            if skip_reason_from_markers(tc.markers):
+                skipped.append(tc)
+            elif has_marker(tc.markers, "manual"):
+                manual.append(tc)
+            else:
+                auto.append(tc)
         click.echo(f"\n  {path.name}: {len(parse_result.cases)} cases")
         click.echo(f"    Auto:    {len(auto)}")
         click.echo(f"    Manual:  {len(manual)}")

@@ -373,6 +373,55 @@ def test_codegen_suite_dry_run_parses_cases_without_profile_gate(tmp_path):
         assert "Profile gate blocked codegen" not in result.output
 
 
+def test_codegen_suite_dry_run_uses_exclusive_marker_buckets(tmp_path):
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
+        root = Path(cwd)
+        _write_module_profile(root)
+        suite_dir = _write_suite(root)
+        (suite_dir / "profile_quota_billing_v2_suite.md").unlink()
+        (suite_dir / "quota_billing_business.md").write_text(
+            """# quota billing cases
+
+## 共享配置
+
+**接口**：`GET /health`
+
+---
+
+## 一、冒烟
+
+### TC-GW-041：auto case
+- **优先级**：P0
+- **断言**：`response.status == "ok"`
+
+### TC-GW-042：manual case
+- **优先级**：P1
+- **标记**：`[manual]`
+- **断言**：人工检查
+
+### TC-GW-043：skipped case
+- **优先级**：P1
+- **标记**：`[!可行性存疑: 需要外部资源]`
+- **断言**：资源可用
+
+### TC-GW-044：skipped wins over manual
+- **优先级**：P1
+- **标记**：`[manual]`、`[!可行性存疑: 仍不可自动化]`
+- **断言**：人工检查
+""",
+            encoding="utf-8",
+        )
+
+        result = runner.invoke(codegen, ["--suite-file", str(suite_dir / "suite.yaml"), "--dry-run"])
+
+        assert result.exit_code == 0, result.output
+        assert "quota_billing_business.md: 4 cases" in result.output
+        assert "    Auto:    1" in result.output
+        assert "    Manual:  1" in result.output
+        assert "    Skipped: 2" in result.output
+
+
 def test_codegen_target_module_health_report_aggregates_registered_suites(tmp_path):
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
