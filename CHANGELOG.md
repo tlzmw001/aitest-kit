@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.4 - 2026-06-14
+
+### Added
+
+- Added generated case identity context so generated tests and custom fixtures/helpers can access the current case metadata during execution.
+
+### Changed
+
+- Centralized codegen strategy resolution and resolved profile runtime loading so planner, emitter, promotion analysis, and profile validation share the same runtime view.
+- Simplified default HTTP setup handling so default HTTP cases use the profile request binding directly instead of implicit setup fixture injection.
+
+### Fixed
+
+- Reused shared marker helpers for dry-run, generated manual markers, and no-base-request checks so skipped and manual case classification stays consistent with generation strategy.
+
 ## 0.3.3 - 2026-06-09
 
 ### Added
