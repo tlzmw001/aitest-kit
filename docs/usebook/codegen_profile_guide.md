@@ -319,6 +319,7 @@ case_flows:
 - `default_case_setup`：自动插入到每条 case_flow 的第一步，常用于 `case = client_factory(case_id="{case_id}")`。
 - `{case_id}` 会在生成 IR 时替换成当前用例 ID。
 - 单条 case_flow 仍可以显式写 `fixture` 或 `object` 覆盖默认值。
+- `default_http` 不会自动执行 `setup_{module}(case_id=...)`；需要 per-case 数据准备、factory setup、SDK/gRPC/custom client 或多步骤调用时，改用 `case_flow` 或 `case_body` 显式接线。
 
 适用场景：同一个模块或 suite 下，每条用例都需要相同的 factory setup，但后续业务动作不同。
 
@@ -428,6 +429,8 @@ case_bodies -> case_flows -> structured_assertions / assertion_rules / aitest.ya
 ```text
 manual/skipped > custom_case_body > structured_case_flow > default_http
 ```
+
+`default_http` 是单请求模板：它只合并基础请求体、`requests`、profile variables 和断言，不隐式运行 per-case setup。真实测试状态准备必须在 `case_flow`、`case_body` 或用户 fixture/helper 中显式表达。
 
 profile gate 会阻断同一 case_id 同时存在 `case_bodies` 和 `case_flows` 的情况，避免迁移中间态让旧 `case_body` 悄悄覆盖新 `case_flow`。
 

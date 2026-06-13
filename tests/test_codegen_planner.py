@@ -6,7 +6,7 @@ tests in test_codegen_ir.py.
 """
 from __future__ import annotations
 
-from aitest_kit.codegen.ir import FileIR
+from aitest_kit.codegen.ir import FileIR, ir_to_dict
 from aitest_kit.codegen.parser import ParseResult, SharedConfig, TestCase
 from aitest_kit.codegen.planner import build_file_ir
 from aitest_kit.codegen.project_config import (
@@ -176,7 +176,7 @@ case_flows:
         case_ir = _case(file_ir, "TC-DEMO-001")
         assert case_ir.strategy == "manual"
         assert case_ir.fixtures == []
-        assert case_ir.setup_call is None
+        assert "setup_call" not in ir_to_dict(case_ir)
         assert case_ir.request is None
         assert case_ir.call is None
         assert case_ir.diagnostics == []
@@ -215,6 +215,7 @@ case_flows:
         case_ir = _case(file_ir, "TC-DEMO-001")
         assert case_ir.strategy == "default_http"
         assert case_ir.protocol == "http"
+        assert "setup_call" not in ir_to_dict(case_ir)
 
 
 # ---------------------------------------------------------------------------

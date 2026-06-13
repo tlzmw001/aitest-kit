@@ -238,11 +238,11 @@ def _render_test_function(case_ir, tc, ctx):
 |---|---|
 | `custom_case_body` | `_render_custom_body()` |
 | `structured_case_flow` | `_render_case_flow()` |
-| `default_http` / `default_grpc` / `manual` | `_render_default_body()` |
+| `default_http` / `manual` | `_render_default_body()` |
 
 `skipped` 会在更外层提前处理，不进入 `_render_test_function()`。
 
-## default_http/default_grpc 怎么渲染
+## default_http 怎么渲染
 
 `_render_default_body()` 生成的结构大致是：
 
@@ -250,8 +250,6 @@ def _render_test_function(case_ir, tc, ctx):
 def test_tc_cal_001(self, http_base_url, setup_calibration):
     """TC-CAL-001：..."""
     __tc_meta__ = {...}
-
-    setup_calibration(case_id="TC-CAL-001")
 
     resp = http_helper.post(
         http_base_url,
@@ -271,11 +269,10 @@ def test_tc_cal_001(self, http_base_url, setup_calibration):
 1. 渲染函数签名
 2. 写 __tc_meta__
 3. 写场景变量注释
-4. 调 setup_{module}(case_id=...)
-5. 构造请求并调用 helper
-6. 渲染通用断言
-7. 提取变量
-8. 渲染 case 断言
+4. 构造请求并调用 helper
+5. 渲染通用断言
+6. 提取变量
+7. 渲染 case 断言
 ```
 
 这里解释了为什么 `s`、`cal` 在响应后才生成。
@@ -585,7 +582,7 @@ flowchart TD
     F -->|skipped| G["记录 __codegen_skipped__，不生成函数"]
     F -->|custom_case_body| H["_render_custom_body"]
     F -->|structured_case_flow| I["_render_case_flow"]
-    F -->|default_http/default_grpc/manual| J["_render_default_body"]
+    F -->|default_http/manual| J["_render_default_body"]
 
     H --> K["收集 lines/unparsed/diagnostics"]
     I --> K
@@ -615,4 +612,3 @@ comment -> 一行注释
 ```
 
 复杂 Python 控制流继续交给 `case_bodies` 更合适。
-

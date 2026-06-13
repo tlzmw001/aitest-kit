@@ -100,18 +100,6 @@ def _render_request_patches(request: RequestIR) -> str:
     return "[" + ", ".join(items) + "]"
 
 
-def _render_setup_call(case_ir: CaseIR) -> str | None:
-    if case_ir.setup_call is None:
-        return None
-    if not case_ir.setup_call.kwargs:
-        return f"{case_ir.setup_call.name}()"
-    kwargs = ", ".join(
-        f"{key}={dict_to_python_compact(value)}"
-        for key, value in case_ir.setup_call.kwargs.items()
-    )
-    return f"{case_ir.setup_call.name}({kwargs})"
-
-
 def _render_assertions(assertions: list[AssertionIR]) -> list[str]:
     lines: list[str] = []
     for assertion in assertions:
@@ -270,10 +258,6 @@ def _render_default_body(
             f"{dict_to_python_compact(_profile_variable_specs(case_ir))})"
         )
     body_lines.extend(_render_setup_comments(tc))
-
-    setup_call = _render_setup_call(case_ir)
-    if setup_call:
-        body_lines.append(f"        {setup_call}")
 
     if case_ir.request is None or case_ir.call is None:
         diagnostics.append(

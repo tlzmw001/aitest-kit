@@ -14,7 +14,6 @@ from aitest_kit.codegen.ir import (
     FileIR,
     RequestPatchIR,
     RequestIR,
-    SetupCallIR,
     SourceTraceIR,
     VariableIR,
 )
@@ -553,11 +552,6 @@ def build_file_ir(
             protocol=protocol,
             skip_reason=strategy_resolution.skip_reason,
             fixtures=fixtures,
-            setup_call=(
-                SetupCallIR(name=f"setup_{parse_result.module}", kwargs={"case_id": tc.id})
-                if strategy == STRATEGY_DEFAULT_HTTP
-                else None
-            ),
             request=request,
             request_bindings=request_bindings,
             call=call,

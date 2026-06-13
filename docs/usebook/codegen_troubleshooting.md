@@ -247,7 +247,7 @@ fixture 'setup_xxx' not found
 
 常见原因：
 
-- generated pytest 引用了 `setup_{module}`。
+- generated pytest 引用了 `setup_{module}`，通常来自 module registry 的默认 fixture、`case_flow.fixture`、`default_fixture` 或显式 `default_case_setup`；`default_http` 不再隐式调用 `setup_{module}(case_id=...)`。
 - target/suite 模式下，`test_workspace/targets/{target}/fixtures/{module}.py` 没有定义该 fixture，或 `module.yaml.fixture.default_fixture` 写错。
 - 旧 workspace 模块模式下，`test_workspace/tests/fixtures/{module}.py` 没有定义该 fixture，或 fixture 文件没有被 `test_workspace/tests/conftest.py` 注册。
 
@@ -255,6 +255,7 @@ fixture 'setup_xxx' not found
 
 - 在 target 模块 fixture 文件中补 `setup_{module}`。
 - 检查 `module.yaml` 的 `fixture.file/default_fixture`。
+- 如果用例需要 per-case 数据准备或 factory setup，把用例改成 `case_flow` 并在 profile 中显式声明 `default_case_setup` 或 flow steps。
 - 旧 workspace 模块模式再检查 `conftest.py` 的插件注册方式。
 - 不要直接改 generated pytest。
 

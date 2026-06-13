@@ -160,8 +160,7 @@ return "default_http", "default", "no custom strategy or gRPC marker"
 | `skipped` | `[]` |
 | `custom_case_body` | profile 的 `case_fixtures`，没有则默认 `setup_{module}` |
 | `structured_case_flow` | `case_flows.{case_id}.fixture` |
-| `default_grpc` | `grpc_target` + `setup_{module}` |
-| `default_http` | `http_base_url` + `setup_{module}` |
+| `default_http` | `http_base_url` + `setup_{module}` 进入函数签名，但不自动调用 per-case setup |
 
 例如 `calibration` 默认 HTTP 用例：
 
@@ -494,4 +493,3 @@ flowchart TD
 ```text
 planner 的职责不是生成 pytest，而是为 renderer 准备一份明确、可检查、可解释的生成计划。
 ```
-

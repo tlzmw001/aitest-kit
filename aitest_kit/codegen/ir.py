@@ -24,12 +24,6 @@ class SourceTraceIR:
 
 
 @dataclass
-class SetupCallIR:
-    name: str
-    kwargs: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
 class RequestPatchIR:
     op: str
     path: str
@@ -125,7 +119,6 @@ class CaseIR:
     protocol: str
     skip_reason: str | None = None
     fixtures: list[str] = field(default_factory=list)
-    setup_call: SetupCallIR | None = None
     request: RequestIR | None = None
     request_bindings: dict[str, RequestBindingIR] = field(default_factory=dict)
     call: CallIR | None = None
