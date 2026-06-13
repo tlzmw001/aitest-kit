@@ -39,6 +39,16 @@ from aitest_kit.codegen.profile_validation_report import (
     write_profile_validation_report,
 )
 from aitest_kit.codegen.suite import load_suite_context_for_paths, parse_suite_case_file
+from aitest_kit.codegen.strategy import (
+    PROFILE_INTENT_NONE,
+    STRATEGY_CUSTOM_CASE_BODY,
+    STRATEGY_DEFAULT_HTTP,
+    STRATEGY_MANUAL,
+    STRATEGY_SKIPPED,
+    STRATEGY_STRUCTURED_CASE_FLOW,
+    has_marker,
+    resolve_case_strategy,
+)
 
 
 _YAML_BLOCK_RE = re.compile(r"```ya?ml\s*\n(.*?)```", re.DOTALL)
@@ -449,7 +459,7 @@ def _validate_structured_assertion_targets(
         if not isinstance(templates, list):
             continue
 
-        strategy = _strategy_name_for_case(report, case_id, case_flows, case_bodies)
+        strategy = _final_strategy_name_for_case(report, case_id, case_flows, case_bodies)
         allowed_targets = _allowed_structured_assertion_targets(strategy, case_flows.get(case_id))
         for index, template in enumerate(templates):
             if not isinstance(template, dict):
@@ -458,7 +468,7 @@ def _validate_structured_assertion_targets(
             if not isinstance(target, str) or not _IDENT_RE.match(target):
                 continue
             source = f"structured_assertions.{case_id}[{index}].target"
-            if strategy in {"custom_case_body", "manual", "skipped"}:
+            if strategy in {STRATEGY_CUSTOM_CASE_BODY, STRATEGY_MANUAL, STRATEGY_SKIPPED}:
                 _error(
                     report,
                     "E530",
@@ -479,27 +489,24 @@ def _validate_structured_assertion_targets(
                 )
 
 
-def _strategy_name_for_case(
+def _final_strategy_name_for_case(
     report: ProfileValidationReport,
     case_id: str,
     case_flows: dict[str, Any],
     case_bodies: dict[str, Any],
 ) -> str:
-    if case_id in case_bodies:
-        return "custom_case_body"
-    if case_id in case_flows:
-        return "structured_case_flow"
-    if _case_has_marker(report, case_id, "可行性存疑"):
-        return "skipped"
-    if _case_has_marker(report, case_id, "manual"):
-        return "manual"
-    return "default_http"
+    return resolve_case_strategy(
+        case_id=case_id,
+        markers=report.case_markers.get(case_id, []),
+        case_flows=case_flows,
+        case_bodies=case_bodies,
+    ).final_strategy
 
 
 def _allowed_structured_assertion_targets(strategy: str, flow: Any) -> set[str]:
-    if strategy == "default_http":
+    if strategy == STRATEGY_DEFAULT_HTTP:
         return {"resp"}
-    if strategy != "structured_case_flow":
+    if strategy != STRATEGY_STRUCTURED_CASE_FLOW:
         return set()
     return _case_flow_output_names(flow)
 
@@ -593,9 +600,9 @@ def _validate_suite_default_coverage(
         for tc in parse_result.cases:
             if tc.id in covered:
                 continue
-            if any("可行性存疑" in marker for marker in tc.markers):
+            if has_marker(tc.markers, "可行性存疑"):
                 continue
-            if any("manual" in marker.lower() for marker in tc.markers):
+            if has_marker(tc.markers, "manual"):
                 continue
             if parse_result.shared_config.base_request_http is None:
                 _error(
@@ -608,11 +615,7 @@ def _validate_suite_default_coverage(
 
 
 def _case_has_marker(report: ProfileValidationReport, case_id: str, marker_name: str) -> bool:
-    marker_name = marker_name.lower()
-    return any(
-        marker_name in marker.lower()
-        for marker in report.case_markers.get(case_id, [])
-    )
+    return has_marker(report.case_markers.get(case_id, []), marker_name)
 
 
 def _case_flow_has_call_or_assert(flow: Any) -> bool:
@@ -634,10 +637,15 @@ def _warn_feasibility_suspect_strategies(
 ) -> None:
     executable_cases = set(case_bodies) | set(case_flows)
     for case_id in sorted(executable_cases):
-        markers = report.case_markers.get(case_id, [])
-        if not any("可行性存疑" in marker for marker in markers):
+        resolution = resolve_case_strategy(
+            case_id=case_id,
+            markers=report.case_markers.get(case_id, []),
+            case_bodies=case_bodies,
+            case_flows=case_flows,
+        )
+        if not resolution.skipped or resolution.profile_intent == PROFILE_INTENT_NONE:
             continue
-        strategy = "case_bodies" if case_id in case_bodies else "case_flows"
+        strategy = _profile_intent_section(resolution.profile_intent)
         _warn(
             report,
             "W503",
@@ -645,6 +653,14 @@ def _warn_feasibility_suspect_strategies(
             f"{strategy}; prefer leaving it skipped until feasibility is confirmed",
             f"{strategy}.{case_id}",
         )
+
+
+def _profile_intent_section(profile_intent: str) -> str:
+    if profile_intent == STRATEGY_CUSTOM_CASE_BODY:
+        return "case_bodies"
+    if profile_intent == STRATEGY_STRUCTURED_CASE_FLOW:
+        return "case_flows"
+    return "profile"
 
 
 def _warn_manual_comment_only_flows(

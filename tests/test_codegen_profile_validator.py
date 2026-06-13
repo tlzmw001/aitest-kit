@@ -589,6 +589,39 @@ case_flows:
     assert any(diag.code == "W503" for diag in report.warnings)
 
 
+def test_profile_validator_uses_final_skipped_strategy_for_structured_assertions(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        marker="[!可行性存疑: 需要外部账号]",
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+case_flows:
+  TC-GW-001:
+    fixture: setup_gateway_api
+    object: client
+    steps:
+      - call: client.health
+        save_as: resp
+structured_assertions:
+  TC-GW-001:
+    - type: jsonpath_exists
+      target: resp
+      path: $.status
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any(diag.code == "W503" for diag in report.warnings)
+    assert any(diag.code == "E530" and "skipped cases" in diag.message for diag in report.errors)
+
+
 def test_profile_validator_allows_pure_manual_without_base_request_or_profile_entry(
     tmp_path,
     monkeypatch,

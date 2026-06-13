@@ -52,16 +52,15 @@ from aitest_kit.codegen.render_utils import (
     strip_backticks,
     tc_number,
 )
+from aitest_kit.codegen.strategy import (
+    STRATEGY_CUSTOM_CASE_BODY,
+    STRATEGY_DEFAULT_HTTP,
+    STRATEGY_MANUAL,
+    STRATEGY_SKIPPED,
+    STRATEGY_STRUCTURED_CASE_FLOW,
+    resolve_case_strategy,
+)
 
-def _has_marker(tc: TestCase, text: str) -> bool:
-    needle = text.lower()
-    return any(needle in marker.lower() for marker in tc.markers)
-
-def _skip_reason(tc: TestCase) -> str | None:
-    for marker in tc.markers:
-        if "可行性存疑" in marker:
-            return marker
-    return None
 
 def _is_protocol_key(key: str) -> bool:
     normalized = key.lower()
@@ -75,23 +74,6 @@ def _grpc_source(tc: TestCase) -> tuple[bool, str, str]:
     return False, "", ""
 
 
-def _strategy_for(
-    tc: TestCase,
-    case_bodies: dict[str, list[str]],
-    case_flows: dict[str, dict[str, Any]],
-) -> tuple[str, str, str]:
-    reason = _skip_reason(tc)
-    if reason:
-        return "skipped", "markers", reason
-    if tc.id in case_bodies:
-        return "custom_case_body", f"profile.case_bodies.{tc.id}", "profile provides custom body"
-    if tc.id in case_flows:
-        return "structured_case_flow", f"profile.case_flows.{tc.id}", "profile provides structured flow"
-    if _has_marker(tc, "manual"):
-        return "manual", "markers", "manual marker"
-    return "default_http", "default", "no custom strategy"
-
-
 def _fixtures_for(
     module: str,
     tc: TestCase,
@@ -99,18 +81,18 @@ def _fixtures_for(
     case_fixtures: dict[str, list[str]],
     case_flows: dict[str, dict[str, Any]],
 ) -> tuple[list[str], str]:
-    if strategy == "skipped":
+    if strategy == STRATEGY_SKIPPED:
         return [], "skipped"
-    if strategy == "custom_case_body":
+    if strategy == STRATEGY_CUSTOM_CASE_BODY:
         if tc.id in case_fixtures:
             return list(case_fixtures[tc.id]), f"profile.case_fixtures.{tc.id}"
         return [f"setup_{module}"], "default custom body fixture"
-    if strategy == "structured_case_flow":
+    if strategy == STRATEGY_STRUCTURED_CASE_FLOW:
         fixture = case_flows.get(tc.id, {}).get("fixture")
         if isinstance(fixture, str) and fixture:
             return [fixture], f"profile.case_flows.{tc.id}.fixture"
         return [], f"profile.case_flows.{tc.id}.fixture"
-    if strategy == "manual":
+    if strategy == STRATEGY_MANUAL:
         return [], "manual marker"
     return ["http_base_url", f"setup_{module}"], "default HTTP fixtures"
 
@@ -193,7 +175,12 @@ def _request_patches_for(raw_patches: Any) -> list[RequestPatchIR]:
 
 
 def _call_for(strategy: str, project: ProjectConfig) -> CallIR | None:
-    if strategy in {"skipped", "custom_case_body", "structured_case_flow", "manual"}:
+    if strategy in {
+        STRATEGY_SKIPPED,
+        STRATEGY_CUSTOM_CASE_BODY,
+        STRATEGY_STRUCTURED_CASE_FLOW,
+        STRATEGY_MANUAL,
+    }:
         return None
     return CallIR(
         helper=project.helper_call,
@@ -303,9 +290,9 @@ def _assertions_for(
     project: ProjectConfig,
     variables: list[str],
 ) -> list[AssertionIR]:
-    if strategy == "skipped":
+    if strategy == STRATEGY_SKIPPED:
         return []
-    if strategy == "custom_case_body":
+    if strategy == STRATEGY_CUSTOM_CASE_BODY:
         return [
             AssertionIR(
                 source=assertion,
@@ -314,7 +301,7 @@ def _assertions_for(
             )
             for assertion in tc.assertions
         ]
-    if strategy == "structured_case_flow":
+    if strategy == STRATEGY_STRUCTURED_CASE_FLOW:
         return [
             AssertionIR(
                 source=assertion,
@@ -323,7 +310,7 @@ def _assertions_for(
             )
             for assertion in tc.assertions
         ]
-    if strategy == "manual":
+    if strategy == STRATEGY_MANUAL:
         return [
             AssertionIR(
                 source=assertion,
@@ -357,7 +344,7 @@ def _structured_assertions_for(
     strategy: str,
     structured_assertions: dict[str, list[dict[str, Any]]],
 ) -> list[AssertionIR]:
-    if strategy not in {"default_http", "structured_case_flow"}:
+    if strategy not in {STRATEGY_DEFAULT_HTTP, STRATEGY_STRUCTURED_CASE_FLOW}:
         return []
     templates = structured_assertions.get(tc.id, [])
     result: list[AssertionIR] = []
@@ -374,13 +361,17 @@ def _structured_assertions_for(
 
 def _case_diagnostics(case_ir: CaseIR, has_http_body: bool) -> list[DiagnosticIR]:
     diagnostics: list[DiagnosticIR] = []
-    if case_ir.strategy == "default_http" and not has_http_body:
+    if case_ir.strategy == STRATEGY_DEFAULT_HTTP and not has_http_body:
         diagnostics.append(DiagnosticIR(
             code="E202",
             layer="planner",
             message="default strategy requires shared_config.base_request_http",
         ))
-    if case_ir.strategy == "structured_case_flow" and case_ir.request_bindings and not has_http_body:
+    if (
+        case_ir.strategy == STRATEGY_STRUCTURED_CASE_FLOW
+        and case_ir.request_bindings
+        and not has_http_body
+    ):
         diagnostics.append(DiagnosticIR(
             code="E202",
             layer="planner",
@@ -445,11 +436,17 @@ def build_file_ir(
     cases_by_id = {tc.id: tc for tc in parse_result.cases}
 
     for tc in parse_result.cases:
-        strategy, strategy_source, strategy_reason = _strategy_for(tc, case_bodies, case_flows)
+        strategy_resolution = resolve_case_strategy(
+            case_id=tc.id,
+            markers=tc.markers,
+            case_bodies=case_bodies,
+            case_flows=case_flows,
+        )
+        strategy = strategy_resolution.final_strategy
         is_grpc, protocol_source, protocol_raw = _grpc_source(tc)
-        if strategy == "custom_case_body":
+        if strategy == STRATEGY_CUSTOM_CASE_BODY:
             protocol = "custom"
-        elif strategy == "structured_case_flow":
+        elif strategy == STRATEGY_STRUCTURED_CASE_FLOW:
             protocol = "flow"
         elif is_grpc:
             protocol = "grpc"
@@ -464,9 +461,9 @@ def build_file_ir(
             case_flows,
         )
         request_refs: set[str] = set()
-        if strategy == "default_http":
+        if strategy == STRATEGY_DEFAULT_HTTP:
             request_refs.add(tc.id)
-        if strategy == "structured_case_flow":
+        if strategy == STRATEGY_STRUCTURED_CASE_FLOW:
             request_refs.update(_request_refs_for_flow(case_flows.get(tc.id, {}), tc.id))
 
         request_bindings: dict[str, RequestIR] = {}
@@ -497,7 +494,7 @@ def build_file_ir(
         template_assertions = _structured_assertions_for(tc, strategy, structured_assertions)
         assertions.extend(template_assertions)
         custom_body = None
-        if strategy == "custom_case_body":
+        if strategy == STRATEGY_CUSTOM_CASE_BODY:
             custom_body = CustomBodyIR(
                 source=f"profile.case_bodies.{tc.id}",
                 fixtures=fixtures,
@@ -505,7 +502,7 @@ def build_file_ir(
             )
         case_flow = (
             build_case_flow_ir(tc, case_flows, profile_rules, proj)
-            if strategy == "structured_case_flow"
+            if strategy == STRATEGY_STRUCTURED_CASE_FLOW
             else None
         )
         case_profile_variables = profile_variable_irs_for_case(
@@ -515,7 +512,11 @@ def build_file_ir(
         )
 
         source_trace = {
-            "strategy": SourceTraceIR(strategy, strategy_source, strategy_reason),
+            "strategy": SourceTraceIR(
+                strategy,
+                strategy_resolution.final_source,
+                strategy_resolution.final_reason,
+            ),
             "protocol": SourceTraceIR(
                 protocol,
                 protocol_source or "default",
@@ -556,11 +557,11 @@ def build_file_ir(
             markers=list(tc.markers),
             strategy=strategy,
             protocol=protocol,
-            skip_reason=_skip_reason(tc),
+            skip_reason=strategy_resolution.skip_reason,
             fixtures=fixtures,
             setup_call=(
                 SetupCallIR(name=f"setup_{parse_result.module}", kwargs={"case_id": tc.id})
-                if strategy == "default_http"
+                if strategy == STRATEGY_DEFAULT_HTTP
                 else None
             ),
             request=request,
