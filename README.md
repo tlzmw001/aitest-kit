@@ -44,7 +44,7 @@ cd ./aitest_workspace
 ```text
 docs/                  # 公开 API 文档、设计文档、OpenAPI/proto
 aitest_config/          # 项目配置、codegen 配置、schema、参考手册
-test_workspace/         # 知识库、用例、fixture、profile、generated pytest、报告
+test_workspace/         # 知识库、suite、Module Harness、generated pytest、报告
 skills/                 # agent-neutral AI skills，按需复制到 .codex/.claude/.agents
 AGENTS.md / CLAUDE.md   # AI 协作说明
 ```
@@ -90,7 +90,7 @@ aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --c
 |---|---|---|
 | 文档和知识 | 公开文档放入 `docs/`，构建可测试契约 | `/doc-review` `/knowledge-build` |
 | 用例设计 | 从知识库生成 Markdown 用例，人工 review | `/test-design` |
-| 脚手架 | 为模块补 fixture、helper、profile | `/test-scaffold` |
+| 脚手架 | 为模块构建 Module Harness 和 profile | `/test-scaffold` |
 | 代码生成 | Markdown + profile → pytest | `aitest codegen` |
 | 执行报告 | freshness check → pytest → 结构化报告 | `aitest run` |
 | 沉淀 | 重复模式提取为规则和模板 | `/emitter-build` |
@@ -136,7 +136,7 @@ mkdir -p .codex/skills && cp -R skills/. .codex/skills/     # Codex
 | `knowledge-build` | 构建/更新 L0/L1/L2 测试知识库 |
 | `case-migrate` | 可选能力，仅用于把外部/历史用例迁移为 AITest Markdown 用例 |
 | `test-design` | 从知识库生成 Markdown 用例 |
-| `test-scaffold` | 为新模块或 suite 补 fixture/profile |
+| `test-scaffold` | 为新模块构建 Harness，或为 suite 补 profile |
 | `test-codegen` | 从 Markdown/profile 生成 pytest |
 | `test-fix` | 修正错误用例并沉淀经验 |
 | `test-maintain` | 诊断 workspace 状态，路由到对应 skill |
@@ -151,7 +151,7 @@ mkdir -p .codex/skills && cp -R skills/. .codex/skills/     # Codex
 | 结构化流程 | `case_flows` | 线性多步骤 |
 | 自定义代码 | `case_bodies` | 并发、mock、进程等复杂场景 |
 
-`case_flows` 只做流程编排；临时文件、日志捕获、mock、并发和 cleanup 等运行器细节应封装到 fixture/helper。详见 [Profile Guide](docs/usebook/codegen_profile_guide.md)。
+`case_flows` 只做流程编排，根对象固定为 `harness`；临时文件、日志捕获、mock、循环、条件和 cleanup 等运行细节封装为 Module Harness capability。详见 [Profile Guide](docs/usebook/codegen_profile_guide.md)。
 
 推荐演进：`case_bodies → case_flows → assertion_rules / 默认模板`。详见 [Profile Guide](docs/usebook/codegen_profile_guide.md)。
 
@@ -167,7 +167,7 @@ aitest_workspace/
 ├── test_workspace/
 │   ├── knowledge/                # L0/L1/L2 + TEST_SPEC
 │   ├── suites/                   # Markdown 用例 + suite profile
-│   ├── targets/                  # fixture、helper、module profile
+│   ├── targets/                  # target registry + modules/{module}/{module.yaml,profile.md,fixture.py,harness.py}
 │   ├── generated/                # generated pytest（编译产物）
 │   ├── reports/                  # 运行报告
 │   └── results/                  # 待测系统 bug 记录
@@ -175,6 +175,8 @@ aitest_workspace/
 ├── AGENTS.md
 └── CLAUDE.md
 ```
+
+Module 运行能力只有一种公开形态：`setup_{module}` fixture 直接返回 `{Module}Harness`，generated pytest 中统一命名为 `harness`。单模块能力留在 module package；只有同一 target 内已被多个 module 实际复用的纯技术适配才进入 `targets/{target}/helpers/`，不建立 workspace 顶层 helpers。
 
 ## 安全与隐私
 

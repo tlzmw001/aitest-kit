@@ -9,23 +9,26 @@ suite: e2e_smoke
 case_flows:
   TC-E2E-001:
     steps:
-    - call: e2e.set_stock
+    - call: harness.set_experiment_whitelist
+      args:
+      - u_e2e_http_internal_001
+    - call: harness.set_stock
       args:
       - COUPON_ACT_001
       - 5
-    - call: e2e.request
+    - call: harness.request
       args:
       - u_e2e_http_internal_001
       - req_e2e_001
       save_as: body
-    - call: e2e.post_recommend_response
+    - call: harness.post_recommend_response
       args:
       - expr: body
       save_as: response
     - assert: assert response.status_code == 200
     - assign: resp
       expr: response.json()
-    - call: e2e.query_coupons
+    - call: harness.query_coupons
       args:
       - u_e2e_http_internal_001
       save_as: coupons
@@ -39,16 +42,16 @@ case_flows:
     - assert: assert resp["coupon"]["item_id"] == "COUPON_ACT_001"
     - assert: assert resp["coupon"]["user_id"] == "u_e2e_http_internal_001"
     - assert: assert resp["coupon"]["status"] == "claimed"
-    - assert: assert e2e.stock("COUPON_ACT_001") == 4
+    - assert: assert harness.stock("COUPON_ACT_001") == 4
     - assert: assert coupons["total"] == 1
     - assert: assert coupons["coupons"][0]["instance_id"] == resp["coupon"]["instance_id"]
   TC-E2E-002:
     steps:
-    - call: e2e.set_stock
+    - call: harness.set_stock
       args:
       - COUPON_SHIP_001
       - 5
-    - call: e2e.request
+    - call: harness.request
       args:
       - u_e2e_http_external_002
       - req_e2e_002
@@ -58,14 +61,14 @@ case_flows:
         device: pc
         external: 1
       save_as: body
-    - call: e2e.post_recommend_response
+    - call: harness.post_recommend_response
       args:
       - expr: body
       save_as: response
     - assert: assert response.status_code == 200
     - assign: resp
       expr: response.json()
-    - call: e2e.query_coupons
+    - call: harness.query_coupons
       args:
       - u_e2e_http_external_002
       save_as: coupons
@@ -81,11 +84,11 @@ case_flows:
     - assert: assert coupons["coupons"][0]["item_id"] == "COUPON_SHIP_001"
   TC-E2E-003:
     steps:
-    - call: e2e.set_stock
+    - call: harness.set_stock
       args:
       - COUPON_ACT_001
       - 2
-    - call: e2e.request
+    - call: harness.request
       args:
       - u_e2e_dual_proto_003
       - req_e2e_003
@@ -93,14 +96,14 @@ case_flows:
         policy_id: policy_fallback_001
         score_threshold: 0.4
       save_as: body
-    - call: e2e.post_recommend_response
+    - call: harness.post_recommend_response
       args:
       - expr: body
       save_as: http_response
     - assert: assert http_response.status_code == 200
     - assign: http_json
       expr: http_response.json()
-    - call: e2e.grpc_recommend
+    - call: harness.grpc_recommend
       args:
       - expr: body
       save_as: grpc_resp
@@ -120,19 +123,22 @@ case_flows:
     - assert: assert grpc_resp["results"][0]["recommended"] is True
     - assert: assert http_json["coupon"]["item_id"] == "COUPON_ACT_001"
     - assert: assert grpc_resp["coupon"]["item_id"] == "COUPON_ACT_001"
-    - assert: assert e2e.stock("COUPON_ACT_001") == 0
+    - assert: assert harness.stock("COUPON_ACT_001") == 0
   TC-E2E-004:
     steps:
-    - call: e2e.set_stock
+    - call: harness.set_experiment_whitelist
+      args:
+      - u_e2e_calibration_004
+    - call: harness.set_stock
       args:
       - COUPON_ACT_001
       - 3
-    - call: e2e.request
+    - call: harness.request
       args:
       - u_e2e_calibration_004
       - req_e2e_004
       save_as: body
-    - call: e2e.post_recommend_response
+    - call: harness.post_recommend_response
       args:
       - expr: body
       save_as: response
@@ -147,14 +153,14 @@ case_flows:
     - assert: assert resp["results"][0]["calibrated_score"] > resp["results"][0]["score"]
     - assert: assert resp["coupon"] is not None
     - assert: assert resp["coupon"]["item_id"] == "COUPON_ACT_001"
-    - assert: assert e2e.stock("COUPON_ACT_001") == 2
+    - assert: assert harness.stock("COUPON_ACT_001") == 2
   TC-E2E-006:
     steps:
-    - call: e2e.set_stock
+    - call: harness.set_stock
       args:
       - COUPON_SHIP_001
       - 3
-    - call: e2e.request
+    - call: harness.request
       args:
       - u_e2e_external_skip_006
       - req_e2e_006
@@ -164,14 +170,14 @@ case_flows:
         device: pc
         external: 1
       save_as: body
-    - call: e2e.post_recommend_response
+    - call: harness.post_recommend_response
       args:
       - expr: body
       save_as: response
     - assert: assert response.status_code == 200
     - assign: resp
       expr: response.json()
-    - call: e2e.query_coupons
+    - call: harness.query_coupons
       args:
       - u_e2e_external_skip_006
       save_as: coupons
@@ -183,11 +189,11 @@ case_flows:
     - assert: assert coupons["total"] == 1
   TC-E2E-007:
     steps:
-    - call: e2e.set_stock
+    - call: harness.set_stock
       args:
       - COUPON_ACT_001
       - 1
-    - call: e2e.request
+    - call: harness.request
       args:
       - u_e2e_shared_state_007
       - req_e2e_007
@@ -195,11 +201,11 @@ case_flows:
         policy_id: policy_fallback_001
         score_threshold: 0.4
       save_as: body
-    - call: e2e.grpc_recommend
+    - call: harness.grpc_recommend
       args:
       - expr: body
       save_as: grpc_resp
-    - call: e2e.query_coupons
+    - call: harness.query_coupons
       args:
       - u_e2e_shared_state_007
       save_as: http_json

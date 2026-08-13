@@ -1,6 +1,7 @@
 """Workspace diagnostics for aitest-kit."""
 from __future__ import annotations
 
+import ast
 import os
 import re
 import subprocess
@@ -13,6 +14,7 @@ import click
 from aitest_kit.codegen.project_config import load_project_config
 from aitest_kit.codegen.profile_validator import validate_profile_suite
 from aitest_kit.registry import load_module_context, load_suite_context, load_target_context
+from aitest_kit.registry.harness_contract import validate_harness_contract
 from aitest_kit.workspace import push_workspace
 from aitest_kit.workspace_config import has_workspace_config, load_workspace_paths
 
@@ -40,10 +42,11 @@ def doctor_command(workspace: str | None):
       workspace layout
       project config
       target/module/suite registry
+      canonical module Harness contract
       profile gate
       generated freshness
       pytest collect
-      fixture environment variable hints
+      fixture environment variable hints plus Harness/runtime requirements
     """
     try:
         with push_workspace(workspace):
@@ -106,13 +109,13 @@ def _doctor_impl() -> int:
         results.append(CheckResult(
             "INFO",
             "environment",
-            "fixture environment variables: " + ", ".join(sorted(env_vars)),
+            "runtime environment variables: " + ", ".join(sorted(env_vars)),
         ))
     else:
         results.append(CheckResult(
             "INFO",
             "environment",
-            "no fixture environment variables detected",
+            "no runtime environment variables detected",
         ))
 
     counts = {"OK": 0, "WARN": 0, "FAIL": 0, "INFO": 0}
@@ -225,7 +228,7 @@ def _check_target_registry(results: list[CheckResult], targets_dir: Path) -> Non
         if not target.defaults.module_dir.exists():
             warnings.append(f"{target.target}: module_dir not found: {target.defaults.module_dir}")
             continue
-        module_files = sorted(target.defaults.module_dir.glob("*.yaml"))
+        module_files = sorted(target.defaults.module_dir.glob("*/module.yaml"))
         if not module_files:
             warnings.append(f"{target.target}: no module registry files under {target.defaults.module_dir}")
             continue
@@ -235,14 +238,23 @@ def _check_target_registry(results: list[CheckResult], targets_dir: Path) -> Non
             if module.diagnostics:
                 failures.append(f"{module_file}: {_diagnostic_summary(module.diagnostics)}")
                 continue
+            if module.module != module_file.parent.name:
+                failures.append(
+                    f"{module_file}: module {module.module} does not match directory {module_file.parent.name}"
+                )
+            contract = validate_harness_contract(module)
+            failures.extend(
+                f"{module_file}: {message}"
+                for message in contract.errors
+            )
+            warnings.extend(
+                f"{target.target}/{module.module}: {message}"
+                for message in contract.warnings
+            )
             if not module.knowledge_refs.get("l1"):
                 warnings.append(
                     f"{target.target}/{module.module}: missing recommended knowledge_refs.l1"
                 )
-            if module.fixture_path and not module.fixture_path.exists():
-                failures.append(f"{module_file}: fixture not found: {module.fixture_path}")
-            if module.profile_path and not module.profile_path.exists():
-                failures.append(f"{module_file}: profile not found: {module.profile_path}")
             for registered in module.registered_suites:
                 suite_count += 1
                 if registered.status != "active":
@@ -351,12 +363,46 @@ def _generated_files(generated_dir: Path) -> list[Path]:
     return sorted(generated_dir.rglob("test_*.py"))
 
 
-def _scan_env_vars(fixture_dir: Path) -> set[str]:
+def _scan_env_vars(target_dir: Path) -> set[str]:
     env_vars: set[str] = set()
-    if not fixture_dir.exists():
+    if not target_dir.exists():
         return env_vars
-    for path in fixture_dir.rglob("*.py"):
+    for path in target_dir.rglob("*.py"):
         text = path.read_text(encoding="utf-8")
         for pattern in _ENV_PATTERNS:
             env_vars.update(pattern.findall(text))
+        try:
+            tree = ast.parse(text, filename=str(path))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            function_name = _call_name(node.func)
+            if function_name == "require_env" and node.args:
+                name = _string_literal(node.args[0])
+                if name is not None:
+                    env_vars.add(name)
+            elif function_name == "require_envs" and node.args:
+                values = node.args[0]
+                if isinstance(values, (ast.List, ast.Tuple, ast.Set)):
+                    env_vars.update(
+                        name
+                        for element in values.elts
+                        if (name := _string_literal(element)) is not None
+                    )
     return env_vars
+
+
+def _call_name(node: ast.expr) -> str:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return ""
+
+
+def _string_literal(node: ast.expr) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    return None

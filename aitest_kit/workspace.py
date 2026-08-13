@@ -209,6 +209,7 @@ def upgrade_workspace(
         result=result,
         backup_dir=backup_dir,
     )
+    _audit_legacy_harness_layout(target_path, result)
 
     if apply:
         merged_hashes = dict(previous_hashes)
@@ -224,6 +225,98 @@ def upgrade_workspace(
         result.backup_dir = backup_dir
 
     return result
+
+
+_REMOVED_PROFILE_BINDING_FIELDS = {
+    "default_fixture",
+    "default_object",
+    "default_case_setup",
+    "case_fixtures",
+}
+
+
+def _audit_legacy_harness_layout(
+    target_path: Path,
+    result: UpgradeWorkspaceResult,
+) -> None:
+    """Report old module injection layouts that require semantic scaffold work."""
+    targets_dir = target_path / "test_workspace" / "targets"
+    for target_dir in sorted(path for path in targets_dir.glob("*") if path.is_dir()):
+        target_yaml = target_dir / "target.yaml"
+        target_data = _read_yaml_for_upgrade(target_yaml)
+        defaults = target_data.get("defaults", {}) if isinstance(target_data, dict) else {}
+        if isinstance(defaults, dict):
+            removed = sorted({"fixture_dir", "profile_dir"} & set(defaults))
+            if removed:
+                result.entries.append(UpgradeEntry(
+                    target_yaml.relative_to(target_path),
+                    "BLOCKED",
+                    "removed target defaults " + ", ".join(removed)
+                    + "; migrate modules before deleting these fields",
+                ))
+
+        modules_dir = target_dir / "modules"
+        for module_yaml in sorted(modules_dir.glob("*.yaml")):
+            result.entries.append(UpgradeEntry(
+                module_yaml.relative_to(target_path),
+                "BLOCKED",
+                "legacy module layout; rebuild as modules/{module}/"
+                "{module.yaml,profile.md,fixture.py,harness.py} with test-scaffold",
+            ))
+
+    for profile in sorted((target_path / "test_workspace").glob("**/profile*.md")):
+        data = _profile_yaml_for_upgrade(profile)
+        if not data:
+            continue
+        removed = sorted(_REMOVED_PROFILE_BINDING_FIELDS & set(data))
+        flow_fields: set[str] = set()
+        flows = data.get("case_flows")
+        if isinstance(flows, dict):
+            for flow in flows.values():
+                if isinstance(flow, dict):
+                    flow_fields.update({"fixture", "object"} & set(flow))
+        removed.extend(f"case_flows.*.{field}" for field in sorted(flow_fields))
+        if removed:
+            result.entries.append(UpgradeEntry(
+                profile.relative_to(target_path),
+                "BLOCKED",
+                "removed fixture injection fields: " + ", ".join(removed)
+                + "; rewrite flow calls to the canonical harness after scaffold",
+            ))
+
+    workspace_helpers = target_path / "test_workspace" / "helpers"
+    if workspace_helpers.exists():
+        result.entries.append(UpgradeEntry(
+            workspace_helpers.relative_to(target_path),
+            "BLOCKED",
+            "workspace-level helpers are no longer a supported ownership layer; "
+            "move each helper to its module or a proven target-level helpers directory",
+        ))
+
+
+def _read_yaml_for_upgrade(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _profile_yaml_for_upgrade(path: Path) -> dict:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    match = _PROFILE_YAML_RE.search(text)
+    if not match:
+        return {}
+    try:
+        data = yaml.safe_load(match.group(1)) or {}
+    except yaml.YAMLError:
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 _PROFILE_YAML_RE = re.compile(r"```ya?ml\s*\n(.*?)```", re.DOTALL)

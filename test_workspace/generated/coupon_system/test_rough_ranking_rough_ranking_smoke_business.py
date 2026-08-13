@@ -4,8 +4,7 @@ import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
 from aitest_kit.runtime_context import reset_case_context, set_case_context
-from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
-from test_workspace.targets.coupon_system.fixtures.rough_ranking import setup_rough_ranking
+pytest_plugins = ["test_workspace.targets.coupon_system.modules.rough_ranking.fixture"]
 
 
 BASE_REQUEST = {
@@ -53,11 +52,11 @@ class TestRoughRankingBusiness:
             # SETUP: 前置操作：白名单命中粗排关闭策略 enable_coarse_rank=false
             # SETUP: 请求覆盖：HTTP 请求按 A,B,C 顺序传入 3 张券
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-001")
-            resp = case.recommend_http()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_001", request_id="req-rank-001", strategy_map={"coarse_rank_exp_game": "cr_off", "calibration_exp_game": "cal_off"}, params={"enable_coarse_rank": False})
+            resp = harness.recommend_http()
             assert resp['code'] == 0
-            assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B', 'COUPON_RANK_C']
+            assert harness.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B', 'COUPON_RANK_C']
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -78,11 +77,11 @@ class TestRoughRankingBusiness:
             # SETUP: 策略参数：白名单命中{"enable_coarse_rank":true,"truncate_count":3}，不配置 prior_count、filters、sort_keys、diversity
             # SETUP: 请求覆盖：gRPC 请求按 A,B,C 顺序传入 3 张券
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-002")
-            resp = case.recommend_grpc()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_002", request_id="req-rank-002", params={"enable_coarse_rank": True, "truncate_count": 3})
+            resp = harness.recommend_grpc()
             assert resp['code'] == 0
-            assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B', 'COUPON_RANK_C']
+            assert harness.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B', 'COUPON_RANK_C']
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -105,11 +104,11 @@ class TestRoughRankingBusiness:
             # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":2,"truncate_rule":"top_value"}
             # SETUP: 请求覆盖：HTTP 请求传入 A/B/C
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-003")
-            resp = case.recommend_http()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_003", request_id="req-rank-003", params={"enable_coarse_rank": True, "truncate_count": 2, "truncate_rule": "top_value"})
+            resp = harness.recommend_http()
             assert resp['code'] == 0
-            assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
+            assert harness.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -130,11 +129,11 @@ class TestRoughRankingBusiness:
             # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":2,"truncate_rule":"top_min_spend"}
             # SETUP: 请求覆盖：HTTP 请求传入 A/B/C
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-004")
-            resp = case.recommend_http()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_004", request_id="req-rank-004", params={"enable_coarse_rank": True, "truncate_count": 2, "truncate_rule": "top_min_spend"})
+            resp = harness.recommend_http()
             assert resp['code'] == 0
-            assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
+            assert harness.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -155,12 +154,12 @@ class TestRoughRankingBusiness:
             # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":2,"truncate_rule":"random"}
             # SETUP: 请求覆盖：HTTP 请求传入 A/B/C
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-005")
-            resp = case.recommend_http()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_005", request_id="req-rank-005", params={"enable_coarse_rank": True, "truncate_count": 2, "truncate_rule": "random"})
+            resp = harness.recommend_http()
             assert resp['code'] == 0
-            assert len(case.rank_input_items) == 2
-            assert set(case.rank_input_items) <= {'COUPON_RANK_A', 'COUPON_RANK_B', 'COUPON_RANK_C'}
+            assert len(harness.rank_input_items) == 2
+            assert set(harness.rank_input_items) <= {'COUPON_RANK_A', 'COUPON_RANK_B', 'COUPON_RANK_C'}
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -182,12 +181,12 @@ class TestRoughRankingBusiness:
             # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":2,"prior_count":1,"prior_rule":"top_value","truncate_rule":"top_value"}
             # SETUP: 请求覆盖：B 为 isPrior=true
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-006")
-            resp = case.recommend_http()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_006", request_id="req-rank-006", params={"enable_coarse_rank": True, "truncate_count": 2, "prior_count": 1, "prior_rule": "top_value", "truncate_rule": "top_value"})
+            resp = harness.recommend_http()
             assert resp['code'] == 0
-            assert case.rank_input_items[0] == 'COUPON_RANK_B'
-            assert len(case.rank_input_items) == 2
+            assert harness.rank_input_items[0] == 'COUPON_RANK_B'
+            assert len(harness.rank_input_items) == 2
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -206,11 +205,11 @@ class TestRoughRankingBusiness:
         try:
             # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":3,"filters":[{"field":"value","op":"gte","value":80},{"field":"coupon_type","op":"in","value":["discount","fixed"]}]}
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-007")
-            resp = case.recommend_http()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_007", request_id="req-rank-007", params={"enable_coarse_rank": True, "truncate_count": 3, "filters": [{"field": "value", "op": "gte", "value": 80}, {"field": "coupon_type", "op": "in", "value": ["discount", "fixed"]}]})
+            resp = harness.recommend_http()
             assert resp['code'] == 0
-            assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
+            assert harness.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -229,11 +228,11 @@ class TestRoughRankingBusiness:
         try:
             # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":3,"sort_keys":[{"field":"value","weight":1.0},{"field":"min_spend","weight":-1.0}]}
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-008")
-            resp = case.recommend_http()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_008", request_id="req-rank-008", params={"enable_coarse_rank": True, "truncate_count": 3, "sort_keys": [{"field": "value", "weight": 1.0}, {"field": "min_spend", "weight": -1.0}]})
+            resp = harness.recommend_http()
             assert resp['code'] == 0
-            assert case.rank_input_items[0] == 'COUPON_RANK_B'
+            assert harness.rank_input_items[0] == 'COUPON_RANK_B'
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -253,12 +252,12 @@ class TestRoughRankingBusiness:
             # SETUP: 请求覆盖：请求传入 4 张券，其中 3 张 coupon_type="discount"、1 张 coupon_type="fixed"
             # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":3,"truncate_rule":"top_value","diversity":{"enabled":true,"group_field":"coupon_type","max_per_group":1}}
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-009")
-            resp = case.recommend_http()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_009", request_id="req-rank-009", params={"enable_coarse_rank": True, "truncate_count": 3, "truncate_rule": "top_value", "diversity": {"enabled": True, "group_field": "coupon_type", "max_per_group": 1}}, items=[{"item_id": "COUPON_RANK_D1", "coupon_type": "discount", "value": 100, "min_spend": 1000, "expire_days": 7}, {"item_id": "COUPON_RANK_D2", "coupon_type": "discount", "value": 90, "min_spend": 1000, "expire_days": 7}, {"item_id": "COUPON_RANK_F1", "coupon_type": "fixed", "value": 80, "min_spend": 1000, "expire_days": 7}, {"item_id": "COUPON_RANK_D3", "coupon_type": "discount", "value": 70, "min_spend": 1000, "expire_days": 7}])
+            resp = harness.recommend_http()
             assert resp['code'] == 0
-            assert len(case.rank_input_items) == 3
-            assert case.rank_input_items[:2] == ['COUPON_RANK_D1', 'COUPON_RANK_F1']
+            assert len(harness.rank_input_items) == 3
+            assert harness.rank_input_items[:2] == ['COUPON_RANK_D1', 'COUPON_RANK_F1']
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -278,12 +277,12 @@ class TestRoughRankingBusiness:
             # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":10,"truncate_rule":"top_value"}
             # SETUP: 请求覆盖：请求只传入 1 张合法候选券
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-010")
-            resp = case.recommend_http()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_010", request_id="req-rank-010", params={"enable_coarse_rank": True, "truncate_count": 10, "truncate_rule": "top_value"}, items=[{"item_id": "COUPON_RANK_A", "coupon_type": "discount", "value": 100, "min_spend": 9000, "expire_days": 7}])
+            resp = harness.recommend_http()
             assert resp['code'] == 0
-            assert len(case.rank_input_items) == 1
-            assert case.rank_input_items == ['COUPON_RANK_A']
+            assert len(harness.rank_input_items) == 1
+            assert harness.rank_input_items == ['COUPON_RANK_A']
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -304,11 +303,11 @@ class TestRoughRankingBusiness:
             # SETUP: 请求覆盖：gRPC 请求中 COUPON_RANK_B.is_prior=true
             # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":1,"prior_count":1,"prior_rule":"top_value"}
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-011")
-            resp = case.recommend_grpc()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_011", request_id="req-rank-011", params={"enable_coarse_rank": True, "truncate_count": 1, "prior_count": 1, "prior_rule": "top_value"})
+            resp = harness.recommend_grpc()
             assert resp['code'] == 0
-            assert case.rank_input_items == ['COUPON_RANK_B']
+            assert harness.rank_input_items == ['COUPON_RANK_B']
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -328,16 +327,15 @@ class TestRoughRankingBusiness:
             # SETUP: 请求覆盖：请求传入 8 个 item（含 3 个 isPrior=true）
             # SETUP: 策略参数：策略参数同时配置 prior_count=2、过滤 expire_days>=3、加权排序、类型打散 max_per_group=1、truncate_count=5
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-012")
-            resp = case.recommend_http()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_012", request_id="req-rank-012", params={"enable_coarse_rank": True, "truncate_count": 5, "prior_count": 2, "prior_rule": "top_value", "filters": [{"field": "expire_days", "op": "gte", "value": 3}], "sort_keys": [{"field": "value", "weight": 1.0}], "diversity": {"enabled": True, "group_field": "coupon_type", "max_per_group": 1}}, items=[{"item_id": "P1", "coupon_type": "discount", "value": 1000, "min_spend": 1000, "expire_days": 7, "isPrior": True}, {"item_id": "P2", "coupon_type": "fixed", "value": 900, "min_spend": 1000, "expire_days": 7, "isPrior": True}, {"item_id": "P3", "coupon_type": "free_shipping", "value": 100, "min_spend": 1000, "expire_days": 7, "isPrior": True}, {"item_id": "A", "coupon_type": "discount", "value": 800, "min_spend": 1000, "expire_days": 7}, {"item_id": "B", "coupon_type": "discount", "value": 700, "min_spend": 1000, "expire_days": 1}, {"item_id": "C", "coupon_type": "fixed", "value": 600, "min_spend": 1000, "expire_days": 7}, {"item_id": "D", "coupon_type": "fixed", "value": 500, "min_spend": 1000, "expire_days": 1}, {"item_id": "E", "coupon_type": "free_shipping", "value": 400, "min_spend": 1000, "expire_days": 7}])
+            resp = harness.recommend_http()
             assert resp['code'] == 0
-            assert case.rank_input_items == ['P1', 'P2', 'A', 'C', 'E']
-            assert case.rank_input_items[:2] == ['P1', 'P2']
+            assert harness.rank_input_items == ['P1', 'P2', 'A', 'C', 'E']
+            assert harness.rank_input_items[:2] == ['P1', 'P2']
         finally:
             reset_case_context(__aitest_ctx_token)
 
 
-# TODO: setup_rough_ranking fixture 需要手写实现（→ tests/fixtures/rough_ranking.py）
 
 __codegen_skipped__ = []

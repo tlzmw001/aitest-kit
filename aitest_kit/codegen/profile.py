@@ -1,14 +1,15 @@
 """Load module-level codegen profile settings."""
 from __future__ import annotations
 
+import keyword
 import re
-from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional, Union
 
 from aitest_kit.codegen.project_config import AssertionRule
 from aitest_kit.codegen.profile_merge import merge_profile_yaml
+from aitest_kit.registry.models import ModuleBinding
 
 
 @dataclass(frozen=True)
@@ -18,30 +19,11 @@ class RuntimeProfile:
     data: dict[str, Any]
     module_profile_path: Path | None = None
     suite_profile_path: Path | None = None
+    module_binding: ModuleBinding | None = None
     diagnostics: list[str] = field(default_factory=list)
 
 
 ProfileSource = Optional[Union[str, Path, RuntimeProfile]]
-
-
-@dataclass(frozen=True)
-class CaseFlowDefaults:
-    """Top-level defaults shared by profile case_flows."""
-
-    fixture: str = ""
-    object_name: str = ""
-    case_setup: dict[str, Any] = field(default_factory=dict)
-
-
-def preferred_module_profile_path(profile_dir: str | Path, module: str) -> Path:
-    """Return the canonical module profile path."""
-    return Path(profile_dir) / f"profile_{module}.md"
-
-
-def resolve_module_profile_path(profile_dir: str | Path, module: str) -> Path | None:
-    """Return the canonical module profile path when it exists."""
-    preferred = preferred_module_profile_path(profile_dir, module)
-    return preferred if preferred.exists() else None
 
 
 def load_profile_yaml(profile_path: ProfileSource) -> dict[str, Any]:
@@ -132,24 +114,6 @@ def load_profile_extra_imports(profile_path: ProfileSource) -> list[str]:
     return [item for item in raw if isinstance(item, str) and item.strip()]
 
 
-def load_profile_case_fixtures(profile_path: ProfileSource) -> dict[str, list[str]]:
-    """Extract per-case fixture signatures from a profile YAML block."""
-    data = load_profile_yaml(profile_path)
-    raw = data.get("case_fixtures", {})
-    if not isinstance(raw, dict):
-        return {}
-
-    result: dict[str, list[str]] = {}
-    for case_id, fixtures in raw.items():
-        if not isinstance(case_id, str) or not isinstance(fixtures, list):
-            continue
-        result[case_id] = [
-            item for item in fixtures
-            if isinstance(item, str) and item.strip()
-        ]
-    return result
-
-
 def load_profile_case_bodies(profile_path: ProfileSource) -> dict[str, list[str]]:
     """Extract per-case test body lines from a profile YAML block."""
     data = load_profile_yaml(profile_path)
@@ -178,26 +142,17 @@ def load_profile_module_type(profile_path: ProfileSource) -> str | None:
     return module_type if isinstance(module_type, str) and module_type.strip() else None
 
 
-def load_profile_case_flow_defaults(profile_path: ProfileSource) -> CaseFlowDefaults:
-    """Extract top-level case_flow defaults from a profile YAML block."""
-    return case_flow_defaults_from_yaml(load_profile_yaml(profile_path))
-
-
-def case_flow_defaults_from_yaml(data: dict[str, Any]) -> CaseFlowDefaults:
-    """Build case_flow defaults from raw profile YAML data."""
-    default_fixture = data.get("default_fixture")
-    default_object = data.get("default_object")
-    default_case_setup = data.get("default_case_setup")
-    return CaseFlowDefaults(
-        fixture=default_fixture if isinstance(default_fixture, str) else "",
-        object_name=default_object if isinstance(default_object, str) else "",
-        case_setup=dict(default_case_setup) if isinstance(default_case_setup, dict) else {},
-    )
-
-
 _CASE_ID_RE = re.compile(r"^TC-[A-Z0-9]+-\d+$")
 _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _CALL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$")
+_RESERVED_FLOW_NAMES = frozenset({
+    "harness",
+    "self",
+    "pytest",
+    "__tc_meta__",
+    "__tc_vars__",
+    "__codegen_skipped__",
+})
 _BACKTICK_RE = re.compile(r"`([^`]+)`")
 
 
@@ -205,68 +160,11 @@ def load_profile_case_flows(profile_path: ProfileSource) -> dict[str, dict[str, 
     """Extract structured case_flows from a profile YAML block."""
     data = load_profile_yaml(profile_path)
     raw = data.get("case_flows", {})
-    case_flows = raw if isinstance(raw, dict) else {}
-    return apply_case_flow_defaults(case_flows, case_flow_defaults_from_yaml(data))
-
-
-class _SafeFormatDict(dict[str, Any]):
-    def __missing__(self, key: str) -> str:
-        return "{" + key + "}"
-
-
-def _format_default_value(value: Any, context: dict[str, Any]) -> Any:
-    if isinstance(value, str):
-        return value.format_map(_SafeFormatDict(context))
-    if isinstance(value, list):
-        return [_format_default_value(item, context) for item in value]
-    if isinstance(value, dict):
-        return {
-            key: _format_default_value(item, context)
-            for key, item in value.items()
-        }
-    return value
-
-
-def _default_setup_for_case(
-    default_case_setup: dict[str, Any],
-    case_id: str,
-) -> dict[str, Any]:
-    if not default_case_setup:
-        return {}
-    return _format_default_value(deepcopy(default_case_setup), {"case_id": case_id})
-
-
-def _steps_start_with_default(
-    steps: Any,
-    default_step: dict[str, Any],
-) -> bool:
-    return isinstance(steps, list) and bool(steps) and steps[0] == default_step
-
-
-def apply_case_flow_defaults(
-    case_flows: dict[str, Any],
-    defaults: CaseFlowDefaults | None = None,
-) -> dict[str, dict[str, Any]]:
-    """Return case_flows with top-level fixture/object/setup defaults applied."""
-    defaults = defaults or CaseFlowDefaults()
-    result: dict[str, dict[str, Any]] = {}
-    for case_id, raw_flow in case_flows.items():
-        if not isinstance(case_id, str) or not isinstance(raw_flow, dict):
-            result[case_id] = raw_flow
-            continue
-        flow = deepcopy(raw_flow)
-        if defaults.fixture and not flow.get("fixture"):
-            flow["fixture"] = defaults.fixture
-        if defaults.object_name and not flow.get("object"):
-            flow["object"] = defaults.object_name
-
-        default_step = _default_setup_for_case(defaults.case_setup, case_id)
-        if default_step:
-            steps = flow.get("steps", [])
-            if not _steps_start_with_default(steps, default_step):
-                flow["steps"] = [default_step, *list(steps if isinstance(steps, list) else [])]
-        result[case_id] = flow
-    return result
+    return {
+        case_id: dict(flow)
+        for case_id, flow in raw.items()
+        if isinstance(case_id, str) and isinstance(flow, dict)
+    } if isinstance(raw, dict) else {}
 
 
 def validate_profile_strategy_conflicts(
@@ -285,12 +183,10 @@ def validate_profile_strategy_conflicts(
 
 def validate_case_flows(
     case_flows: dict[str, Any],
-    defaults: CaseFlowDefaults | None = None,
 ) -> list[str]:
     """Validate structured case_flow profile data without external deps."""
     errors: list[str] = []
-    normalized = apply_case_flow_defaults(case_flows, defaults)
-    for case_id, flow in normalized.items():
+    for case_id, flow in case_flows.items():
         prefix = f"case_flows.{case_id}"
         if not isinstance(case_id, str) or not _CASE_ID_RE.match(case_id):
             errors.append(f"{prefix}: invalid case_id")
@@ -299,7 +195,7 @@ def validate_case_flows(
             errors.append(f"{prefix}: flow must be a mapping")
             continue
 
-        allowed_flow_keys = {"fixture", "object", "description", "steps"}
+        allowed_flow_keys = {"description", "steps"}
         for key in flow:
             if key not in allowed_flow_keys:
                 errors.append(f"{prefix}: unknown field {key}")
@@ -307,16 +203,6 @@ def validate_case_flows(
         description = flow.get("description")
         if description is not None and not isinstance(description, str):
             errors.append(f"{prefix}.description: must be a string")
-
-        fixture = flow.get("fixture")
-        if not isinstance(fixture, str) or not fixture.strip():
-            errors.append(f"{prefix}.fixture: must be a non-empty string")
-
-        obj_name = flow.get("object")
-        if obj_name is not None and (
-            not isinstance(obj_name, str) or not _IDENT_RE.match(obj_name)
-        ):
-            errors.append(f"{prefix}.object: must be a valid Python identifier")
 
         steps = flow.get("steps")
         if not isinstance(steps, list) or not steps:
@@ -366,6 +252,18 @@ def _validate_case_flow_step(
         not isinstance(step.get("call"), str) or not _CALL_RE.match(step["call"])
     ):
         errors.append(f"{prefix}.call: must be a valid dotted call path")
+    elif has_call:
+        call_parts = step["call"].split(".")
+        root = call_parts[0]
+        for part in call_parts:
+            if keyword.iskeyword(part):
+                errors.append(f"{prefix}.call: call path segment {part} is a Python keyword")
+        if root == "harness" and len(call_parts) < 2:
+            errors.append(f"{prefix}.call: harness call must name a capability")
+        if root != "harness" and root not in saved_names:
+            errors.append(
+                f"{prefix}.call: root object must be harness or a previous save_as/assign"
+            )
     if has_assert:
         assertion = step.get("assert")
         if not isinstance(assertion, str):
@@ -376,8 +274,12 @@ def _validate_case_flow_step(
             )
     if has_assign:
         target = step.get("assign")
-        if not isinstance(target, str) or not _IDENT_RE.match(target):
+        if not isinstance(target, str) or not target.isidentifier():
             errors.append(f"{prefix}.assign: must be a valid Python identifier")
+        elif keyword.iskeyword(target):
+            errors.append(f"{prefix}.assign: assign {target} is a Python keyword")
+        elif target in _RESERVED_FLOW_NAMES:
+            errors.append(f"{prefix}.assign: assign {target} is reserved")
         else:
             saved_names.add(target)
         expr = step.get("expr")
@@ -396,16 +298,22 @@ def _validate_case_flow_step(
         errors.append(f"{prefix}.kwargs: must be a mapping")
     if isinstance(kwargs, dict):
         for key in kwargs:
-            if not isinstance(key, str) or not _IDENT_RE.match(key):
+            if not isinstance(key, str) or not key.isidentifier():
                 errors.append(f"{prefix}.kwargs.{key}: key must be a valid Python identifier")
+            elif keyword.iskeyword(key):
+                errors.append(f"{prefix}.kwargs.{key}: key is a Python keyword")
 
     _validate_case_flow_values(args, f"{prefix}.args", saved_names, errors)
     _validate_case_flow_values(kwargs, f"{prefix}.kwargs", saved_names, errors)
 
     save_as = step.get("save_as")
     if save_as is not None:
-        if not isinstance(save_as, str) or not _IDENT_RE.match(save_as):
+        if not isinstance(save_as, str) or not save_as.isidentifier():
             errors.append(f"{prefix}.save_as: must be a valid Python identifier")
+        elif keyword.iskeyword(save_as):
+            errors.append(f"{prefix}.save_as: save_as {save_as} is a Python keyword")
+        elif save_as in _RESERVED_FLOW_NAMES:
+            errors.append(f"{prefix}.save_as: save_as {save_as} is reserved")
         else:
             saved_names.add(save_as)
 

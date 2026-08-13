@@ -37,7 +37,7 @@ cd ./aitest_workspace
 ```text
 docs/                  # 放公开 API 文档、设计文档、OpenAPI/proto 等
 aitest_config/          # 项目配置、codegen 配置、schema、refs
-test_workspace/         # 知识库、用例、fixture、profile、generated、报告
+test_workspace/         # 知识库、用例、Module Harness、profile、generated、报告
 skills/                 # agent-neutral AI skills，按需复制到 .codex/.claude/.agents
 AGENTS.md / CLAUDE.md   # AI 协作说明
 ```
@@ -70,7 +70,7 @@ doc-review -> knowledge-build -> test-design -> test-scaffold -> test-codegen ->
 
 ### 框架层不随项目迁移改动
 
-迁移新项目时，优先改 workspace 配置：`aitest.yaml`、`target.yaml`、`module.yaml`、fixture、helper、profile 和 suite。不要为适配单个项目修改 parser、planner、renderer 或 emitter engine。
+迁移新项目时，优先改 workspace 配置：`aitest.yaml`、`target.yaml`、canonical module package、suite profile 和 suite。不要为适配单个项目修改 parser、planner、renderer 或 emitter engine。
 
 ### workspace 模板只有一个来源
 
@@ -122,31 +122,35 @@ test_workspace/suites/{target}/{suite}/profile_{suite}_suite.md
 
 ### 4. 补充项目配置
 
-`aitest_config/aitest.yaml` 是 workspace 适配入口，决定 helper import、默认 API 路径、调用函数、断言映射、module_type 和内置断言规则。
+`aitest_config/aitest.yaml` 是 workspace 适配入口，决定默认 API 路径、调用函数、断言映射、module_type 和内置断言规则。
 
 分层：
 
 ```text
-框架层：parser / planner / renderer / CLI / 通用 helpers
+框架层：parser / planner / renderer / CLI
 项目配置层：aitest.yaml
-target/module/suite 层：target.yaml / module.yaml / fixture / helper / profile / suite
+target/module/suite 层：target.yaml / canonical module package / target helper / suite profile / suite
 ```
 
 迁移时先通过项目配置层和模块配置层适配。
 
-### 5. 建立模块 fixture 和 profile
+### 5. 建立 canonical Module Harness
 
 每个模块至少准备：
 
 ```text
-test_workspace/targets/{target}/modules/{module}.yaml
-test_workspace/targets/{target}/fixtures/{module}.py
-test_workspace/targets/{target}/profiles/profile_{module}.md
+test_workspace/targets/{target}/modules/{module}/
+├── module.yaml
+├── profile.md
+├── fixture.py
+└── harness.py
 ```
 
-fixture 封装测试能力：读取服务地址和环境变量、调用公开 API、准备/清理状态、提供查询副作用的 helper。必需环境变量缺失时应明确失败，不静默回退。
+`harness.py` 定义 `{Module}Harness`，封装该模块的公开 API、状态准备、查询、清理和复杂控制逻辑。`fixture.py` 只负责 pytest 生命周期与依赖装配，公开 fixture 固定为 `setup_{module}`，直接返回或 yield `{Module}Harness`。必需环境变量缺失时应明确失败，不静默回退。
 
-profile 指导 codegen：`module_type`、`requests`、`assertion_rules`、`case_flows`、`case_bodies`。module profile 放 L1 稳定能力；suite profile 放 TC-ID 绑定的 `variables`、`requests`、`case_flows`、`case_bodies`。
+module profile `profile.md` 放 L1 稳定的变量默认值和断言规则；`module_type` 只写在 `module.yaml`。suite profile 放 TC-ID 绑定的 `variables`、`requests`、`structured_assertions`、`case_flows`、`case_bodies`。codegen 自动把 `setup_{module}` 注入 generated pytest，并固定绑定为 `harness`；flow 不再配置 fixture/object。
+
+单模块能力留在 module package。只有同一 target 内至少两个 module 已经实际复用的纯技术适配才放到 `test_workspace/targets/{target}/helpers/`；不建立 `test_workspace/helpers/`。
 
 详细字段说明见 [Profile Guide](./codegen_profile_guide.md)。
 
@@ -163,7 +167,7 @@ aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --c
 ```
 
 - `--validate-profile` 是硬门禁，ERROR 必须先修。
-- `--dump-ir` 观察每条 case 的 strategy、fixture、断言来源。
+- `--dump-ir` 观察每条 case 的 strategy、Harness 绑定和断言来源。
 - `--check` 确认 generated 与 Markdown/profile 同步。
 - collect 只验证可导入和可收集，不代表真实测试通过。
 
@@ -189,7 +193,7 @@ AITEST_ENV_FILE=/tmp/your-project-test.env \
   aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --capture
 ```
 
-capture 写入当前 run 目录下的 `capture.jsonl`；task、module、target 和 `--all` 聚合运行写入聚合 run 目录。框架只自动捕获默认 HTTP 用例，`case_flow`、`case_body`、gRPC、SDK 或特殊 fixture 不自动捕获，用户可在自己的 fixture/client/helper 方法中调用 `aitest_kit.helpers.capture.capture_io()`。在 generated 测试函数体内调用时，`capture_io()` 可自动归因到当前 case；显式传入 `case_id` 仍然有效。pytest fixture setup/teardown 阶段不在该 context 内。capture 不自动脱敏，敏感字段应在 fixture 中处理后再写入。
+capture 写入当前 run 目录下的 `capture.jsonl`；task、module、target 和 `--all` 聚合运行写入聚合 run 目录。框架只自动捕获默认 HTTP 用例，`case_flow`、`case_body`、gRPC、SDK 或特殊 Harness capability 不自动捕获，用户可在 Harness 或 target helper 中调用 `aitest_kit.helpers.capture.capture_io()`。在 generated 测试函数体内调用时，`capture_io()` 可自动归因到当前 case；显式传入 `case_id` 仍然有效。pytest fixture setup/teardown 阶段不在该 context 内。capture 不自动脱敏，敏感字段应在 Harness 中处理后再写入。
 
 ## 四、失败分流
 
@@ -200,7 +204,7 @@ capture 写入当前 run 目录下的 `capture.jsonl`；task、module、target �
 | 文档问题 | 公开文档未说明、字段不明确 | 补知识库 `[?]` 或找产品确认 |
 | 用例问题 | 断言不可观测、场景不稳定 | 修 Markdown，必要时记录 mismatch |
 | profile 问题 | profile gate 报错、case_id 不匹配 | 修 profile |
-| fixture 问题 | 前置状态没准备好、环境变量缺失 | 修 fixture/helper |
+| Harness 问题 | 前置状态没准备好、环境变量缺失、capability 实现错误 | 修 module package 或 target helper |
 | codegen 问题 | IR/renderer 生成错误 | 修 codegen 并补测试 |
 | 环境问题 | 服务没启动、端口不通 | 修启动命令或环境配置 |
 | 待测系统 bug | 请求和断言合理，系统行为不符合契约 | 记录到 `test_workspace/results/` |
@@ -230,13 +234,14 @@ capture 写入当前 run 目录下的 `capture.jsonl`；task、module、target �
 | 公开文档 | `docs/` | 系统公开行为、接口、字段、错误码 |
 | 测试知识库 | `test_workspace/knowledge/` | 可测试契约 |
 | Markdown 用例 | `test_workspace/suites/` | 人类可 review 的测试设计源文件 |
-| fixture/helper | `test_workspace/targets/` | 测试动作库、setup/cleanup |
-| profile | `profiles/` + `profile_*_suite.md` | codegen 编排配置 |
+| Module Harness | `test_workspace/targets/{target}/modules/{module}/` | 模块能力、pytest 装配、setup/cleanup、模块规则 |
+| target helper | `test_workspace/targets/{target}/helpers/` | 已证实跨 module 复用的纯技术适配 |
+| profile | module package 的 `profile.md` + `profile_*_suite.md` | 稳定规则与 suite 编排配置 |
 | generated pytest | `test_workspace/generated/` | 编译产物 |
 | report | `test_workspace/reports/` | 测试执行结果 |
 | results | `test_workspace/results/` | 已确认的待测系统问题 |
 
-generated pytest 是编译产物。生成结果不对时，应回到对应源头（Markdown、profile、fixture、aitest.yaml）修改，不直接改 generated。
+generated pytest 是编译产物。生成结果不对时，应回到对应源头（Markdown、profile、Module Harness、target helper、aitest.yaml）修改，不直接改 generated。
 
 ### Skill 路由
 
@@ -244,38 +249,38 @@ generated pytest 是编译产物。生成结果不对时，应回到对应源头
 |---|---|
 | 新系统第一次接入 | `doc-review -> knowledge-build -> test-design -> test-scaffold -> test-codegen` |
 | 文档不完整 | `doc-gen` |
-| 新模块没有 fixture/profile | `test-scaffold` |
-| 现有模块新增用例，fixture 够用 | `test-codegen` |
-| 新增用例但 fixture 缺动作 | `test-scaffold` 增量补，再 `test-codegen` |
+| 新模块没有 Module Harness/profile | `test-scaffold` |
+| 现有模块新增用例，Harness capability 够用 | `test-codegen` |
+| 新增用例但 Harness 缺能力 | `test-scaffold` 增量补，再 `test-codegen` |
 | 用例写错或断言不可观测 | `test-fix` |
 | 测试失败不知归因 | `aitest run` 看报告，再路由 |
 | 重复 case_flow / case_body 太多 | `emitter-build` |
 | 不确定走哪个入口 | `test-maintain` |
 
-### fixture / client / helper / profile 边界
+### Harness / fixture / helper / profile 边界
 
 | 概念 | 职责 | 示例 |
 |---|---|---|
-| helper | 通用技术工具 | HTTP 请求、gRPC 调用、等待轮询 |
-| fixture | pytest 注入和生命周期 | 读取 env、创建 client、注册 cleanup |
-| client/action | 面向模块的测试动作库 | `client.login()`、`client.call_api()` |
+| Harness | 面向模块的测试能力 | `harness.login()`、`harness.call_api()`、状态准备和复杂控制流 |
+| fixture | pytest 注入和生命周期 | 读取 env、装配 Harness、注册 cleanup |
+| target helper | 同一 target 内已证实跨 module 复用的纯技术适配 | HTTP 传输、gRPC 调用、等待轮询 |
 | profile | codegen 编排配置 | `variables`、`case_flows`、`case_bodies` |
 
-调用关系：`case_flow -> client/action -> helper -> target API`。fixture 提供动作和生命周期，case_flow 表达当前用例的流程和断言。不要把 fixture 写成隐藏 pytest。
+调用关系：`case_flow -> harness -> target helper（可选） -> target API`。`setup_{module}` 只装配 Harness 和生命周期；case_flow 从固定根对象 `harness` 编排当前用例。不要让 fixture 按 case_id 隐藏用例逻辑，也不要创建 `test_workspace/helpers/`。
 
 ### 生成路线选择
 
 | 场景 | 推荐路线 |
 |---|---|
 | 单接口、固定 HTTP endpoint、只改请求字段 | `default_http` |
-| gRPC、SDK、多端点或自定义动作库 | fixture/helper + `case_flows` |
+| gRPC、SDK、多端点或模块动作库 | Harness capability + `case_flows` |
 | 多端点但流程线性、需要保存中间变量 | `case_flows` |
-| if/else、for、try/finally 控制流 | 封装到 helper/fixture 或 `case_bodies` |
-| 进程、mock、临时文件生命周期 | `case_bodies` |
+| if/else、for、try/finally 控制流 | 优先封装为 Harness capability；测试函数仍需复杂编排时用 `case_bodies` |
+| 进程、mock、临时文件生命周期 | 优先封装为 Harness capability；仍需测试函数编排时用 `case_bodies` |
 | 只适合人工观察 | `manual` |
 | 可行性存疑 | `skipped` |
 
-推荐演进方向：`case_bodies -> case_flows -> assertion_rules / 默认模板`。大量用例需要 `case_bodies` 时，检查 fixture 动作库是否太弱。
+推荐演进方向：`case_bodies -> Harness capability + case_flows -> assertion_rules / 默认模板`。大量用例需要 `case_bodies` 时，先检查 Harness 能力边界是否合理。
 
 ### 人工 review 清单
 
@@ -284,7 +289,7 @@ AI 生成初稿后，以下判断必须由人 review：
 - 知识库是否正确理解业务
 - 断言是否可观测
 - 用例是否来自明确契约
-- fixture 是否把 per-case 逻辑藏太深
+- Harness 是否按 capability 组织，而不是按 case_id 隐藏逐条用例逻辑
 - case_flow 是否保持线性清晰
 - case_body 是否有保留理由
 - env/resource 是否安全、可脱敏
@@ -294,7 +299,7 @@ AI 生成初稿后，以下判断必须由人 review：
 
 - 直接修改 generated pytest
 - 绕过知识库直接从零散文档写 pytest
-- fixture 里按 case_id 写死每条用例逻辑和断言
+- fixture 或 Harness 里按 case_id 写死每条用例逻辑和断言
 - profile 变成大量 Python 表达式拼接
 - 缺 env 或缺测试数据时误判为待测系统 bug
 - 为了通过测试而放宽断言、skip 失败或伪造响应
@@ -330,7 +335,7 @@ aitest upgrade --workspace /path/to/aitest_workspace --apply
 
 ### 环境变量缺失
 
-fixture 会报缺少的变量名。通过 shell、CI secret 或 `AITEST_ENV_FILE` 提供，不要放宽断言或 skip。
+Module Harness 装配阶段会报缺少的变量名。通过 shell、CI secret 或 `AITEST_ENV_FILE` 提供，不要放宽断言或 skip。
 
 ### pytest collect 找不到 test_workspace
 

@@ -14,6 +14,7 @@ def render_header(
     has_structured_assertions: bool = False,
     has_default_http: bool = False,
     has_case_context: bool = False,
+    has_module_harness: bool = False,
 ) -> list[str]:
     regenerate_hint = _regenerate_hint(ctx)
     lines = [
@@ -34,6 +35,13 @@ def render_header(
         lines.append("from aitest_kit.runtime_variables import resolve_profile_variables")
     if has_structured_assertions:
         lines.append("from aitest_kit.helpers import structured_assertions as aitest_assertions")
+    if has_module_harness and ctx.module_binding:
+        if ctx.module_binding.fixture_module:
+            lines.append(
+                f'pytest_plugins = ["{ctx.module_binding.fixture_module}"]'
+            )
+        elif ctx.module_binding.fixture_import:
+            lines.append(ctx.module_binding.fixture_import)
     lines.extend(ctx.extra_imports)
     return lines
 

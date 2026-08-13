@@ -8,10 +8,10 @@ suite: scene_routing_smoke
 case_flows:
   TC-ROUTE-001:
     steps:
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_ROUTE_001
-      - call: client.recommend_http
+      - call: harness.recommend_http
         kwargs:
           request_overrides:
             user_id: u_route_game_mobile
@@ -26,10 +26,10 @@ case_flows:
 
   TC-ROUTE-002:
     steps:
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_ROUTE_001
-      - call: client.recommend_grpc
+      - call: harness.recommend_grpc
         kwargs:
           request_overrides:
             user_id: u_route_ad_pc
@@ -44,10 +44,10 @@ case_flows:
 
   TC-ROUTE-003:
     steps:
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_ROUTE_001
-      - call: client.recommend_http
+      - call: harness.recommend_http
         kwargs:
           request_overrides:
             user_id: u_route_external
@@ -62,10 +62,10 @@ case_flows:
 
   TC-ROUTE-004:
     steps:
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_ROUTE_001
-      - call: client.recommend_http
+      - call: harness.recommend_http
         kwargs:
           request_overrides:
             user_id: u_route_policy_fb
@@ -82,10 +82,10 @@ case_flows:
 
   TC-ROUTE-005:
     steps:
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_ROUTE_001
-      - call: client.recommend_http
+      - call: harness.recommend_http
         kwargs:
           request_overrides:
             user_id: u_fallback
@@ -102,10 +102,10 @@ case_flows:
 
   TC-ROUTE-006:
     steps:
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_ROUTE_001
-      - call: client.recommend_grpc
+      - call: harness.recommend_grpc
         kwargs:
           request_overrides:
             user_id: u_route_unknown
@@ -121,14 +121,14 @@ case_flows:
 
   TC-ROUTE-007:
     steps:
-      - call: client.set_fallback_scores
+      - call: harness.set_fallback_scores
         args:
           - "coupon:fallback:score:3001": "0.8"
             "coupon:fallback:score:default": "0.6"
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_ROUTE_001
-      - call: client.recommend_http
+      - call: harness.recommend_http
         kwargs:
           request_overrides:
             user_id: u_route_007
@@ -144,13 +144,13 @@ case_flows:
 
   TC-ROUTE-008:
     steps:
-      - call: client.set_fallback_scores
+      - call: harness.set_fallback_scores
         args:
           - "coupon:fallback:score:default": "0.6"
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_ROUTE_001
-      - call: client.recommend_http
+      - call: harness.recommend_http
         kwargs:
           request_overrides:
             user_id: u_route_008
@@ -166,11 +166,11 @@ case_flows:
 
   TC-ROUTE-009:
     steps:
-      - call: client.clear_fallback_scores
-      - call: client.prepare_stock
+      - call: harness.clear_fallback_scores
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_ROUTE_001
-      - call: client.recommend_http
+      - call: harness.recommend_http
         kwargs:
           request_overrides:
             user_id: u_route_009
@@ -186,13 +186,13 @@ case_flows:
 
   TC-ROUTE-011:
     steps:
-      - call: client.set_fallback_scores
+      - call: harness.set_fallback_scores
         args:
           - "coupon:fallback:score:default": not-a-number
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_ROUTE_BOUNDARY_001
-      - call: client.recommend_http
+      - call: harness.recommend_http
         kwargs:
           request_overrides:
             user_id: u_route_011
@@ -214,10 +214,10 @@ case_flows:
 
   TC-ROUTE-013:
     steps:
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_ROUTE_BOUNDARY_001
-      - call: client.recommend_http
+      - call: harness.recommend_http
         kwargs:
           request_overrides:
             user_id: u_route_013
@@ -238,10 +238,10 @@ case_flows:
 
   TC-ROUTE-014:
     steps:
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_ROUTE_BOUNDARY_001
-      - call: client.recommend_grpc
+      - call: harness.recommend_grpc
         kwargs:
           request_overrides:
             user_id: u_route_014
@@ -263,10 +263,10 @@ case_flows:
 
   TC-ROUTE-018:
     steps:
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_ROUTE_BOUNDARY_001
-      - call: client.recommend_grpc
+      - call: harness.recommend_grpc
         kwargs:
           request_overrides:
             user_id: u_route_018

@@ -1,6 +1,6 @@
 ---
 name: emitter-build
-description: 从已验证 pytest、Case IR 和 profile 中识别可沉淀模式，评估是否晋升为 assertion_rules、case_flows、fixture helper 或 emitter 规则
+description: 从已验证 pytest、Case IR 和 profile 中识别可沉淀模式，评估是否晋升为 assertion_rules、case_flows、Module Harness capability 或 emitter 规则
 when_to_use: 当 generated pytest 已通过，需要复盘重复模式、减少 case_body/flow 重复，或评估是否值得沉淀为确定性生成规则时
 argument-hint: --suite-file <suite.yaml>|--target <target> [--module <module>] [--analyze-promotion|--health-report|--suggest-promotion-patch]
 arguments: [suite_file, target, module, analyze_promotion, health_report, suggest_promotion_patch, write_report]
@@ -11,11 +11,11 @@ effort: high
 
 # Emitter 模板构建
 
-`emitter-build` 的职责是把**已经跑通的 AI/人工补写经验**沉淀为确定性模式，减少后续重复写 `case_bodies`、重复 raw assert 或重复 fixture 逻辑。
+`emitter-build` 的职责是把**已经跑通的 AI/人工补写经验**沉淀为确定性模式，减少后续重复写 `case_bodies`、重复 raw assert 或重复 Harness 动作。
 
 它不是探索入口，也不是失败修复入口。不要从未验证的 pytest、失败用例、缺环境变量的运行结果，或猜测出的业务语义中提取规则。
 
-默认先分析并输出建议；只有用户明确确认后，才修改 profile、fixture/helper、`aitest.yaml` 或 emitter 代码。`--suggest-promotion-patch` 生成的是 review-only 草案，不自动应用。
+默认先分析并输出建议；只有用户明确确认后，才修改 profile、module package/Harness、`aitest.yaml` 或 emitter 代码。`--suggest-promotion-patch` 生成的是 review-only 草案，不自动应用。
 
 ## 参考文档
 
@@ -41,7 +41,7 @@ effort: high
 如果用户给出 `--suite-file <suite.yaml>`：
 
 1. 读取 `suite.yaml` 的 `target/module/suite/case_files`，并合成 effective knowledge refs：`target.yaml.l0` + `module.yaml.l1` + `suite.yaml.l2`
-2. 按约定路径读取 module profile 和 suite profile
+2. 读取 canonical module package 的 `module.yaml`、`profile.md`、`fixture.py`、`harness.py`，以及 suite profile
 3. 读取 `case_files` 中声明的 Markdown case
 4. 读取对应 generated 文件：`test_workspace/generated/{target}/test_{module}_{suite}_{case_file_stem}.py`
 5. 运行或读取 `--dump-ir` / `--explain` 输出，确认每条 case 的 `strategy`、`fixtures`、`assertion resolution`
@@ -61,8 +61,8 @@ effort: high
 | strategy | 处理方向 |
 |---|---|
 | `default_http` | 提取 assertion_rules 或默认请求规则 |
-| `structured_case_flow` | 对齐 flow，寻找可抽 helper 或更通用 flow 模式 |
-| `custom_case_body` | 分析是否保留 body、抽 helper 或晋升 flow |
+| `structured_case_flow` | 对齐 flow，寻找可抽 Harness capability 或更通用 flow 模式 |
+| `custom_case_body` | 分析是否保留 body、抽 Harness capability 或晋升 flow |
 | `manual` | pure manual 不写 flow；半自动可保留 flow/body |
 | `skipped` | 不生成执行逻辑，只记录恢复条件 |
 | `UNPARSED` | 待补规则，不直接晋升 |
@@ -75,11 +75,11 @@ effort: high
 
 依次执行三类提取，规则细节见 `refs/patterns.md`：
 
-1. **断言模板提取**：逐条断言判断归属层级（通用 → 模块 → suite → fixture/helper）。分类规则见 `refs/patterns.md#断言模式分类`。
+1. **断言模板提取**：逐条断言判断归属层级（通用 → module profile → suite profile → Harness capability）。分类规则见 `refs/patterns.md#断言模式分类`。
 
 2. **case_bodies 提取**：对 `custom_case_body` 策略的 case，确认 body 已验证通过，与 suite profile 对齐，分析 3+ 条结构相似是否可晋升。提取步骤和晋升条件见 `refs/patterns.md#case_bodies-提取规则` 和 `refs/patterns.md#晋升条件`。
 
-3. **case_flow 与 fixture/helper 下沉**：多个 flow 重复认证、资源管理、标准断言等逻辑时，优先下沉到 fixture/helper。循环/分支逻辑本身就是测试主体时，保留 `case_body`。
+3. **case_flow 与 Harness 下沉**：多个 flow 重复认证、资源管理、标准断言等逻辑时，优先下沉到 module package 的 Harness capability。循环/分支逻辑本身就是测试主体时，保留 `case_body`。
 
 4. **文件级结构检查**：不要假设所有 generated 文件都有 `BASE_REQUEST`、`_req()`。检查纯 flow/body 文件是否仍生成无用默认 boilerplate，以及 import、class 名、`__tc_meta__` 是否可追踪。文件级模板问题只有跨模块稳定出现时才考虑改 emitter。
 
@@ -90,8 +90,8 @@ effort: high
 1. `aitest.yaml` — 跨模块通用断言规则
 2. module profile — 模块级 assertion_rules、defaults
 3. suite profile — requests、case_flows、case_bodies、variables.cases
-4. fixture/helper — 重复测试动作、复杂断言 helper
-5. emitter/renderer — 只有 profile/fixture/helper 无法表达且跨模块稳定时
+4. module package/Harness — 重复测试动作、资源管理和复杂断言 capability
+5. emitter/renderer — 只有 profile/Harness 无法表达且跨模块稳定时
 
 完整分类规则和晋升分类表见 `refs/patterns.md#晋升分类` 和 `refs/patterns.md#分类产出规则`。
 
@@ -106,7 +106,7 @@ effort: high
 子 Agent 执行验证序列，产出 pass/fail 摘要表。验证门禁顺序和 CLI 命令见 `refs/patterns.md#验证命令`。
 
 - profile 修改 → `--validate-profile` + `--check` + collect
-- fixture/helper 修改 → `compileall` + collect
+- Harness/module package 修改 → `doctor` + `compileall` + collect
 - 晋升重构 → 允许 generated 结构变化，但必须重新生成后通过 `--check` 和 collect
 - 用 `--health-report --write-report` 确认 case_body/UNPARSED 数量下降或不恶化
 
@@ -144,14 +144,14 @@ effort: high
 晋升候选：
 - assertion_rule：{列表或无}
 - case_flow：{列表或无}
-- helper：{列表或无}
+- Harness capability：{列表或无}
 - keep_case_body：{列表和原因或无}
 
 建议修改：
 - aitest.yaml：{列表或无}
 - module profile：{列表或无}
 - suite profile：{列表或无}
-- fixture/helper：{列表或无}
+- module package/Harness：{列表或无}
 - emitter/renderer：{列表或无}
 
 实际修改：
@@ -170,7 +170,7 @@ effort: high
 
 - 用例格式问题 → `TEST_SPEC` 或 `aitest_config/refs/case-format.md`
 - 配置字段归属问题 → `aitest_config/refs/config-files.md`
-- suite 接线 / profile 写法 / fixture 能力问题 → `test-scaffold` 或 `test-codegen` skill
+- suite 接线 / profile 写法 / Harness 能力问题 → `test-scaffold` 或 `test-codegen` skill
 - 模块断言规则 → module profile
 - TC-ID 绑定流程 → suite profile
 - 生成器缺陷 → `aitest_kit/codegen/*`

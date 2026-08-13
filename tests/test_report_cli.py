@@ -13,6 +13,56 @@ from aitest_kit.report.codegen_check import run_codegen_check
 from aitest_kit.report.cli import _create_run_dir, _report_command_impl, _run_command_impl
 
 
+def _write_gateway_module_package(
+    target_dir: Path,
+    *,
+    registered_suite: tuple[str, Path] | None = None,
+) -> None:
+    module_dir = target_dir / "modules" / "gateway_api"
+    module_dir.mkdir(parents=True)
+    registered_suites = ""
+    if registered_suite is not None:
+        suite, manifest = registered_suite
+        registered_suites = f"""registered_suites:
+  - suite: {suite}
+    manifest: {manifest}
+    status: active
+"""
+    (module_dir / "module.yaml").write_text(
+        f"""target: sub2api
+module: gateway_api
+module_type: multi_endpoint
+{registered_suites}""",
+        encoding="utf-8",
+    )
+    (module_dir / "profile.md").write_text("```yaml\n{}\n```\n", encoding="utf-8")
+    (module_dir / "harness.py").write_text(
+        textwrap.dedent(
+            '''
+            class GatewayApiHarness:
+                def health(self):
+                    return {"status": "ok"}
+            '''
+        ),
+        encoding="utf-8",
+    )
+    (module_dir / "fixture.py").write_text(
+        textwrap.dedent(
+            '''
+            import pytest
+
+            from .harness import GatewayApiHarness
+
+
+            @pytest.fixture
+            def setup_gateway_api() -> GatewayApiHarness:
+                return GatewayApiHarness()
+            '''
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_create_run_dir_uses_unique_filesystem_directory(tmp_path):
     first_id, first_dir = _create_run_dir(tmp_path)
     second_id, second_dir = _create_run_dir(tmp_path)
@@ -670,21 +720,16 @@ def test_run_target_module_selector_and_report(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("AITEST_ENV_FILE", raising=False)
     target_dir = tmp_path / "test_workspace" / "targets" / "sub2api"
-    module_dir = target_dir / "modules"
-    profile_dir = target_dir / "profiles"
-    module_dir.mkdir(parents=True)
-    profile_dir.mkdir(parents=True)
+    target_dir.mkdir(parents=True)
     (target_dir / "target.yaml").write_text(
         """target: sub2api
 defaults:
   module_dir: test_workspace/targets/sub2api/modules
-  profile_dir: test_workspace/targets/sub2api/profiles
   generated_dir: test_workspace/generated/sub2api
   reports_dir: test_workspace/reports/sub2api
 """,
         encoding="utf-8",
     )
-    (profile_dir / "profile_gateway_api.md").write_text("```yaml\nmodule_type: multi_endpoint\n```\n", encoding="utf-8")
     suite_dir = tmp_path / "test_workspace" / "suites" / "sub2api" / "quota_billing_v2"
     suite_dir.mkdir(parents=True)
     suite_file = suite_dir / "suite.yaml"
@@ -706,16 +751,9 @@ case_files:
 """,
         encoding="utf-8",
     )
-    (module_dir / "gateway_api.yaml").write_text(
-        f"""target: sub2api
-module: gateway_api
-module_type: multi_endpoint
-registered_suites:
-  - suite: quota_billing_v2
-    manifest: {suite_file}
-    status: active
-""",
-        encoding="utf-8",
+    _write_gateway_module_package(
+        target_dir,
+        registered_suite=("quota_billing_v2", suite_file),
     )
     generated = tmp_path / "test_workspace" / "generated" / "sub2api"
     generated.mkdir(parents=True)
@@ -797,21 +835,16 @@ def test_run_target_module_selector_records_pytest_passthrough_args(tmp_path, mo
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("AITEST_ENV_FILE", raising=False)
     target_dir = tmp_path / "test_workspace" / "targets" / "sub2api"
-    module_dir = target_dir / "modules"
-    profile_dir = target_dir / "profiles"
-    module_dir.mkdir(parents=True)
-    profile_dir.mkdir(parents=True)
+    target_dir.mkdir(parents=True)
     (target_dir / "target.yaml").write_text(
         """target: sub2api
 defaults:
   module_dir: test_workspace/targets/sub2api/modules
-  profile_dir: test_workspace/targets/sub2api/profiles
   generated_dir: test_workspace/generated/sub2api
   reports_dir: test_workspace/reports/sub2api
 """,
         encoding="utf-8",
     )
-    (profile_dir / "profile_gateway_api.md").write_text("```yaml\nmodule_type: multi_endpoint\n```\n", encoding="utf-8")
     suite_dir = tmp_path / "test_workspace" / "suites" / "sub2api" / "passthrough"
     suite_dir.mkdir(parents=True)
     suite_file = suite_dir / "suite.yaml"
@@ -833,16 +866,9 @@ case_files:
 """,
         encoding="utf-8",
     )
-    (module_dir / "gateway_api.yaml").write_text(
-        f"""target: sub2api
-module: gateway_api
-module_type: multi_endpoint
-registered_suites:
-  - suite: passthrough
-    manifest: {suite_file}
-    status: active
-""",
-        encoding="utf-8",
+    _write_gateway_module_package(
+        target_dir,
+        registered_suite=("passthrough", suite_file),
     )
     generated = tmp_path / "test_workspace" / "generated" / "sub2api"
     generated.mkdir(parents=True)
@@ -883,29 +909,17 @@ def test_run_suite_file_uses_target_generated_and_reports_dirs(tmp_path, monkeyp
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("AITEST_ENV_FILE", raising=False)
     target_dir = tmp_path / "test_workspace" / "targets" / "sub2api"
-    profile_dir = target_dir / "profiles"
-    profile_dir.mkdir(parents=True)
+    target_dir.mkdir(parents=True)
     (target_dir / "target.yaml").write_text(
         """target: sub2api
 defaults:
-  profile_dir: test_workspace/targets/sub2api/profiles
+  module_dir: test_workspace/targets/sub2api/modules
   generated_dir: test_workspace/generated/sub2api
   reports_dir: test_workspace/reports/sub2api
 """,
         encoding="utf-8",
     )
-    (profile_dir / "profile_gateway_api.md").write_text(
-        """```yaml
-module_type: multi_endpoint
-case_flows:
-  TC-GW-041:
-    fixture: setup_gateway_api
-    steps:
-      - assert: 'assert True'
-```
-""",
-        encoding="utf-8",
-    )
+    _write_gateway_module_package(target_dir)
     suite_dir = tmp_path / "external_suites" / "quota_billing_v2"
     suite_dir.mkdir(parents=True)
     suite_file = suite_dir / "suite.yaml"
@@ -924,6 +938,18 @@ case_files:
 ### TC-GW-041：suite case
 - **优先级**：P0
 - **断言**：`response.status == "ok"`
+""",
+        encoding="utf-8",
+    )
+    (suite_dir / "profile_quota_billing_v2_suite.md").write_text(
+        """```yaml
+case_flows:
+  TC-GW-041:
+    steps:
+      - call: harness.health
+        save_as: resp
+      - assert: 'assert resp["status"] == "ok"'
+```
 """,
         encoding="utf-8",
     )

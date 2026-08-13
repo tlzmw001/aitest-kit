@@ -4,7 +4,7 @@ import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
 from aitest_kit.runtime_context import reset_case_context, set_case_context
-from test_workspace.targets.coupon_system.fixtures.ab_service import setup_ab_service
+pytest_plugins = ["test_workspace.targets.coupon_system.modules.ab_service.fixture"]
 
 
 BASE_REQUEST = {
@@ -45,9 +45,9 @@ class TestAbServiceBoundary:
             # SETUP: 请求覆盖：实验 exp_abs_overlap 策略顺序为 s_first [0,80)、s_second [50,100)
             # SETUP: 前置操作：选择 hash=60 的 user_id
 
-            ab = setup_ab_service
-            ab = setup_ab_service(case_id="TC-ABS-023")
-            resp = ab.post("/api/v1/ab/evaluate", {"user_id": "u_abs_overlap_243", "request_id": "req_abs_023", "experiment_names": ["exp_abs_overlap"]})
+            harness = setup_ab_service
+            harness.upsert_experiment({"name": "exp_abs_overlap", "strategies": [{"id": "s_first", "hash_range": [0, 80], "params": {}}, {"id": "s_second", "hash_range": [50, 100], "params": {}}]})
+            resp = harness.post("/api/v1/ab/evaluate", {"user_id": "u_abs_overlap_243", "request_id": "req_abs_023", "experiment_names": ["exp_abs_overlap"]})
             assert resp.status_code == 200
             assert resp.json()['assignments']['exp_abs_overlap']['strategy_id'] == 's_first'
         finally:
@@ -69,9 +69,9 @@ class TestAbServiceBoundary:
             # SETUP: 前置操作：创建实验 exp_abs_empty，strategies=[]
             # SETUP: 接口调用：evaluate 指定该实验
 
-            ab = setup_ab_service
-            ab = setup_ab_service(case_id="TC-ABS-024")
-            resp = ab.post("/api/v1/ab/evaluate", {"user_id": "u_abs_hash_0", "request_id": "req_abs_024", "experiment_names": ["exp_abs_empty"]})
+            harness = setup_ab_service
+            harness.upsert_experiment({"name": "exp_abs_empty", "strategies": []})
+            resp = harness.post("/api/v1/ab/evaluate", {"user_id": "u_abs_hash_0", "request_id": "req_abs_024", "experiment_names": ["exp_abs_empty"]})
             assert resp.status_code == 200
             assert resp.json()['assignments'] == {}
         finally:
@@ -92,9 +92,8 @@ class TestAbServiceBoundary:
         try:
             # SETUP: 接口调用：evaluate experiment_names=["not_exists_exp"]
 
-            ab = setup_ab_service
-            ab = setup_ab_service(case_id="TC-ABS-025")
-            resp = ab.post("/api/v1/ab/evaluate", {"user_id": "u_abs_hash_0", "request_id": "req_abs_025", "experiment_names": ["not_exists_exp"]})
+            harness = setup_ab_service
+            resp = harness.post("/api/v1/ab/evaluate", {"user_id": "u_abs_hash_0", "request_id": "req_abs_025", "experiment_names": ["not_exists_exp"]})
             assert resp.status_code == 200
             assert resp.json()['assignments'] == {}
         finally:
@@ -117,9 +116,8 @@ class TestAbServiceBoundary:
         try:
             # SETUP: 环境覆盖：使用不存在的 AB_SERVICE_EXPERIMENTS_PATH=/tmp/aitest_ab_service_boundary/new/experiments.json 启动服务
 
-            ab = setup_ab_service
-            ab = setup_ab_service(case_id="TC-ABS-026")
-            result = ab.missing_experiments_file_is_created_auto()
+            harness = setup_ab_service
+            result = harness.missing_experiments_file_is_created()
             assert result['status'] == 200
             assert result['body'] == []
             assert result['exists']
@@ -142,9 +140,8 @@ class TestAbServiceBoundary:
         try:
             # SETUP: 环境覆盖：白名单文件内容为 {bad json，启动服务
 
-            ab = setup_ab_service
-            ab = setup_ab_service(case_id="TC-ABS-027")
-            result = ab.malformed_whitelist_falls_back_empty_auto()
+            harness = setup_ab_service
+            result = harness.malformed_whitelist_falls_back_empty()
             assert result['status'] == 200
             assert result['body'] == {}
             assert '白名单文件读取失败' in result['logs']
@@ -166,9 +163,8 @@ class TestAbServiceBoundary:
         try:
             # SETUP: 请求覆盖：实验配置文件中策略 s_bad 的 hash_range=["bad"]
 
-            ab = setup_ab_service
-            ab = setup_ab_service(case_id="TC-ABS-028")
-            result = ab.bad_hash_range_still_evaluates_auto()
+            harness = setup_ab_service
+            result = harness.bad_hash_range_still_evaluates()
             assert result['status'] == 200
             assert result['strategy_id'] == 's_bad'
         finally:
@@ -189,9 +185,8 @@ class TestAbServiceBoundary:
         try:
             # SETUP: 请求覆盖：实验配置文件中策略 s_bad_params 的 params="bad"
 
-            ab = setup_ab_service
-            ab = setup_ab_service(case_id="TC-ABS-029")
-            result = ab.bad_params_fall_back_empty_auto()
+            harness = setup_ab_service
+            result = harness.bad_params_fall_back_empty()
             assert result['status'] == 200
             assert result['params'] == {}
         finally:
@@ -214,9 +209,8 @@ class TestAbServiceBoundary:
         try:
             # SETUP: 接口调用：POST /api/v1/ab/evaluate body 缺少 user_id
 
-            ab = setup_ab_service
-            ab = setup_ab_service(case_id="TC-ABS-030")
-            resp = ab.post("/api/v1/ab/evaluate", {"request_id": "req_abs_030", "experiment_names": ["exp_ab_basic"]})
+            harness = setup_ab_service
+            resp = harness.post("/api/v1/ab/evaluate", {"request_id": "req_abs_030", "experiment_names": ["exp_ab_basic"]})
             assert resp.status_code == 422
             assert ['body', 'user_id'] in [item['loc'] for item in resp.json()['detail']]
         finally:
@@ -237,9 +231,8 @@ class TestAbServiceBoundary:
         try:
             # SETUP: 接口调用：POST /api/v1/ab/experiments body {"name":"exp_abs_bad_schema","strategies":"bad"}
 
-            ab = setup_ab_service
-            ab = setup_ab_service(case_id="TC-ABS-031")
-            resp = ab.post("/api/v1/ab/experiments", {"name": "exp_abs_bad_schema", "strategies": "bad"})
+            harness = setup_ab_service
+            resp = harness.post("/api/v1/ab/experiments", {"name": "exp_abs_bad_schema", "strategies": "bad"})
             assert resp.status_code == 422
         finally:
             reset_case_context(__aitest_ctx_token)
@@ -259,9 +252,8 @@ class TestAbServiceBoundary:
         try:
             # SETUP: 接口调用：PUT /api/v1/ab/whitelist/u_abs_bad_schema body {"strategy_map":"bad"}
 
-            ab = setup_ab_service
-            ab = setup_ab_service(case_id="TC-ABS-032")
-            resp = ab.put("/api/v1/ab/whitelist/u_abs_bad_schema", {"strategy_map": "bad"})
+            harness = setup_ab_service
+            resp = harness.put("/api/v1/ab/whitelist/u_abs_bad_schema", {"strategy_map": "bad"})
             assert resp.status_code == 422
         finally:
             reset_case_context(__aitest_ctx_token)
@@ -283,9 +275,8 @@ class TestAbServiceBoundary:
         try:
             # SETUP: 请求覆盖：在仅包含 ab_experiment_sdk 包的隔离 Python 进程中执行 import ab_experiment_sdk.service
 
-            ab = setup_ab_service
-            ab = setup_ab_service(case_id="TC-ABS-033")
-            result = ab.import_works_from_other_cwd_auto()
+            harness = setup_ab_service
+            result = harness.import_works_from_other_cwd()
             assert result['returncode'] == 0, result['stderr']
             assert 'ok ab_experiment_sdk.service' in result['stdout']
         finally:
@@ -306,9 +297,8 @@ class TestAbServiceBoundary:
         try:
             # SETUP: 前置操作：在临时目录中执行 import ab_experiment_sdk.service，随后检查当前工作目录
 
-            ab = setup_ab_service
-            ab = setup_ab_service(case_id="TC-ABS-034")
-            result = ab.import_has_no_default_file_side_effect_auto()
+            harness = setup_ab_service
+            result = harness.import_has_no_default_file_side_effect()
             assert result['returncode'] == 0, result['stderr']
             assert 'exists False' in result['stdout']
         finally:
@@ -330,9 +320,9 @@ class TestAbServiceBoundary:
             # SETUP: 前置操作：AB 服务启动，白名单 u1 -> {"exp_game":"game_on"}
             # SETUP: 请求覆盖：调用 RemoteABExperimentSDK.evaluate(user_id="u1", experiment_names=["exp_game"])
 
-            ab = setup_ab_service
-            ab = setup_ab_service(case_id="TC-ABS-035")
-            result = ab.remote_sdk_evaluate_whitelist_auto()
+            harness = setup_ab_service
+            harness.prepare_standard_experiments(names=["exp_game", "exp_cal"])
+            result = harness.remote_sdk_evaluate_whitelist()
             assert result['request_id'] == 'req_abs_035'
             assert result['strategy_id'] == 'game_on'
             assert result['hit_reason'] == 'whitelist'
@@ -354,9 +344,9 @@ class TestAbServiceBoundary:
         try:
             # SETUP: 接口调用：调用 sdk.set_user_whitelist("u2", {"exp_cal":"cal_on"})，随后 evaluate user_id="u2"、experiment_names=["exp_cal"]
 
-            ab = setup_ab_service
-            ab = setup_ab_service(case_id="TC-ABS-036")
-            result = ab.remote_sdk_set_user_whitelist_auto()
+            harness = setup_ab_service
+            harness.prepare_standard_experiments(names=["exp_game", "exp_cal"])
+            result = harness.remote_sdk_set_user_whitelist()
             assert result['strategy_id'] == 'cal_on'
             assert result['hit_reason'] == 'whitelist'
         finally:
@@ -378,9 +368,9 @@ class TestAbServiceBoundary:
             # SETUP: 前置操作：u2 白名单已存在
             # SETUP: 请求覆盖：调用 sdk.clear_whitelist("u2")
 
-            ab = setup_ab_service
-            ab = setup_ab_service(case_id="TC-ABS-037")
-            result = ab.remote_sdk_clear_user_whitelist_auto()
+            harness = setup_ab_service
+            harness.prepare_standard_experiments(names=["exp_game", "exp_cal"])
+            result = harness.remote_sdk_clear_user_whitelist()
             assert 'u2' not in result['whitelist']
         finally:
             reset_case_context(__aitest_ctx_token)
@@ -401,9 +391,9 @@ class TestAbServiceBoundary:
             # SETUP: 前置操作：已有白名单数据
             # SETUP: 请求覆盖：调用 sdk.set_whitelist({"u3":{"exp_game":"game_on"}})
 
-            ab = setup_ab_service
-            ab = setup_ab_service(case_id="TC-ABS-038")
-            result = ab.remote_sdk_replace_whitelist_auto()
+            harness = setup_ab_service
+            harness.prepare_standard_experiments(names=["exp_game", "exp_cal"])
+            result = harness.remote_sdk_replace_whitelist()
             assert result['whitelist'] == {'u3': {'exp_game': 'game_on'}}
         finally:
             reset_case_context(__aitest_ctx_token)
@@ -424,9 +414,9 @@ class TestAbServiceBoundary:
             # SETUP: 前置操作：已有白名单数据
             # SETUP: 请求覆盖：调用 sdk.clear_whitelist()
 
-            ab = setup_ab_service
-            ab = setup_ab_service(case_id="TC-ABS-039")
-            result = ab.remote_sdk_clear_all_whitelist_auto()
+            harness = setup_ab_service
+            harness.prepare_standard_experiments(names=["exp_game", "exp_cal"])
+            result = harness.remote_sdk_clear_all_whitelist()
             assert result['whitelist'] == {}
         finally:
             reset_case_context(__aitest_ctx_token)
@@ -448,15 +438,13 @@ class TestAbServiceBoundary:
             # SETUP: 请求覆盖：mock AB 服务端对 /api/v1/ab/evaluate 固定返回 HTTP 500
             # SETUP: 请求覆盖_2：调用 sdk.evaluate(user_id="u_err")
 
-            ab = setup_ab_service
-            ab = setup_ab_service(case_id="TC-ABS-040")
-            result = ab.remote_sdk_raises_on_http_error()
+            harness = setup_ab_service
+            result = harness.remote_sdk_raises_on_http_error()
             assert result['raised'] is True
             assert result['status_code'] == 500
         finally:
             reset_case_context(__aitest_ctx_token)
 
 
-# TODO: setup_ab_service fixture 需要手写实现（→ tests/fixtures/ab_service.py）
 
 __codegen_skipped__ = []

@@ -4,7 +4,7 @@ import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
 from aitest_kit.runtime_context import reset_case_context, set_case_context
-from test_workspace.targets.coupon_system.fixtures.feature_scoring import setup_feature_scoring
+pytest_plugins = ["test_workspace.targets.coupon_system.modules.feature_scoring.fixture"]
 
 
 BASE_REQUEST = {
@@ -169,10 +169,10 @@ class TestFeatureScoringBusiness:
             # SETUP: 协议：HTTP
             # SETUP: 请求覆盖：HTTP 请求 user_id="u_score_external_http"、external=1、reqId="req-score-003"
 
-            client = setup_feature_scoring
-            client.prepare_user(user_id="u_score_external_http", features={"gender": "male", "age": 28, "total_spend": 30000, "purchase_frequency": 4, "register_days": 120, "is_new_user": True, "is_member": True})
-            client.prepare_stock(coupon_id="COUPON_FEAT_001", stock=100)
-            resp = client.recommend_http(request_overrides={"user_id": "u_score_external_http", "reqId": "req-score-003", "external": 1})
+            harness = setup_feature_scoring
+            harness.prepare_user(user_id="u_score_external_http", features={"gender": "male", "age": 28, "total_spend": 30000, "purchase_frequency": 4, "register_days": 120, "is_new_user": True, "is_member": True})
+            harness.prepare_stock(coupon_id="COUPON_FEAT_001", stock=100)
+            resp = harness.recommend_http(request_overrides={"user_id": "u_score_external_http", "reqId": "req-score-003", "external": 1})
             assert resp["code"] == 0
             assert resp["results"][0]["score"] >= 0.2
             assert resp["experiment_info"] == {}
@@ -195,10 +195,10 @@ class TestFeatureScoringBusiness:
             # SETUP: 协议：gRPC
             # SETUP: 请求覆盖：gRPC 请求 user_id="u_score_external_grpc"、external=1、req_id="req-score-004"
 
-            client = setup_feature_scoring
-            client.prepare_user(user_id="u_score_external_grpc", features={"gender": "male", "age": 28, "total_spend": 30000, "purchase_frequency": 4, "register_days": 120, "is_new_user": True, "is_member": True})
-            client.prepare_stock(coupon_id="COUPON_FEAT_001", stock=100)
-            resp = client.recommend_grpc(request_overrides={"user_id": "u_score_external_grpc", "req_id": "req-score-004", "external": 1})
+            harness = setup_feature_scoring
+            harness.prepare_user(user_id="u_score_external_grpc", features={"gender": "male", "age": 28, "total_spend": 30000, "purchase_frequency": 4, "register_days": 120, "is_new_user": True, "is_member": True})
+            harness.prepare_stock(coupon_id="COUPON_FEAT_001", stock=100)
+            resp = harness.recommend_grpc(request_overrides={"user_id": "u_score_external_grpc", "req_id": "req-score-004", "external": 1})
             assert resp["code"] == 0
             assert resp["results"][0]["score"] >= 0.2
             assert resp["experiment_info"] == {}
@@ -229,6 +229,5 @@ class TestFeatureScoringBusiness:
             reset_case_context(__aitest_ctx_token)
 
 
-# TODO: setup_feature_scoring fixture 需要手写实现（→ tests/fixtures/feature_scoring.py）
 
 __codegen_skipped__ = []

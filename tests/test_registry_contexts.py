@@ -25,9 +25,8 @@ def test_registry_loads_target_module_suite_and_task_with_external_paths(tmp_pat
     monkeypatch.setenv("SUB2API_KNOWLEDGE", str(knowledge))
 
     target_dir = workspace / "test_workspace" / "targets" / "sub2api"
-    (target_dir / "modules").mkdir(parents=True)
-    (target_dir / "fixtures").mkdir()
-    (target_dir / "profiles").mkdir()
+    module_dir = target_dir / "modules" / "gateway_api"
+    module_dir.mkdir(parents=True)
     (target_dir / "target.yaml").write_text(
         """target: sub2api
 source_root: /srv/sub2api
@@ -36,20 +35,16 @@ docs:
 knowledge_refs:
   l0: ${SUB2API_KNOWLEDGE}/L0_system_architecture.md
 defaults:
-  fixture_dir: test_workspace/targets/sub2api/fixtures
-  profile_dir: test_workspace/targets/sub2api/profiles
+  module_dir: test_workspace/targets/sub2api/modules
 """,
         encoding="utf-8",
     )
-    (target_dir / "modules" / "gateway_api.yaml").write_text(
+    (module_dir / "module.yaml").write_text(
         """target: sub2api
 module: gateway_api
 module_type: multi_endpoint
 knowledge_refs:
   l1: ${SUB2API_KNOWLEDGE}/L1/gateway_api.md
-fixture:
-  file: gateway_api.py
-  default_fixture: setup_gateway_api
 registered_suites:
   - suite: quota_billing_v2
     manifest: external_suites/sub2api/quota_billing_v2/suite.yaml
@@ -57,6 +52,7 @@ registered_suites:
 """,
         encoding="utf-8",
     )
+    _write_canonical_module_assets(module_dir, "gateway_api")
 
     suite_dir = workspace / "external_suites" / "sub2api" / "quota_billing_v2"
     suite_dir.mkdir(parents=True)
@@ -112,16 +108,27 @@ units:
     assert target.target == "sub2api"
     assert target.knowledge_refs["l0"] == [knowledge / "L0_system_architecture.md"]
     assert target.docs == [knowledge / "L0_system_architecture.md"]
-    assert target.defaults.profile_dir == target_dir / "profiles"
+    assert target.defaults.module_dir == target_dir / "modules"
 
     module = load_module_context(target, "gateway_api")
     assert module.diagnostics == []
     assert module.module == "gateway_api"
     assert module.module_type == "multi_endpoint"
     assert module.knowledge_refs["l1"] == [knowledge_l1 / "gateway_api.md"]
-    assert module.fixture_path == target_dir / "fixtures" / "gateway_api.py"
-    assert module.default_fixture == "setup_gateway_api"
-    assert module.profile_path == target_dir / "profiles" / "profile_gateway_api.md"
+    assert module.package_dir == module_dir
+    assert module.fixture_path == module_dir / "fixture.py"
+    assert module.harness_path == module_dir / "harness.py"
+    assert module.profile_path == module_dir / "profile.md"
+    assert module.binding.target == "sub2api"
+    assert module.binding.module == "gateway_api"
+    assert module.binding.fixture_name == "setup_gateway_api"
+    assert module.binding.object_name == "harness"
+    assert module.binding.fixture_module == (
+        "test_workspace.targets.sub2api.modules.gateway_api.fixture"
+    )
+    assert module.binding.fixture_import == (
+        "from test_workspace.targets.sub2api.modules.gateway_api.fixture import setup_gateway_api"
+    )
     assert module.registered_suites[0].manifest == suite_dir / "suite.yaml"
 
     suite = load_suite_context(suite_dir / "suite.yaml", workspace_root=workspace)
@@ -231,7 +238,6 @@ def test_registry_loads_target_from_central_targets_yaml(tmp_path):
     target: coupon_system
     defaults:
       module_dir: test_workspace/targets/coupon_system/modules
-      profile_dir: test_workspace/targets/coupon_system/profiles
     knowledge_refs:
       l0: test_workspace/knowledge/L0_system_architecture.md
 """,
@@ -259,7 +265,6 @@ def test_registry_loads_target_from_unified_aitest_yaml(tmp_path):
     target: coupon_system
     defaults:
       module_dir: test_workspace/targets/coupon_system/modules
-      profile_dir: test_workspace/targets/coupon_system/profiles
     knowledge_refs:
       l0: test_workspace/knowledge/L0_system_architecture.md
 """,
@@ -292,9 +297,10 @@ def test_registry_expands_knowledge_ref_directories_one_level(tmp_path):
     nested_doc.write_text("# Nested\n", encoding="utf-8")
 
     target_dir = workspace / "test_workspace" / "targets" / "sub2api"
-    (target_dir / "modules").mkdir(parents=True)
+    module_dir = target_dir / "modules" / "gateway_api"
+    module_dir.mkdir(parents=True)
     (target_dir / "target.yaml").write_text("target: sub2api\n", encoding="utf-8")
-    (target_dir / "modules" / "gateway_api.yaml").write_text(
+    (module_dir / "module.yaml").write_text(
         """target: sub2api
 module: gateway_api
 knowledge_refs:
@@ -302,6 +308,7 @@ knowledge_refs:
 """,
         encoding="utf-8",
     )
+    _write_canonical_module_assets(module_dir, "gateway_api")
 
     target = load_target_context("sub2api", workspace_root=workspace)
     module = load_module_context(target, "gateway_api")
@@ -351,10 +358,16 @@ case_files:
     assert context.case_files == [suite_dir / "business.md"]
 
 
-def test_registry_rejects_module_profile_field(tmp_path):
+def test_registry_rejects_removed_module_layout_fields(tmp_path):
     workspace, _ = _registry_workspace_with_suite(tmp_path, registered_suites="registered_suites: []\n")
     module_file = (
-        workspace / "test_workspace" / "targets" / "sub2api" / "modules" / "gateway_api.yaml"
+        workspace
+        / "test_workspace"
+        / "targets"
+        / "sub2api"
+        / "modules"
+        / "gateway_api"
+        / "module.yaml"
     )
     module_file.write_text(
         """target: sub2api
@@ -363,6 +376,8 @@ module_type: multi_endpoint
 fixture:
   file: gateway_api.py
   default_fixture: setup_gateway_api
+helpers:
+  - shared.py
 profile:
   file: profile_gateway_api.md
 registered_suites: []
@@ -373,10 +388,73 @@ registered_suites: []
     target = load_target_context("sub2api", workspace_root=workspace)
     module = load_module_context(target, "gateway_api")
 
-    assert any("module.yaml must not contain profile" in diagnostic for diagnostic in module.diagnostics)
-    assert module.profile_path == (
-        workspace / "test_workspace" / "targets" / "sub2api" / "profiles" / "profile_gateway_api.md"
+    assert any(
+        "module.yaml uses removed path fields: fixture, helpers, profile" in diagnostic
+        for diagnostic in module.diagnostics
     )
+    assert module.package_dir == module_file.parent
+    assert module.fixture_path == module_file.parent / "fixture.py"
+    assert module.harness_path == module_file.parent / "harness.py"
+    assert module.profile_path == module_file.parent / "profile.md"
+    assert module.binding.fixture_name == "setup_gateway_api"
+
+
+def test_registry_rejects_module_name_that_differs_from_package_directory(tmp_path):
+    workspace, _ = _registry_workspace_with_suite(tmp_path, registered_suites="registered_suites: []\n")
+    module_file = (
+        workspace
+        / "test_workspace"
+        / "targets"
+        / "sub2api"
+        / "modules"
+        / "gateway_api"
+        / "module.yaml"
+    )
+    module_file.write_text(
+        """target: sub2api
+module: gateway_v2
+module_type: multi_endpoint
+registered_suites: []
+""",
+        encoding="utf-8",
+    )
+
+    target = load_target_context("sub2api", workspace_root=workspace)
+    module = load_module_context(target, "gateway_api")
+
+    assert any(
+        "module gateway_v2 does not match package directory gateway_api" in diagnostic
+        for diagnostic in module.diagnostics
+    )
+
+
+def test_registry_rejects_registered_suite_owned_by_another_module(tmp_path):
+    workspace, suite_file = _registry_workspace_with_suite(
+        tmp_path,
+        registered_suites=f"""registered_suites:
+  - suite: quota_billing_v2
+    manifest: {suite_file_placeholder()}
+    status: active
+""",
+    )
+    suite_file.write_text(
+        """target: sub2api
+module: billing_api
+suite: quota_billing_v2
+case_files:
+  - business.md
+""",
+        encoding="utf-8",
+    )
+
+    target = load_target_context("sub2api", workspace_root=workspace)
+    module = load_module_context(target, "gateway_api")
+
+    assert any(
+        "suite target/module sub2api/billing_api does not match sub2api/gateway_api" in diagnostic
+        for diagnostic in module.diagnostics
+    )
+    assert module.registered_suites == []
 
 
 def test_registry_rejects_suite_manifest_profile_field(tmp_path):
@@ -413,31 +491,26 @@ def suite_file_placeholder() -> str:
 def _registry_workspace_with_suite(tmp_path, *, registered_suites: str):
     workspace = tmp_path / "aitest_project"
     target_dir = workspace / "test_workspace" / "targets" / "sub2api"
-    (target_dir / "modules").mkdir(parents=True)
-    (target_dir / "fixtures").mkdir()
-    (target_dir / "profiles").mkdir()
+    module_dir = target_dir / "modules" / "gateway_api"
+    module_dir.mkdir(parents=True)
     (target_dir / "target.yaml").write_text(
         """target: sub2api
 defaults:
   module_dir: test_workspace/targets/sub2api/modules
-  fixture_dir: test_workspace/targets/sub2api/fixtures
-  profile_dir: test_workspace/targets/sub2api/profiles
   suite_dir: test_workspace/suites/sub2api
   generated_dir: test_workspace/generated/sub2api
   reports_dir: test_workspace/reports/sub2api
 """,
         encoding="utf-8",
     )
-    (target_dir / "modules" / "gateway_api.yaml").write_text(
+    (module_dir / "module.yaml").write_text(
         f"""target: sub2api
 module: gateway_api
 module_type: multi_endpoint
-fixture:
-  file: gateway_api.py
-  default_fixture: setup_gateway_api
 {registered_suites}""",
         encoding="utf-8",
     )
+    _write_canonical_module_assets(module_dir, "gateway_api")
 
     suite_dir = workspace / "test_workspace" / "suites" / "sub2api" / "quota_billing_v2"
     suite_dir.mkdir(parents=True)
@@ -454,3 +527,20 @@ case_files:
         encoding="utf-8",
     )
     return workspace, suite_file
+
+
+def _write_canonical_module_assets(module_dir: Path, module: str) -> None:
+    class_name = "".join(part.title() for part in module.split("_")) + "Harness"
+    (module_dir / "profile.md").write_text("```yaml\n{}\n```\n", encoding="utf-8")
+    (module_dir / "harness.py").write_text(
+        f"class {class_name}:\n    pass\n",
+        encoding="utf-8",
+    )
+    (module_dir / "fixture.py").write_text(
+        "import pytest\n\n"
+        f"from .harness import {class_name}\n\n\n"
+        "@pytest.fixture\n"
+        f"def setup_{module}() -> {class_name}:\n"
+        f"    return {class_name}()\n",
+        encoding="utf-8",
+    )

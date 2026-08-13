@@ -14,11 +14,8 @@ aitest_config/capture.yaml
 test_workspace/targets/{target}/target.yaml
   一个目标系统的默认目录、文档引用、知识库引用
 
-test_workspace/targets/{target}/modules/{module}.yaml
-  一个模块的 fixture 注册、module_type、L1 知识引用、registered_suites
-
-test_workspace/targets/{target}/profiles/profile_{module}.md
-  module profile，放 L1 级稳定生成能力
+test_workspace/targets/{target}/modules/{module}/
+  module.yaml + profile.md + fixture.py + harness.py
 
 test_workspace/suites/{target}/{suite}/suite.yaml
   一个用例批次绑定哪个 target/module，以及包含哪些 Markdown 用例文件
@@ -46,12 +43,12 @@ test_workspace/tasks/{task}.yaml
 | 通用 `module_type` 定义 | `aitest_config/aitest.yaml` | suite profile |
 | 通用断言规则 | `aitest_config/aitest.yaml.codegen.builtin_assertion_rules` | 单个 suite profile，除非只服务该 suite |
 | target 默认目录 | `target.yaml` 或 `aitest.yaml.targets` | suite.yaml |
-| module 的 fixture 文件 | `modules/{module}.yaml.fixture.file` | suite.yaml |
-| module 的默认 fixture 名 | `modules/{module}.yaml.fixture.default_fixture` | suite.yaml |
+| module 的公开 fixture | 约定 `modules/{module}/fixture.py:setup_{module}` | YAML 配置 |
+| module 的 Harness | 约定 `modules/{module}/harness.py:{Module}Harness` | suite profile |
 | target 级 L0 知识引用 | `target.yaml.knowledge_refs.l0` | suite.yaml |
-| module 级 L1 知识引用 | `modules/{module}.yaml.knowledge_refs.l1` | suite.yaml |
+| module 级 L1 知识引用 | `modules/{module}/module.yaml.knowledge_refs.l1` | suite.yaml |
 | suite 级 L2 知识引用 | `suite.yaml.knowledge_refs.l2` | module.yaml |
-| module profile 路径 | 约定路径 `test_workspace/targets/{target}/profiles/profile_{module}.md` | `module.yaml`、suite.yaml |
+| module profile 路径 | 约定路径 `modules/{module}/profile.md` | `module.yaml`、suite.yaml |
 | suite 属于哪个 target/module | `suite.yaml` | profile YAML |
 | suite 包含哪些 Markdown 文件 | `suite.yaml.case_files` | module profile |
 | suite profile 路径 | 约定路径 `{suite_dir}/profile_{suite}_suite.md` | `suite.yaml`、module profile |
@@ -59,10 +56,9 @@ test_workspace/tasks/{task}.yaml
 | `case_bodies` | suite profile | module profile |
 | `requests` | suite profile | module profile |
 | `structured_assertions` | suite profile | module profile |
-| `case_fixtures` | suite profile | module profile |
 | `variables.cases` | suite profile | module profile |
 | `variables.defaults` | module profile 或 suite profile | fixture 代码里硬编码 |
-| `default_fixture/default_object/default_case_setup` | module profile 或 suite profile | suite.yaml |
+| Harness 生命周期 | `modules/{module}/fixture.py` | profile |
 | 环境变量真实值 | 本地 shell、`.env` 或 `AITEST_ENV_FILE` | profile、fixture、Markdown 用例 |
 | run capture 开关和输出文件名 | `aitest_config/capture.yaml` 或 `aitest run --capture` | fixture 代码里硬编码绝对路径 |
 | 多 suite 组合执行 | `test_workspace/tasks/{task}.yaml` | module profile |
@@ -105,7 +101,7 @@ targets: {}
 注意：
 
 - 新项目不要急着配置 `default_request.auto_fields`。只有字段命名稳定且跨用例一致时才配置。
-- 多端点模块优先使用 fixture Client + suite profile `case_flows`。
+- 多端点模块优先使用 module Harness + suite profile `case_flows`。
 - `api_path: /api/v1/replace-me` 是占位默认值，真实 suite 不应依赖它。
 
 ## `aitest_config/capture.yaml`
@@ -140,7 +136,7 @@ output:
 
 ## `target.yaml`
 
-职责：描述一个目标系统，设置该 target 下的默认 module、fixture、profile、suite、generated、reports 目录，并链接 L0 或系统级文档。
+职责：描述一个目标系统，设置 module、可选 target helper、suite、generated、reports 目录，并链接 L0 或系统级文档。
 
 ```yaml
 target: your_service
@@ -151,9 +147,7 @@ knowledge_refs:
   l0: test_workspace/knowledge/L0_system_architecture.md
 defaults:
   module_dir: test_workspace/targets/your_service/modules
-  fixture_dir: test_workspace/targets/your_service/fixtures
   helper_dir: test_workspace/targets/your_service/helpers
-  profile_dir: test_workspace/targets/your_service/profiles
   suite_dir: test_workspace/suites/your_service
   generated_dir: test_workspace/generated/your_service
   reports_dir: test_workspace/reports/your_service
@@ -165,9 +159,9 @@ defaults:
 - `defaults` 只定义目录，不定义具体用例策略。
 - `knowledge_refs.l0` 推荐写系统架构索引；外部知识库可写绝对路径或 `${ENV_NAME}`。
 
-## `modules/{module}.yaml`
+## `modules/{module}/module.yaml`
 
-职责：描述某个 module 属于哪个 target，注册 fixture、module_type、L1 知识引用和 active suites，使 `--module`、`--target`、`--all` 能发现它们。module profile 不在这里配置路径，固定读取 `test_workspace/targets/{target}/profiles/profile_{module}.md`。
+职责：描述 module 归属、module_type、L1 知识引用和 active suites，使 `--module`、`--target`、`--all` 能发现它们。fixture、Harness 和 profile 均从同目录固定推导，不在 YAML 中配置路径。
 
 ```yaml
 target: your_service
@@ -175,9 +169,6 @@ module: gateway_api
 module_type: multi_endpoint
 knowledge_refs:
   l1: test_workspace/knowledge/L1/gateway_api.md
-fixture:
-  file: gateway_api.py
-  default_fixture: setup_gateway_api
 registered_suites:
   - test_workspace/suites/your_service/gateway_smoke/suite.yaml
 ```
@@ -205,27 +196,52 @@ aitest registry register-suite \
   --suite-file test_workspace/suites/your_service/gateway_smoke/suite.yaml
 ```
 
+同一目录还必须包含：
+
+```text
+modules/gateway_api/
+├── __init__.py
+├── module.yaml
+├── profile.md
+├── fixture.py
+└── harness.py
+```
+
+`fixture.py` 只公开固定 fixture，并直接返回或 yield Harness：
+
+```python
+import pytest
+
+from .harness import GatewayApiHarness
+
+
+@pytest.fixture
+def setup_gateway_api() -> GatewayApiHarness:
+    harness = GatewayApiHarness()
+    try:
+        yield harness
+    finally:
+        harness.close()
+```
+
+额外的 module-local fixture 必须以下划线开头，只作为实现细节。fixture 不返回 factory，不按 `case_id` 选择业务分支。跨多个 module 已经实际复用的纯技术适配可以放 `targets/{target}/helpers/`；单 module 能力保留在 module package，不建立 workspace 顶层 helper。
+
+codegen 会把 `fixture.py` 作为 pytest plugin 注册，使 `setup_{module}` 能引用同文件的 private fixture；suite profile 和 generated 测试不需要知道这些内部依赖。
+
 ## module profile
 
 路径：
 
 ```text
-test_workspace/targets/{target}/profiles/profile_{module}.md
+test_workspace/targets/{target}/modules/{module}/profile.md
 ```
 
-职责：放 L1 级稳定能力，例如 `module_type`、默认 fixture/object/setup、模块级稳定断言规则和跨 suite 通用的 `variables.defaults`。
+职责：只放跨 suite 稳定的断言规则和 `variables.defaults`。`module_type` 的唯一来源是同目录 `module.yaml`；fixture/Harness 由目录契约提供。
 
 ````markdown
-# profile_gateway_api
+# gateway_api module profile
 
 ```yaml
-module_type: multi_endpoint
-extra_imports:
-  - "from test_workspace.targets.your_service.fixtures.gateway_api import setup_gateway_api"
-
-default_fixture: setup_gateway_api
-default_object: client
-
 variables:
   defaults:
     base_url:
@@ -245,7 +261,6 @@ case_flows: {}
 case_bodies: {}
 requests: {}
 structured_assertions: {}
-case_fixtures: {}
 variables:
   cases: {}
 ```
@@ -287,7 +302,7 @@ knowledge_refs:
 | 层级 | 推荐 key | 含义 |
 |---|---|---|
 | target.yaml | `l0` | 系统架构索引 |
-| modules/{module}.yaml | `l1` | 模块可测试契约 |
+| modules/{module}/module.yaml | `l1` | 模块可测试契约 |
 | suite.yaml | `l2` | 需求变更、迭代或用例批次 |
 | 任意层 | `test_spec` | 补充测试规范 |
 
@@ -354,7 +369,7 @@ case_flows:
   TC-GW-001:
     description: 查询当前用户信息
     steps:
-      - call: client.current_user
+      - call: harness.current_user
         kwargs:
           token:
             var: token
@@ -379,9 +394,13 @@ structured_assertions:
 
 `case_flow` step 规则：
 
+- 首个调用根对象固定为 `harness`；后续也可调用前序 `save_as` 或 `assign` 生成的变量。
+- suite profile 不配置 `fixture`、`object`、`extra_imports`，也不能直接引用 `tmp_path`、`caplog` 等 pytest fixture。
+- 循环、条件、重试、等待和资源生命周期封装为 Harness 方法，flow 保持线性编排。
+
 | step | 含义 |
 |---|---|
-| `call` | 调用 fixture/client/helper 方法 |
+| `call` | 调用 `harness` capability 或前序变量的方法 |
 | `args` | 位置参数，必须是 list |
 | `kwargs` | 关键字参数，必须是 mapping；无参数时省略或写 `{}` |
 | `save_as` | 保存调用结果，供后续 step 使用 |
@@ -397,7 +416,7 @@ structured_assertions:
 - `case_flow` 路线只能写当前 flow 中 `save_as` 或 `assign` 产出的变量。
 - `case_bodies`、pure manual、skipped 用例不写 `structured_assertions`。
 - JSONPath、集合遍历、字段存在性和长度断言优先写 `structured_assertions`。
-- 复杂业务计算、循环、条件和等待逻辑封装到 fixture/helper 方法，再通过 `case_flow.call` 调用。
+- 复杂业务计算、循环、条件和等待逻辑封装到 module Harness capability，再通过 `case_flow.call` 调用。
 
 变量引用：
 
@@ -515,7 +534,7 @@ case_files:
 错误：
 
 ```yaml
-# test_workspace/targets/your_service/profiles/profile_gateway_api.md
+# test_workspace/targets/your_service/modules/gateway_api/profile.md
 case_flows:
   TC-GW-001:
     steps:
@@ -538,7 +557,7 @@ case_flows:
 
 ```yaml
 steps:
-  - call: client.health
+  - call: harness.health
     kwargs: []
 ```
 
@@ -546,14 +565,14 @@ steps:
 
 ```yaml
 steps:
-  - call: client.health
+  - call: harness.health
 ```
 
 或：
 
 ```yaml
 steps:
-  - call: client.health
+  - call: harness.health
     kwargs: {}
 ```
 
@@ -567,7 +586,7 @@ profile: profile_gateway_smoke.md
 
 正确：
 
-- module profile 固定放在 `test_workspace/targets/{target}/profiles/profile_{module}.md`。
+- module profile 固定放在 `test_workspace/targets/{target}/modules/{module}/profile.md`。
 - suite profile 固定放在 `{suite_dir}/profile_{suite}_suite.md`。
 - `module.yaml` 和 `suite.yaml` 都不要写 `profile` 字段。
 

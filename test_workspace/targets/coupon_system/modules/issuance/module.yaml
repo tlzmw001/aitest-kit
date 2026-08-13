@@ -1,0 +1,10 @@
+target: coupon_system
+module: issuance
+module_type: multi_endpoint
+knowledge_refs:
+  l1:
+  - test_workspace/knowledge/L1/issuance.md
+registered_suites:
+- suite: issuance_smoke
+  manifest: test_workspace/suites/coupon_system/issuance_smoke/suite.yaml
+  status: active

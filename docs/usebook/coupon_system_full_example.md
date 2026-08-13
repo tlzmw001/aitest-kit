@@ -20,7 +20,7 @@
 - 外部 HTTP 打分服务。
 - Markdown 用例。
 - codegen profile。
-- module fixture。
+- Module Harness。
 - generated pytest。
 - `aitest run` 结构化报告。
 
@@ -34,7 +34,7 @@ ab_experiment_sdk/                     # AB 实验服务和 SDK
 docs/                                  # 开发文档和使用说明
 test_workspace/knowledge/              # 测试知识库
 test_workspace/suites/coupon_system/   # suite Markdown 用例和 suite profile
-test_workspace/targets/coupon_system/  # 模块 fixture、helper 和 module profile
+test_workspace/targets/coupon_system/  # canonical module package 和可选 target helper
 test_workspace/generated/coupon_system/# generated pytest
 test_workspace/reports/                # aitest run 输出
 test_workspace/results/                # 已确认的待测系统 bug 记录
@@ -127,8 +127,10 @@ test_workspace/reports/tasks/<task_or_selector>/latest/report.md
 
 ```text
 test_workspace/suites/coupon_system/calibration_smoke/
-test_workspace/targets/coupon_system/profiles/profile_calibration.md
-test_workspace/targets/coupon_system/fixtures/calibration.py
+test_workspace/targets/coupon_system/modules/calibration/module.yaml
+test_workspace/targets/coupon_system/modules/calibration/profile.md
+test_workspace/targets/coupon_system/modules/calibration/fixture.py
+test_workspace/targets/coupon_system/modules/calibration/harness.py
 test_workspace/generated/coupon_system/test_calibration_calibration_smoke_business.py
 ```
 
@@ -138,14 +140,15 @@ test_workspace/generated/coupon_system/test_calibration_calibration_smoke_busine
 - `response.code == 0` 如何被内置规则翻译。
 - 分段校准公式如何通过 profile `assertion_rules` 和 named template 生成可执行断言。
 
-### ab_service：case_flow + case_body 混合
+### ab_service：Harness + case_flow + case_body 混合
 
 `ab_service` 是多端点服务模块，默认 `/api/v1/recommend` 模板不适用。
 
 它展示：
 
 - 运行中 HTTP API CRUD 适合 `case_flows`。
-- 文件持久化、Remote SDK 生命周期、mock、subprocess 等复杂场景适合保留 `case_bodies`。
+- 模块 API、状态准备和可复用复杂控制逻辑封装为 Harness capability，suite flow 从固定根对象 `harness` 调用。
+- 文件持久化、Remote SDK 生命周期、mock、subprocess 等无法自然收进 Harness capability 的测试函数编排，适合保留 `case_bodies`。
 - `case_body` 不是失败，但要有明确保留理由。
 
 ### issuance：状态副作用验证
@@ -158,7 +161,7 @@ test_workspace/generated/coupon_system/test_calibration_calibration_smoke_busine
 - HTTP/gRPC 查询路径。
 - 并发库存场景。
 
-它说明多步骤状态验证应优先通过 fixture/helper 封装能力，再由 `case_flow` 或必要的 `case_body` 调用。
+它说明多步骤状态验证应优先封装为 Harness capability，再由 `case_flow` 编排；只有测试函数本身仍需复杂控制流时才使用 `case_body`。
 
 ### logging：隔离服务和日志捕获
 
@@ -197,9 +200,11 @@ health report 是治理工具，不是为了把所有模块都强行推到同一
 
 - 文档先进入知识库。
 - Markdown 用例作为可 review 的测试设计。
-- fixture 封装公开 API 和测试状态能力。
+- 每个模块用 `modules/{module}/{module.yaml,profile.md,fixture.py,harness.py}` 组织稳定测试能力。
+- `setup_{module}` 返回或 yield `{Module}Harness`，suite flow 从固定根对象 `harness` 调用 capability。
+- 单模块能力留在 module package；仅已证实跨 module 复用的纯技术适配放在 target helpers，不建立 `test_workspace/helpers/`。
 - profile 表达模块生成规则。
 - generated pytest 只作为编译产物。
-- report 反哺用例、fixture、profile 或系统 bug。
+- report 反哺用例、Module Harness、profile 或系统 bug。
 
 如果你的项目是多端点状态流，可以重点参考 `ab_service` 和 `issuance`。如果你的项目是标准单接口，可以重点参考 `calibration`。

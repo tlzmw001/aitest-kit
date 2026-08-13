@@ -3,6 +3,56 @@ from __future__ import annotations
 from click.testing import CliRunner
 
 from aitest_kit.cli import main
+from aitest_kit.doctor import _scan_env_vars
+
+
+def _write_canonical_module(target, *, module_type: str = "standard_http"):
+    target_dir = target / "test_workspace" / "targets" / "demo_target"
+    module_dir = target_dir / "modules" / "demo"
+    module_dir.mkdir(parents=True, exist_ok=True)
+    (target_dir / "target.yaml").write_text(
+        """target: demo_target
+defaults:
+  module_dir: test_workspace/targets/demo_target/modules
+  suite_dir: test_workspace/suites/demo_target
+  generated_dir: test_workspace/generated/demo_target
+  reports_dir: test_workspace/reports/demo_target
+""",
+        encoding="utf-8",
+    )
+    (module_dir / "__init__.py").write_text("", encoding="utf-8")
+    (module_dir / "module.yaml").write_text(
+        f"""target: demo_target
+module: demo
+module_type: {module_type}
+registered_suites:
+  - suite: demo_smoke
+    manifest: test_workspace/suites/demo_target/demo_smoke/suite.yaml
+    status: active
+""",
+        encoding="utf-8",
+    )
+    (module_dir / "profile.md").write_text("```yaml\n{}\n```\n", encoding="utf-8")
+    (module_dir / "harness.py").write_text(
+        """class DemoHarness:
+    def health(self):
+        return {"status": "ok"}
+""",
+        encoding="utf-8",
+    )
+    (module_dir / "fixture.py").write_text(
+        """import pytest
+
+from .harness import DemoHarness
+
+
+@pytest.fixture
+def setup_demo() -> DemoHarness:
+    return DemoHarness()
+""",
+        encoding="utf-8",
+    )
+    return module_dir
 
 
 def test_doctor_reports_empty_workspace_with_warnings(tmp_path):
@@ -59,25 +109,7 @@ def test_doctor_checks_case_suite_profiles(tmp_path):
     init_result = runner.invoke(main, ["init", "--target", str(target)])
     assert init_result.exit_code == 0
 
-    target_dir = target / "test_workspace" / "targets" / "demo_target"
-    profile_dir = target_dir / "profiles"
-    profile_dir.mkdir(parents=True, exist_ok=True)
-    (target_dir / "target.yaml").write_text(
-        """target: demo_target
-defaults:
-  profile_dir: test_workspace/targets/demo_target/profiles
-  generated_dir: test_workspace/generated/demo_target
-  reports_dir: test_workspace/reports/demo_target
-""",
-        encoding="utf-8",
-    )
-    (profile_dir / "profile_demo.md").write_text(
-        """```yaml
-module_type: standard_http
-```
-""",
-        encoding="utf-8",
-    )
+    _write_canonical_module(target)
     suite_dir = target / "test_workspace" / "suites" / "demo_target" / "demo_smoke"
     suite_dir.mkdir(parents=True, exist_ok=True)
     (suite_dir / "suite.yaml").write_text(
@@ -113,10 +145,8 @@ parent_module: demo
 suite: demo_smoke
 case_flows:
   TC-DEMO-001:
-    fixture: setup_demo
-    object: client
     steps:
-      - call: client.health
+      - call: harness.health
         save_as: resp
       - assert: 'assert resp["status"] == "ok"'
 ```
@@ -137,44 +167,7 @@ def test_doctor_checks_target_registry(tmp_path):
     init_result = runner.invoke(main, ["init", "--target", str(target)])
     assert init_result.exit_code == 0
 
-    target_dir = target / "test_workspace" / "targets" / "demo_target"
-    (target_dir / "modules").mkdir(parents=True, exist_ok=True)
-    (target_dir / "fixtures").mkdir(parents=True, exist_ok=True)
-    (target_dir / "profiles").mkdir(parents=True, exist_ok=True)
-    (target_dir / "target.yaml").write_text(
-        """target: demo_target
-defaults:
-  module_dir: test_workspace/targets/demo_target/modules
-  fixture_dir: test_workspace/targets/demo_target/fixtures
-  profile_dir: test_workspace/targets/demo_target/profiles
-  suite_dir: test_workspace/suites/demo_target
-  generated_dir: test_workspace/generated/demo_target
-  reports_dir: test_workspace/reports/demo_target
-""",
-        encoding="utf-8",
-    )
-    (target_dir / "fixtures" / "demo.py").write_text(
-        "def setup_demo():\n    return object()\n",
-        encoding="utf-8",
-    )
-    (target_dir / "profiles" / "profile_demo.md").write_text(
-        "```yaml\nmodule_type: multi_endpoint\n```\n",
-        encoding="utf-8",
-    )
-    (target_dir / "modules" / "demo.yaml").write_text(
-        """target: demo_target
-module: demo
-module_type: standard_http
-fixture:
-  file: demo.py
-  default_fixture: setup_demo
-registered_suites:
-  - suite: demo_smoke
-    manifest: test_workspace/suites/demo_target/demo_smoke/suite.yaml
-    status: active
-""",
-        encoding="utf-8",
-    )
+    _write_canonical_module(target)
 
     suite_dir = target / "test_workspace" / "suites" / "demo_target" / "demo_smoke"
     suite_dir.mkdir(parents=True, exist_ok=True)
@@ -207,3 +200,62 @@ case_files:
         in result.output
     )
     assert "[FAIL] generated freshness" in result.output
+
+
+def test_doctor_rejects_broken_harness_contract(tmp_path):
+    target = tmp_path / "project"
+    runner = CliRunner()
+    assert runner.invoke(main, ["init", "--target", str(target)]).exit_code == 0
+    module_dir = _write_canonical_module(target)
+    (module_dir / "harness.py").write_text("class WrongHarness:\n    pass\n", encoding="utf-8")
+    (module_dir / "fixture.py").write_text(
+        """import pytest
+
+
+@pytest.fixture
+def setup_demo():
+    return lambda: object()
+
+
+@pytest.fixture
+def extra_fixture():
+    return object()
+""",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(main, ["doctor", "--workspace", str(target)])
+
+    assert result.exit_code == 1, result.output
+    assert "setup_demo return annotation must reference DemoHarness" in result.output
+    assert "fixture.py exposes additional public pytest fixtures: extra_fixture" in result.output
+    assert "harness.py must define DemoHarness" in result.output
+
+
+def test_scan_env_vars_discovers_harness_runtime_requirements(tmp_path):
+    module_dir = tmp_path / "test_workspace" / "targets" / "demo" / "modules" / "gateway"
+    module_dir.mkdir(parents=True)
+    (module_dir / "harness.py").write_text(
+        '''from aitest_kit.runtime_variables import require_env, require_envs
+
+
+class GatewayHarness:
+    def api_url(self):
+        return require_env("GATEWAY_BASE_URL")
+
+    def credentials(self):
+        return require_envs(
+            [
+                "GATEWAY_USER",
+                "GATEWAY_PASSWORD",
+            ]
+        )
+''',
+        encoding="utf-8",
+    )
+
+    assert _scan_env_vars(tmp_path / "test_workspace" / "targets") == {
+        "GATEWAY_BASE_URL",
+        "GATEWAY_USER",
+        "GATEWAY_PASSWORD",
+    }

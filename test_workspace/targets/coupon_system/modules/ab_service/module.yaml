@@ -1,0 +1,10 @@
+target: coupon_system
+module: ab_service
+module_type: multi_endpoint
+knowledge_refs:
+  l1:
+  - test_workspace/knowledge/L1/ab_service.md
+registered_suites:
+- suite: ab_service_smoke
+  manifest: test_workspace/suites/coupon_system/ab_service_smoke/suite.yaml
+  status: active

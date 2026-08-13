@@ -8,6 +8,7 @@ from aitest_kit.registry.loader import (
 )
 from aitest_kit.registry.task_loader import load_task_context
 from aitest_kit.registry.models import (
+    ModuleBinding,
     ModuleContext,
     RegisteredSuite,
     SuiteManifestContext,
@@ -19,6 +20,7 @@ from aitest_kit.registry.models import (
 
 __all__ = [
     "ModuleContext",
+    "ModuleBinding",
     "RegisteredSuite",
     "SuiteManifestContext",
     "TargetContext",

@@ -317,7 +317,6 @@ def _generate_suite(context: SuiteContext, paths: Any, project: ProjectConfig) -
             path.stem,
             profile_path=context.runtime_profile,
             output_dir=paths.generated_dir,
-            fixture_dir=paths.profile_dir,
             project=project,
             output_file_type=suite_output_file_type(context, path),
         )
@@ -374,7 +373,6 @@ def _check_suite_consistency(
                 path.stem,
                 profile_path=context.runtime_profile,
                 output_dir=tmp_path,
-                fixture_dir=paths.profile_dir,
                 project=project,
                 output_file_type=suite_output_file_type(context, path),
             )

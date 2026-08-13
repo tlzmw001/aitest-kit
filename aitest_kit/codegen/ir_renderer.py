@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 from aitest_kit.codegen.file_rendering import (
@@ -22,6 +21,7 @@ from aitest_kit.codegen.render_utils import (
     strip_backticks,
 )
 from aitest_kit.codegen.strategy import has_marker
+from aitest_kit.registry.models import ModuleBinding
 
 
 @dataclass
@@ -33,10 +33,9 @@ class EmitContext:
     project: ProjectConfig
     profile_rules: list[AssertionRule] = field(default_factory=list)
     extra_imports: list[str] = field(default_factory=list)
-    case_fixtures: dict[str, list[str]] = field(default_factory=dict)
     case_bodies: dict[str, list[str]] = field(default_factory=dict)
     variables: dict[str, str] = field(default_factory=dict)
-    fixture_dir: Path = field(default_factory=lambda: Path("test_workspace/targets"))
+    module_binding: ModuleBinding | None = None
 
 
 @dataclass
@@ -131,6 +130,8 @@ def _render_custom_body(case_ir: CaseIR, tc: TestCase, ctx: EmitContext) -> list
     body_lines: list[str] = []
     body_lines.extend(_render_setup_comments(tc))
     body_lines.append("")
+    if fixtures:
+        body_lines.append(f"        harness = {fixtures[0]}")
     body = case_ir.custom_body.lines if case_ir.custom_body else []
     for body_line in body:
         body_lines.append(f"        {body_line}" if body_line else "")
@@ -362,6 +363,10 @@ def render_file_from_ir(
         for assertion in case.assertions
     )
     has_default_http = any(case.strategy == "default_http" for case in file_ir.cases)
+    has_module_harness = any(
+        case.strategy in {"structured_case_flow", "custom_case_body"}
+        for case in file_ir.cases
+    )
     has_case_context = any(case.strategy != "skipped" for case in file_ir.cases)
 
     all_lines.extend(render_header(
@@ -370,6 +375,7 @@ def render_file_from_ir(
         has_structured_assertions=has_structured_assertions,
         has_default_http=has_default_http,
         has_case_context=has_case_context,
+        has_module_harness=has_module_harness,
     ))
     all_lines.extend(render_base_request(ctx))
     if ctx.shared_config.base_request_http:
@@ -422,17 +428,6 @@ def render_file_from_ir(
 
     all_lines.append("")
     all_lines.append("")
-    default_fixture_name = f"setup_{ctx.module}"
-    needs_default_fixture = any(
-        default_fixture_name in case.fixtures
-        for case in file_ir.cases
-    )
-    fixture_path = ctx.fixture_dir / f"{ctx.module}.py"
-    if needs_default_fixture and not fixture_path.exists():
-        all_lines.append(
-            f"# TODO: setup_{ctx.module} fixture 需要手写实现（→ tests/fixtures/{ctx.module}.py）"
-        )
-
     for tc_id, reason in skipped:
         all_lines.append(f"# SKIPPED: {tc_id} — {reason}")
 

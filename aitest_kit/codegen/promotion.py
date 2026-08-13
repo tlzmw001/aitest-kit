@@ -60,21 +60,11 @@ def _valid_object_name(name: object) -> bool:
     return isinstance(name, str) and bool(_IDENT.match(name))
 
 
-def _profile_object_names(
-    case_fixtures: dict[str, list[str]],
-    case_flows: dict[str, dict],
-) -> set[str]:
-    names = set(_DEFAULT_OBJECT_NAMES)
-    for fixtures in case_fixtures.values():
-        for fixture in fixtures:
-            if _valid_object_name(fixture):
-                names.add(fixture)
+def _profile_object_names(case_flows: dict[str, dict]) -> set[str]:
+    names = set(_DEFAULT_OBJECT_NAMES) | {"harness"}
     for flow in case_flows.values():
         if not isinstance(flow, dict):
             continue
-        obj_name = flow.get("object")
-        if _valid_object_name(obj_name):
-            names.add(obj_name)
         steps = flow.get("steps", [])
         if not isinstance(steps, list):
             continue
@@ -156,9 +146,8 @@ def analyze_case_body_promotion(
             for case_id, lines in bodies.items()
             if case_id in case_ids
         }
-    case_fixtures = resolved_profile.case_fixtures
     case_flows = resolved_profile.case_flows
-    object_names = _profile_object_names(case_fixtures, case_flows)
+    object_names = _profile_object_names(case_flows)
     grouped: dict[str, list[PromotionCase]] = {}
     group_meta: dict[str, tuple[str, str, list[str], list[str]]] = {}
 

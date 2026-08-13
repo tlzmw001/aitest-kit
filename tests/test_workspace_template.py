@@ -15,34 +15,25 @@ def test_repo_does_not_keep_legacy_root_template_copy():
 
 def _write_demo_module(workspace: Path) -> None:
     target_dir = workspace / "test_workspace" / "targets" / "demo_target"
-    module_dir = target_dir / "modules"
-    fixture_dir = target_dir / "fixtures"
-    profile_dir = target_dir / "profiles"
+    module_dir = target_dir / "modules" / "demo"
     suite_dir = workspace / "test_workspace" / "suites" / "demo_target" / "demo_smoke"
     module_dir.mkdir(parents=True, exist_ok=True)
-    fixture_dir.mkdir(parents=True, exist_ok=True)
-    profile_dir.mkdir(parents=True, exist_ok=True)
     suite_dir.mkdir(parents=True, exist_ok=True)
 
     (target_dir / "target.yaml").write_text(
         """target: demo_target
 defaults:
   module_dir: test_workspace/targets/demo_target/modules
-  fixture_dir: test_workspace/targets/demo_target/fixtures
-  profile_dir: test_workspace/targets/demo_target/profiles
   suite_dir: test_workspace/suites/demo_target
   generated_dir: test_workspace/generated/demo_target
   reports_dir: test_workspace/reports/demo_target
 """,
         encoding="utf-8",
     )
-    (module_dir / "demo.yaml").write_text(
+    (module_dir / "module.yaml").write_text(
         """target: demo_target
 module: demo
 module_type: standard_http
-fixture:
-  file: demo.py
-  default_fixture: setup_demo
 registered_suites:
   - suite: demo_smoke
     manifest: test_workspace/suites/demo_target/demo_smoke/suite.yaml
@@ -50,23 +41,28 @@ registered_suites:
 """,
         encoding="utf-8",
     )
-    (fixture_dir / "demo.py").write_text(
-        """import pytest
-
-
-class DemoClient:
+    (module_dir / "__init__.py").write_text("", encoding="utf-8")
+    (module_dir / "harness.py").write_text(
+        """class DemoHarness:
     def health(self):
         return {"code": 0}
-
-
-@pytest.fixture
-def setup_demo():
-    return DemoClient()
 """,
         encoding="utf-8",
     )
-    (profile_dir / "profile_demo.md").write_text(
-        "```yaml\nmodule_type: standard_http\n```\n",
+    (module_dir / "fixture.py").write_text(
+        """import pytest
+
+from .harness import DemoHarness
+
+
+@pytest.fixture
+def setup_demo() -> DemoHarness:
+    return DemoHarness()
+""",
+        encoding="utf-8",
+    )
+    (module_dir / "profile.md").write_text(
+        "```yaml\n{}\n```\n",
         encoding="utf-8",
     )
     (suite_dir / "business.md").write_text(
@@ -93,10 +89,8 @@ parent_module: demo
 suite: demo_smoke
 case_flows:
   TC-DEMO-001:
-    fixture: setup_demo
-    object: client
     steps:
-      - call: client.health
+      - call: harness.health
         save_as: resp
       - assert: 'assert resp["code"] == 0'
 ```
@@ -269,7 +263,8 @@ def test_cli_help_matches_workspace_product_flow():
 
     upgrade_help = runner.invoke(main, ["upgrade", "--help"])
     assert upgrade_help.exit_code == 0
-    assert "Upgrade template-managed files" in upgrade_help.output
+    assert "diagnose legacy module/Harness layouts" in upgrade_help.output
+    assert "semantic fixture/factory migrations as BLOCKED" in upgrade_help.output
 
     run_help = runner.invoke(main, ["run", "--help"])
     assert run_help.exit_code == 0
@@ -407,6 +402,69 @@ request_patches:
     assert "overrides:" in text
     assert "patches:" in text
     assert list((target / ".aitest" / "backups").glob("upgrade-*/test_workspace/suites/demo_target/demo_smoke/profile_demo_smoke_suite.md"))
+
+
+def test_upgrade_reports_legacy_module_harness_blockers(tmp_path):
+    target = tmp_path / "project"
+    runner = CliRunner()
+    assert runner.invoke(main, ["init", "--target", str(target)]).exit_code == 0
+    target_dir = target / "test_workspace" / "targets" / "demo_target"
+    (target_dir / "modules").mkdir(parents=True)
+    (target_dir / "target.yaml").write_text(
+        """target: demo_target
+defaults:
+  module_dir: test_workspace/targets/demo_target/modules
+  fixture_dir: test_workspace/targets/demo_target/fixtures
+  profile_dir: test_workspace/targets/demo_target/profiles
+""",
+        encoding="utf-8",
+    )
+    (target_dir / "modules" / "demo.yaml").write_text(
+        """target: demo_target
+module: demo
+fixture:
+  file: demo.py
+  default_fixture: setup_demo
+""",
+        encoding="utf-8",
+    )
+    suite_profile = (
+        target
+        / "test_workspace"
+        / "suites"
+        / "demo_target"
+        / "demo_smoke"
+        / "profile_demo_smoke_suite.md"
+    )
+    suite_profile.parent.mkdir(parents=True)
+    suite_profile.write_text(
+        """```yaml
+profile_scope: case_suite
+default_fixture: setup_demo
+case_flows:
+  TC-DEMO-001:
+    fixture: setup_demo
+    object: client
+    steps:
+      - call: client.health
+```
+""",
+        encoding="utf-8",
+    )
+    workspace_helpers = target / "test_workspace" / "helpers"
+    workspace_helpers.mkdir(parents=True)
+
+    result = runner.invoke(main, ["upgrade", "--workspace", str(target), "--check"])
+
+    assert result.exit_code == 0, result.output
+    assert "[BLOCKED] test_workspace/targets/demo_target/target.yaml" in result.output
+    assert "removed target defaults fixture_dir, profile_dir" in result.output
+    assert "[BLOCKED] test_workspace/targets/demo_target/modules/demo.yaml" in result.output
+    assert "legacy module layout" in result.output
+    assert "removed fixture injection fields" in result.output
+    assert "case_flows.*.fixture" in result.output
+    assert "case_flows.*.object" in result.output
+    assert "[BLOCKED] test_workspace/helpers" in result.output
 
 
 def _set_manifest_hash(target: Path, relative: str, content: str) -> None:

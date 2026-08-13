@@ -10,6 +10,8 @@ from aitest_kit.codegen.ir import ir_to_dict
 from aitest_kit.codegen.parser import ParseResult, SharedConfig, TestCase as ParsedTestCase
 from aitest_kit.codegen.planner import build_file_ir
 from aitest_kit.codegen.profile import (
+    RuntimeProfile,
+    load_profile_yaml,
     merge_profile_yaml,
     validate_case_flows,
     validate_profile_strategy_conflicts,
@@ -21,6 +23,7 @@ from aitest_kit.codegen.project_config import (
 )
 from aitest_kit.helpers import structured_assertions as aitest_assertions
 from aitest_kit.runtime_context import current_case_id
+from aitest_kit.registry.models import ModuleBinding
 
 
 def _case(file_ir, case_id: str):
@@ -32,6 +35,20 @@ def _case(file_ir, case_id: str):
 
 def _write_profile(path: Path, yaml_body: str) -> None:
     path.write_text(f"```yaml\n{yaml_body}```\n", encoding="utf-8")
+
+
+def _runtime_profile(path: Path, *, module_type: str = "standard_recommend") -> RuntimeProfile:
+    data = load_profile_yaml(path)
+    data["module_type"] = module_type
+    return RuntimeProfile(
+        data=data,
+        module_binding=ModuleBinding(
+            target="demo",
+            module="demo",
+            fixture_import="",
+            fixture_name="setup_demo",
+        ),
+    )
 
 
 def _parse_result(
@@ -57,7 +74,7 @@ def _parse_result(
     )
 
 
-def test_profile_merge_merges_nested_lists_by_index():
+def test_profile_merge_keeps_case_scoped_requests_in_suite_profile():
     merged, diagnostics = merge_profile_yaml(
         {
             "requests": {
@@ -91,11 +108,11 @@ def test_profile_merge_merges_nested_lists_by_index():
     assert diagnostics == []
     assert merged["requests"]["TC-DEMO-001"]["overrides"] == {
         "messages": [
-            {"role": "user", "content": "hello"},
-            {"role": "assistant", "content": "world"},
+            {"content": "hello"},
+            {"content": "world"},
             {"role": "tool", "content": "extra"},
         ],
-        "metadata": {"trace": True, "tags": ["override"]},
+        "metadata": {"tags": ["override"]},
     }
 
 
@@ -157,7 +174,10 @@ def test_generated_req_deep_merges_request_override_lists(tmp_path):
         },
     )
 
-    project = ProjectConfig(default_request=DefaultRequestConfig(auto_fields={}))
+    project = ProjectConfig(
+        default_request=DefaultRequestConfig(auto_fields={}),
+        module_types={"standard_recommend": {}},
+    )
     file_ir = build_file_ir(
         parse_result,
         "business",
@@ -198,7 +218,6 @@ def test_structured_assertions_render_jsonpath_all_equals_and_len_gte(tmp_path):
         profile_path,
         """case_flows:
   TC-DEMO-001:
-    fixture: setup_demo
     steps:
       - assign: resp
         expr: '{"data": {"items": [{"publishStatus": 0}, {"publishStatus": 0}]}}'
@@ -219,7 +238,7 @@ structured_assertions:
     file_ir = build_file_ir(
         parse_result,
         "business",
-        profile_path=profile_path,
+        profile_path=_runtime_profile(profile_path),
         project=load_project_config(),
     )
     case_ir = _case(file_ir, "TC-DEMO-001")
@@ -248,7 +267,7 @@ structured_assertions:
     result = emit_file(
         parse_result,
         "business",
-        profile_path=profile_path,
+        profile_path=_runtime_profile(profile_path),
         output_dir=tmp_path,
         project=load_project_config(),
     )
@@ -427,10 +446,8 @@ def test_case_flow_renders_request_ref_from_unified_request_binding(tmp_path):
       user_id: u001
 case_flows:
   TC-DEMO-001:
-    fixture: setup_demo
-    object: client
     steps:
-      - call: client.create
+      - call: harness.create
         kwargs:
           body: {request_ref: self}
         save_as: resp
@@ -441,12 +458,15 @@ case_flows:
         assertions=['`response.code == 0`'],
         base_request_http={"user_id": "u_default", "items": []},
     )
-    project = ProjectConfig(default_request=DefaultRequestConfig(auto_fields={}))
+    project = ProjectConfig(
+        default_request=DefaultRequestConfig(auto_fields={}),
+        module_types={"standard_recommend": {}},
+    )
 
     file_ir = build_file_ir(
         parse_result,
         "business",
-        profile_path=profile_path,
+        profile_path=_runtime_profile(profile_path),
         project=project,
     )
     case_ir = _case(file_ir, "TC-DEMO-001")
@@ -458,13 +478,13 @@ case_flows:
         parse_result,
         "business",
         output_dir=tmp_path,
-        profile_path=profile_path,
+        profile_path=_runtime_profile(profile_path),
         project=project,
     )
     assert result.diagnostics == []
     text = (tmp_path / "test_demo_business.py").read_text(encoding="utf-8")
     assert '__request_tc_demo_001 = _req(overrides={"user_id": "u001"})' in text
-    assert "resp = client.create(body=__request_tc_demo_001)" in text
+    assert "resp = harness.create(body=__request_tc_demo_001)" in text
 
 
 def test_ir_marks_profile_case_flow_without_default_request_plan(tmp_path):
@@ -473,10 +493,8 @@ def test_ir_marks_profile_case_flow_without_default_request_plan(tmp_path):
         profile_path,
         """case_flows:
   TC-DEMO-001:
-    fixture: setup_demo
-    object: client
     steps:
-      - call: client.health
+      - call: harness.health
         save_as: resp
       - assert: 'assert resp["status"] == "ok"'
 """,
@@ -485,7 +503,7 @@ def test_ir_marks_profile_case_flow_without_default_request_plan(tmp_path):
     file_ir = build_file_ir(
         _parse_result(assertions=['`response.status == "ok"`']),
         "business",
-        profile_path=profile_path,
+        profile_path=_runtime_profile(profile_path),
         project=load_project_config(),
     )
     case_ir = _case(file_ir, "TC-DEMO-001")
@@ -496,7 +514,7 @@ def test_ir_marks_profile_case_flow_without_default_request_plan(tmp_path):
     assert case_ir.call is None
     assert case_ir.fixtures == ["setup_demo"]
     assert case_ir.case_flow is not None
-    assert case_ir.case_flow.steps[0].call == "client.health"
+    assert case_ir.case_flow.steps[0].call == "harness.health"
 
 
 def test_ir_serializes_to_plain_json_data(tmp_path):
@@ -505,8 +523,6 @@ def test_ir_serializes_to_plain_json_data(tmp_path):
         profile_path,
         """case_flows:
   TC-DEMO-001:
-    fixture: setup_demo
-    object: client
     steps:
       - assert: 'assert True'
 """,
@@ -514,7 +530,7 @@ def test_ir_serializes_to_plain_json_data(tmp_path):
     file_ir = build_file_ir(
         _parse_result(),
         "business",
-        profile_path=profile_path,
+        profile_path=_runtime_profile(profile_path),
         project=load_project_config(),
     )
 
@@ -595,14 +611,10 @@ def test_module_type_requirement_accepts_case_flows(tmp_path):
     profile_path = tmp_path / "profile_demo_suite.md"
     _write_profile(
         profile_path,
-        """module_type: multi_endpoint
-case_flows:
+        """case_flows:
   TC-DEMO-001:
-    fixture: setup_demo
     steps:
-      - call: setup_demo
-        save_as: case
-      - call: case.get
+      - call: harness.get
         args: ["/health"]
         save_as: resp
       - assert: "assert resp.status_code == 200"
@@ -612,7 +624,7 @@ case_flows:
     result = emit_file(
         _parse_result(assertions=["`status_code == 200`"]),
         "business",
-        profile_path=profile_path,
+        profile_path=_runtime_profile(profile_path, module_type="multi_endpoint"),
         output_dir=tmp_path,
         project=load_project_config(),
     )
@@ -624,8 +636,7 @@ def test_module_type_requirement_requires_profile_or_module_yaml_injected_type(t
     profile_path = tmp_path / "profile_demo_suite.md"
     _write_profile(
         profile_path,
-        """module_type: isolated_service
-extra_imports: []
+        """extra_imports: []
 """,
     )
     project = ProjectConfig(
@@ -635,7 +646,7 @@ extra_imports: []
     result = emit_file(
         _parse_result(base_request_http={"user_id": "", "reqId": ""}),
         "business",
-        profile_path=profile_path,
+        profile_path=_runtime_profile(profile_path, module_type="isolated_service"),
         output_dir=tmp_path,
         project=project,
     )
@@ -647,7 +658,6 @@ extra_imports: []
 def test_case_flow_profile_validation_rejects_forward_refs():
     errors = validate_case_flows({
         "TC-DEMO-001": {
-            "fixture": "setup_demo",
             "steps": [
                 {"call": "case.post", "args": [{"ref": "missing"}], "save_as": "resp"},
             ],
@@ -657,10 +667,26 @@ def test_case_flow_profile_validation_rejects_forward_refs():
     assert any("must reference a previous save_as" in error for error in errors)
 
 
+@pytest.mark.parametrize(
+    ("step", "expected"),
+    [
+        ({"call": "harness.class", "save_as": "resp"}, "call path segment class is a Python keyword"),
+        ({"call": "harness", "save_as": "resp"}, "harness call must name a capability"),
+        ({"call": "harness.get", "save_as": "harness"}, "save_as harness is reserved"),
+        ({"assign": "class", "expr": "1"}, "assign class is a Python keyword"),
+        ({"call": "harness.get", "kwargs": {"class": 1}}, "kwargs.class: key is a Python keyword"),
+    ],
+)
+def test_validate_case_flows_rejects_invalid_or_reserved_python_identifiers(step, expected):
+    errors = validate_case_flows({"TC-DEMO-001": {"steps": [step]}})
+
+    assert any(expected in error for error in errors)
+
+
 def test_profile_strategy_validation_rejects_case_body_case_flow_overlap():
     errors = validate_profile_strategy_conflicts(
         {"TC-DEMO-001": ["resp = case.http()"]},
-        {"TC-DEMO-001": {"fixture": "setup_demo", "steps": []}},
+        {"TC-DEMO-001": {"steps": []}},
     )
 
     assert any("defined in both case_bodies and case_flows" in error for error in errors)
@@ -675,10 +701,7 @@ def test_emit_file_rejects_case_body_case_flow_overlap(tmp_path):
     resp = case.http()
 case_flows:
   TC-DEMO-001:
-    fixture: setup_demo
     steps:
-      - call: setup_demo
-        save_as: case
       - assert: "assert True"
 """,
     )
@@ -728,9 +751,8 @@ case_bodies:
 def test_case_flow_profile_validation_rejects_bare_assert_expression():
     errors = validate_case_flows({
         "TC-DEMO-001": {
-            "fixture": "setup_demo",
             "steps": [
-                {"call": "setup_demo", "save_as": "case"},
+                {"call": "harness.prepare", "save_as": "case"},
                 {"assert": "`resp == ERR`"},
             ],
         }
@@ -742,9 +764,8 @@ def test_case_flow_profile_validation_rejects_bare_assert_expression():
 def test_case_flow_profile_validation_accepts_assign_step():
     errors = validate_case_flows({
         "TC-DEMO-001": {
-            "fixture": "setup_demo",
             "steps": [
-                {"call": "setup_demo", "save_as": "case"},
+                {"call": "harness.prepare", "save_as": "case"},
                 {"assign": "locs", "expr": "[item['loc'] for item in detail]"},
                 {"comment": "MANUAL CHECK: inspect logs"},
                 {"assert": "assert ['body', 'external'] in locs"},
@@ -758,11 +779,9 @@ def test_case_flow_profile_validation_accepts_assign_step():
 def test_case_flow_profile_validation_accepts_description_metadata():
     errors = validate_case_flows({
         "TC-DEMO-001": {
-            "fixture": "setup_demo",
-            "object": "client",
             "description": "login and query current user",
             "steps": [
-                {"call": "client.login", "save_as": "login_resp"},
+                {"call": "harness.login", "save_as": "login_resp"},
                 {"assert": "assert login_resp.status_code == 200"},
             ],
         }
@@ -774,7 +793,6 @@ def test_case_flow_profile_validation_accepts_description_metadata():
 def test_case_flow_profile_validation_rejects_non_string_description():
     errors = validate_case_flows({
         "TC-DEMO-001": {
-            "fixture": "setup_demo",
             "description": {"text": "not allowed"},
             "steps": [
                 {"assert": "assert True"},
@@ -785,21 +803,14 @@ def test_case_flow_profile_validation_rejects_non_string_description():
     assert any("description: must be a string" in error for error in errors)
 
 
-def test_case_flow_defaults_expand_fixture_object_and_setup_step(tmp_path):
+def test_case_flow_uses_canonical_runtime_binding(tmp_path):
     profile_path = tmp_path / "profile_demo_suite.md"
     _write_profile(
         profile_path,
-        """default_fixture: setup_demo
-default_object: client_factory
-default_case_setup:
-  call: client_factory
-  kwargs:
-    case_id: "{case_id}"
-  save_as: case
-case_flows:
+        """case_flows:
   TC-DEMO-001:
     steps:
-      - call: case.get
+      - call: harness.get
         args: ["/health"]
         save_as: resp
       - assert: 'assert resp["status"] == "ok"'
@@ -809,18 +820,16 @@ case_flows:
     file_ir = build_file_ir(
         _parse_result(assertions=['`resp["status"] == "ok"`']),
         "business",
-        profile_path=profile_path,
+        profile_path=_runtime_profile(profile_path),
         project=load_project_config(),
     )
     case_ir = _case(file_ir, "TC-DEMO-001")
 
     assert case_ir.fixtures == ["setup_demo"]
     assert case_ir.case_flow is not None
-    assert case_ir.case_flow.object_name == "client_factory"
-    assert case_ir.case_flow.steps[0].call == "client_factory"
-    assert case_ir.case_flow.steps[0].kwargs == {"case_id": "TC-DEMO-001"}
-    assert case_ir.case_flow.steps[0].save_as == "case"
-    assert case_ir.case_flow.steps[1].call == "case.get"
+    assert case_ir.case_flow.object_name == "harness"
+    assert case_ir.case_flow.fixture == "setup_demo"
+    assert case_ir.case_flow.steps[0].call == "harness.get"
 
 
 def test_emitter_can_render_structured_case_flow(tmp_path):
@@ -829,10 +838,8 @@ def test_emitter_can_render_structured_case_flow(tmp_path):
         profile_path,
         """case_flows:
   TC-DEMO-001:
-    fixture: setup_demo
-    object: case
     steps:
-      - call: case.http
+      - call: harness.http
         args: ["u_demo"]
         kwargs:
           req_id: "req-demo"
@@ -847,7 +854,7 @@ def test_emitter_can_render_structured_case_flow(tmp_path):
     result = emit_file(
         _parse_result(assertions=["`resp[\"code\"] == 0`"], base_request_http={"user_id": "", "reqId": ""}),
         "business",
-        profile_path=profile_path,
+        profile_path=_runtime_profile(profile_path),
         output_dir=tmp_path,
     )
 
@@ -856,8 +863,8 @@ def test_emitter_can_render_structured_case_flow(tmp_path):
     assert "from aitest_kit.runtime_context import reset_case_context, set_case_context" in text
     assert "def test_tc_demo_001(self, setup_demo):" in text
     assert '__aitest_ctx_token = set_case_context(__tc_meta__["tc_id"], __tc_meta__)' in text
-    assert "case = setup_demo" in text
-    assert 'resp = case.http("u_demo", req_id="req-demo")' in text
+    assert "harness = setup_demo" in text
+    assert 'resp = harness.http("u_demo", req_id="req-demo")' in text
     assert 'locs = [item["loc"] for item in resp["detail"]]' in text
     assert "# MANUAL CHECK: inspect logs" in text
     assert 'assert resp["code"] == 0' in text
@@ -888,17 +895,15 @@ def test_generated_case_context_resets_when_case_flow_raises(tmp_path):
         profile_path,
         """case_flows:
   TC-DEMO-001:
-    fixture: setup_demo
-    object: case
     steps:
-      - call: case.fail
+      - call: harness.fail
 """,
     )
 
     result = emit_file(
         _parse_result(),
         "business",
-        profile_path=profile_path,
+        profile_path=_runtime_profile(profile_path),
         output_dir=tmp_path,
         project=load_project_config(),
     )

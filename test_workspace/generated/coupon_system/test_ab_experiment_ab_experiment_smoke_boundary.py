@@ -4,7 +4,7 @@ import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
 from aitest_kit.runtime_context import reset_case_context, set_case_context
-from test_workspace.targets.coupon_system.fixtures.ab_experiment import setup_ab_experiment
+pytest_plugins = ["test_workspace.targets.coupon_system.modules.ab_experiment.fixture"]
 
 
 BASE_REQUEST = {
@@ -52,9 +52,9 @@ class TestAbExperimentBoundary:
             # SETUP: 前置操作_2：选择 md5(user_id)%100 == H 的 user_id
             # SETUP: 前置操作_3：将 scene_id=1001 映射到该实验
 
-            client = setup_ab_experiment
-            client.prepare_stock(coupon_id="COUPON_AB_BOUNDARY_001", stock=100)
-            resp = client.recommend_http(request_overrides={"user_id": "u_ab_boundary_right", "reqId": "req-ab-011", "items": [{"item_id": "COUPON_AB_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]})
+            harness = setup_ab_experiment
+            harness.prepare_stock(coupon_id="COUPON_AB_BOUNDARY_001", stock=100)
+            resp = harness.recommend_http(request_overrides={"user_id": "u_ab_boundary_right", "reqId": "req-ab-011", "items": [{"item_id": "COUPON_AB_BOUNDARY_001", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]})
             assert resp["code"] == 0
             assert "ab_boundary_right" not in resp["experiment_info"]
         finally:
@@ -86,7 +86,6 @@ class TestAbExperimentBoundary:
             reset_case_context(__aitest_ctx_token)
 
 
-# TODO: setup_ab_experiment fixture 需要手写实现（→ tests/fixtures/ab_experiment.py）
 # SKIPPED: TC-AB-010 — `[!可行性存疑: 已确认为待测系统缺陷，主服务不支持运行时热更新 scene_experiments.json，详见 results/ab_experiment_scene_experiments_hot_reload_bug.md]`
 # SKIPPED: TC-AB-013 — `[!可行性存疑: 需要测试环境支持本地 SDK 模式启动主服务]`
 # SKIPPED: TC-AB-014 — `[!可行性存疑: 需要测试环境提供慢响应 AB 服务]`

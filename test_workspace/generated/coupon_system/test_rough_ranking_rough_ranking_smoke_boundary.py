@@ -4,8 +4,7 @@ import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
 from aitest_kit.runtime_context import reset_case_context, set_case_context
-from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
-from test_workspace.targets.coupon_system.fixtures.rough_ranking import setup_rough_ranking
+pytest_plugins = ["test_workspace.targets.coupon_system.modules.rough_ranking.fixture"]
 
 
 BASE_REQUEST = {
@@ -52,12 +51,12 @@ class TestRoughRankingBoundary:
             # SETUP: 协议：HTTP
             # SETUP: 请求覆盖：HTTP 请求 items=[]
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-013")
-            resp = case.recommend_http()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_013", request_id="req-rank-013", items=[])
+            resp = harness.recommend_http()
             assert resp['code'] == 1001
             assert resp['results'] == []
-            assert case.rank_input_items == []
+            assert harness.rank_input_items == []
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -78,13 +77,13 @@ class TestRoughRankingBoundary:
             # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":0,"truncate_rule":"top_value"}
             # SETUP: 请求覆盖：HTTP 请求传入 3 张合法券
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-014")
-            resp = case.recommend_http()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_014", request_id="req-rank-014", params={"enable_coarse_rank": True, "truncate_count": 0, "truncate_rule": "top_value"})
+            resp = harness.recommend_http()
             assert resp['code'] == 0
             assert resp['results'] == []
             assert resp['coupon'] is None
-            assert case.rank_input_items == []
+            assert harness.rank_input_items == []
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -105,11 +104,11 @@ class TestRoughRankingBoundary:
             # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":"bad","truncate_rule":"top_value"}
             # SETUP: 请求覆盖：HTTP 请求传入 3 张合法券
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-015")
-            resp = case.recommend_http()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_015", request_id="req-rank-015", params={"enable_coarse_rank": True, "truncate_count": "bad", "truncate_rule": "top_value"})
+            resp = harness.recommend_http()
             assert resp['code'] == 0
-            assert len(case.rank_input_items) == 3
+            assert len(harness.rank_input_items) == 3
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -133,11 +132,11 @@ class TestRoughRankingBoundary:
             # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":2,"truncate_rule":"unknown_rule"}
             # SETUP: 请求覆盖：HTTP 请求传入 A/B/C
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-016")
-            resp = case.recommend_http()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_016", request_id="req-rank-016", params={"enable_coarse_rank": True, "truncate_count": 2, "truncate_rule": "unknown_rule"})
+            resp = harness.recommend_http()
             assert resp['code'] == 0
-            assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
+            assert harness.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
             # MANUAL CHECK: 应用日志包含 未知粗排规则
         finally:
             reset_case_context(__aitest_ctx_token)
@@ -157,11 +156,11 @@ class TestRoughRankingBoundary:
         try:
             # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":2,"sort_keys":["bad",{"field":123,"weight":1},{"field":"value","weight":"bad"}]}
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-017")
-            resp = case.recommend_http()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_017", request_id="req-rank-017", params={"enable_coarse_rank": True, "truncate_count": 2, "sort_keys": ["bad", {"field": 123, "weight": 1}, {"field": "value", "weight": "bad"}]})
+            resp = harness.recommend_http()
             assert resp['code'] == 0
-            assert len(case.rank_input_items) == 2
+            assert len(harness.rank_input_items) == 2
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -181,12 +180,12 @@ class TestRoughRankingBoundary:
         try:
             # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":3,"filters":[{"field":"value","op":"bad_op","value":80}]}
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-018")
-            resp = case.recommend_http()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_018", request_id="req-rank-018", params={"enable_coarse_rank": True, "truncate_count": 3, "filters": [{"field": "value", "op": "bad_op", "value": 80}]})
+            resp = harness.recommend_http()
             assert resp['code'] == 0
             assert resp['results'] == []
-            assert case.rank_input_items == []
+            assert harness.rank_input_items == []
             # MANUAL CHECK: 应用日志包含 未知过滤操作符
         finally:
             reset_case_context(__aitest_ctx_token)
@@ -206,11 +205,11 @@ class TestRoughRankingBoundary:
         try:
             # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":2,"truncate_rule":"top_value","diversity":{"enabled":true,"group_field":123,"max_per_group":0}}
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-019")
-            resp = case.recommend_http()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_019", request_id="req-rank-019", params={"enable_coarse_rank": True, "truncate_count": 2, "truncate_rule": "top_value", "diversity": {"enabled": True, "group_field": 123, "max_per_group": 0}})
+            resp = harness.recommend_http()
             assert resp['code'] == 0
-            assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
+            assert harness.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -231,11 +230,11 @@ class TestRoughRankingBoundary:
             # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":1,"prior_count":3,"prior_rule":"top_value"}
             # SETUP: 请求覆盖：B 为 isPrior=true
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-020")
-            resp = case.recommend_http()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_020", request_id="req-rank-020", params={"enable_coarse_rank": True, "truncate_count": 1, "prior_count": 3, "prior_rule": "top_value"})
+            resp = harness.recommend_http()
             assert resp['code'] == 0
-            assert case.rank_input_items == ['COUPON_RANK_B']
+            assert harness.rank_input_items == ['COUPON_RANK_B']
             # MANUAL CHECK: 应用日志包含 prior_count=3 大于 truncate_count=1
         finally:
             reset_case_context(__aitest_ctx_token)
@@ -257,11 +256,11 @@ class TestRoughRankingBoundary:
             # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":"bad","truncate_rule":"top_value"}
             # SETUP: 请求覆盖：gRPC 请求传入 3 张合法券
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-021")
-            resp = case.recommend_grpc()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_021", request_id="req-rank-021", params={"enable_coarse_rank": True, "truncate_count": "bad", "truncate_rule": "top_value"})
+            resp = harness.recommend_grpc()
             assert resp['code'] == 0
-            assert len(case.rank_input_items) == 3
+            assert len(harness.rank_input_items) == 3
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -283,11 +282,11 @@ class TestRoughRankingBoundary:
             # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":2,"truncate_rule":"unknown_rule"}
             # SETUP: 请求覆盖：gRPC 请求传入 A/B/C
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-022")
-            resp = case.recommend_grpc()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_022", request_id="req-rank-022", params={"enable_coarse_rank": True, "truncate_count": 2, "truncate_rule": "unknown_rule"})
+            resp = harness.recommend_grpc()
             assert resp['code'] == 0
-            assert case.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
+            assert harness.rank_input_items == ['COUPON_RANK_A', 'COUPON_RANK_B']
             # MANUAL CHECK: 应用日志包含 未知粗排规则
         finally:
             reset_case_context(__aitest_ctx_token)
@@ -310,16 +309,15 @@ class TestRoughRankingBoundary:
             # SETUP: 策略参数：{"enable_coarse_rank":true,"truncate_count":1,"prior_count":3,"prior_rule":"top_value"}
             # SETUP: 请求覆盖：gRPC 请求中 COUPON_RANK_B.is_prior=true
 
-            case = setup_rough_ranking
-            case = setup_rough_ranking(case_id="TC-RANK-023")
-            resp = case.recommend_grpc()
+            harness = setup_rough_ranking
+            harness.prepare(user_id="u_rank_023", request_id="req-rank-023", params={"enable_coarse_rank": True, "truncate_count": 1, "prior_count": 3, "prior_rule": "top_value"})
+            resp = harness.recommend_grpc()
             assert resp['code'] == 0
-            assert case.rank_input_items == ['COUPON_RANK_B']
+            assert harness.rank_input_items == ['COUPON_RANK_B']
             # MANUAL CHECK: 应用日志包含 prior_count=3 大于 truncate_count=1
         finally:
             reset_case_context(__aitest_ctx_token)
 
 
-# TODO: setup_rough_ranking fixture 需要手写实现（→ tests/fixtures/rough_ranking.py）
 
 __codegen_skipped__ = []

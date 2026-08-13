@@ -44,7 +44,7 @@ This creates:
 ```text
 docs/                  # public API docs, design docs, OpenAPI/proto
 aitest_config/          # project config, codegen config, schemas, refs
-test_workspace/         # knowledge base, cases, fixtures, profiles, generated pytest, reports
+test_workspace/         # knowledge, suites, Module Harness packages, generated pytest, reports
 skills/                 # agent-neutral AI skills, copy to .codex/.claude/.agents as needed
 AGENTS.md / CLAUDE.md   # AI collaboration guidance
 ```
@@ -90,7 +90,7 @@ Public docs / API contracts
 |---|---|---|
 | Docs & knowledge | Put public docs in `docs/`, build testable contracts | `/doc-review` `/knowledge-build` |
 | Case design | Generate Markdown cases from knowledge base, human review | `/test-design` |
-| Scaffolding | Add fixtures, helpers, profiles for new modules | `/test-scaffold` |
+| Scaffolding | Build a Module Harness and profiles | `/test-scaffold` |
 | Codegen | Markdown + profile → pytest | `aitest codegen` |
 | Run & report | Freshness check → pytest → structured reports | `aitest run` |
 | Promotion | Extract repeated patterns into rules and templates | `/emitter-build` |
@@ -141,7 +141,7 @@ mkdir -p .codex/skills && cp -R skills/. .codex/skills/     # Codex
 | `knowledge-build` | Build/update the L0/L1/L2 test knowledge base |
 | `case-migrate` | Optional; convert external/historical cases into AITest Markdown cases |
 | `test-design` | Generate Markdown cases from the knowledge base |
-| `test-scaffold` | Add fixtures/profiles for new modules or suites |
+| `test-scaffold` | Build a Harness for a module or add a suite profile |
 | `test-codegen` | Generate pytest from Markdown/profile |
 | `test-fix` | Fix bad cases and record lessons |
 | `test-maintain` | Diagnose workspace state, route to the right skill |
@@ -156,7 +156,7 @@ mkdir -p .codex/skills && cp -R skills/. .codex/skills/     # Codex
 | Structured flow | `case_flows` | Linear multi-step workflows |
 | Custom body | `case_bodies` | Concurrency, subprocesses, mocks, file lifecycle |
 
-`case_flows` should only orchestrate steps; runtime details such as temporary files, log capture, mocks, concurrency, and cleanup belong in fixtures/helpers. See [Profile Guide](docs/usebook/codegen_profile_guide.md).
+`case_flows` only orchestrate steps from the fixed `harness` root. Temporary files, log capture, mocks, loops, conditions, and cleanup belong in Module Harness capabilities. See [Profile Guide](docs/usebook/codegen_profile_guide.md).
 
 Recommended evolution: `case_bodies → case_flows → assertion_rules / default templates`. See [Profile Guide](docs/usebook/codegen_profile_guide.md).
 
@@ -172,7 +172,7 @@ aitest_workspace/
 ├── test_workspace/
 │   ├── knowledge/                # L0/L1/L2 + TEST_SPEC
 │   ├── suites/                   # Markdown cases + suite profiles
-│   ├── targets/                  # fixtures, helpers, module profiles
+│   ├── targets/                  # target registry + modules/{module}/{module.yaml,profile.md,fixture.py,harness.py}
 │   ├── generated/                # generated pytest (build artifact)
 │   ├── reports/                  # run reports
 │   └── results/                  # confirmed SUT bug records
@@ -180,6 +180,8 @@ aitest_workspace/
 ├── AGENTS.md
 └── CLAUDE.md
 ```
+
+Each module has one public runtime shape: the `setup_{module}` fixture directly returns a `{Module}Harness`, exposed to generated pytest as `harness`. Module-specific capabilities stay in the module package. Only proven technical adapters shared by multiple modules in one target belong in `targets/{target}/helpers/`; there is no workspace-level helpers directory.
 
 ## Security
 

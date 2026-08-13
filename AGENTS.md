@@ -41,7 +41,7 @@
   测试知识库目录，包含 L0/L1/L2 以及 `TEST_SPEC` 等内容。
 
 - `test_workspace/targets/`
-  按目标系统组织 target/module registry、模块 fixture、helper 和 module profile。
+  按目标系统组织 target registry、canonical module package 和可选的 target 级技术 helper。
 
 - `test_workspace/suites/`
   按目标系统组织独立 suite；suite 通过 `suite.yaml` 绑定 target/module。
@@ -234,11 +234,14 @@ test-maintain
 - suite 注册是聚合执行入口。
   单个 suite 可直接用 `--suite-file` 执行；只有通过 `aitest registry register-suite` 写入 `module.yaml.registered_suites` 的 active suite，才会进入 `--module`、`--target` 和 `--all`。手写 `registered_suites` 时推荐直接写 suite manifest 路径字符串；需要 `status` 时再写 `{suite, manifest, status}` mapping。
 
-- 模块 fixture 按 target/module 拆分。
-  模块逻辑放到 `test_workspace/targets/{target}/fixtures/{module}.py`，由 `modules/{module}.yaml` 注册。
+- 模块运行能力按 canonical module package 组织。
+  `test_workspace/targets/{target}/modules/{module}/` 固定包含 `module.yaml`、`profile.md`、`fixture.py`、`harness.py`；公开 fixture 固定为 `setup_{module}`，直接返回或 yield `{Module}Harness`。
 
-- module profile 与 fixture 同目录，suite profile 跟随用例目录。
-  `test_workspace/targets/{target}/profiles/profile_{module}.md` 放 L1 稳定能力；`profile_{suite}_suite.md` 放该批用例的 `requests/case_flows/case_bodies`。具体 TC-ID 绑定的 `requests`、`case_flows`、`case_bodies`、`case_fixtures` 应优先放 suite profile，不要塞回 module profile。
+- module profile 与 Harness 同目录，suite profile 跟随用例目录。
+  `modules/{module}/profile.md` 放 L1 稳定断言和变量默认值；`profile_{suite}_suite.md` 放该批用例的 `requests/case_flows/case_bodies`。suite flow 不配置 fixture/object，首个调用根固定为 `harness`。
+
+- helper 放在覆盖所有真实调用者的最小作用域。
+  单 module 能力放 module package；同一 target 内至少两个 module 已实际复用的纯技术适配才放 `targets/{target}/helpers/`；不建立 `test_workspace/helpers/`。
 
 - 生成的 pytest 是编译产物。
   优先修改 Markdown 用例、profile、fixture、emitter 或 `aitest.yaml`，再重新生成；不要把生成文件当作长期手写源文件。如果 generated pytest 需要手修，先判断应回写到 suite profile、module profile、fixture/helper 还是 emitter。
@@ -301,14 +304,15 @@ workspace 默认配置层（少量全局默认）
 target registry 层（一个待测系统一份）
   - test_workspace/targets/{target}/target.yaml
   - source_root、docs、knowledge_refs
-  - defaults：module_dir / fixture_dir / helper_dir / profile_dir / suite_dir / generated_dir / reports_dir
+  - defaults：module_dir / helper_dir / suite_dir / generated_dir / reports_dir
 
 module 能力层（一个业务模块一份）
-  - test_workspace/targets/{target}/modules/{module}.yaml
-  - test_workspace/targets/{target}/fixtures/{module}.py
-  - test_workspace/targets/{target}/helpers/
-  - test_workspace/targets/{target}/profiles/profile_{module}.md
-  - 稳定动作库、默认 fixture、module_type、L1 级稳定断言规则
+  - test_workspace/targets/{target}/modules/{module}/module.yaml
+  - test_workspace/targets/{target}/modules/{module}/fixture.py
+  - test_workspace/targets/{target}/modules/{module}/harness.py
+  - test_workspace/targets/{target}/modules/{module}/profile.md
+  - 可选 test_workspace/targets/{target}/helpers/
+  - 稳定 Harness capability、module_type、L1 级稳定断言规则
 
 suite 用例层（一个需求批次/用例集一份）
   - test_workspace/suites/{target}/{suite}/suite.yaml
@@ -340,10 +344,10 @@ task / selector 执行层（组合运行）
 
 ## module_type 分类
 
-`module_type` 是模块能力契约，在 `modules/{module}.yaml` 中声明。名称来自 `aitest_config/aitest.yaml.codegen.module_types`。选择建议：
+`module_type` 是模块能力契约，在 `modules/{module}/module.yaml` 中声明。名称来自 `aitest_config/aitest.yaml.codegen.module_types`。选择建议：
 
 - 默认 HTTP/gRPC 路线足够时用 `standard_http` 或 `standard_recommend`
-- 多端点、多步骤、fixture Client 模块用 `multi_endpoint`
+- 多端点、多步骤、Harness 模块用 `multi_endpoint`
 - 进程隔离、mock、服务实例管理等用更具体的类型
 
 缺少 `module_type` 产生 W502 warning；类型未定义或 `requires` 不满足产生 E504 error。

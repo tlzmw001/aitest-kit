@@ -4,8 +4,7 @@ import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
 from aitest_kit.runtime_context import reset_case_context, set_case_context
-from test_workspace.targets.coupon_system.fixtures.issuance import setup_issuance
-from test_workspace.targets.coupon_system.fixtures.issuance import issue_item, issue_items
+pytest_plugins = ["test_workspace.targets.coupon_system.modules.issuance.fixture"]
 
 
 BASE_REQUEST = {
@@ -54,15 +53,15 @@ class TestIssuanceBoundary:
             # SETUP: 前置操作_2：重置库存为 top_item=0、second_item=100
             # SETUP: 请求覆盖：验证请求 max_claim_per_request=2、score_threshold=0.0
 
-            issue = setup_issuance
-            issue.set_stock("COUPON_ISSUE_A", 0)
-            issue.set_stock("COUPON_ISSUE_B", 100)
-            body = issue.request("u_issue_stock_next", "req_issue_011", items=issue_items('COUPON_ISSUE_A', 'COUPON_ISSUE_B'), score_threshold=0.0, max_claim_per_request=2, policy_id="policy_fallback_001")
-            resp = issue.post_recommend(body)
+            harness = setup_issuance
+            harness.set_stock("COUPON_ISSUE_A", 0)
+            harness.set_stock("COUPON_ISSUE_B", 100)
+            body = harness.request("u_issue_stock_next", "req_issue_011", items=harness.issue_items('COUPON_ISSUE_A', 'COUPON_ISSUE_B'), score_threshold=0.0, max_claim_per_request=2, policy_id="policy_fallback_001")
+            resp = harness.post_recommend(body)
             assert resp['code'] == 0
             assert resp['coupon'] is not None
             assert resp['coupon']['item_id'] == 'COUPON_ISSUE_B'
-            assert issue.stock('COUPON_ISSUE_A') == 0
+            assert harness.stock('COUPON_ISSUE_A') == 0
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -82,11 +81,11 @@ class TestIssuanceBoundary:
             # SETUP: 前置操作：A/B 库存均为 0
             # SETUP: 请求覆盖：max_claim_per_request=2、score_threshold=0.0
 
-            issue = setup_issuance
-            issue.set_stock("COUPON_ISSUE_A", 0)
-            issue.set_stock("COUPON_ISSUE_B", 0)
-            body = issue.request("u_issue_all_empty", "req_issue_012", score_threshold=0.0, max_claim_per_request=2)
-            resp = issue.post_recommend(body)
+            harness = setup_issuance
+            harness.set_stock("COUPON_ISSUE_A", 0)
+            harness.set_stock("COUPON_ISSUE_B", 0)
+            body = harness.request("u_issue_all_empty", "req_issue_012", score_threshold=0.0, max_claim_per_request=2)
+            resp = harness.post_recommend(body)
             assert resp['code'] == 0
             assert resp['coupon'] is None
             assert resp['code'] != 1006
@@ -110,8 +109,8 @@ class TestIssuanceBoundary:
             # SETUP: 请求覆盖：两个不同 user_id 并发请求同一券
             # SETUP: 请求覆盖_2：score_threshold=0.0
 
-            issue = setup_issuance
-            result = issue.concurrent_issue_once()
+            harness = setup_issuance
+            result = harness.concurrent_issue_once()
             assert all(r['code'] == 0 for r in result['responses'])
             assert result['success_count'] == 1
             assert result['empty_count'] == 1
@@ -138,9 +137,9 @@ class TestIssuanceBoundary:
             # SETUP: 请求覆盖：HTTP 请求 item 省略 expire_days，其他字段完整
             # SETUP: 请求覆盖_2：成功发放
 
-            issue = setup_issuance
-            body = issue.request("u_issue_default_expire", "req_issue_016", items=[issue_item('COUPON_ISSUE_A', expire_days=None)], score_threshold=0.0)
-            resp = issue.post_recommend(body)
+            harness = setup_issuance
+            body = harness.request("u_issue_default_expire", "req_issue_016", items=[harness.issue_item('COUPON_ISSUE_A', expire_days=None)], score_threshold=0.0)
+            resp = harness.post_recommend(body)
             assert resp['code'] == 0
             assert resp['coupon'] is not None
             assert resp['coupon']['expire_time'] - resp['coupon']['claim_time'] == 7 * 86400
@@ -165,11 +164,11 @@ class TestIssuanceBoundary:
             # SETUP: 前置操作_2：重置库存为 top_item=0、second_item=100
             # SETUP: 请求覆盖：验证请求 max_claim_per_request=10、score_threshold=0.0
 
-            issue = setup_issuance
-            issue.set_stock("COUPON_ISSUE_A", 0)
-            issue.set_stock("COUPON_ISSUE_B", 100)
-            body = issue.request("u_issue_max_gt_count", "req_issue_017", items=issue_items('COUPON_ISSUE_A', 'COUPON_ISSUE_B'), score_threshold=0.0, max_claim_per_request=10, policy_id="policy_fallback_001")
-            resp = issue.post_recommend(body)
+            harness = setup_issuance
+            harness.set_stock("COUPON_ISSUE_A", 0)
+            harness.set_stock("COUPON_ISSUE_B", 100)
+            body = harness.request("u_issue_max_gt_count", "req_issue_017", items=harness.issue_items('COUPON_ISSUE_A', 'COUPON_ISSUE_B'), score_threshold=0.0, max_claim_per_request=10, policy_id="policy_fallback_001")
+            resp = harness.post_recommend(body)
             assert resp['code'] == 0
             assert resp['coupon'] is not None
             assert resp['coupon']['item_id'] == 'COUPON_ISSUE_B'
@@ -194,15 +193,15 @@ class TestIssuanceBoundary:
             # SETUP: 前置操作_2：重置库存为 top_item=0、second_item=100
             # SETUP: 请求覆盖：验证请求 max_claim_per_request=2、score_threshold=0.0
 
-            issue = setup_issuance
-            issue.set_stock("COUPON_ISSUE_A", 0)
-            issue.set_stock("COUPON_ISSUE_B", 100)
-            body = issue.request("u_issue_grpc_stock_next", "req_issue_018", items=issue_items('COUPON_ISSUE_A', 'COUPON_ISSUE_B'), score_threshold=0.0, max_claim_per_request=2, policy_id="policy_fallback_001")
-            resp = issue.grpc_recommend(body)
+            harness = setup_issuance
+            harness.set_stock("COUPON_ISSUE_A", 0)
+            harness.set_stock("COUPON_ISSUE_B", 100)
+            body = harness.request("u_issue_grpc_stock_next", "req_issue_018", items=harness.issue_items('COUPON_ISSUE_A', 'COUPON_ISSUE_B'), score_threshold=0.0, max_claim_per_request=2, policy_id="policy_fallback_001")
+            resp = harness.grpc_recommend(body)
             assert resp['code'] == 0
             assert resp['coupon'] is not None
             assert resp['coupon']['item_id'] == 'COUPON_ISSUE_B'
-            assert issue.stock('COUPON_ISSUE_A') == 0
+            assert harness.stock('COUPON_ISSUE_A') == 0
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -223,11 +222,11 @@ class TestIssuanceBoundary:
             # SETUP: 前置操作：gRPC 请求传入 A/B，库存均为 0
             # SETUP: 请求覆盖：max_claim_per_request=2、score_threshold=0.0
 
-            issue = setup_issuance
-            issue.set_stock("COUPON_ISSUE_A", 0)
-            issue.set_stock("COUPON_ISSUE_B", 0)
-            body = issue.request("u_issue_grpc_all_empty", "req_issue_019", score_threshold=0.0, max_claim_per_request=2)
-            resp = issue.grpc_recommend(body)
+            harness = setup_issuance
+            harness.set_stock("COUPON_ISSUE_A", 0)
+            harness.set_stock("COUPON_ISSUE_B", 0)
+            body = harness.request("u_issue_grpc_all_empty", "req_issue_019", score_threshold=0.0, max_claim_per_request=2)
+            resp = harness.grpc_recommend(body)
             assert resp['code'] == 0
             assert resp['coupon'] is None
             assert resp['code'] != 1006
@@ -251,16 +250,15 @@ class TestIssuanceBoundary:
             # SETUP: 前置操作：gRPC 请求传入两张库存充足的候选券
             # SETUP: 请求覆盖：max_claim_per_request=10、score_threshold=0.0
 
-            issue = setup_issuance
-            body = issue.request("u_issue_grpc_max_gt_count", "req_issue_020", score_threshold=0.0, max_claim_per_request=10)
-            resp = issue.grpc_recommend(body)
+            harness = setup_issuance
+            body = harness.request("u_issue_grpc_max_gt_count", "req_issue_020", score_threshold=0.0, max_claim_per_request=10)
+            resp = harness.grpc_recommend(body)
             assert resp['code'] == 0
             assert resp['coupon'] is None or resp['coupon']['item_id'] in {r['item_id'] for r in resp['results']}
         finally:
             reset_case_context(__aitest_ctx_token)
 
 
-# TODO: setup_issuance fixture 需要手写实现（→ tests/fixtures/issuance.py）
 # SKIPPED: TC-ISSUE-014 — `[!可行性存疑: L1 未规定去重限制，当前实现未调用 has_claimed，需产品确认是否允许重复领取]`
 # SKIPPED: TC-ISSUE-015 — `[!可行性存疑: 需要测试环境能在扣库存后注入 Redis 写失败]`
 

@@ -5,7 +5,7 @@
 核心流程：
 
 ```text
-docs -> knowledge -> suite cases -> target fixture/profile -> generated pytest -> report
+docs -> knowledge -> suite cases -> module Harness/profile -> generated pytest -> report
 ```
 
 ## 3 分钟开始
@@ -106,7 +106,7 @@ docs/                         # 公开 API 文档、设计文档、OpenAPI/proto
 aitest_config/                 # 项目配置、codegen 配置、schema、refs
 test_workspace/
   knowledge/                   # L0/L1/L2 + TEST_SPEC
-  targets/                     # 按目标系统组织 fixture/helper/module profile
+  targets/                     # 按目标系统组织 module Harness、profile 和可选 target helper
   suites/                      # 按目标系统组织独立 suite
   generated/                   # 按目标系统保存 generated pytest
   reports/                     # aitest run 生成的报告
@@ -139,9 +139,10 @@ mkdir -p .agents/skills && cp -R skills/. .agents/skills/
 | `docs/` | 测试规则来源，优先放公开 API/设计文档 |
 | `test_workspace/knowledge/` | 测试知识库，记录当前系统可测试契约 |
 | `test_workspace/suites/` | 推荐 suite 根目录，用于需求、迭代、临时批次 |
-| `test_workspace/targets/` | 推荐 target 根目录，用于目标系统级 fixture/profile/知识索引 |
-| `test_workspace/targets/{target}/fixtures/{module}.py` | target 模块 fixture，封装公开 API 调用和测试动作 |
-| `test_workspace/targets/{target}/profiles/profile_{module}.md` | target module profile，配置稳定生成规则 |
+| `test_workspace/targets/` | 推荐 target 根目录，用于目标系统级 module package 和知识索引 |
+| `test_workspace/targets/{target}/modules/{module}/fixture.py` | 唯一公开 `setup_{module}` fixture，负责 Harness 生命周期 |
+| `test_workspace/targets/{target}/modules/{module}/harness.py` | 模块测试能力门面，供 suite flow 固定以 `harness` 调用 |
+| `test_workspace/targets/{target}/modules/{module}/profile.md` | module profile，只放跨 suite 稳定生成规则 |
 | `profile_{suite}_suite.md` | suite profile，跟随某批用例 |
 | `test_workspace/generated/` | 推荐 generated pytest 输出根目录 |
 | `test_workspace/reports/` | 执行报告 |
@@ -165,9 +166,10 @@ suite 用例适合按 L2 需求、迭代或临时批次组织。推荐布局：
 
 ```text
 test_workspace/targets/<target>/target.yaml
-test_workspace/targets/<target>/modules/<module>.yaml
-test_workspace/targets/<target>/fixtures/<module>.py
-test_workspace/targets/<target>/profiles/profile_<module>.md
+test_workspace/targets/<target>/modules/<module>/module.yaml
+test_workspace/targets/<target>/modules/<module>/fixture.py
+test_workspace/targets/<target>/modules/<module>/harness.py
+test_workspace/targets/<target>/modules/<module>/profile.md
 test_workspace/suites/<target>/<suite>/suite.yaml
 test_workspace/suites/<target>/<suite>/business.md
 test_workspace/suites/<target>/<suite>/profile_<suite>_suite.md
@@ -175,7 +177,7 @@ test_workspace/suites/<target>/<suite>/profile_<suite>_suite.md
 
 suite profile 跟随用例目录，module profile 保留模块级稳定能力。
 
-具体规则：`profile_{module}.md` 只放 L1 稳定能力；`profile_{suite}_suite.md` 放具体 TC-ID 绑定的 `variables.cases/requests/case_flows/case_bodies/case_fixtures`。更多示例见 `aitest_config/refs/config-files.md`。
+具体规则：`modules/{module}/profile.md` 只放 L1 稳定能力；`profile_{suite}_suite.md` 放具体 TC-ID 绑定的 `variables.cases/requests/case_flows/case_bodies`。suite flow 不选择 fixture/object，固定从 `harness` 开始调用。更多示例见 `aitest_config/refs/config-files.md`。
 
 ## 常用命令
 

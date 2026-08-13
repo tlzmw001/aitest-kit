@@ -124,7 +124,7 @@ def _all_units(target: str, diagnostics: list[str]) -> list[TaskUnit]:
         if not module_dir.exists():
             diagnostics.append(f"E740: target module_dir not found: {module_dir}")
             continue
-        for module_file in sorted(module_dir.glob("*.yaml")):
+        for module_file in sorted(module_dir.glob("*/module.yaml")):
             module_context = load_module_context(target_context, module_file)
             diagnostics.extend(module_context.diagnostics)
             units.extend(_units_from_module(module_context))
@@ -170,7 +170,7 @@ def _targets_containing_module(module: str) -> list[str]:
         target_context = load_target_context(target)
         if target_context.diagnostics:
             continue
-        if (target_context.defaults.module_dir / f"{module}.yaml").exists():
+        if (target_context.defaults.module_dir / module / "module.yaml").exists():
             result.append(target)
     return result
 

@@ -19,7 +19,7 @@ aitest run --workspace /path/to/project --suite-file test_workspace/suites/<targ
 
 ```text
 No modules found under the configured cases directory.
-Next step: create a target/module registry and a suite.yaml, or keep using legacy module cases.
+Next step: create a canonical target/module registry and a suite.yaml.
 ```
 
 含义：
@@ -30,8 +30,8 @@ Next step: create a target/module registry and a suite.yaml, or keep using legac
 处理：
 
 - 创建 `test_workspace/targets/{target}/target.yaml`。
-- 创建 `test_workspace/targets/{target}/modules/{module}.yaml`。
-- 创建 `test_workspace/targets/{target}/profiles/profile_{module}.md`。
+- 创建 canonical module package：
+  `test_workspace/targets/{target}/modules/{module}/{module.yaml,profile.md,fixture.py,harness.py}`。
 - 创建 `test_workspace/suites/{target}/{suite}/suite.yaml` 和 Markdown 用例。
 
 ## E001: JSON 解析失败
@@ -48,7 +48,7 @@ Next step: create a target/module registry and a suite.yaml, or keep using legac
 - 基础请求体必须能被 `json.loads` 解析。
 - 变化字段填合法默认值。
 - case 级变化写到“请求覆盖”供 review；真实执行差异优先写 profile 的 `requests.<case_id>.patches`，简单字段覆盖可用 `overrides`。
-- `基础请求体（gRPC）` 可以保留，但代码块必须是合法 JSON；它不会启用 `default_grpc`。用例场景变量写 `协议：gRPC` 也不会阻断默认 JSON 请求绑定；只有需要真实 gRPC/SDK/多端点调用时，才需要通过 suite profile 的 `case_flows` 或 `case_bodies` 显式调用 fixture/helper。
+- `基础请求体（gRPC）` 可以保留，但代码块必须是合法 JSON；它不会启用 `default_grpc`。用例场景变量写 `协议：gRPC` 也不会阻断默认 JSON 请求绑定；只有需要真实 gRPC/SDK/多端点调用时，才需要通过 suite profile 的 `case_flows` 或 `case_bodies` 显式调用 Harness capability。
 
 ## E002: 缺少基础请求体
 
@@ -61,7 +61,7 @@ Next step: create a target/module registry and a suite.yaml, or keep using legac
 
 - 单请求模块：补完整基础请求体。
 - 多步骤模块：在 profile 中补 `case_flows`。
-- 复杂控制流模块：临时使用 `case_bodies`。
+- 复杂控制流模块：先封装为 Harness capability；只有测试函数本身仍需复杂编排时才使用 `case_bodies`。
 
 ## E202: gRPC 用例缺少显式执行策略
 
@@ -72,9 +72,9 @@ Next step: create a target/module registry and a suite.yaml, or keep using legac
 
 处理：
 
-- 在 fixture/helper 中封装真实 gRPC 调用。
-- 在 suite profile 的 `case_flows` 中显式调用该 helper。
-- 若控制流复杂、需要 mock/并发/生命周期管理，先用 `case_bodies`，稳定后再评估是否晋升为 `case_flows`。
+- 在模块 Harness 中封装真实 gRPC 调用；只有多个 module 已实际复用的纯技术适配才放到 target helper。
+- 在 suite profile 的 `case_flows` 中通过固定根对象 `harness` 调用该能力。
+- 若控制流复杂、需要 mock/并发/生命周期管理，优先封装为 Harness capability；只有测试函数本身仍需复杂编排时才用 `case_bodies`。
 
 ## profile schema 错误
 
@@ -114,7 +114,7 @@ aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --
 
 典型判断：
 
-- `Review hint` 提示 UNPARSED：优先补 `structured_assertions`、`assertion_rules` 或 fixture/helper。
+- `Review hint` 提示 UNPARSED：优先补 `structured_assertions`、`assertion_rules` 或 Harness capability。
 - `Case flow` 中没有预期的 `save_as`：修 suite profile 的 `case_flows.steps`。
 - `Request bindings` 没有预期 patches/overrides：修 suite profile 的 `requests.<case_id>`。
 - `Request bindings` 里的 `value_from` 来源不符合预期：修 suite profile 的 `variables.defaults` / `variables.cases.<case_id>`，不要把 env 值写进 profile。
@@ -149,7 +149,7 @@ aitest codegen --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --
 - default HTTP 用例只能写 `target: resp`。
 - `case_flow` 用例只能引用该 flow 中 `save_as` 或 `assign` 产出的变量。
 - `case_bodies`、pure manual、skipped 用例不挂 `structured_assertions`。
-- 复杂业务计算不要扩展 YAML 控制流，封装到 fixture/helper 方法，再通过 `case_flow.call` 调用。
+- 复杂业务计算不要扩展 YAML 控制流，封装为 Harness capability，再通过 `case_flow.call` 调用。
 
 ## case_flow 引用未注入变量
 
@@ -167,19 +167,19 @@ NameError: name 'caplog' is not defined
 
 处理：
 
-- `case_flow` 只引用 codegen 生成的变量：`object`、前序 `save_as`、`assign`、`{var: name}`、`{request_ref: ...}`。
-- 临时目录、日志捕获、mock、monkeypatch 和 cleanup 封装到 fixture/helper 方法。
-- suite profile 只调用该方法并断言返回结果。
+- `case_flow` 只引用 codegen 生成的变量：固定根对象 `harness`、前序 `save_as`、`assign`、`{var: name}`、`{request_ref: ...}`。
+- 临时目录、日志捕获、mock、monkeypatch、循环、条件和 cleanup 封装为 Harness capability。
+- suite profile 只调用该能力并断言返回结果；不要在 flow 中声明 fixture 或 object。
 
 ## unknown module_type
 
 常见原因：
 
-- profile 写了 `module_type: xxx`，但 `aitest_config/aitest.yaml` 的 `codegen.module_types` 没有定义。
+- `modules/{module}/module.yaml` 写了 `module_type: xxx`，但 `aitest_config/aitest.yaml` 的 `codegen.module_types` 没有定义。
 
 处理：
 
-- 如果是拼写错误，改 profile。
+- 如果是拼写错误，改 `modules/{module}/module.yaml`。
 - 如果是新模块类别，在 `aitest.yaml` 中新增 module_type，并明确是否需要 `case_bodies` 或 `case_flows`。
 
 ## stale generated
@@ -247,16 +247,16 @@ fixture 'setup_xxx' not found
 
 常见原因：
 
-- generated pytest 引用了 `setup_{module}`，通常来自 `case_flow.fixture`、`default_fixture`、显式 `default_case_setup` 或 `case_body` 默认 fixture；`default_http` 不再隐式注入或调用 `setup_{module}`。
-- target/suite 模式下，`test_workspace/targets/{target}/fixtures/{module}.py` 没有定义该 fixture，或 `module.yaml.fixture.default_fixture` 写错。
-- 旧 workspace 模块模式下，`test_workspace/tests/fixtures/{module}.py` 没有定义该 fixture，或 fixture 文件没有被 `test_workspace/tests/conftest.py` 注册。
+- canonical module package 不完整，缺少 `modules/{module}/fixture.py` 或 `modules/{module}/harness.py`。
+- `fixture.py` 没有定义公开 fixture `setup_{module}`，或它没有返回/yield `{Module}Harness`。
+- generated pytest 的 canonical fixture import 无法导入，通常说明 target/module 名称与目录不一致，或 Python package 接线不完整。
 
 处理：
 
-- 在 target 模块 fixture 文件中补 `setup_{module}`。
-- 检查 `module.yaml` 的 `fixture.file/default_fixture`。
-- 如果用例需要 per-case 数据准备或 factory setup，把用例改成 `case_flow` 并在 profile 中显式声明 `default_case_setup` 或 flow steps。
-- 旧 workspace 模块模式再检查 `conftest.py` 的插件注册方式。
+- 检查 `test_workspace/targets/{target}/modules/{module}/` 是否同时包含 `module.yaml`、`profile.md`、`fixture.py`、`harness.py`。
+- 在 `fixture.py` 中实现固定公开入口 `setup_{module}`，直接返回或 yield `{Module}Harness`。
+- 在 `harness.py` 中补模块所需 capability；suite flow 从固定根对象 `harness` 调用，不配置 fixture/object。
+- 单模块能力留在 module package；仅已证实跨 module 复用的纯技术适配放到 `test_workspace/targets/{target}/helpers/`，不要建立 `test_workspace/helpers/`。
 - 不要直接改 generated pytest。
 
 ## 环境变量缺失
@@ -297,7 +297,7 @@ generated pytest 中出现：
 1. 少量一次性断言：由 AI 补写 generated 片段，再评估是否需要沉淀。
 2. 重复断言：写入 profile `assertion_rules`。
 3. 项目通用断言：写入 `aitest_config/aitest.yaml` 的 `codegen.builtin_assertion_rules`。
-4. 多步骤流程：改为 `case_flows`。
+4. 多步骤流程：改为调用 Harness capability 的 `case_flows`。
 
 ## 待测系统 bug 与用例问题分流
 
@@ -312,5 +312,5 @@ generated pytest 中出现：
 
 - 文档不清楚：知识库标 `[?]`。
 - 用例不可测：修改 Markdown 或记录为测试基础设施需求。
-- fixture/codegen 问题：修改 fixture/profile/helper/`aitest.yaml`。
+- Harness/codegen 问题：修改 module package、suite profile、target helper 或 `aitest.yaml`。
 - 待测系统 bug：记录到 `test_workspace/results/`，保留复现命令、实际结果和期望结果。

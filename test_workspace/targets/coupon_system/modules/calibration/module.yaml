@@ -1,0 +1,10 @@
+target: coupon_system
+module: calibration
+module_type: standard_recommend
+knowledge_refs:
+  l1:
+    - test_workspace/knowledge/L1/calibration.md
+registered_suites:
+  - suite: calibration_smoke
+    manifest: test_workspace/suites/coupon_system/calibration_smoke/suite.yaml
+    status: active

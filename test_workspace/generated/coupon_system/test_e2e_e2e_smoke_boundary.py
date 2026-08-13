@@ -4,8 +4,7 @@ import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
 from aitest_kit.runtime_context import reset_case_context, set_case_context
-from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
-from test_workspace.targets.coupon_system.fixtures.e2e import setup_e2e
+pytest_plugins = ["test_workspace.targets.coupon_system.modules.e2e.fixture"]
 
 
 BASE_REQUEST = {
@@ -57,11 +56,11 @@ class TestE2eBoundary:
             # SETUP: 前置操作_4：设置 COUPON_ACT_001 库存为 3
             # SETUP: 请求覆盖：scene_name="game"、device="mobile"、external=0、score_threshold=0.2、max_claim_per_request=1、items 只包含 COUPON_ACT_001
 
-            e2e = setup_e2e
-            e2e = setup_e2e(case_id="TC-E2E-004")
-            e2e.set_stock("COUPON_ACT_001", 3)
-            body = e2e.request("u_e2e_calibration_004", "req_e2e_004")
-            response = e2e.post_recommend_response(body)
+            harness = setup_e2e
+            harness.set_experiment_whitelist("u_e2e_calibration_004")
+            harness.set_stock("COUPON_ACT_001", 3)
+            body = harness.request("u_e2e_calibration_004", "req_e2e_004")
+            response = harness.post_recommend_response(body)
             assert response.status_code == 200
             resp = response.json()
             assert resp["code"] == 0
@@ -71,7 +70,7 @@ class TestE2eBoundary:
             assert resp["results"][0]["calibrated_score"] > resp["results"][0]["score"]
             assert resp["coupon"] is not None
             assert resp["coupon"]["item_id"] == "COUPON_ACT_001"
-            assert e2e.stock("COUPON_ACT_001") == 2
+            assert harness.stock("COUPON_ACT_001") == 2
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -97,14 +96,13 @@ class TestE2eBoundary:
             # SETUP: 前置操作_3：设置 COUPON_SHIP_001 库存为 3
             # SETUP: 请求覆盖：user_id="u_e2e_external_skip_006"、scene_name="ad"、device="pc"、external=1、score_threshold=0.2、max_claim_per_request=1、items 只包含 COUPON_SHIP_001
 
-            e2e = setup_e2e
-            e2e = setup_e2e(case_id="TC-E2E-006")
-            e2e.set_stock("COUPON_SHIP_001", 3)
-            body = e2e.request("u_e2e_external_skip_006", "req_e2e_006", coupon_id="COUPON_SHIP_001", scene_name="ad", device="pc", external=1)
-            response = e2e.post_recommend_response(body)
+            harness = setup_e2e
+            harness.set_stock("COUPON_SHIP_001", 3)
+            body = harness.request("u_e2e_external_skip_006", "req_e2e_006", coupon_id="COUPON_SHIP_001", scene_name="ad", device="pc", external=1)
+            response = harness.post_recommend_response(body)
             assert response.status_code == 200
             resp = response.json()
-            coupons = e2e.query_coupons("u_e2e_external_skip_006")
+            coupons = harness.query_coupons("u_e2e_external_skip_006")
             assert resp["code"] == 0
             assert resp["scene_id"] == 2002
             assert resp["experiment_info"] == {}
@@ -135,12 +133,11 @@ class TestE2eBoundary:
             # SETUP: 请求覆盖：gRPC 推荐请求使用 user_id="u_e2e_shared_state_007"、scene_name="game"、device="mobile"、policy_id="policy_fallback_001"、external=0、score_threshold=0.4、max_claim_per_request=1、items 只包含 COUPON_ACT_001
             # SETUP: 请求覆盖_2：推荐成功后调用 HTTP GET /api/v1/coupons/u_e2e_shared_state_007
 
-            e2e = setup_e2e
-            e2e = setup_e2e(case_id="TC-E2E-007")
-            e2e.set_stock("COUPON_ACT_001", 1)
-            body = e2e.request("u_e2e_shared_state_007", "req_e2e_007", policy_id="policy_fallback_001", score_threshold=0.4)
-            grpc_resp = e2e.grpc_recommend(body)
-            http_json = e2e.query_coupons("u_e2e_shared_state_007")
+            harness = setup_e2e
+            harness.set_stock("COUPON_ACT_001", 1)
+            body = harness.request("u_e2e_shared_state_007", "req_e2e_007", policy_id="policy_fallback_001", score_threshold=0.4)
+            grpc_resp = harness.grpc_recommend(body)
+            http_json = harness.query_coupons("u_e2e_shared_state_007")
             assert grpc_resp["code"] == 0
             assert grpc_resp["scene_id"] == 3001
             assert grpc_resp["coupon"] is not None
@@ -153,7 +150,6 @@ class TestE2eBoundary:
             reset_case_context(__aitest_ctx_token)
 
 
-# TODO: setup_e2e fixture 需要手写实现（→ tests/fixtures/e2e.py）
 # SKIPPED: TC-E2E-005 — `[!可行性存疑: 需要 fixture 支持以不可达 AB_SERVICE_URL 启动独立主服务；默认集成环境使用正常 AB 服务时该用例会返回 200，详见 results/e2e_unreachable_ab_requires_isolated_main_service.md]`
 
 __codegen_skipped__ = [{"tc_id": "TC-E2E-005", "module": "e2e", "category": "boundary", "source": "test_workspace/suites/coupon_system/e2e_smoke/boundary.md", "title": "内部打分链路在 AB 服务不可用时直接返回 HTTP 500", "priority": "P1 / 异常", "markers": ["`[!可行性存疑: 需要 fixture 支持以不可达 AB_SERVICE_URL 启动独立主服务；默认集成环境使用正常 AB 服务时该用例会返回 200，详见 results/e2e_unreachable_ab_requires_isolated_main_service.md]`"], "reason": "`[!可行性存疑: 需要 fixture 支持以不可达 AB_SERVICE_URL 启动独立主服务；默认集成环境使用正常 AB 服务时该用例会返回 200，详见 results/e2e_unreachable_ab_requires_isolated_main_service.md]`"}]

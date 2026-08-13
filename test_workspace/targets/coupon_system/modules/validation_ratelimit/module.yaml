@@ -1,0 +1,10 @@
+target: coupon_system
+module: validation_ratelimit
+module_type: isolated_service
+knowledge_refs:
+  l1:
+    - test_workspace/knowledge/L1/validation_ratelimit.md
+registered_suites:
+  - suite: validation_ratelimit_smoke
+    manifest: test_workspace/suites/coupon_system/validation_ratelimit_smoke/suite.yaml
+    status: active

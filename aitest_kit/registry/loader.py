@@ -8,17 +8,14 @@ import yaml
 
 from aitest_kit.workspace_config import AITEST_CONFIG_PATH
 from aitest_kit.registry.models import (
+    ModuleBinding,
     ModuleContext,
     RegisteredSuite,
     SuiteManifestContext,
     TargetContext,
     TargetDefaults,
 )
-from aitest_kit.registry.path_resolver import (
-    resolve_knowledge_refs,
-    resolve_named_path,
-    resolve_path,
-)
+from aitest_kit.registry.path_resolver import resolve_knowledge_refs, resolve_path
 
 
 def load_target_context(
@@ -76,10 +73,37 @@ def load_module_context(
         diagnostics=diagnostics,
         field="knowledge_refs",
     )
-    fixture_path, default_fixture = _module_fixture(target_context, data, diagnostics)
-    profile_path = _module_profile(target_context, data, module_name, diagnostics)
-    helper_paths = _module_helpers(target_context, data, diagnostics)
-    registered_suites = _registered_suites(target_context, data, diagnostics)
+    package_dir = _module_package_dir(config_path, target_context, module_name)
+    if package_dir.name != module_name:
+        diagnostics.append(
+            f"E715: module {module_name} does not match package directory {package_dir.name}"
+        )
+    _validate_module_layout_fields(data, diagnostics)
+    fixture_path = package_dir / "fixture.py"
+    harness_path = package_dir / "harness.py"
+    profile_path = package_dir / "profile.md"
+    missing_assets = [
+        path.name
+        for path in (fixture_path, harness_path, profile_path)
+        if not path.exists()
+    ]
+    if missing_assets:
+        diagnostics.append(
+            "E714: canonical module assets not found under "
+            f"{package_dir}: {', '.join(missing_assets)}"
+        )
+    binding = _module_binding(
+        target_context,
+        module_name,
+        fixture_path,
+        diagnostics,
+    )
+    registered_suites = _registered_suites(
+        target_context,
+        module_name,
+        data,
+        diagnostics,
+    )
 
     return ModuleContext(
         workspace_root=target_context.workspace_root,
@@ -87,11 +111,12 @@ def load_module_context(
         module=module_name,
         module_type=module_type,
         config_path=config_path,
+        package_dir=package_dir,
         knowledge_refs=knowledge_refs,
         fixture_path=fixture_path,
-        default_fixture=default_fixture,
+        harness_path=harness_path,
         profile_path=profile_path,
-        helper_paths=helper_paths,
+        binding=binding,
         registered_suites=registered_suites,
         diagnostics=diagnostics,
     )
@@ -197,6 +222,13 @@ def _target_defaults(
     diagnostics: list[str],
 ) -> TargetDefaults:
     defaults = raw if isinstance(raw, dict) else {}
+    removed = sorted({"fixture_dir", "profile_dir"} & set(defaults))
+    if removed:
+        diagnostics.append(
+            "E701: target defaults use removed path fields: "
+            + ", ".join(removed)
+            + "; module assets live under defaults.module_dir/{module}"
+        )
 
     def field(name: str, fallback: str) -> Path:
         return resolve_path(
@@ -208,9 +240,7 @@ def _target_defaults(
 
     return TargetDefaults(
         module_dir=field("module_dir", f"test_workspace/targets/{target}/modules"),
-        fixture_dir=field("fixture_dir", f"test_workspace/targets/{target}/fixtures"),
         helper_dir=field("helper_dir", f"test_workspace/targets/{target}/helpers"),
-        profile_dir=field("profile_dir", f"test_workspace/targets/{target}/profiles"),
         suite_dir=field("suite_dir", f"test_workspace/suites/{target}"),
         generated_dir=field("generated_dir", f"test_workspace/generated/{target}"),
         reports_dir=field("reports_dir", f"test_workspace/reports/{target}"),
@@ -226,8 +256,10 @@ def _load_module_data(
     if raw.suffix in {".yaml", ".yml"} or raw.exists():
         path = raw if raw.is_absolute() else target_context.workspace_root / raw
         path = path.resolve(strict=False)
+        if path.is_dir():
+            path = path / "module.yaml"
     else:
-        path = target_context.defaults.module_dir / f"{module}.yaml"
+        path = target_context.defaults.module_dir / str(module) / "module.yaml"
     data = _read_yaml_mapping(path, diagnostics, "module")
     return path, data
 
@@ -248,64 +280,75 @@ def _module_type(data: dict[str, Any], diagnostics: list[str]) -> str:
     return value.strip()
 
 
-def _module_fixture(
+def _module_package_dir(
+    config_path: Path | None,
     target_context: TargetContext,
-    data: dict[str, Any],
-    diagnostics: list[str],
-) -> tuple[Path | None, str]:
-    raw = data.get("fixture", {})
-    if isinstance(raw, str):
-        file_value = raw
-        default_fixture = ""
-    elif isinstance(raw, dict):
-        file_value = raw.get("file")
-        default_fixture = raw.get("default_fixture", "")
-    else:
-        diagnostics.append("E711: module fixture must be a string or mapping")
-        return None, ""
-    path = resolve_named_path(
-        file_value,
-        default_dir=target_context.defaults.fixture_dir,
-        workspace_root=target_context.workspace_root,
-        diagnostics=diagnostics,
-        field="fixture.file",
-    )
-    return path, default_fixture if isinstance(default_fixture, str) else ""
-
-
-def _module_profile(
-    target_context: TargetContext,
-    data: dict[str, Any],
     module: str,
-    diagnostics: list[str],
-) -> Path | None:
-    if "profile" in data:
+) -> Path:
+    if config_path is not None:
+        return config_path.parent.resolve(strict=False)
+    return (target_context.defaults.module_dir / module).resolve(strict=False)
+
+
+def _validate_module_layout_fields(data: dict[str, Any], diagnostics: list[str]) -> None:
+    removed = sorted({"fixture", "helpers", "profile"} & set(data))
+    if removed:
         diagnostics.append(
-            "E711: module.yaml must not contain profile; "
-            f"use canonical module profile path profile_{module}.md"
+            "E711: module.yaml uses removed path fields: "
+            + ", ".join(removed)
+            + "; use canonical module package files module.yaml, profile.md, fixture.py, harness.py"
         )
-    return (target_context.defaults.profile_dir / f"profile_{module}.md").resolve(strict=False)
 
 
-def _module_helpers(
+def _module_binding(
     target_context: TargetContext,
-    data: dict[str, Any],
+    module: str,
+    fixture_path: Path,
     diagnostics: list[str],
-) -> list[Path]:
-    return [
-        item
-        for item in _resolve_path_list(
-            data.get("helpers", []),
-            base_dir=target_context.workspace_root,
-            diagnostics=diagnostics,
-            field="helpers",
+) -> ModuleBinding:
+    fixture_name = f"setup_{module}"
+    fixture_module = _python_module_for(
+        fixture_path,
+        target_context.workspace_root,
+    )
+    fixture_import = _python_import_for(
+        fixture_path,
+        fixture_name,
+        target_context.workspace_root,
+    )
+    if not fixture_import or not fixture_module:
+        diagnostics.append(
+            "E713: canonical module fixture path is not importable as Python: "
+            f"{fixture_path}"
         )
-        if item is not None
-    ]
+    return ModuleBinding(
+        target=target_context.target,
+        module=module,
+        fixture_import=fixture_import,
+        fixture_name=fixture_name,
+        fixture_module=fixture_module,
+    )
+
+
+def _python_import_for(path: Path, symbol: str, workspace_root: Path) -> str:
+    module = _python_module_for(path, workspace_root)
+    return f"from {module} import {symbol}" if module else ""
+
+
+def _python_module_for(path: Path, workspace_root: Path) -> str:
+    try:
+        relative = path.resolve(strict=False).relative_to(workspace_root.resolve(strict=False))
+    except ValueError:
+        return ""
+    parts = list(relative.with_suffix("").parts)
+    if not parts or not all(part.isidentifier() for part in parts):
+        return ""
+    return ".".join(parts)
 
 
 def _registered_suites(
     target_context: TargetContext,
+    module_name: str,
     data: dict[str, Any],
     diagnostics: list[str],
 ) -> list[RegisteredSuite]:
@@ -315,7 +358,13 @@ def _registered_suites(
         return []
     suites: list[RegisteredSuite] = []
     for index, item in enumerate(raw):
-        registered = _registered_suite(target_context, item, index, diagnostics)
+        registered = _registered_suite(
+            target_context,
+            module_name,
+            item,
+            index,
+            diagnostics,
+        )
         if registered is not None:
             suites.append(registered)
     return suites
@@ -323,6 +372,7 @@ def _registered_suites(
 
 def _registered_suite(
     target_context: TargetContext,
+    module_name: str,
     item: Any,
     index: int,
     diagnostics: list[str],
@@ -336,10 +386,16 @@ def _registered_suite(
         )
         if manifest is None:
             return None
-        suite = _suite_name_from_manifest(target_context, manifest, index, diagnostics)
-        if not suite:
+        suite_context = _suite_from_manifest(
+            target_context,
+            module_name,
+            manifest,
+            index,
+            diagnostics,
+        )
+        if suite_context is None:
             return None
-        return RegisteredSuite(suite=suite, manifest=manifest, status="active")
+        return RegisteredSuite(suite=suite_context.suite, manifest=manifest, status="active")
 
     if not isinstance(item, dict):
         diagnostics.append(
@@ -361,43 +417,63 @@ def _registered_suite(
     if isinstance(suite, str) and suite.strip():
         suite_name = suite.strip()
         if manifest.exists():
-            manifest_suite = _suite_name_from_manifest(target_context, manifest, index, diagnostics)
-        else:
-            manifest_suite = ""
-        if manifest_suite and manifest_suite != suite_name:
-            diagnostics.append(
-                f"E712: registered_suites[{index}].suite {suite_name} "
-                f"does not match manifest suite {manifest_suite}"
+            manifest_context = _suite_from_manifest(
+                target_context,
+                module_name,
+                manifest,
+                index,
+                diagnostics,
             )
-            return None
+            if manifest_context is None:
+                return None
+            if manifest_context.suite != suite_name:
+                diagnostics.append(
+                    f"E712: registered_suites[{index}].suite {suite_name} "
+                    f"does not match manifest suite {manifest_context.suite}"
+                )
+                return None
     else:
-        manifest_suite = _suite_name_from_manifest(target_context, manifest, index, diagnostics)
-        if not manifest_suite:
+        manifest_context = _suite_from_manifest(
+            target_context,
+            module_name,
+            manifest,
+            index,
+            diagnostics,
+        )
+        if manifest_context is None:
             diagnostics.append(f"E712: registered_suites[{index}] requires suite or readable manifest")
             return None
-        suite_name = manifest_suite
+        suite_name = manifest_context.suite
 
     status = item.get("status", "active")
     return RegisteredSuite(suite=suite_name, manifest=manifest, status=str(status))
 
 
-def _suite_name_from_manifest(
+def _suite_from_manifest(
     target_context: TargetContext,
+    module_name: str,
     manifest: Path,
     index: int,
     diagnostics: list[str],
-) -> str:
+) -> SuiteManifestContext | None:
     if not manifest.exists():
         diagnostics.append(f"E712: registered_suites[{index}] suite manifest not found: {manifest}")
-        return ""
+        return None
     suite = load_suite_context(manifest, workspace_root=target_context.workspace_root)
     if suite.diagnostics:
         diagnostics.append(
             f"E712: registered_suites[{index}] invalid suite manifest: "
             + "; ".join(suite.diagnostics)
         )
-        return ""
-    return suite.suite
+        return None
+    if suite.target != target_context.target or suite.module != module_name:
+        diagnostics.append(
+            f"E712: registered_suites[{index}] suite target/module "
+            f"{suite.target}/{suite.module} does not match "
+            f"{target_context.target}/{module_name}"
+        )
+        return None
+    return suite
 
 
 def _suite_manifest_path(suite_file: str | Path, diagnostics: list[str]) -> Path:

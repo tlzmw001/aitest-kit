@@ -1,135 +1,114 @@
-# test-codegen emitter 生成规则参考
+# test-codegen 生成规则参考
 
-## 文件结构
+## 文件与命名
 
-- target/suite 中的 `{case_file}.md` -> `test_workspace/generated/{target}/test_{module}_{suite}_{case_file_stem}.py`
+- `{case_file}.md` -> `test_workspace/generated/{target}/test_{module}_{suite}_{case_file_stem}.py`
+- 函数名：TC-ID 小写、连字符转下划线，例如 `test_tc_mod_001`。
+- generated 是编译产物；修复应回写 Markdown、profile、Harness 或 codegen。
 
-## 类和函数命名
+## ModuleBinding
 
-- 类名由 `module_class_name(module, file_type)` 生成。
-- suite 模式下 `file_type = {suite}_{case_file_stem}`，因此类名会包含 module、suite 和 case file stem。
-- 示例：`gateway_api` + `quota_billing_v2` + `quota_billing_business.md` -> `TestGatewayApiQuotaBillingV2QuotaBillingBusiness`。
-- 旧模块直连模式类名：`Test{Module}Business` 或 `Test{Module}Boundary`，仅用于兼容说明。
-- 函数名：`test_tc_mod_001`（TC ID 小写，连字符转下划线）
-- docstring：`"""TC-MOD-001：{title}"""`
+registry 从 canonical module package 推导：
 
-## setup 处理
+```text
+module package: test_workspace/targets/{target}/modules/{module}/
+fixture import: test_workspace.targets.{target}.modules.{module}.fixture
+fixture name: setup_{module}
+object name: harness
+```
 
-setup 不再默认等价于 `setup_{module}(case_id=...)`。当前优先级：
+策略绑定：
 
-1. suite/module profile 中的 `case_flows` / `case_bodies`
-2. `default_fixture` / `default_object` / `default_case_setup`
-3. module registry 的 `fixture.file` / `fixture.default_fixture`
-4. 对无法结构化执行的场景变量，保留 `# SETUP:` 注释或转入 profile 映射
+| strategy | pytest fixture | generated object |
+|---|---|---|
+| default_http | 默认 HTTP fixture | 无 Harness |
+| structured_case_flow | `setup_{module}` | `harness` |
+| custom_case_body | `setup_{module}` | `harness` |
+| manual/skipped | 无 | 无 |
 
-只有项目 fixture 明确提供 `setup_{module}` 且 profile 显式使用时，才生成对应调用。
+profile 不允许配置 `fixture`、`object`、`default_fixture`、`default_object`、`default_case_setup` 或 `case_fixtures`。suite profile 也不允许 `extra_imports`。
 
-target/suite 模式下，fixture 由 `test_workspace/targets/{target}/fixtures/{module}.py` 提供，helper 由 `test_workspace/targets/{target}/helpers/` 提供。codegen 根据 `module.yaml.fixture.file/default_fixture` 自动注入 fixture import；target helper 文件存在时优先生成 target helper import。
+## Harness contract
 
-新增模块时需要：
-1. 创建 `test_workspace/targets/{target}/fixtures/{module}.py`
-2. 创建或更新 `test_workspace/targets/{target}/modules/{module}.yaml`
-3. 创建 `test_workspace/targets/{target}/profiles/profile_{module}.md`
-4. 确认 generated pytest 能引用到 target fixture/helper
-
-## fixture 编写检查清单
-
-编写新模块的 `setup_{module}` fixture 前，确认：
-
-1. **部署拓扑** — 服务间调用关系，确认环境变量（服务 URL、外部依赖地址等）
-2. **可用 API** — fixture 需要调用的管理接口或数据准备接口
-3. **隔离策略** — 每条用例的数据如何隔离（tmp_path、唯一 user_id、teardown 恢复）
-4. **teardown** — 所有副作用都能恢复（配置、测试数据、外部依赖状态）
-5. **profile 映射** — requests/case_flows/case_bodies 是否覆盖当前用例
-6. **服务地址** — 从项目专属环境变量读取（如 `SERVICE_BASE_URL` 或 `{TARGET}_BASE_URL`），可兼容 `HTTP_BASE_URL`；不要硬编码端口或 URL
-7. **环境缺失** — 可执行 API 测试缺少服务地址时用 `pytest.fail`，不要用 `pytest.skip` 掩盖环境未配置
-8. **HTTP 客户端** — 使用 `httpx` 时显式指定 `httpx.HTTPTransport()`，避免 macOS/CI 系统代理影响本地 HTTP 测试
-9. **黑盒边界** — fixture 不 import 待测系统内部模块，不读取目标项目源码/内部测试来推断业务规则
-
-## 断言生成
-
-断言匹配优先级：profile assertion_rules > `aitest.yaml.codegen.builtin_assertion_rules` > UNPARSED。
-
-通用断言模式（框架内置）：
-
-| 断言模式 | 生成方式 |
-|---------|---------|
-| `response.code == 固定值` | `assert resp["code"] == 固定值` |
-| `response.xxx == 固定值` | `assert resp["xxx"] == 固定值` |
-| `set(response.results[*].item_id) == {集合}` | `assert {r["item_id"] for r in resp["results"]} == {集合}` |
-| `len(xxx) == N` | `assert len(xxx) == N` |
-| `[manual]` 标记 | `# MANUAL CHECK: {原文}` |
-| 无法翻译 | `# UNPARSED ASSERTION: {原文}` |
-
-项目专属断言模式见 `aitest_config/aitest.yaml` 的 `codegen.builtin_assertion_rules`。
-
-`round(..., 4)` -> `pytest.approx(..., abs=1e-4)`。`clamp(x)` -> `max(0, min(1, x))`。
+- `fixture.py` 只公开 `setup_{module}` 并直接 return/yield `{Module}Harness`。
+- flow 固定调用 `harness.*` 或前序生成变量。
+- Harness 内部可组合 API client、资源管理、复杂计算和私有 fixture。
+- suite 不能直接引用 pytest fixture 名，如 `tmp_path`、`caplog`、`monkeypatch`、`mocker`。
+- 未使用的 capability 不应在 fixture setup 阶段读取自己的可选 env 或建立连接。
+- module 专属能力放 module package；target helpers 只保留已有多 module 复用的纯技术适配；不建立 workspace 顶层 helpers。
 
 ## 请求生成
 
-1. 从共享配置取基础请求体，场景变量 `请求覆盖` 合并
-2. gRPC 用例通过场景变量中的 `协议：gRPC` 标识，Case IR 应记录该判断来源
-3. 共享配置中的 HTTP 基础请求体必须是合法 JSON，不使用 `{{placeholder}}`；case 级差异优先通过 profile `requests.<case_id>.patches` 表达，简单字段覆盖可用 `overrides`。多步骤 `case_flow` 需要请求体时，用 `{request_ref: self}` 或 `{request_ref: TC-XXX-001}` 引用同一套请求绑定。
-4. `requests.patches` 使用 JSON Patch 子集：`add` / `replace` / `remove`。`add` / `replace` 必须且只能写 `value` 或 `value_from`；`remove` 不能写值。`value_from` 引用 profile `variables.defaults` 或 `variables.cases.<case_id>`。
+1. 默认 HTTP 从 Markdown 共享基础请求体开始。
+2. `requests.<case_id>.overrides` 适合简单字段覆盖。
+3. `patches` 用于嵌套替换、列表追加/定位、字段删除和变量注入。
+4. patch 支持 `add`、`replace`、`remove`；`value_from` 引用 profile variables。
+5. flow 需要请求体时使用 `{request_ref: self}` 或指定 TC-ID，不把 JSON 写成字符串。
+6. module profile 只提供稳定 defaults；TC-ID 请求绑定必须在 suite profile。
 
-## 结构化断言
+## case_flow
 
-- JSONPath、列表遍历、字段存在性和长度断言优先写 suite profile `structured_assertions`。
-- default HTTP 路线的 `target` 只能是 `resp`。
-- `case_flow` 路线的 `target` 必须来自当前 flow 中的 `save_as` 或 `assign`。
-- `case_bodies`、pure manual、skipped 用例不挂 `structured_assertions`。
-- 复杂业务公式、循环、条件、等待和跨响应计算应封装到 fixture/helper 方法，再用 `case_flow.call` 调用；不要把 YAML 写成控制流语言。
+支持四类 step：
 
-## case_body 与 case_flow
+- `call`：调用 `harness` 或前序变量的方法。
+- `assign`：用显式表达式生成中间变量。
+- `assert`：可执行 Python 断言，必须以 `assert ` 开头。
+- `comment`：生成注释，不代表执行能力。
 
-- `case_bodies` 是复杂场景的逃生通道，适合多端点、多请求、副作用、日志、隔离服务、并发等默认模板难以覆盖的用例。
-- `case_flows` 是已验证且结构稳定的 `case_bodies` 晋升形态，适合"调用 helper -> 保存结果 -> 派生变量 -> 观察副作用 -> 断言/注释"这类重复多步骤流程；当前支持 `call`、`assign`、`assert`、`comment` 四类 step。单条 flow 顶层可写 `description` 作为 profile metadata，不进入 generated pytest；需要生成代码注释时使用 `comment` step。
-- 同一个 case_id 不允许同时出现在 `case_bodies` 和 `case_flows`；正式晋升为 `case_flow` 时必须删除旧 `case_body`，否则 codegen 会报错。
-- `case_flow` 的 `assert` step 必须写成可执行 Python 断言，例如 `assert resp["code"] == 0`；裸表达式如 `` `resp == ERR` `` 会被 profile 校验拒绝。
-- `case_flow` 表示可执行流程，至少应包含 `call` 或 `assert`。非 manual 用例不能写只有 `comment/assign` 的 flow；纯人工 `[manual]` 不写 flow，半自动 manual 才写带 `call/assert` 的 flow，并保留 manual marker。
-- `case_flow` 的 `args/kwargs` 可以用 `{var: name}` 引用 profile `variables`；变量来源只支持 `env` 或 `value`，`env` 可从进程环境变量、当前工作目录 `.env` 或 `AITEST_ENV_FILE` 指定文件读取；缺 env 时运行失败且只显示 env 名。
-- `case_flow` 不自动注入 pytest fixture 名；不要直接引用 `tmp_path`、`caplog`、`monkeypatch`、`mocker`。需要这些能力时封装到 fixture/helper 方法。
-- generated 测试函数体会设置运行时 case context，函数体内调用的 fixture/client/helper 方法可让 `capture_io()` 自动归因到当前 case；pytest fixture setup/teardown 阶段不在该 context 内；该 context 只用于 capture/log，不用于请求体差异、账号/token 选择或业务分支。
-- profile 顶层可以写 `default_fixture`、`default_object`、`default_case_setup`，用于给多条 `case_flows` 统一补 fixture/object/factory setup；`default_case_setup.kwargs.case_id: "{case_id}"` 会替换为当前用例 ID。
-- 如果 `case_flow` 自身没有 `fixture`，必须能从 `default_fixture` 得到；单条 flow 显式 `fixture/object` 时覆盖顶层默认值。
-- 不要把复杂 Python 控制流硬塞进 `case_flow`；包含线程、进程、mock、复杂文件生命周期时继续保留 `case_body`。
-- 新增 `case_flow` 前必须能解释它比原 `case_body` 更稳定、更可读、更可校验。
-- 生成或迁移前显式运行 `--validate-profile`；普通生成也会自动硬门禁，用于提前发现 JSON Schema 格式、case_id 引用、case_flow assert 和 module_type 必需字段问题。
-- `--analyze-promotion --write-report` 和 `--suggest-promotion-patch` 的产物写入 `test_workspace/reports/codegen/latest/`，不要放到 `plans/`；patch 草案默认只供 review，不自动修改 profile。
-- `--explain <TC-ID>` 输出单 case 诊断卡片，用于确认 strategy 来源、fixture、case_flow steps、request bindings、request review、structured assertions target、generated assertion code 和 review hint；`value_from` 会显示 provider/source/env 名。
-- `--health-report --write-report` 输出模块成熟度、case_flow/case_body/UNPARSED、structured assertion target、request binding、profile variable、review focus 和 next_actions，用来决定下一轮沉淀优先级。
+规则：
+
+- flow 顶层只写 `description`、`steps`。
+- `args/kwargs` 可使用字面量、`{ref: name}`、`{expr: ...}`、`{var: name}`、`{request_ref: ...}`。
+- 非 manual flow 至少包含一个 call/assert。
+- pure manual 不写 flow；半自动 manual 可写可执行 flow/body 并保留 marker。
+- 不给 YAML 增加 if/for/while/try。复杂控制优先封装 Harness capability。
+- 同一个 case_id 不得同时存在于 case flow 和 case body。
+
+## case_body
+
+case body 是复杂运行器控制的逃生通道：并发、进程、mock、复杂文件生命周期或测试函数本身必须保留的分支/循环。
+
+generated 形态固定为：
+
+```python
+def test_xxx(self, setup_demo):
+    harness = setup_demo
+    # profile case_body
+```
+
+case body 不能通过额外 fixture 改函数签名，也不应 import module 私有能力绕过 Harness。
+
+## 断言生成
+
+优先级：module/profile `assertion_rules` > `aitest.yaml` builtin rules > UNPARSED。
+
+- JSONPath、列表遍历、字段存在和长度优先用 `structured_assertions`。
+- default HTTP 的 structured target 为 `resp`。
+- flow 的 structured target 必须是当前 flow 的 `save_as`/`assign` 变量。
+- 复杂业务公式或重复遍历可封装为 Harness 方法，flow 断言返回值。
+- UNPARSED 必须回写源层，不直接手改 generated。
 
 ## 标记处理
 
-- `[manual]` 纯人工 -> 不要求 profile 覆盖，生成 `@pytest.mark.manual` + manual 注释；半自动 manual -> 使用真实 `case_flow/case_body` 并保留 manual marker
-- `[!可行性存疑: ...]` -> 跳过不生成，末尾 `# SKIPPED:`
+- `[manual]` pure manual：manual metadata，不写 comment-only flow。
+- `[manual]` 半自动：可生成 flow/body，默认 run 仍排除 manual。
+- `[!可行性存疑]`：skipped，保留原因和恢复条件。
+- manual/skipped 不能成为 promotion 的业务规则证据。
 
-## 后续：编写 codegen profile
+## Profile 归属
 
-测试调通后编写 module profile 或 suite profile：
+module profile `modules/{module}/profile.md`：
 
-- module profile：`test_workspace/targets/{target}/profiles/profile_{module}.md`，承载 L1 级稳定能力
-- suite profile：`{suite_dir}/profile_{suite}_suite.md`，只覆盖该 suite 的 case_id
-- `requests/case_flows/case_bodies/case_fixtures/variables.cases` 是 TC-ID 绑定配置，必须写入 suite profile；如果写到 module profile 且引用当前 suite 的 case_id，profile gate 会报错。
+- `assertion_rules`
+- `variables.defaults`
+- 必要且稳定的 module-level imports
 
-profile 应包含：
+suite profile：
 
-| 章节 | 内容 |
-|------|------|
-| **fixture 依赖** | fixture 名称、来源、调用方式 |
-| **setup_{module} 做了什么** | fixture 内部操作步骤 |
-| **新增用例时如何扩展** | dict/map 添加条目格式 |
-| **请求模板** | 固定字段、差异字段、helper 用法 |
-| **profile variables** | 本 suite/case 使用的账号、token、URL path、非法值等变量面板 |
-| **断言模式** | 断言 -> pytest 映射表 |
-| **setup 映射** | 场景变量 -> fixture/case_flow 映射 |
-| **case_bodies / case_flows** | 复杂用例的自定义执行体，或已晋升的结构化多步骤流程 |
-| **已知阻塞项** | 无法自动化的用例及原因 |
-| **调试经验** | 模块特有排错经验 |
-| **emitter 规则** | YAML code block，模块特有断言规则 |
+- `variables`
+- `requests`
+- `structured_assertions`
+- `case_flows`
+- `case_bodies`
 
-参考已有模块的 profile 作为结构模板。
-
-## 后续：emitter-build
-
-测试全部通过且 profile 编写完成后，调用 `/emitter-build` 提取确定性模板。
+`module_type` 只写 `module.yaml`。测试全部通过且出现重复稳定模式后，使用 `emitter-build` 评估晋升。

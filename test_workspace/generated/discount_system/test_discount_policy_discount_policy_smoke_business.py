@@ -4,7 +4,7 @@ import pytest
 from aitest_kit.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
 from aitest_kit.runtime_context import reset_case_context, set_case_context
-from test_workspace.targets.discount_system.fixtures.discount_policy import setup_discount_policy
+pytest_plugins = ["test_workspace.targets.discount_system.modules.discount_policy.fixture"]
 
 
 BASE_REQUEST = {
@@ -47,9 +47,8 @@ class TestDiscountPolicyBusiness:
         try:
             # SETUP: 接口调用：GET /health
 
-            dp = setup_discount_policy
-            dp = setup_discount_policy(case_id="TC-DP-001")
-            resp = dp.health()
+            harness = setup_discount_policy
+            resp = harness.health()
             assert resp.status_code == 200
             body = resp.json()
             assert body == {'status': 'ok'}
@@ -71,10 +70,9 @@ class TestDiscountPolicyBusiness:
         try:
             # SETUP: 请求覆盖：{"user_id": "u_dp_002", "user_level": "black", "scene": "campaign", "stock": 0, "request_id": "req_dp_002"}
 
-            dp = setup_discount_policy
-            dp = setup_discount_policy(case_id="TC-DP-002")
-            payload = dp.payload(user_id="u_dp_002", user_level="black", scene="campaign", stock=0, request_id="req_dp_002")
-            resp = dp.evaluate(payload)
+            harness = setup_discount_policy
+            payload = harness.payload(user_id="u_dp_002", user_level="black", scene="campaign", stock=0, request_id="req_dp_002")
+            resp = harness.evaluate(payload)
             assert resp.status_code == 200
             body = resp.json()
             assert body["code"] == 0
@@ -100,10 +98,9 @@ class TestDiscountPolicyBusiness:
         try:
             # SETUP: 请求覆盖：{"user_id": "u_dp_003", "user_level": "vip", "scene": "campaign", "stock": 0, "request_id": "req_dp_003"}
 
-            dp = setup_discount_policy
-            dp = setup_discount_policy(case_id="TC-DP-003")
-            payload = dp.payload(user_id="u_dp_003", user_level="vip", scene="campaign", stock=0, request_id="req_dp_003")
-            resp = dp.evaluate(payload)
+            harness = setup_discount_policy
+            payload = harness.payload(user_id="u_dp_003", user_level="vip", scene="campaign", stock=0, request_id="req_dp_003")
+            resp = harness.evaluate(payload)
             assert resp.status_code == 200
             body = resp.json()
             assert body["code"] == 0
@@ -129,10 +126,9 @@ class TestDiscountPolicyBusiness:
         try:
             # SETUP: 请求覆盖：{"user_id": "u_dp_004", "user_level": "normal", "scene": "campaign", "stock": 5, "request_id": "req_dp_004"}
 
-            dp = setup_discount_policy
-            dp = setup_discount_policy(case_id="TC-DP-004")
-            payload = dp.payload(user_id="u_dp_004", user_level="normal", scene="campaign", stock=5, request_id="req_dp_004")
-            resp = dp.evaluate(payload)
+            harness = setup_discount_policy
+            payload = harness.payload(user_id="u_dp_004", user_level="normal", scene="campaign", stock=5, request_id="req_dp_004")
+            resp = harness.evaluate(payload)
             assert resp.status_code == 200
             body = resp.json()
             assert body["code"] == 0
@@ -158,10 +154,9 @@ class TestDiscountPolicyBusiness:
         try:
             # SETUP: 请求覆盖：{"user_id": "u_dp_005", "user_level": "vip", "scene": "checkout", "stock": 5, "request_id": "req_dp_005"}
 
-            dp = setup_discount_policy
-            dp = setup_discount_policy(case_id="TC-DP-005")
-            payload = dp.payload(user_id="u_dp_005", user_level="vip", scene="checkout", stock=5, request_id="req_dp_005")
-            resp = dp.evaluate(payload)
+            harness = setup_discount_policy
+            payload = harness.payload(user_id="u_dp_005", user_level="vip", scene="checkout", stock=5, request_id="req_dp_005")
+            resp = harness.evaluate(payload)
             assert resp.status_code == 200
             body = resp.json()
             assert body["code"] == 0
@@ -187,10 +182,9 @@ class TestDiscountPolicyBusiness:
         try:
             # SETUP: 请求覆盖：{"user_id": "u_dp_006", "user_level": "normal", "scene": "checkout", "stock": 5, "request_id": "req_dp_006"}
 
-            dp = setup_discount_policy
-            dp = setup_discount_policy(case_id="TC-DP-006")
-            payload = dp.payload(user_id="u_dp_006", user_level="normal", scene="checkout", stock=5, request_id="req_dp_006")
-            resp = dp.evaluate(payload)
+            harness = setup_discount_policy
+            payload = harness.payload(user_id="u_dp_006", user_level="normal", scene="checkout", stock=5, request_id="req_dp_006")
+            resp = harness.evaluate(payload)
             assert resp.status_code == 200
             body = resp.json()
             assert body["code"] == 0
@@ -219,12 +213,11 @@ class TestDiscountPolicyBusiness:
             # SETUP: 接口调用：先 POST /api/v1/discount/policy，再 GET /api/v1/discount/decisions/req_dp_007
             # SETUP: 请求覆盖：{"user_id": "u_dp_007", "user_level": "vip", "scene": "checkout", "stock": 5, "request_id": "req_dp_007"}
 
-            dp = setup_discount_policy
-            dp = setup_discount_policy(case_id="TC-DP-007")
-            payload = dp.payload(user_id="u_dp_007", user_level="vip", scene="checkout", stock=5, request_id="req_dp_007")
-            eval_resp = dp.evaluate(payload)
+            harness = setup_discount_policy
+            payload = harness.payload(user_id="u_dp_007", user_level="vip", scene="checkout", stock=5, request_id="req_dp_007")
+            eval_resp = harness.evaluate(payload)
             assert eval_resp.status_code == 200
-            query_resp = dp.query("req_dp_007")
+            query_resp = harness.query("req_dp_007")
             assert query_resp.status_code == 200
             body = query_resp.json()
             assert body["found"] is True
@@ -250,16 +243,15 @@ class TestDiscountPolicyBusiness:
             # SETUP: 接口调用：先 POST /api/v1/discount/policy，再 DELETE /api/v1/discount/decisions/req_dp_008，最后查询同一 request_id
             # SETUP: 请求覆盖：{"user_id": "u_dp_008", "user_level": "normal", "scene": "campaign", "stock": 5, "request_id": "req_dp_008"}
 
-            dp = setup_discount_policy
-            dp = setup_discount_policy(case_id="TC-DP-008")
-            payload = dp.payload(user_id="u_dp_008", user_level="normal", scene="campaign", stock=5, request_id="req_dp_008")
-            eval_resp = dp.evaluate(payload)
+            harness = setup_discount_policy
+            payload = harness.payload(user_id="u_dp_008", user_level="normal", scene="campaign", stock=5, request_id="req_dp_008")
+            eval_resp = harness.evaluate(payload)
             assert eval_resp.status_code == 200
-            delete_resp = dp.delete("req_dp_008")
+            delete_resp = harness.delete("req_dp_008")
             assert delete_resp.status_code == 200
             deleted = delete_resp.json()
             assert deleted["deleted"] is True
-            query_resp = dp.query("req_dp_008")
+            query_resp = harness.query("req_dp_008")
             assert query_resp.status_code == 404
             body = query_resp.json()
             assert body["found"] is False
@@ -268,6 +260,5 @@ class TestDiscountPolicyBusiness:
             reset_case_context(__aitest_ctx_token)
 
 
-# TODO: setup_discount_policy fixture 需要手写实现（→ tests/fixtures/discount_policy.py）
 
 __codegen_skipped__ = []
