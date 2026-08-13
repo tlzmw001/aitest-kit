@@ -85,7 +85,7 @@ task / module / target / all 是聚合执行维度：
 | 需要创建/清理测试数据或跨步骤状态管理 | 切到 `test-scaffold incremental`：补 setup/cleanup 能力 |
 | 需要文件上传、流式响应、WebSocket、mock、外部依赖或复杂生命周期 | 切到 `test-scaffold incremental`，必要时允许 `case_bodies` |
 | 只能靠大段 raw `case_body` 绕过 fixture 缺口 | 切到 `test-scaffold incremental`，先补测试能力再决定是否保留 `case_body` |
-| generated 需要 import 当前 fixture/helper 中不存在的方法 | 切到 `test-scaffold incremental` |
+| 用例需要当前 Module Harness 中不存在的 capability | 切到 `test-scaffold incremental` |
 
 简化判断：**只是新增用例表达 → test-codegen；需要新增测试调用能力 → test-scaffold incremental。**
 

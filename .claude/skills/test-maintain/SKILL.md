@@ -54,7 +54,7 @@ effort: high
 
 ```text
 knowledge → cases → scaffold → codegen → execution → emitter
-  L0/L1/L2    Markdown   fixture/profile  generated    report     模式沉淀
+  L0/L1/L2    Markdown   Harness/profile  generated    report     模式沉淀
 ```
 
 **按层序检查，找到最左侧断裂层。** 右侧问题可能是左侧断裂的连锁反应。
@@ -65,7 +65,7 @@ knowledge → cases → scaffold → codegen → execution → emitter
 |----|------|--------|
 | knowledge | `ls test_workspace/knowledge/L*/`，检查 target/module/suite effective knowledge refs | 知识库覆盖与追溯 |
 | cases | `ls test_workspace/suites/{target}/{suite}/` | 用例和 suite.yaml |
-| scaffold | `aitest codegen --suite-file <s.yaml> --validate-profile`，检查 `module.yaml.knowledge_refs.l1` | fixture/profile/L1 接线 |
+| scaffold | `aitest doctor` + `aitest codegen --suite-file <s.yaml> --validate-profile` | canonical module package、Harness/profile/L1 接线 |
 | codegen | `aitest codegen --suite-file <s.yaml> --check` | generated 与源头同步 |
 | execution | `ls test_workspace/reports/{target}/.../latest/` | 最近执行结果 |
 

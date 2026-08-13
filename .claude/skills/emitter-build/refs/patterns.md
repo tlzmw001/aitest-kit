@@ -34,11 +34,31 @@ assertion_rules:
     regex: "^score == round\\((?P<expr>.+), 4\\)$"
     template: |
       assert score == pytest.approx(round({expr}, 4), abs=1e-4)
+```
 
-  - name: publish_status_all_zero
-    pattern: "response.data.items 中每条记录的 publishStatus == 0"
-    template: |
-      client.assert_all_publish_status(resp, 0)
+`assertion_rules` 只能根据匹配结果渲染自包含断言，不引用 `harness` 或某条 flow 才生成的局部变量。列表遍历等已有结构化语义优先写 suite profile：
+
+```yaml
+structured_assertions:
+  TC-XXX-001:
+    - type: jsonpath_all_equals
+      target: resp
+      path: $.data.items[*].publishStatus
+      equals: 0
+```
+
+如果判断逻辑确实属于模块稳定能力，先由 `case_flow` 调用 Harness capability 并保存结果，再断言该结果：
+
+```yaml
+case_flows:
+  TC-XXX-001:
+    steps:
+      - call: harness.items_have_publish_status
+        args:
+          - ref: resp
+          - 0
+        save_as: matched
+      - assert: "assert matched"
 ```
 
 规则：
@@ -46,7 +66,7 @@ assertion_rules:
 - `pattern`、`regex`、`template`、`extract_vars`、`params`、`name` 是 schema 支持字段。
 - 模块特有 assertion_rules 写 module profile。
 - 具体 TC-ID 的执行流程写 suite profile，不写 module profile。
-- 复杂循环/分支断言优先抽成 fixture/helper 方法，再由 `case_flow` 调用。
+- 复杂循环/分支断言优先抽成 Module Harness capability，再由 `case_flow` 调用。
 
 ## 断言模式分类
 
@@ -55,7 +75,7 @@ assertion_rules:
 | 2+ 模块，语义与项目无关 | `aitest.yaml.codegen.builtin_assertion_rules` |
 | 只在当前 module，L1 稳定能力 | module profile `assertion_rules` |
 | 只服务当前 suite / TC-ID | suite profile `case_flows` 或 `case_bodies` |
-| 需要循环、分支、复杂遍历 | 先抽 fixture/helper，再由 `case_flow` 调用 |
+| 需要循环、分支、复杂遍历 | 先抽 Harness capability，再由 `case_flow` 调用 |
 
 ## case_bodies 提取规则
 
@@ -65,7 +85,7 @@ assertion_rules:
 
 1. 从 generated pytest 函数中去掉 emitter 自动生成部分，例如 docstring、`__tc_meta__`、`# SETUP:` 注释。
 2. 保留真正业务执行代码，写入 suite profile 的 `case_bodies.{tc_id}`。
-3. 从函数签名提取 fixture 参数（去掉 `self`），写入 suite profile 的 `case_fixtures.{tc_id}`。
+3. 去掉 generated 自动注入的 `harness = setup_{module}`；case body 只能通过 canonical `harness` 访问运行能力，不提取额外 pytest fixture。
 4. 与 suite profile 已有 `case_bodies` diff：
    - 一致：无需更新。
    - generated 中有验证通过的修正：回写 suite profile 后重新 codegen。
@@ -86,7 +106,7 @@ assertion_rules:
 
 `case_flow` 适合稳定的 Arrange / Act / Observe / Assert 多步骤流程。当前支持：
 
-- 调用 fixture/helper 对象方法
+- 调用固定 `harness` 或前序变量的方法
 - `args` / `kwargs` 传入字面量、`ref` 引用或显式 `expr`
 - `save_as` 保存中间变量
 - `assign` 用显式 `expr` 派生中间变量
@@ -96,9 +116,10 @@ assertion_rules:
 边界：
 
 - 自然语言断言不要直接写进 `case_flow.assert`；先转为 assertion_rule、helper 方法或人工确认的 Python assert
-- 复杂循环断言优先抽 helper，例如 `client.assert_all_publish_status(resp, 0)`
+- 复杂循环断言优先抽 Harness capability，例如 `harness.items_have_publish_status(resp, 0)`
 - 循环/分支逻辑本身就是测试主体时，保留 case_body
 - 不要用 comment-only flow 代表 manual；pure manual 不写 profile entry
+- profile 不配置 fixture/object/extra imports；ModuleBinding 固定注入 `setup_{module}` 和 `harness`
 
 ## 晋升分类
 
@@ -107,13 +128,13 @@ assertion_rules:
 | `promote_to_assertion_rule` | 请求/flow 已稳定，只有断言可模板化 | module profile 或 `aitest.yaml` |
 | `promote_to_structured_assertions` | JSONPath、集合遍历、字段存在性、长度断言重复出现 | suite profile |
 | `promote_to_case_flow` | 多步骤流程稳定，差异主要是参数和期望值 | suite profile |
-| `promote_to_helper` | 多个 body/flow 重复 Python 逻辑 | fixture/helper |
+| `promote_to_harness_capability` | 多个 body/flow 重复模块动作或复杂 Python 逻辑 | module package/Harness |
 | `promote_to_default_template` | 可退回 default_http，且默认模板真实适配 | suite profile requests |
 | `keep_case_body` | 少见、复杂、并发、mock 等暂不晋升 | suite profile |
 
-推荐顺序：structured_assertions / assertion_rule → case_flow → fixture/helper → keep_case_body → emitter/renderer 规则最后。
+推荐顺序：structured_assertions / assertion_rule → case_flow → Harness capability → keep_case_body → emitter/renderer 规则最后。
 
-不要因为 default_http 已存在就强行退回默认模板；gRPC、多端点、SDK 项目通常应优先使用 fixture Client + case_flow。
+不要因为 default_http 已存在就强行退回默认模板；gRPC、多端点、SDK 项目通常应优先使用 Module Harness + case_flow。
 
 ## 晋升条件
 
@@ -121,7 +142,7 @@ assertion_rules:
 
 1. 至少 3 条已验证通过的 case_body 或 flow 结构相似。
 2. 差异主要是参数、期望值、case_id 或 profile variables。
-3. 使用 fixture/helper 暴露的公开测试能力。
+3. 使用 canonical Module Harness 暴露的公开测试能力。
 4. 晋升后比原 case_body 更可读、更可解释。
 5. 晋升后 `--validate-profile`、`--check`、collect 能通过。
 
@@ -134,7 +155,7 @@ assertion_rules:
 | case identity | `case_id/module/suite/source_file` | `__tc_meta__` |
 | 断言文本 | `TestCase.assertions` / `AssertionIR.source` | `assert ...` / manual check / UNPARSED 注释 |
 | 执行策略 | `CaseIR.strategy` | 默认模板、case_flow、case_body、manual skip |
-| fixture | `CaseIR.fixtures` / profile defaults | 函数参数、fixture import、对象创建 |
+| module binding | `CaseIR.fixtures` / `ModuleBinding` | `setup_{module}` 参数、fixture import、`harness` 绑定 |
 | flow steps | `case_flows.{tc_id}.steps` | call / assign / assert / comment 代码 |
 | skipped | `__codegen_skipped__` / strategy skipped | 未生成 test 函数或显式 skip |
 
@@ -143,8 +164,8 @@ assertion_rules:
 - 在 2+ 模块出现的断言模式 → 通用，写入 `aitest.yaml.codegen.builtin_assertion_rules`
 - 只在 1 个模块出现、且属于 L1 稳定能力 → 模块特有，写入 module profile
 - 只服务当前 suite 或当前 TC-ID → 写入 suite profile
-- 多个 case 重复 Python 动作 → 抽 fixture/helper
-- 需要生成 if/elif/else 块且跨模块稳定 → 优先抽 fixture/helper；确认为跨项目框架能力后再评估 emitter/renderer
+- 多个 case 重复 module 动作 → 抽 Harness capability
+- 需要生成 if/elif/else 块 → 优先抽 Harness capability；确认为跨项目框架能力后再评估 emitter/renderer
 - 简单"匹配文本 → 替换生成代码" → YAML assertion_rule
 
 ## 验证命令
