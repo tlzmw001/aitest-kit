@@ -1,0 +1,10 @@
+target: coupon_system
+module: ab_experiment
+module_type: standard_recommend
+knowledge_refs:
+  l1:
+  - test_workspace/knowledge/L1/ab_experiment.md
+registered_suites:
+- suite: ab_experiment_smoke
+  manifest: test_workspace/suites/coupon_system/ab_experiment_smoke/suite.yaml
+  status: active

@@ -8,11 +8,11 @@ suite: ab_experiment_smoke
 case_flows:
   TC-AB-001:
     steps:
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_AB_001
           stock: 100
-      - call: client.recommend_http
+      - call: harness.recommend_http
         kwargs:
           request_overrides:
             user_id: u_ab_hash_http
@@ -22,16 +22,16 @@ case_flows:
             external: 0
         save_as: resp
       - assert: 'assert resp["code"] == 0'
-      - assert: 'assert client.experiment_keys(resp) <= {"coarse_rank_exp_game", "calibration_exp_game"}'
+      - assert: 'assert harness.experiment_keys(resp) <= {"coarse_rank_exp_game", "calibration_exp_game"}'
       - assert: 'assert "coarse_rank_exp_ad" not in resp["experiment_info"] and "calibration_exp_ad" not in resp["experiment_info"]'
 
   TC-AB-002:
     steps:
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_AB_001
           stock: 100
-      - call: client.recommend_grpc
+      - call: harness.recommend_grpc
         kwargs:
           request_overrides:
             user_id: u_ab_hash_grpc
@@ -41,22 +41,22 @@ case_flows:
             external: 0
         save_as: resp
       - assert: 'assert resp["code"] == 0'
-      - assert: 'assert client.experiment_keys(resp) <= {"coarse_rank_exp_ad", "calibration_exp_ad"}'
+      - assert: 'assert harness.experiment_keys(resp) <= {"coarse_rank_exp_ad", "calibration_exp_ad"}'
       - assert: 'assert "coarse_rank_exp_game" not in resp["experiment_info"] and "calibration_exp_game" not in resp["experiment_info"]'
 
   TC-AB-003:
     steps:
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_AB_001
           stock: 100
-      - call: client.set_whitelist
+      - call: harness.set_whitelist
         kwargs:
           user_id: u_ab_white
           strategy_map:
             coarse_rank_exp_game: cr_off
             calibration_exp_game: cal_off
-      - call: client.recommend_http
+      - call: harness.recommend_http
         kwargs:
           request_overrides:
             user_id: u_ab_white
@@ -71,11 +71,11 @@ case_flows:
 
   TC-AB-004:
     steps:
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_AB_001
           stock: 100
-      - call: client.recommend_http
+      - call: harness.recommend_http
         kwargs:
           request_overrides:
             user_id: u_ab_scene_game
@@ -85,16 +85,16 @@ case_flows:
             external: 0
         save_as: resp
       - assert: 'assert resp["code"] == 0'
-      - assert: 'assert client.experiment_keys(resp) <= {"coarse_rank_exp_game", "calibration_exp_game"}'
+      - assert: 'assert harness.experiment_keys(resp) <= {"coarse_rank_exp_game", "calibration_exp_game"}'
       - assert: 'assert not any(k.endswith("_ad") for k in resp["experiment_info"])'
 
   TC-AB-006:
     steps:
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_AB_001
           stock: 100
-      - call: client.recommend_http
+      - call: harness.recommend_http
         kwargs:
           request_overrides:
             user_id: u_ab_external_http
@@ -108,11 +108,11 @@ case_flows:
 
   TC-AB-007:
     steps:
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_AB_001
           stock: 100
-      - call: client.recommend_grpc
+      - call: harness.recommend_grpc
         kwargs:
           request_overrides:
             user_id: u_ab_external_grpc
@@ -126,11 +126,11 @@ case_flows:
 
   TC-AB-011:
     steps:
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_AB_BOUNDARY_001
           stock: 100
-      - call: client.recommend_http
+      - call: harness.recommend_http
         kwargs:
           request_overrides:
             user_id: u_ab_boundary_right

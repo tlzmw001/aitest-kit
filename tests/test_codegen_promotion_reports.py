@@ -17,16 +17,13 @@ def _demo_profile(tmp_path: Path) -> Path:
         """```yaml
 case_bodies:
   TC-DEMO-001: |
-    case = setup_demo(case_id="TC-DEMO-001")
-    resp = case.http("u1")
+    resp = harness.http("u1")
     assert resp["code"] == 0
   TC-DEMO-002: |
-    case = setup_demo(case_id="TC-DEMO-002")
-    resp = case.http("u2")
+    resp = harness.http("u2")
     assert resp["code"] == 0
   TC-DEMO-003: |
-    case = setup_demo(case_id="TC-DEMO-003")
-    resp = case.http("u3")
+    resp = harness.http("u3")
     assert resp["code"] == 0
 ```
 """,
@@ -37,42 +34,48 @@ case_bodies:
 
 def _write_promotion_suite(root: Path) -> Path:
     target_dir = root / "test_workspace" / "targets" / "sub2api"
-    module_dir = target_dir / "modules"
-    fixture_dir = target_dir / "fixtures"
-    profile_dir = target_dir / "profiles"
+    module_dir = target_dir / "modules" / "gateway_api"
     suite_dir = root / "test_workspace" / "suites" / "sub2api" / "gateway_smoke"
     module_dir.mkdir(parents=True, exist_ok=True)
-    fixture_dir.mkdir(parents=True, exist_ok=True)
-    profile_dir.mkdir(parents=True, exist_ok=True)
     suite_dir.mkdir(parents=True, exist_ok=True)
+    for package_dir in (
+        root / "test_workspace",
+        root / "test_workspace" / "targets",
+        target_dir,
+        target_dir / "modules",
+        module_dir,
+    ):
+        (package_dir / "__init__.py").write_text("", encoding="utf-8")
     (target_dir / "target.yaml").write_text(
         """target: sub2api
 defaults:
   module_dir: test_workspace/targets/sub2api/modules
-  fixture_dir: test_workspace/targets/sub2api/fixtures
-  profile_dir: test_workspace/targets/sub2api/profiles
   generated_dir: test_workspace/generated/sub2api
   reports_dir: test_workspace/reports/sub2api
 """,
         encoding="utf-8",
     )
-    (module_dir / "gateway_api.yaml").write_text(
+    (module_dir / "module.yaml").write_text(
         """target: sub2api
 module: gateway_api
 module_type: multi_endpoint
-fixture:
-  file: gateway_api.py
-  default_fixture: setup_gateway_api
 """,
         encoding="utf-8",
     )
-    (fixture_dir / "gateway_api.py").write_text("def setup_gateway_api():\n    return object()\n", encoding="utf-8")
-    (profile_dir / "profile_gateway_api.md").write_text(
-        """```yaml
-module_type: multi_endpoint
-default_fixture: setup_gateway_api
-default_object: client
-```
+    (module_dir / "profile.md").write_text("```yaml\n{}\n```\n", encoding="utf-8")
+    (module_dir / "harness.py").write_text(
+        "class GatewayApiHarness:\n    def get(self, path):\n        return {\"path\": path}\n",
+        encoding="utf-8",
+    )
+    (module_dir / "fixture.py").write_text(
+        """import pytest
+
+from .harness import GatewayApiHarness
+
+
+@pytest.fixture
+def setup_gateway_api() -> GatewayApiHarness:
+    return GatewayApiHarness()
 """,
         encoding="utf-8",
     )
@@ -117,13 +120,13 @@ parent_module: gateway_api
 suite: gateway_smoke
 case_bodies:
   TC-GW-001: |
-    resp = client.get("/orders/1")
+    resp = harness.get("/orders/1")
     assert resp.status_code == 200
   TC-GW-002: |
-    resp = client.get("/orders/2")
+    resp = harness.get("/orders/2")
     assert resp.status_code == 200
   TC-GW-003: |
-    resp = client.get("/orders/3")
+    resp = harness.get("/orders/3")
     assert resp.status_code == 200
 ```
 """,
@@ -145,7 +148,7 @@ def test_write_promotion_report_outputs_markdown_and_json(tmp_path):
     assert "Codegen Promotion Report: demo" in markdown
     assert "review for case_flow promotion" in markdown
     assert payload["module"] == "demo"
-    assert payload["groups"][0]["objects"] == ["case"]
+    assert payload["groups"][0]["objects"] == ["harness"]
 
 
 def test_write_promotion_patch_outputs_review_markdown_and_diff(tmp_path):

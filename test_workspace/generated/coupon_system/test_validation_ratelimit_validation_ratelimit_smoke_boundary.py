@@ -4,9 +4,7 @@ import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
 from aitest_kit.runtime_context import reset_case_context, set_case_context
-from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
-from test_workspace.targets.coupon_system.fixtures.validation_ratelimit import BOUNDARY_ITEM, ERR, LIMITED
-from test_workspace.targets.coupon_system.fixtures.validation_ratelimit import setup_validation_ratelimit
+pytest_plugins = ["test_workspace.targets.coupon_system.modules.validation_ratelimit.fixture"]
 
 
 BASE_REQUEST = {
@@ -55,14 +53,14 @@ class TestValidationRatelimitBoundary:
             # SETUP: 请求覆盖：HTTP 请求固定 user_id="u_rate_http_window"
             # SETUP: 请求覆盖_2：第 2 次请求触发限流后，轮询 EXISTS coupon:rate:user:u_rate_http_window 直到返回 0，最长等待 3 秒，再发送第 3 次请求
 
-            client_factory = setup_validation_ratelimit
-            case = client_factory(case_id="TC-RATE-006")
-            r1 = case.http("u_rate_http_window", "req-rate-006-1", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
-            r2 = case.http("u_rate_http_window", "req-rate-006-2", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
-            case.wait_rate_key_gone("u_rate_http_window")
-            r3 = case.http("u_rate_http_window", "req-rate-006-3", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
+            harness = setup_validation_ratelimit
+            harness.use_isolated_rate_service(max_qps=100, per_user_qps=1, window_seconds=1)
+            r1 = harness.http("u_rate_http_window", "req-rate-006-1", item=harness.BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
+            r2 = harness.http("u_rate_http_window", "req-rate-006-2", item=harness.BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
+            harness.wait_rate_key_gone("u_rate_http_window")
+            r3 = harness.http("u_rate_http_window", "req-rate-006-3", item=harness.BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
             assert r1['code'] == 0
-            assert r2 == LIMITED
+            assert r2 == harness.LIMITED
             assert r3['code'] == 0
         finally:
             reset_case_context(__aitest_ctx_token)
@@ -85,20 +83,19 @@ class TestValidationRatelimitBoundary:
             # SETUP: 请求覆盖：gRPC 请求固定 user_id="u_rate_grpc_window"
             # SETUP: 请求覆盖_2：第 2 次请求触发限流后，轮询 EXISTS coupon:rate:user:u_rate_grpc_window 直到返回 0，最长等待 3 秒，再发送第 3 次请求
 
-            client_factory = setup_validation_ratelimit
-            case = client_factory(case_id="TC-RATE-007")
-            r1 = case.grpc("u_rate_grpc_window", "req-rate-007-1", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
-            r2 = case.grpc("u_rate_grpc_window", "req-rate-007-2", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
-            case.wait_rate_key_gone("u_rate_grpc_window")
-            r3 = case.grpc("u_rate_grpc_window", "req-rate-007-3", item=BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
+            harness = setup_validation_ratelimit
+            harness.use_isolated_rate_service(max_qps=100, per_user_qps=1, window_seconds=1)
+            r1 = harness.grpc("u_rate_grpc_window", "req-rate-007-1", item=harness.BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
+            r2 = harness.grpc("u_rate_grpc_window", "req-rate-007-2", item=harness.BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
+            harness.wait_rate_key_gone("u_rate_grpc_window")
+            r3 = harness.grpc("u_rate_grpc_window", "req-rate-007-3", item=harness.BOUNDARY_ITEM, external=0, score_threshold=0.0, max_claim_per_request=1)
             assert r1['code'] == 0
-            assert r2 == LIMITED
+            assert r2 == harness.LIMITED
             assert r3['code'] == 0
         finally:
             reset_case_context(__aitest_ctx_token)
 
 
-# TODO: setup_validation_ratelimit fixture 需要手写实现（→ tests/fixtures/validation_ratelimit.py）
 # SKIPPED: TC-RATE-008 — `[!可行性存疑: 需要测试环境允许控制 Redis 可用性，且不能修改仓库内 .env 或配置文件]`
 # SKIPPED: TC-RATE-009 — `[!可行性存疑: 需要测试环境允许控制 Redis 可用性，且不能修改仓库内 .env 或配置文件]`
 # SKIPPED: TC-RATE-010 — `[!可行性存疑: 黑盒接口测试无法直接固定服务进程内 time.time()，需要测试环境提供可控时钟或专项白盒验证；详见 mismatch.md]`

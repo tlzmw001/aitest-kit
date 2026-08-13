@@ -29,7 +29,12 @@ def upgrade_command(
     apply_changes: bool,
     force_file: tuple[str, ...],
 ) -> None:
-    """Upgrade template-managed files and report layout migration hints."""
+    """Upgrade template files and diagnose legacy module/Harness layouts.
+
+    ``--check`` is read-only. ``--apply`` updates safe template-managed files,
+    but reports semantic fixture/factory migrations as BLOCKED for scaffold
+    review instead of guessing business behavior.
+    """
     if check_only and apply_changes:
         raise click.ClickException("Use either --check or --apply, not both.")
 

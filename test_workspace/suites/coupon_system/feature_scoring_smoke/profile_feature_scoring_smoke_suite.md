@@ -8,7 +8,7 @@ suite: feature_scoring_smoke
 case_flows:
   TC-SCORE-003:
     steps:
-      - call: client.prepare_user
+      - call: harness.prepare_user
         kwargs:
           user_id: u_score_external_http
           features:
@@ -19,11 +19,11 @@ case_flows:
             register_days: 120
             is_new_user: true
             is_member: true
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_FEAT_001
           stock: 100
-      - call: client.recommend_http
+      - call: harness.recommend_http
         kwargs:
           request_overrides:
             user_id: u_score_external_http
@@ -36,7 +36,7 @@ case_flows:
 
   TC-SCORE-004:
     steps:
-      - call: client.prepare_user
+      - call: harness.prepare_user
         kwargs:
           user_id: u_score_external_grpc
           features:
@@ -47,11 +47,11 @@ case_flows:
             register_days: 120
             is_new_user: true
             is_member: true
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_FEAT_001
           stock: 100
-      - call: client.recommend_grpc
+      - call: harness.recommend_grpc
         kwargs:
           request_overrides:
             user_id: u_score_external_grpc
@@ -64,7 +64,7 @@ case_flows:
 
   TC-FEAT-009:
     steps:
-      - call: client.prepare_user
+      - call: harness.prepare_user
         kwargs:
           user_id: u_feat_not_in_tsv
           features:
@@ -75,11 +75,11 @@ case_flows:
             register_days: 120
             is_new_user: true
             is_member: true
-      - call: client.prepare_stock
+      - call: harness.prepare_stock
         kwargs:
           coupon_id: COUPON_FEAT_NOT_IN_TSV
           stock: 100
-      - call: client.recommend_http
+      - call: harness.recommend_http
         kwargs:
           request_overrides:
             user_id: u_feat_not_in_tsv

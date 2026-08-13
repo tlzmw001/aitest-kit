@@ -306,15 +306,14 @@ class TestFixtureSelection:
         file_ir = build_file_ir(_parse_result([tc]), "business", project=DEFAULT_PROJECT)
         assert _case(file_ir, "TC-DEMO-001").fixtures == ["http_base_url"]
 
-    def test_case_flow_uses_flow_fixture(self, tmp_path):
+    def test_case_flow_uses_canonical_module_fixture(self, tmp_path):
         profile_path = tmp_path / "profile_demo_suite.md"
         profile_path.write_text(
             """```yaml
 case_flows:
   TC-DEMO-001:
-    fixture: custom_fixture
     steps:
-      - call: custom_fixture
+      - call: harness.create
         save_as: obj
       - assert: "assert True"
 ```
@@ -328,19 +327,15 @@ case_flows:
             profile_path=profile_path,
             project=DEFAULT_PROJECT,
         )
-        assert _case(file_ir, "TC-DEMO-001").fixtures == ["custom_fixture"]
+        assert _case(file_ir, "TC-DEMO-001").fixtures == ["setup_demo"]
 
-    def test_case_body_uses_case_fixtures_override(self, tmp_path):
+    def test_case_body_uses_canonical_module_fixture(self, tmp_path):
         profile_path = tmp_path / "profile_demo_suite.md"
         profile_path.write_text(
             """```yaml
 case_bodies:
   TC-DEMO-001: |
     resp = special()
-case_fixtures:
-  TC-DEMO-001:
-    - tmp_path
-    - redis_url
 ```
 """,
             encoding="utf-8",
@@ -352,7 +347,7 @@ case_fixtures:
             profile_path=profile_path,
             project=DEFAULT_PROJECT,
         )
-        assert _case(file_ir, "TC-DEMO-001").fixtures == ["tmp_path", "redis_url"]
+        assert _case(file_ir, "TC-DEMO-001").fixtures == ["setup_demo"]
 
     def test_skipped_case_has_no_fixtures(self):
         tc = TestCase(

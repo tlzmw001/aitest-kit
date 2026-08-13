@@ -47,9 +47,10 @@
 | `aitest_config/aitest.yaml` | 统一配置入口：workspace 路径、codegen 默认 helper、API path、断言规则、module_type |
 | `aitest_config/schemas/codegen_profile.schema.json` | profile 的 JSON Schema 硬门禁 |
 | `test_workspace/knowledge/` | 测试知识库 |
-| `test_workspace/targets/{target}/modules/{module}.yaml` | 模块注册信息 |
-| `test_workspace/targets/{target}/fixtures/{module}.py` | 模块测试 client、setup fixture、辅助方法 |
-| `test_workspace/targets/{target}/profiles/profile_{module}.md` | 模块级稳定生成配置 |
+| `test_workspace/targets/{target}/modules/{module}/module.yaml` | 模块注册信息 |
+| `test_workspace/targets/{target}/modules/{module}/fixture.py` | 唯一公开 `setup_{module}` fixture 和 Harness 生命周期 |
+| `test_workspace/targets/{target}/modules/{module}/harness.py` | 模块测试能力门面 |
+| `test_workspace/targets/{target}/modules/{module}/profile.md` | 模块级稳定生成配置 |
 | `test_workspace/suites/{target}/{suite}/suite.yaml` | suite manifest，绑定 target/module/case files |
 | `test_workspace/suites/{target}/{suite}/*.md` | Markdown 用例源数据 |
 | `test_workspace/suites/{target}/{suite}/profile_{suite}_suite.md` | suite 级 TC-ID 绑定配置 |
@@ -250,7 +251,7 @@ ParseResult(
 profile 分两层：
 
 ```text
-test_workspace/targets/{target}/profiles/profile_{module}.md
+test_workspace/targets/{target}/modules/{module}/profile.md
 test_workspace/suites/{target}/{suite}/profile_{suite}_suite.md
 ```
 
@@ -270,10 +271,9 @@ loader 系列函数：
 | `load_profile_rules()` | `assertion_rules` |
 | `load_profile_requests()` | `requests` |
 | `load_profile_extra_imports()` | `extra_imports` |
-| `load_profile_case_fixtures()` | `case_fixtures` |
 | `load_profile_case_bodies()` | `case_bodies` |
 | `load_profile_case_flows()` | `case_flows` |
-| `load_profile_module_type()` | `module_type` |
+| `load_profile_module_type()` | runtime 合并后的 `module_type`（事实源是 `module.yaml`） |
 
 profile gate 做三类校验：
 
@@ -624,7 +624,7 @@ analyze_case_body_promotion(module, profile_path)
 当前能力：
 
 - 扫描 `case_bodies` 的 Python 文本。
-- 识别对象方法调用，例如 `client.evaluate(...)`。
+- 识别对象方法调用，例如 `harness.evaluate(...)`。
 - 标记复杂行为，例如并发、循环、子进程、mock、文件生命周期。
 - 按方法和 flags 分组。
 - 输出 review-only report 和 patch draft。
@@ -672,17 +672,15 @@ profile:
         request_id: req_dp_delete_then_query
   case_flows:
     TC-DP-008:
-      fixture: setup_discount_policy
-      object: client
       steps:
-        - call: client.evaluate
+        - call: harness.evaluate
           kwargs:
             overrides:
               request_ref: self
           save_as: policy_resp
-        - call: client.delete
+        - call: harness.delete
           save_as: delete_resp
-        - call: client.query_response
+        - call: harness.query_response
           save_as: query_http
         - assign: query_resp
           expr: query_http.json()
@@ -693,11 +691,11 @@ planner:
   case_flow = CaseFlowIR(...)
 
 renderer:
-  client = setup_discount_policy
+  harness = setup_discount_policy
   __request_tc_dp_008 = _req(...)
-  policy_resp = client.evaluate(overrides=__request_tc_dp_008)
-  delete_resp = client.delete(...)
-  query_http = client.query_response(...)
+  policy_resp = harness.evaluate(overrides=__request_tc_dp_008)
+  delete_resp = harness.delete(...)
+  query_http = harness.query_response(...)
   query_resp = query_http.json()
   assert query_http.status_code == 404
 ```
@@ -726,13 +724,10 @@ module profile 放模块稳定能力，suite profile 放具体 TC-ID 绑定。
 
 可控制：
 
-- `module_type`
-- `extra_imports`
-- `requests`
-- `assertion_rules`
-- `case_fixtures`
-- `case_bodies`
-- `case_flows`
+- module profile：`assertion_rules`、`variables.defaults`
+- suite profile：`variables`、`requests`、`structured_assertions`、`case_bodies`、`case_flows`
+- `module_type`：只来自 `modules/{module}/module.yaml`
+- fixture/object：来自 registry 的 `ModuleBinding`，不是 profile 字段
 
 ## 13. 初学者应该按什么顺序读代码
 
@@ -879,7 +874,7 @@ Case IR 是解释层。它保存：
 - Markdown 用例
 - profile `case_flows`
 - profile `assertion_rules`
-- fixture helper
+- Module Harness capability
 - `aitest.yaml`
 
 否则每次生成都依赖 AI 重新理解，会出现不稳定、难 review、难复现的问题。
@@ -891,8 +886,8 @@ Case IR 是解释层。它保存：
 
 - Markdown 用例错误 -> 改 suite 目录下的 `.md`
 - suite profile 错误 -> 改 `profile_{suite}_suite.md`
-- module profile 错误 -> 改 `profile_{module}.md`
-- fixture 问题 -> 改 `test_workspace/targets/{target}/fixtures/{module}.py`
+- module profile 错误 -> 改 `modules/{module}/profile.md`
+- Harness/fixture 问题 -> 改 `modules/{module}/harness.py` 或 `fixture.py`
 - 通用生成问题 -> 改 `aitest_kit/codegen/`
 - 报告问题 -> 改 `aitest_kit/report/`
 

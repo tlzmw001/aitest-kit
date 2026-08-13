@@ -5,10 +5,6 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "module_type": {
-      "type": "string",
-      "minLength": 1
-    },
     "profile_scope": {
       "type": "string",
       "enum": ["case_suite"]
@@ -27,15 +23,6 @@
     },
     "knowledge_refs": {
       "type": "object"
-    },
-    "default_fixture": {
-      "$ref": "#/$defs/identifier"
-    },
-    "default_object": {
-      "$ref": "#/$defs/identifier"
-    },
-    "default_case_setup": {
-      "$ref": "#/$defs/caseFlowCallStep"
     },
     "assertion_rules": {
       "type": "array",
@@ -96,18 +83,6 @@
       "items": {
         "type": "string"
       }
-    },
-    "case_fixtures": {
-      "type": "object",
-      "patternProperties": {
-        "^TC-[A-Z0-9]+-[0-9]+$": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "additionalProperties": false
     },
     "case_bodies": {
       "type": "object",
@@ -280,13 +255,6 @@
       "additionalProperties": false,
       "required": ["steps"],
       "properties": {
-        "fixture": {
-          "type": "string",
-          "minLength": 1
-        },
-        "object": {
-          "$ref": "#/$defs/identifier"
-        },
         "description": {
           "type": "string"
         },

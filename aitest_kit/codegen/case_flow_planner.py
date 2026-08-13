@@ -7,6 +7,7 @@ from aitest_kit.codegen.ir import AssertionIR, CaseFlowIR, CaseFlowStepIR
 from aitest_kit.codegen.parser import TestCase
 from aitest_kit.codegen.project_config import AssertionRule, ProjectConfig
 from aitest_kit.codegen.render_utils import resolve_assertion, strip_backticks
+from aitest_kit.registry.models import ModuleBinding
 
 
 def build_case_flow_ir(
@@ -14,6 +15,8 @@ def build_case_flow_ir(
     case_flows: dict[str, dict[str, Any]],
     profile_rules: list[AssertionRule],
     project: ProjectConfig,
+    *,
+    module_binding: ModuleBinding | None = None,
 ) -> CaseFlowIR | None:
     flow = case_flows.get(tc.id)
     if not isinstance(flow, dict):
@@ -54,8 +57,8 @@ def build_case_flow_ir(
 
     return CaseFlowIR(
         source=f"profile.case_flows.{tc.id}",
-        fixture=flow.get("fixture", ""),
-        object_name=flow.get("object", "") or "",
+        fixture=(module_binding.fixture_name if module_binding else ""),
+        object_name=(module_binding.object_name if module_binding else "harness"),
         steps=steps,
     )
 

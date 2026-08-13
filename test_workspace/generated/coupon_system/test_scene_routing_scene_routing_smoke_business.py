@@ -4,7 +4,7 @@ import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
 from aitest_kit.runtime_context import reset_case_context, set_case_context
-from test_workspace.targets.coupon_system.fixtures.scene_routing import setup_scene_routing
+pytest_plugins = ["test_workspace.targets.coupon_system.modules.scene_routing.fixture"]
 
 
 BASE_REQUEST = {
@@ -51,9 +51,9 @@ class TestSceneRoutingBusiness:
             # SETUP: 协议：HTTP
             # SETUP: 请求覆盖：HTTP 请求 user_id="u_route_game_mobile"、scene_name="game"、device="mobile"、policy_id=""、external=0
 
-            client = setup_scene_routing
-            client.prepare_stock(coupon_id="COUPON_ROUTE_001")
-            resp = client.recommend_http(request_overrides={"user_id": "u_route_game_mobile", "reqId": "req-route-001", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 0})
+            harness = setup_scene_routing
+            harness.prepare_stock(coupon_id="COUPON_ROUTE_001")
+            resp = harness.recommend_http(request_overrides={"user_id": "u_route_game_mobile", "reqId": "req-route-001", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 0})
             assert resp["code"] == 0
             assert resp["scene_id"] == 1001
         finally:
@@ -75,9 +75,9 @@ class TestSceneRoutingBusiness:
             # SETUP: 协议：gRPC
             # SETUP: 请求覆盖：gRPC 请求 user_id="u_route_ad_pc"、scene_name="ad"、device="pc"、policy_id=""、external=0
 
-            client = setup_scene_routing
-            client.prepare_stock(coupon_id="COUPON_ROUTE_001")
-            resp = client.recommend_grpc(request_overrides={"user_id": "u_route_ad_pc", "req_id": "req-route-002", "scene_name": "ad", "device": "pc", "policy_id": "", "external": 0})
+            harness = setup_scene_routing
+            harness.prepare_stock(coupon_id="COUPON_ROUTE_001")
+            resp = harness.recommend_grpc(request_overrides={"user_id": "u_route_ad_pc", "req_id": "req-route-002", "scene_name": "ad", "device": "pc", "policy_id": "", "external": 0})
             assert resp["code"] == 0
             assert resp["scene_id"] == 2002
         finally:
@@ -99,9 +99,9 @@ class TestSceneRoutingBusiness:
             # SETUP: 协议：HTTP
             # SETUP: 请求覆盖：HTTP 请求 user_id="u_route_external"、scene_name="game"、device="mobile"、policy_id=""、external=1
 
-            client = setup_scene_routing
-            client.prepare_stock(coupon_id="COUPON_ROUTE_001")
-            resp = client.recommend_http(request_overrides={"user_id": "u_route_external", "reqId": "req-route-003", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 1})
+            harness = setup_scene_routing
+            harness.prepare_stock(coupon_id="COUPON_ROUTE_001")
+            resp = harness.recommend_http(request_overrides={"user_id": "u_route_external", "reqId": "req-route-003", "scene_name": "game", "device": "mobile", "policy_id": "", "external": 1})
             assert resp["code"] == 0
             assert resp["scene_id"] == 1001
         finally:
@@ -125,9 +125,9 @@ class TestSceneRoutingBusiness:
             # SETUP: 协议：HTTP
             # SETUP: 请求覆盖：HTTP 请求 user_id="u_route_policy_fb"、scene_name="game"、device="mobile"、policy_id="policy_fallback_001"、external=0
 
-            client = setup_scene_routing
-            client.prepare_stock(coupon_id="COUPON_ROUTE_001")
-            resp = client.recommend_http(request_overrides={"user_id": "u_route_policy_fb", "reqId": "req-route-004", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0})
+            harness = setup_scene_routing
+            harness.prepare_stock(coupon_id="COUPON_ROUTE_001")
+            resp = harness.recommend_http(request_overrides={"user_id": "u_route_policy_fb", "reqId": "req-route-004", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0})
             assert resp["code"] == 0
             assert resp["scene_id"] == 3001
             assert resp["experiment_info"] == {}
@@ -151,9 +151,9 @@ class TestSceneRoutingBusiness:
             # SETUP: 协议：HTTP
             # SETUP: 请求覆盖：HTTP 请求 user_id="u_fallback"、scene_name="game"、device="mobile"、policy_id="policy_fallback_001"、external=0、score_threshold=0.0
 
-            client = setup_scene_routing
-            client.prepare_stock(coupon_id="COUPON_ROUTE_001")
-            resp = client.recommend_http(request_overrides={"user_id": "u_fallback", "reqId": "req-route-005", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0, "score_threshold": 0.0})
+            harness = setup_scene_routing
+            harness.prepare_stock(coupon_id="COUPON_ROUTE_001")
+            resp = harness.recommend_http(request_overrides={"user_id": "u_fallback", "reqId": "req-route-005", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0, "score_threshold": 0.0})
             assert resp["code"] == 0
             assert resp["coupon"] is not None
             assert resp["coupon"]["user_id"] == "u_fallback"
@@ -176,9 +176,9 @@ class TestSceneRoutingBusiness:
             # SETUP: 协议：gRPC
             # SETUP: 请求覆盖：gRPC 请求 user_id="u_route_unknown"、scene_name="unknown_scene"、device="unknown_device"、policy_id=""、external=0
 
-            client = setup_scene_routing
-            client.prepare_stock(coupon_id="COUPON_ROUTE_001")
-            resp = client.recommend_grpc(request_overrides={"user_id": "u_route_unknown", "req_id": "req-route-006", "scene_name": "unknown_scene", "device": "unknown_device", "policy_id": "", "external": 0})
+            harness = setup_scene_routing
+            harness.prepare_stock(coupon_id="COUPON_ROUTE_001")
+            resp = harness.recommend_grpc(request_overrides={"user_id": "u_route_unknown", "req_id": "req-route-006", "scene_name": "unknown_scene", "device": "unknown_device", "policy_id": "", "external": 0})
             assert resp["code"] == 0
             assert resp["scene_id"] == 3001
             assert resp["experiment_info"] == {}
@@ -204,10 +204,10 @@ class TestSceneRoutingBusiness:
             # SETUP: 前置操作：执行 SET coupon:fallback:score:3001 0.8 和 SET coupon:fallback:score:default 0.6
             # SETUP: 请求覆盖：HTTP 请求命中 policy_fallback_001
 
-            client = setup_scene_routing
-            client.set_fallback_scores({"coupon:fallback:score:3001": "0.8", "coupon:fallback:score:default": "0.6"})
-            client.prepare_stock(coupon_id="COUPON_ROUTE_001")
-            resp = client.recommend_http(request_overrides={"user_id": "u_route_007", "reqId": "req-route-007", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0})
+            harness = setup_scene_routing
+            harness.set_fallback_scores({"coupon:fallback:score:3001": "0.8", "coupon:fallback:score:default": "0.6"})
+            harness.prepare_stock(coupon_id="COUPON_ROUTE_001")
+            resp = harness.recommend_http(request_overrides={"user_id": "u_route_007", "reqId": "req-route-007", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0})
             assert resp["code"] == 0
             assert resp["results"][0]["score"] == 0.8
             assert resp["results"][0]["calibrated_score"] == 0.8
@@ -231,10 +231,10 @@ class TestSceneRoutingBusiness:
             # SETUP: 前置操作：执行 DEL coupon:fallback:score:3001 和 SET coupon:fallback:score:default 0.6
             # SETUP: 请求覆盖：HTTP 请求命中 policy_fallback_001
 
-            client = setup_scene_routing
-            client.set_fallback_scores({"coupon:fallback:score:default": "0.6"})
-            client.prepare_stock(coupon_id="COUPON_ROUTE_001")
-            resp = client.recommend_http(request_overrides={"user_id": "u_route_008", "reqId": "req-route-008", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0})
+            harness = setup_scene_routing
+            harness.set_fallback_scores({"coupon:fallback:score:default": "0.6"})
+            harness.prepare_stock(coupon_id="COUPON_ROUTE_001")
+            resp = harness.recommend_http(request_overrides={"user_id": "u_route_008", "reqId": "req-route-008", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0})
             assert resp["code"] == 0
             assert resp["results"][0]["score"] == 0.6
             assert resp["results"][0]["calibrated_score"] == 0.6
@@ -258,10 +258,10 @@ class TestSceneRoutingBusiness:
             # SETUP: 前置操作：执行 DEL coupon:fallback:score:3001 coupon:fallback:score:default
             # SETUP: 请求覆盖：HTTP 请求命中 policy_fallback_001
 
-            client = setup_scene_routing
-            client.clear_fallback_scores()
-            client.prepare_stock(coupon_id="COUPON_ROUTE_001")
-            resp = client.recommend_http(request_overrides={"user_id": "u_route_009", "reqId": "req-route-009", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0})
+            harness = setup_scene_routing
+            harness.clear_fallback_scores()
+            harness.prepare_stock(coupon_id="COUPON_ROUTE_001")
+            resp = harness.recommend_http(request_overrides={"user_id": "u_route_009", "reqId": "req-route-009", "scene_name": "game", "device": "mobile", "policy_id": "policy_fallback_001", "external": 0})
             assert resp["code"] == 0
             assert resp["results"][0]["score"] == 0.5
             assert resp["results"][0]["calibrated_score"] == 0.5
@@ -269,6 +269,5 @@ class TestSceneRoutingBusiness:
             reset_case_context(__aitest_ctx_token)
 
 
-# TODO: setup_scene_routing fixture 需要手写实现（→ tests/fixtures/scene_routing.py）
 
 __codegen_skipped__ = []

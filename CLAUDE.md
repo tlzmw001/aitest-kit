@@ -11,7 +11,7 @@ docs/                   # 开发文档输入目录（skill 的输入源）
 test_workspace/         # 本仓自用测试资产工作区
   knowledge/            #   测试知识库（L0/L1/L2 + TEST_SPEC）
   suites/               #   suite 用例（Markdown + suite.yaml + suite profile）
-  targets/              #   target/module registry、fixture、helper、module profile
+  targets/              #   target registry、module Harness package、可选 target helper
   generated/            #   codegen 生成的 pytest 文件（编译产物）
   reports/              #   测试执行报告（运行产物，不入库）
   results/              #   待测系统 bug 记录
@@ -171,8 +171,9 @@ codegen 链路：suite context 加载 → profile 硬门禁 → parser 解析 Ma
 - 配置文件写法以 `aitest_config/refs/config-files.md` 为准；新建或修改 target/module/suite/profile/task/env 配置前先确认字段归属
 - 用例存放在 suite 目录，用 `suite.yaml` 绑定 target/module
 - 单 suite 可直接通过 `--suite-file` 执行；进入 `--module`、`--target`、`--all` 聚合前，必须用 `aitest registry register-suite` 注册到对应 module；手写 `registered_suites` 时推荐直接写 suite manifest 路径字符串，需要 `status` 时再写 `{suite, manifest, status}` mapping
-- 模块 fixture 按 target/module 拆分到 `test_workspace/targets/{target}/fixtures/{module}.py`
-- module profile 存放在 `test_workspace/targets/{target}/profiles/profile_{module}.md`，只放 L1 稳定能力；suite profile 跟随用例目录，命名为 `profile_{suite}_suite.md`，具体 TC-ID 绑定的 `requests`、`case_flows`、`case_bodies`、`case_fixtures` 应优先放 suite profile
+- module package 固定放在 `test_workspace/targets/{target}/modules/{module}/`，包含 `module.yaml`、`profile.md`、`fixture.py`、`harness.py`；公开 fixture 固定为 `setup_{module}` 并直接返回/yield `{Module}Harness`
+- module profile 只放 L1 稳定断言和变量默认值；suite profile 跟随用例目录，命名为 `profile_{suite}_suite.md`，具体 TC-ID 绑定的 `requests`、`case_flows`、`case_bodies` 放 suite profile；flow 首个调用根固定为 `harness`
+- 单 module 能力留在 module package；同一 target 内已被多个 module 复用的纯技术适配才放 `targets/{target}/helpers/`；不建立 `test_workspace/helpers/`
 - generated pytest 是编译产物；如果需要手修，先判断应回写到 suite profile、module profile、fixture/helper 还是 emitter
 - 测试执行报告写入 `test_workspace/reports/`，属于运行产物，不提交；待测系统 bug 仍记录到 `test_workspace/results/`
 - 项目结构或流程发生变更时，检查是否需要同步更新 `CLAUDE.md` 和 `README.md`，并询问用户是否需要更新 `docs/usebook/` 下的文档
@@ -246,9 +247,10 @@ codegen 的可移植性来自分层归属。迁移新项目时，优先改 works
 │  - source_root / docs / knowledge_refs / defaults   │
 ├─────────────────────────────────────────────────────┤
 │  module 能力层（一个业务模块一份）                      │
-│  - modules/{module}.yaml                            │
-│  - fixtures/{module}.py / helpers/                  │
-│  - profiles/profile_{module}.md                     │
+│  - modules/{module}/module.yaml                     │
+│  - modules/{module}/fixture.py / harness.py         │
+│  - modules/{module}/profile.md                      │
+│  - helpers/（仅 target 内已证实跨 module 复用）     │
 ├─────────────────────────────────────────────────────┤
 │  suite 用例层（一个需求批次/用例集一份）                 │
 │  - suites/{target}/{suite}/suite.yaml               │
@@ -270,8 +272,8 @@ codegen 的可移植性来自分层归属。迁移新项目时，优先改 works
 
 1. 先执行 `aitest init --target <aitest_workspace>` 创建独立 workspace，不直接复用本仓 `test_workspace/`
 2. 建立 `test_workspace/targets/{target}/target.yaml`，配置 target 默认目录和知识库引用
-3. 建立 `modules/{module}.yaml`，注册 fixture 文件、默认 fixture、module profile 和 module_type
-4. 建立 `fixtures/{module}.py`、必要的 `helpers/` 和 `profiles/profile_{module}.md`，沉淀模块级稳定动作与断言能力
+3. 建立 `modules/{module}/module.yaml`，声明 module_type、知识引用和 registered_suites
+4. 在同目录建立 `fixture.py`、`harness.py` 和 `profile.md`，由固定 `setup_{module}` 提供 Harness 生命周期和模块稳定能力
 5. 准备一份 smoke suite：`suite.yaml` + Markdown 用例 + `profile_{suite}_suite.md`
 6. 依次验证：`--validate-profile` → `--dump-ir` → 生成 → `--check` → `aitest run -- --collect-only -q`
 
@@ -279,17 +281,17 @@ workspace 模板只有一个来源：`aitest_kit/templates/project_workspace/`�
 
 ### module_type 分类
 
-`module_type` 是模块能力契约，在 `modules/{module}.yaml` 中声明。名称来自 `aitest_config/aitest.yaml.codegen.module_types`。选择建议：
+`module_type` 是模块能力契约，在 `modules/{module}/module.yaml` 中声明。名称来自 `aitest_config/aitest.yaml.codegen.module_types`。选择建议：
 
 - 默认 HTTP/gRPC 路线足够时用 `standard_http` 或 `standard_recommend`
-- 多端点、多步骤、fixture Client 模块用 `multi_endpoint`
+- 多端点、多步骤、Harness 模块用 `multi_endpoint`
 - 进程隔离、mock、服务实例管理等用更具体的类型
 
 缺少 `module_type` 产生 W502 warning；类型未定义或 `requires` 不满足产生 E504 error。
 
 ### 生成策略与规则层
 
-`assertion_rules`、`requests`、`variables` 是规则层输入，不是独立 strategy。`case_flow` 支持 `call`、`assign`、`assert`、`comment`；复杂 `if/for/try/with` 应封装进 fixture/helper 或用 `case_bodies` 逃生。
+`assertion_rules`、`requests`、`variables` 是规则层输入，不是独立 strategy。`case_flow` 支持 `call`、`assign`、`assert`、`comment`；复杂 `if/for/try/with` 应封装进 Harness capability 或用 `case_bodies` 逃生。
 
 晋升方向：`case_bodies` → `case_flows` / fixture helper → assertion_rules / builtin rules。同一 case_id 不允许同时出现在 `case_bodies` 和 `case_flows`。
 

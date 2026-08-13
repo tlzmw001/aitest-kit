@@ -1,0 +1,13 @@
+target: coupon_system
+module: e2e
+module_type: multi_endpoint
+knowledge_refs:
+  l0: test_workspace/knowledge/L0_system_architecture.md
+  l1:
+    - test_workspace/knowledge/L1/ab_experiment.md
+    - test_workspace/knowledge/L1/calibration.md
+    - test_workspace/knowledge/L1/issuance.md
+registered_suites:
+  - suite: e2e_smoke
+    manifest: test_workspace/suites/coupon_system/e2e_smoke/suite.yaml
+    status: active

@@ -8,7 +8,7 @@ suite: logging_smoke
 case_flows:
   TC-LOG-001:
     steps:
-      - call: case.run_http_with_logs
+      - call: harness.run_http_with_logs
         kwargs:
           user_id: u_log_http_internal
           req_id: req-log-001
@@ -23,7 +23,7 @@ case_flows:
 
   TC-LOG-002:
     steps:
-      - call: case.run_grpc_with_logs
+      - call: harness.run_grpc_with_logs
         kwargs:
           user_id: u_log_grpc_internal
           req_id: req-log-002
@@ -37,7 +37,7 @@ case_flows:
 
   TC-LOG-003:
     steps:
-      - call: case.run_http_with_logs
+      - call: harness.run_http_with_logs
         kwargs:
           user_id: u_log_http_external
           req_id: req-log-003
@@ -51,7 +51,7 @@ case_flows:
 
   TC-LOG-004:
     steps:
-      - call: case.run_grpc_with_logs
+      - call: harness.run_grpc_with_logs
         kwargs:
           user_id: u_log_grpc_external
           req_id: req-log-004
@@ -65,18 +65,18 @@ case_flows:
 
   TC-LOG-005:
     steps:
-      - call: case.run_http_with_logs
+      - call: harness.run_http_with_logs
         kwargs:
           user_id: u_log_auto_reqid
           req_id: ""
           external: 0
         save_as: result
       - assert: 'assert result["resp"]["code"] == 0'
-      - assert: 'assert case.has_auto_req_id_log(result["logs"])'
+      - assert: 'assert harness.has_auto_req_id_log(result["logs"])'
 
   TC-LOG-006:
     steps:
-      - call: case.run_http_with_logs
+      - call: harness.run_http_with_logs
         kwargs:
           user_id: u_log_fallback
           req_id: req-log-006
@@ -89,7 +89,7 @@ case_flows:
 
   TC-LOG-010:
     steps:
-      - call: case.run_http_with_logs
+      - call: harness.run_http_with_logs
         kwargs:
           user_id: u_log_010
           req_id: req-log-010

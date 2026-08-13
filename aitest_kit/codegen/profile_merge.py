@@ -53,42 +53,23 @@ def merge_profile_yaml(
     merged: dict[str, Any] = {}
     diagnostics: list[str] = []
 
-    for key in ("module_type", "assertion_rules"):
+    for key in ("assertion_rules",):
         if key in module_data:
             merged[key] = deepcopy(module_data[key])
 
-    for key in ("default_fixture", "default_object"):
-        if key in suite_data:
-            merged[key] = deepcopy(suite_data[key])
-        elif key in module_data:
-            merged[key] = deepcopy(module_data[key])
-
-    if "default_case_setup" in suite_data and "default_case_setup" in module_data:
-        merged["default_case_setup"] = _deep_merge(
-            module_data["default_case_setup"],
-            suite_data["default_case_setup"],
-        )
-    elif "default_case_setup" in suite_data:
-        merged["default_case_setup"] = deepcopy(suite_data["default_case_setup"])
-    elif "default_case_setup" in module_data:
-        merged["default_case_setup"] = deepcopy(module_data["default_case_setup"])
-
     imports = []
-    for raw in (module_data.get("extra_imports", []), suite_data.get("extra_imports", [])):
-        if isinstance(raw, list):
-            imports.extend(item for item in raw if isinstance(item, str) and item.strip())
+    raw = module_data.get("extra_imports", [])
+    if isinstance(raw, list):
+        imports.extend(item for item in raw if isinstance(item, str) and item.strip())
     if imports:
         merged["extra_imports"] = _dedupe_strings(imports)
 
-    requests = _merge_profile_requests(
-        module_data.get("requests", {}),
-        suite_data.get("requests", {}),
-    )
+    requests = _merge_profile_requests({}, suite_data.get("requests", {}))
     if requests:
         merged["requests"] = requests
 
     for key in ("case_flows", "structured_assertions"):
-        module_values = module_data.get(key, {})
+        module_values = {}
         suite_values = suite_data.get(key, {})
         module_map = module_values if isinstance(module_values, dict) else {}
         suite_map = suite_values if isinstance(suite_values, dict) else {}
@@ -96,8 +77,8 @@ def merge_profile_yaml(
         if merged_values:
             merged[key] = merged_values
 
-    for key in ("case_fixtures", "case_bodies"):
-        module_values = module_data.get(key, {})
+    for key in ("case_bodies",):
+        module_values = {}
         suite_values = suite_data.get(key, {})
         module_map = module_values if isinstance(module_values, dict) else {}
         suite_map = suite_values if isinstance(suite_values, dict) else {}
@@ -180,9 +161,8 @@ def _merge_profile_variables(
         module_map.get("defaults", {}) if isinstance(module_map.get("defaults"), dict) else {},
         suite_map.get("defaults", {}) if isinstance(suite_map.get("defaults"), dict) else {},
     )
-    module_cases = module_map.get("cases", {}) if isinstance(module_map.get("cases"), dict) else {}
     suite_cases = suite_map.get("cases", {}) if isinstance(suite_map.get("cases"), dict) else {}
-    cases = _merge_case_maps(module_cases, suite_cases)
+    cases = deepcopy(suite_cases)
 
     result: dict[str, Any] = {}
     if defaults:

@@ -8,9 +8,9 @@ suite: calibration_smoke
 case_flows:
   TC-CAL-001:
     steps:
-      - call: client.run_http_calibration
+      - call: harness.run_http_calibration
         kwargs:
-          case_id: TC-CAL-001
+          resource_key: TC-CAL-001
           linear_files:
             1:
               - conditions:
@@ -19,13 +19,13 @@ case_flows:
                 b: 0.1
         save_as: resp
       - assert: 'assert resp["code"] == 0'
-      - assert: 'assert client.matches_linear(resp, k=1.2, b=0.1)'
+      - assert: 'assert harness.matches_linear(resp, k=1.2, b=0.1)'
 
   TC-CAL-002:
     steps:
-      - call: client.run_http_calibration
+      - call: harness.run_http_calibration
         kwargs:
-          case_id: TC-CAL-002
+          resource_key: TC-CAL-002
           piecewise_files:
             1:
               - conditions:
@@ -48,13 +48,13 @@ case_flows:
                 b: 0.05
         save_as: resp
       - assert: 'assert resp["code"] == 0'
-      - assert: 'assert client.matches_piecewise_then_linear(resp, linear_k=1.2, linear_b=0.05)'
+      - assert: 'assert harness.matches_piecewise_then_linear(resp, linear_k=1.2, linear_b=0.05)'
 
   TC-CAL-003:
     steps:
-      - call: client.run_http_calibration
+      - call: harness.run_http_calibration
         kwargs:
-          case_id: TC-CAL-003
+          resource_key: TC-CAL-003
           linear_files:
             1:
               - conditions:
@@ -68,13 +68,13 @@ case_flows:
                 b: 0.0
         save_as: resp
       - assert: 'assert resp["code"] == 0'
-      - assert: 'assert client.matches_linear(resp, k=1.3, b=0.0)'
+      - assert: 'assert harness.matches_linear(resp, k=1.3, b=0.0)'
 
   TC-CAL-004:
     steps:
-      - call: client.run_http_calibration
+      - call: harness.run_http_calibration
         kwargs:
-          case_id: TC-CAL-004
+          resource_key: TC-CAL-004
           linear_files:
             1:
               - conditions:
@@ -83,13 +83,13 @@ case_flows:
                 b: 0.0
         save_as: resp
       - assert: 'assert resp["code"] == 0'
-      - assert: 'assert client.matches_unchanged(resp)'
+      - assert: 'assert harness.matches_unchanged(resp)'
 
   TC-CAL-005:
     steps:
-      - call: client.run_http_calibration
+      - call: harness.run_http_calibration
         kwargs:
-          case_id: TC-CAL-005
+          resource_key: TC-CAL-005
           enable_calibration: false
           linear_files:
             1:
@@ -99,13 +99,13 @@ case_flows:
                 b: 0.0
         save_as: resp
       - assert: 'assert resp["code"] == 0'
-      - assert: 'assert client.matches_unchanged(resp)'
+      - assert: 'assert harness.matches_unchanged(resp)'
 
   TC-CAL-006:
     steps:
-      - call: client.run_grpc_calibration
+      - call: harness.run_grpc_calibration
         kwargs:
-          case_id: TC-CAL-006
+          resource_key: TC-CAL-006
           linear_files:
             1:
               - conditions:
@@ -114,13 +114,13 @@ case_flows:
                 b: 0.1
         save_as: resp
       - assert: 'assert resp["code"] == 0'
-      - assert: 'assert client.matches_linear(resp, k=1.5, b=0.1)'
+      - assert: 'assert harness.matches_linear(resp, k=1.5, b=0.1)'
 
   TC-CAL-007:
     steps:
-      - call: client.run_http_calibration
+      - call: harness.run_http_calibration
         kwargs:
-          case_id: TC-CAL-007
+          resource_key: TC-CAL-007
           linear_files:
             1:
               - conditions:
@@ -133,13 +133,13 @@ case_flows:
                 b: 0.0
         save_as: resp
       - assert: 'assert resp["code"] == 0'
-      - assert: 'assert client.matches_linear(resp, k=1.2, b=0.0)'
+      - assert: 'assert harness.matches_linear(resp, k=1.2, b=0.0)'
 
   TC-CAL-008:
     steps:
-      - call: client.run_http_calibration
+      - call: harness.run_http_calibration
         kwargs:
-          case_id: TC-CAL-008
+          resource_key: TC-CAL-008
           linear_files:
             1:
               - conditions:
@@ -148,13 +148,13 @@ case_flows:
                 b: 0.0
         save_as: resp
       - assert: 'assert resp["code"] == 0'
-      - assert: 'assert client.matches_unchanged(resp)'
+      - assert: 'assert harness.matches_unchanged(resp)'
 
   TC-CAL-009:
     steps:
-      - call: client.run_http_calibration
+      - call: harness.run_http_calibration
         kwargs:
-          case_id: TC-CAL-009
+          resource_key: TC-CAL-009
           linear_files:
             1:
               - conditions:
@@ -163,13 +163,13 @@ case_flows:
                 b: 0.0
         save_as: resp
       - assert: 'assert resp["code"] == 0'
-      - assert: 'assert client.matches_unchanged(resp)'
+      - assert: 'assert harness.matches_unchanged(resp)'
 
   TC-CAL-010:
     steps:
-      - call: client.run_http_calibration
+      - call: harness.run_http_calibration
         kwargs:
-          case_id: TC-CAL-010
+          resource_key: TC-CAL-010
           linear_files:
             1:
               - conditions:
@@ -178,13 +178,13 @@ case_flows:
                 b: 0.0
         save_as: resp
       - assert: 'assert resp["code"] == 0'
-      - assert: 'assert client.matches_linear(resp, k=1.5, b=0.0)'
+      - assert: 'assert harness.matches_linear(resp, k=1.5, b=0.0)'
 
   TC-CAL-011:
     steps:
-      - call: client.run_http_calibration
+      - call: harness.run_http_calibration
         kwargs:
-          case_id: TC-CAL-011
+          resource_key: TC-CAL-011
           piecewise_files:
             1:
               - conditions:
@@ -201,13 +201,13 @@ case_flows:
                     b: -0.2
         save_as: resp
       - assert: 'assert resp["code"] == 0'
-      - assert: 'assert client.matches_piecewise(resp)'
+      - assert: 'assert harness.matches_piecewise(resp)'
 
   TC-CAL-012:
     steps:
-      - call: client.run_http_calibration
+      - call: harness.run_http_calibration
         kwargs:
-          case_id: TC-CAL-012
+          resource_key: TC-CAL-012
           piecewise_files:
             1:
               - conditions:
@@ -230,13 +230,13 @@ case_flows:
                 b: 0.05
         save_as: resp
       - assert: 'assert resp["code"] == 0'
-      - assert: 'assert client.matches_piecewise_then_linear(resp, linear_k=1.2, linear_b=0.05)'
+      - assert: 'assert harness.matches_piecewise_then_linear(resp, linear_k=1.2, linear_b=0.05)'
 
   TC-CAL-013:
     steps:
-      - call: client.run_http_calibration
+      - call: harness.run_http_calibration
         kwargs:
-          case_id: TC-CAL-013
+          resource_key: TC-CAL-013
           piecewise_files:
             1:
               - conditions:
@@ -259,13 +259,13 @@ case_flows:
                 b: 0.05
         save_as: resp
       - assert: 'assert resp["code"] == 0'
-      - assert: 'assert client.matches_unchanged(resp)'
+      - assert: 'assert harness.matches_unchanged(resp)'
 
   TC-CAL-014:
     steps:
-      - call: client.run_http_calibration
+      - call: harness.run_http_calibration
         kwargs:
-          case_id: TC-CAL-014
+          resource_key: TC-CAL-014
           linear_files:
             1:
               - conditions:
@@ -279,5 +279,5 @@ case_flows:
                 b: 0.0
         save_as: resp
       - assert: 'assert resp["code"] == 0'
-      - assert: 'assert client.matches_linear(resp, k=1.8, b=0.0)'
+      - assert: 'assert harness.matches_linear(resp, k=1.8, b=0.0)'
 ```

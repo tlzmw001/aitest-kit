@@ -1,0 +1,10 @@
+target: coupon_system
+module: feature_scoring
+module_type: standard_recommend
+knowledge_refs:
+  l1:
+  - test_workspace/knowledge/L1/feature_scoring.md
+registered_suites:
+- suite: feature_scoring_smoke
+  manifest: test_workspace/suites/coupon_system/feature_scoring_smoke/suite.yaml
+  status: active

@@ -12,9 +12,9 @@ from aitest_kit.codegen.profile import (
     RuntimeProfile,
     load_profile_yaml,
     merge_profile_yaml,
-    preferred_module_profile_path,
 )
 from aitest_kit.registry.path_resolver import merge_knowledge_refs, resolve_knowledge_refs
+from aitest_kit.registry.models import ModuleBinding
 
 
 @dataclass(frozen=True)
@@ -28,6 +28,7 @@ class SuiteContext:
     module_profile_path: Path
     suite_profile_path: Path
     runtime_profile: RuntimeProfile
+    module_binding: ModuleBinding | None = None
     knowledge_refs: dict[str, Any] = field(default_factory=dict)
     diagnostics: list[str] = field(default_factory=list)
 
@@ -192,15 +193,13 @@ def load_suite_context(
             f"E612: suite profile filename must end with _suite.md: {suite_profile_path.name}"
         )
 
-    module_profile_path = preferred_module_profile_path(profile_dir, module)
-    if module and not module_profile_path.exists():
-        diagnostics.append(f"E611: module profile not found: {module_profile_path}")
-
-    module_data = load_profile_yaml(module_profile_path)
+    module_profile_path = (
+        Path(profile_dir) / target / "modules" / module / "profile.md"
+    )
     suite_data = load_profile_yaml(suite_profile_path) if suite_profile_path.exists() else {}
     if suite_profile_path.exists():
         _validate_suite_identity(suite_data, module, suite, diagnostics)
-    merged, merge_diagnostics = merge_profile_yaml(module_data, suite_data)
+    merged, merge_diagnostics = merge_profile_yaml({}, suite_data)
     diagnostics.extend(merge_diagnostics)
 
     knowledge_refs = resolve_knowledge_refs(
@@ -244,15 +243,25 @@ def load_suite_context_for_paths(
     )
     target_context = _load_target_context_if_available(context.target)
     if target_context is None:
-        return context
-    target_profile_dir = target_context.defaults.profile_dir
-    if Path(profile_dir).resolve(strict=False) == target_profile_dir:
-        return _with_target_module_fixture_import(context, target_context)
-    target_context_loaded = load_suite_context(
-        cases_path,
-        profile_dir=target_profile_dir,
-    )
-    return _with_target_module_fixture_import(target_context_loaded, target_context)
+        diagnostics = list(context.diagnostics)
+        if context.target:
+            diagnostics.append(
+                f"E616: target registry not found for suite target: {context.target}"
+            )
+        runtime_profile = RuntimeProfile(
+            data=dict(context.runtime_profile.data),
+            module_profile_path=context.module_profile_path,
+            suite_profile_path=context.runtime_profile.suite_profile_path,
+            diagnostics=diagnostics,
+        )
+        return _replace_suite_context(
+            context,
+            runtime_profile=runtime_profile,
+            knowledge_refs=context.knowledge_refs,
+            module_binding=None,
+            diagnostics=diagnostics,
+        )
+    return _with_target_module_binding(context, target_context)
 
 
 def resolve_suite_runtime_paths(
@@ -277,7 +286,7 @@ def resolve_suite_runtime_paths(
     return SuiteRuntimePaths(
         generated_dir=target_context.defaults.generated_dir,
         reports_dir=target_context.defaults.reports_dir,
-        profile_dir=target_context.defaults.profile_dir,
+        profile_dir=target_context.defaults.module_dir,
     )
 
 
@@ -292,8 +301,8 @@ def _load_target_context_if_available(target: str):
     return context
 
 
-def _with_target_module_fixture_import(context: SuiteContext, target_context) -> SuiteContext:
-    """Augment target-aware runtime profile with module.yaml fixture import."""
+def _with_target_module_binding(context: SuiteContext, target_context) -> SuiteContext:
+    """Attach the canonical module package and runtime Harness binding."""
     module_context = _load_module_context_if_available(target_context, context.module)
     knowledge_refs = merge_knowledge_refs(
         target_context.knowledge_refs,
@@ -303,55 +312,52 @@ def _with_target_module_fixture_import(context: SuiteContext, target_context) ->
     if module_context is None:
         diagnostics = list(context.diagnostics)
         diagnostics.extend(target_context.diagnostics)
+        diagnostics.append(
+            "E616: canonical module registry not found: "
+            f"{target_context.defaults.module_dir / context.module / 'module.yaml'}"
+        )
         runtime_profile = RuntimeProfile(
-            data=load_profile_yaml(context.runtime_profile),
-            module_profile_path=context.runtime_profile.module_profile_path,
+            data={},
+            module_profile_path=target_context.defaults.module_dir / context.module / "profile.md",
             suite_profile_path=context.runtime_profile.suite_profile_path,
+            module_binding=None,
             diagnostics=diagnostics,
         )
         return _replace_suite_context(
             context,
             runtime_profile=runtime_profile,
+            module_profile_path=target_context.defaults.module_dir / context.module / "profile.md",
             knowledge_refs=knowledge_refs,
+            module_binding=None,
             diagnostics=diagnostics,
         )
 
-    data = load_profile_yaml(context.runtime_profile)
     diagnostics = list(context.diagnostics)
     diagnostics.extend(module_context.diagnostics)
+    module_profile_path = module_context.profile_path
+    suite_profile_path = context.suite_profile_path
+    if not module_profile_path.exists():
+        diagnostics.append(f"E611: module profile not found: {module_profile_path}")
+    module_data = load_profile_yaml(module_profile_path)
+    suite_data = load_profile_yaml(suite_profile_path) if suite_profile_path.exists() else {}
+    data, merge_diagnostics = merge_profile_yaml(module_data, suite_data)
+    diagnostics.extend(merge_diagnostics)
     if module_context.module_type:
         data["module_type"] = module_context.module_type
 
-    fixture_import = _target_fixture_import(
-        module_context.fixture_path,
-        module_context.default_fixture,
-        target_context.workspace_root,
-    )
-    if fixture_import:
-        imports = data.get("extra_imports", [])
-        merged_imports = [item for item in imports if isinstance(item, str) and item.strip()]
-        if fixture_import not in merged_imports:
-            merged_imports.append(fixture_import)
-        data["extra_imports"] = merged_imports
-    elif module_context.fixture_path and module_context.default_fixture and not _profile_imports_fixture(
-        data,
-        module_context.default_fixture,
-    ):
-        diagnostics.append(
-            "E615: target module fixture path is not importable; add profile extra_imports "
-            f"for fixture {module_context.default_fixture}"
-        )
-
     runtime_profile = RuntimeProfile(
         data=data,
-        module_profile_path=context.runtime_profile.module_profile_path,
-        suite_profile_path=context.runtime_profile.suite_profile_path,
+        module_profile_path=module_profile_path,
+        suite_profile_path=suite_profile_path if suite_profile_path.exists() else None,
+        module_binding=module_context.binding,
         diagnostics=diagnostics,
     )
     return _replace_suite_context(
         context,
         runtime_profile=runtime_profile,
+        module_profile_path=module_profile_path,
         knowledge_refs=knowledge_refs,
+        module_binding=module_context.binding,
         diagnostics=diagnostics,
     )
 
@@ -360,7 +366,9 @@ def _replace_suite_context(
     context: SuiteContext,
     *,
     runtime_profile: RuntimeProfile,
+    module_profile_path: Path | None = None,
     knowledge_refs: dict[str, list[Path]],
+    module_binding: ModuleBinding | None,
     diagnostics: list[str],
 ) -> SuiteContext:
     return SuiteContext(
@@ -370,48 +378,22 @@ def _replace_suite_context(
         suite=context.suite,
         case_files=context.case_files,
         manifest_path=context.manifest_path,
-        module_profile_path=context.module_profile_path,
+        module_profile_path=module_profile_path or context.module_profile_path,
         suite_profile_path=context.suite_profile_path,
         runtime_profile=runtime_profile,
+        module_binding=module_binding,
         knowledge_refs=knowledge_refs,
         diagnostics=diagnostics,
     )
 
 
 def _load_module_context_if_available(target_context, module: str):
-    module_path = target_context.defaults.module_dir / f"{module}.yaml"
+    module_path = target_context.defaults.module_dir / module / "module.yaml"
     if not module_path.exists():
         return None
     from aitest_kit.registry.loader import load_module_context
 
     return load_module_context(target_context, module)
-
-
-def _target_fixture_import(fixture_path: Path | None, fixture_name: str, workspace_root: Path) -> str:
-    if fixture_path is None or not fixture_name or fixture_path.suffix != ".py":
-        return ""
-    try:
-        relative = fixture_path.resolve(strict=False).relative_to(
-            workspace_root.resolve(strict=False)
-        )
-    except ValueError:
-        return ""
-    dotted_path = _dotted_import_path(relative.with_suffix(""))
-    return f"from {dotted_path} import {fixture_name}" if dotted_path else ""
-
-
-def _dotted_import_path(path: Path) -> str:
-    parts = list(path.parts)
-    if not parts or not all(part.isidentifier() for part in parts):
-        return ""
-    return ".".join(parts)
-
-
-def _profile_imports_fixture(data: dict[str, Any], fixture_name: str) -> bool:
-    imports = data.get("extra_imports", [])
-    if not isinstance(imports, list):
-        return False
-    return any(isinstance(item, str) and fixture_name in item for item in imports)
 
 
 def _manifest_path_for_dir(suite_dir: Path) -> Path:

@@ -8,9 +8,9 @@
 | 缺用例 / 用例过时 | cases | `test-design` | — |
 | 单条用例错误 | cases | `test-fix` | — |
 | profile not found / validate-profile ERROR | scaffold | `test-scaffold` | — |
-| fixture 缺方法 / 缺认证 / 缺 env / 缺 cleanup | scaffold | `test-scaffold incremental` | — |
+| Module Harness 缺 capability / 认证 / env / cleanup | scaffold | `test-scaffold incremental` | — |
 | `--check` stale | codegen | `test-codegen` | — |
-| UNPARSED 过多 | codegen 或 scaffold | 先 `--dump-ir` 看 strategy 来源：emitter 规则缺失 → `test-codegen`；fixture 能力缺失 → `test-scaffold` | 列两候选让用户选 |
+| UNPARSED 过多 | codegen 或 scaffold | 先 `--dump-ir` 看 strategy 来源：规则/profile 缺失 → `test-codegen`；Harness capability 缺失 → `test-scaffold` | 列两候选让用户选 |
 | pytest collect 失败 | codegen 或 scaffold | `python -c "import ast; ast.parse(open(f).read())"` 语法错误 → `test-codegen`；ImportError → `test-scaffold` | 按错误类型判定 |
 | 测试执行失败 | execution | 读 `report.md` 分流：`ASSERTION_FAILURE` → `test-fix`；`TEST_SCAFFOLD_ERROR` → `test-scaffold`；`PRECONDITION_MISSING` / `ENVIRONMENT_ERROR` → 补 env/服务；SUT bug → 记录 `results/` | — |
 | 重复 case_body / case_flow 模式稳定 | emitter | `emitter-build` | — |
@@ -27,6 +27,7 @@
 
 ```bash
 aitest codegen --suite-file <suite.yaml> --validate-profile
+aitest doctor
 aitest codegen --suite-file <suite.yaml> --check
 aitest run --suite-file <suite.yaml> -- --collect-only -q
 ```

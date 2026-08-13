@@ -6,12 +6,10 @@ Suite-specific codegen profile generated from the existing reviewed case/profile
 profile_scope: case_suite
 parent_module: validation_ratelimit
 suite: validation_ratelimit_smoke
-extra_imports:
-- from test_workspace.targets.coupon_system.fixtures.validation_ratelimit import BOUNDARY_ITEM, ERR, LIMITED
 case_flows:
   TC-VAL-001:
     steps:
-    - call: case.http
+    - call: harness.http
       args:
       - ''
       - req-val-001
@@ -20,10 +18,10 @@ case_flows:
         score_threshold: 0.5
         max_claim_per_request: 1
       save_as: resp
-    - assert: assert resp == ERR
+    - assert: assert resp == harness.ERR
   TC-VAL-002:
     steps:
-    - call: case.http
+    - call: harness.http
       args:
       - u_val_scene_empty
       - req-val-002
@@ -33,10 +31,10 @@ case_flows:
         score_threshold: 0.5
         max_claim_per_request: 1
       save_as: resp
-    - assert: assert resp == ERR
+    - assert: assert resp == harness.ERR
   TC-VAL-003:
     steps:
-    - call: case.http
+    - call: harness.http
       args:
       - u_val_device_empty
       - req-val-003
@@ -46,46 +44,46 @@ case_flows:
         score_threshold: 0.5
         max_claim_per_request: 1
       save_as: resp
-    - assert: assert resp == ERR
+    - assert: assert resp == harness.ERR
   TC-VAL-005:
     steps:
-    - call: case.grpc_missing
+    - call: harness.grpc_missing
       args:
       - u_val_grpc_missing_control
       - req-val-005
       - external
       save_as: resp
-    - assert: assert resp == ERR
+    - assert: assert resp == harness.ERR
   TC-GRPC-001:
     steps:
-    - call: case.grpc_missing
+    - call: harness.grpc_missing
       args:
       - u_grpc_external_missing
       - req-grpc-001
       - external
       save_as: resp
-    - assert: assert resp == ERR
+    - assert: assert resp == harness.ERR
   TC-GRPC-002:
     steps:
-    - call: case.grpc_missing
+    - call: harness.grpc_missing
       args:
       - u_grpc_threshold_missing
       - req-grpc-002
       - score_threshold
       save_as: resp
-    - assert: assert resp == ERR
+    - assert: assert resp == harness.ERR
   TC-GRPC-003:
     steps:
-    - call: case.grpc_missing
+    - call: harness.grpc_missing
       args:
       - u_grpc_max_claim_missing
       - req-grpc-003
       - max_claim_per_request
       save_as: resp
-    - assert: assert resp == ERR
+    - assert: assert resp == harness.ERR
   TC-SCHEMA-001:
     steps:
-    - call: case.body
+    - call: harness.body
       args:
       - u_schema_external_missing
       - req-schema-001
@@ -97,7 +95,7 @@ case_flows:
     - call: body.pop
       args:
       - external
-    - call: case.http_response
+    - call: harness.http_response
       args:
       - ref: body
       save_as: resp
@@ -107,7 +105,7 @@ case_flows:
     - assert: assert ["body", "external"] in locs
   TC-SCHEMA-002:
     steps:
-    - call: case.body
+    - call: harness.body
       args:
       - u_schema_threshold_missing
       - req-schema-002
@@ -119,7 +117,7 @@ case_flows:
     - call: body.pop
       args:
       - score_threshold
-    - call: case.http_response
+    - call: harness.http_response
       args:
       - ref: body
       save_as: resp
@@ -129,7 +127,7 @@ case_flows:
     - assert: assert ["body", "score_threshold"] in locs
   TC-SCHEMA-003:
     steps:
-    - call: case.body
+    - call: harness.body
       args:
       - u_schema_max_claim_missing
       - req-schema-003
@@ -141,7 +139,7 @@ case_flows:
     - call: body.pop
       args:
       - max_claim_per_request
-    - call: case.http_response
+    - call: harness.http_response
       args:
       - ref: body
       save_as: resp
@@ -151,7 +149,7 @@ case_flows:
     - assert: assert ["body", "max_claim_per_request"] in locs
   TC-VAL-004:
     steps:
-    - call: case.http
+    - call: harness.http
       args:
       - u_val_items_empty
       - req-val-004
@@ -161,10 +159,10 @@ case_flows:
         score_threshold: 0.5
         max_claim_per_request: 1
       save_as: resp
-    - assert: assert resp == ERR
+    - assert: assert resp == harness.ERR
   TC-VAL-006:
     steps:
-    - call: case.http
+    - call: harness.http
       args:
       - u_val_http_external_2
       - req-val-006
@@ -173,10 +171,10 @@ case_flows:
         score_threshold: 0.5
         max_claim_per_request: 1
       save_as: resp
-    - assert: assert resp == ERR
+    - assert: assert resp == harness.ERR
   TC-VAL-007:
     steps:
-    - call: case.grpc
+    - call: harness.grpc
       args:
       - u_val_grpc_external_2
       - req-val-007
@@ -185,10 +183,10 @@ case_flows:
         score_threshold: 0.5
         max_claim_per_request: 1
       save_as: resp
-    - assert: assert resp == ERR
+    - assert: assert resp == harness.ERR
   TC-VAL-008:
     steps:
-    - call: case.http
+    - call: harness.http
       args:
       - u_val_http_threshold_low
       - req-val-008
@@ -197,10 +195,10 @@ case_flows:
         score_threshold: -0.01
         max_claim_per_request: 1
       save_as: resp
-    - assert: assert resp == ERR
+    - assert: assert resp == harness.ERR
   TC-VAL-009:
     steps:
-    - call: case.grpc
+    - call: harness.grpc
       args:
       - u_val_grpc_threshold_high
       - req-val-009
@@ -209,10 +207,10 @@ case_flows:
         score_threshold: 1.01
         max_claim_per_request: 1
       save_as: resp
-    - assert: assert resp == ERR
+    - assert: assert resp == harness.ERR
   TC-VAL-010:
     steps:
-    - call: case.http
+    - call: harness.http
       args:
       - u_val_http_max_claim_0
       - req-val-010
@@ -221,10 +219,10 @@ case_flows:
         score_threshold: 0.5
         max_claim_per_request: 0
       save_as: resp
-    - assert: assert resp == ERR
+    - assert: assert resp == harness.ERR
   TC-VAL-011:
     steps:
-    - call: case.grpc
+    - call: harness.grpc
       args:
       - u_val_grpc_max_claim_0
       - req-val-011
@@ -233,10 +231,10 @@ case_flows:
         score_threshold: 0.5
         max_claim_per_request: 0
       save_as: resp
-    - assert: assert resp == ERR
+    - assert: assert resp == harness.ERR
   TC-VAL-012:
     steps:
-    - call: case.http
+    - call: harness.http
       args:
       - u_reqid_http_auto
       - ''
@@ -249,7 +247,7 @@ case_flows:
     - comment: 'MANUAL CHECK: 应用日志存在 recommend request:，其中 reqId= 的值匹配 UUID 正则'
   TC-VAL-013:
     steps:
-    - call: case.grpc
+    - call: harness.grpc
       args:
       - u_reqid_grpc_auto
       - ''
@@ -262,7 +260,7 @@ case_flows:
     - comment: 'MANUAL CHECK: 应用日志存在 recommend request:，其中 reqId= 的值匹配 UUID 正则'
   TC-GRPC-004:
     steps:
-    - call: case.grpc
+    - call: harness.grpc
       args:
       - u_grpc_valid
       - req-grpc-004
@@ -274,7 +272,12 @@ case_flows:
     - assert: assert resp['code'] == 0
   TC-RATE-001:
     steps:
-    - call: case.http
+    - call: harness.use_isolated_rate_service
+      kwargs:
+        max_qps: 100
+        per_user_qps: 2
+        window_seconds: 1
+    - call: harness.http
       args:
       - u_rate_old_user
       - req-rate-001-1
@@ -283,7 +286,7 @@ case_flows:
         score_threshold: 0.0
         max_claim_per_request: 1
       save_as: r1
-    - call: case.http
+    - call: harness.http
       args:
       - u_rate_old_user
       - req-rate-001-2
@@ -292,7 +295,7 @@ case_flows:
         score_threshold: 0.0
         max_claim_per_request: 1
       save_as: r2
-    - call: case.http
+    - call: harness.http
       args:
       - u_rate_old_user
       - req-rate-001-3
@@ -303,10 +306,15 @@ case_flows:
       save_as: r3
     - assert: assert r1['code'] == 0
     - assert: assert r2['code'] == 0
-    - assert: assert r3 == LIMITED
+    - assert: assert r3 == harness.LIMITED
   TC-RATE-002:
     steps:
-    - call: case.http
+    - call: harness.use_isolated_rate_service
+      kwargs:
+        max_qps: 2
+        per_user_qps: 10
+        window_seconds: 1
+    - call: harness.http
       args:
       - u_rate_http_global_1
       - req-rate-002-1
@@ -315,7 +323,7 @@ case_flows:
         score_threshold: 0.0
         max_claim_per_request: 1
       save_as: r1
-    - call: case.http
+    - call: harness.http
       args:
       - u_rate_http_global_2
       - req-rate-002-2
@@ -324,7 +332,7 @@ case_flows:
         score_threshold: 0.0
         max_claim_per_request: 1
       save_as: r2
-    - call: case.http
+    - call: harness.http
       args:
       - u_rate_http_global_3
       - req-rate-002-3
@@ -335,10 +343,15 @@ case_flows:
       save_as: r3
     - assert: assert r1['code'] == 0
     - assert: assert r2['code'] == 0
-    - assert: assert r3 == LIMITED
+    - assert: assert r3 == harness.LIMITED
   TC-RATE-003:
     steps:
-    - call: case.grpc
+    - call: harness.use_isolated_rate_service
+      kwargs:
+        max_qps: 2
+        per_user_qps: 10
+        window_seconds: 1
+    - call: harness.grpc
       args:
       - u_rate_grpc_global_1
       - req-rate-003-1
@@ -347,7 +360,7 @@ case_flows:
         score_threshold: 0.0
         max_claim_per_request: 1
       save_as: r1
-    - call: case.grpc
+    - call: harness.grpc
       args:
       - u_rate_grpc_global_2
       - req-rate-003-2
@@ -356,7 +369,7 @@ case_flows:
         score_threshold: 0.0
         max_claim_per_request: 1
       save_as: r2
-    - call: case.grpc
+    - call: harness.grpc
       args:
       - u_rate_grpc_global_3
       - req-rate-003-3
@@ -367,10 +380,15 @@ case_flows:
       save_as: r3
     - assert: assert r1['code'] == 0
     - assert: assert r2['code'] == 0
-    - assert: assert r3 == LIMITED
+    - assert: assert r3 == harness.LIMITED
   TC-RATE-004:
     steps:
-    - call: case.http
+    - call: harness.use_isolated_rate_service
+      kwargs:
+        max_qps: 100
+        per_user_qps: 1
+        window_seconds: 1
+    - call: harness.http
       args:
       - u_rate_http_user
       - req-rate-004-1
@@ -379,7 +397,7 @@ case_flows:
         score_threshold: 0.0
         max_claim_per_request: 1
       save_as: r1
-    - call: case.http
+    - call: harness.http
       args:
       - u_rate_http_user
       - req-rate-004-2
@@ -389,10 +407,15 @@ case_flows:
         max_claim_per_request: 1
       save_as: r2
     - assert: assert r1['code'] == 0
-    - assert: assert r2 == LIMITED
+    - assert: assert r2 == harness.LIMITED
   TC-RATE-005:
     steps:
-    - call: case.grpc
+    - call: harness.use_isolated_rate_service
+      kwargs:
+        max_qps: 100
+        per_user_qps: 1
+        window_seconds: 1
+    - call: harness.grpc
       args:
       - u_rate_grpc_user
       - req-rate-005-1
@@ -401,7 +424,7 @@ case_flows:
         score_threshold: 0.0
         max_claim_per_request: 1
       save_as: r1
-    - call: case.grpc
+    - call: harness.grpc
       args:
       - u_rate_grpc_user
       - req-rate-005-2
@@ -411,87 +434,97 @@ case_flows:
         max_claim_per_request: 1
       save_as: r2
     - assert: assert r1['code'] == 0
-    - assert: assert r2 == LIMITED
+    - assert: assert r2 == harness.LIMITED
   TC-RATE-006:
     steps:
-    - call: case.http
+    - call: harness.use_isolated_rate_service
+      kwargs:
+        max_qps: 100
+        per_user_qps: 1
+        window_seconds: 1
+    - call: harness.http
       args:
       - u_rate_http_window
       - req-rate-006-1
       kwargs:
         item:
-          expr: BOUNDARY_ITEM
+          expr: harness.BOUNDARY_ITEM
         external: 0
         score_threshold: 0.0
         max_claim_per_request: 1
       save_as: r1
-    - call: case.http
+    - call: harness.http
       args:
       - u_rate_http_window
       - req-rate-006-2
       kwargs:
         item:
-          expr: BOUNDARY_ITEM
+          expr: harness.BOUNDARY_ITEM
         external: 0
         score_threshold: 0.0
         max_claim_per_request: 1
       save_as: r2
-    - call: case.wait_rate_key_gone
+    - call: harness.wait_rate_key_gone
       args:
       - u_rate_http_window
-    - call: case.http
+    - call: harness.http
       args:
       - u_rate_http_window
       - req-rate-006-3
       kwargs:
         item:
-          expr: BOUNDARY_ITEM
+          expr: harness.BOUNDARY_ITEM
         external: 0
         score_threshold: 0.0
         max_claim_per_request: 1
       save_as: r3
     - assert: assert r1['code'] == 0
-    - assert: assert r2 == LIMITED
+    - assert: assert r2 == harness.LIMITED
     - assert: assert r3['code'] == 0
   TC-RATE-007:
     steps:
-    - call: case.grpc
+    - call: harness.use_isolated_rate_service
+      kwargs:
+        max_qps: 100
+        per_user_qps: 1
+        window_seconds: 1
+    - call: harness.grpc
       args:
       - u_rate_grpc_window
       - req-rate-007-1
       kwargs:
         item:
-          expr: BOUNDARY_ITEM
+          expr: harness.BOUNDARY_ITEM
         external: 0
         score_threshold: 0.0
         max_claim_per_request: 1
       save_as: r1
-    - call: case.grpc
+    - call: harness.grpc
       args:
       - u_rate_grpc_window
       - req-rate-007-2
       kwargs:
         item:
-          expr: BOUNDARY_ITEM
+          expr: harness.BOUNDARY_ITEM
         external: 0
         score_threshold: 0.0
         max_claim_per_request: 1
       save_as: r2
-    - call: case.wait_rate_key_gone
+    - call: harness.wait_rate_key_gone
       args:
       - u_rate_grpc_window
-    - call: case.grpc
+    - call: harness.grpc
       args:
       - u_rate_grpc_window
       - req-rate-007-3
       kwargs:
         item:
-          expr: BOUNDARY_ITEM
+          expr: harness.BOUNDARY_ITEM
         external: 0
         score_threshold: 0.0
         max_claim_per_request: 1
       save_as: r3
     - assert: assert r1['code'] == 0
-    - assert: assert r2 == LIMITED
+    - assert: assert r2 == harness.LIMITED
     - assert: assert r3['code'] == 0
 ```

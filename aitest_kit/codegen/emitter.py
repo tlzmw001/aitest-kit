@@ -44,7 +44,6 @@ def emit_file(
     file_type: str,
     profile_path: str | Path | None = None,
     output_dir: str | Path = "test_workspace/generated",
-    fixture_dir: str | Path = "test_workspace/targets",
     project: ProjectConfig | None = None,
     output_file_type: str | None = None,
 ) -> EmitResult:
@@ -91,7 +90,6 @@ def emit_file(
     resolved_profile = resolve_profile(profile_path)
     profile_rules = resolved_profile.rules
     extra_imports = resolved_profile.extra_imports
-    case_fixtures = resolved_profile.case_fixtures
     case_bodies = resolved_profile.case_bodies
     case_flows = resolved_profile.case_flows
     profile_data = resolved_profile.raw
@@ -105,10 +103,9 @@ def emit_file(
         project=proj,
         profile_rules=profile_rules,
         extra_imports=extra_imports,
-        case_fixtures=case_fixtures,
         case_bodies=case_bodies,
         variables=parse_result.shared_config.variables,
-        fixture_dir=Path(fixture_dir),
+        module_binding=resolved_profile.module_binding,
     )
 
     if parse_result.errors:

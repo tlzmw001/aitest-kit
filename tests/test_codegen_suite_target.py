@@ -11,25 +11,55 @@ from aitest_kit.codegen.suite import load_suite_context_for_paths
 
 def _write_module_profile(root: Path) -> None:
     target_dir = root / "test_workspace" / "targets" / "sub2api"
-    profile_dir = target_dir / "profiles"
-    profile_dir.mkdir(parents=True, exist_ok=True)
+    module_dir = target_dir / "modules" / "gateway_api"
+    module_dir.mkdir(parents=True, exist_ok=True)
+    for package_dir in (
+        root / "test_workspace",
+        root / "test_workspace" / "targets",
+        target_dir,
+        target_dir / "modules",
+        module_dir,
+    ):
+        (package_dir / "__init__.py").write_text("", encoding="utf-8")
     (target_dir / "target.yaml").write_text(
         """target: sub2api
 defaults:
-  profile_dir: test_workspace/targets/sub2api/profiles
+  module_dir: test_workspace/targets/sub2api/modules
   generated_dir: test_workspace/generated/sub2api
   reports_dir: test_workspace/reports/sub2api
 """,
         encoding="utf-8",
     )
-    (profile_dir / "profile_gateway_api.md").write_text(
-        """```yaml
+    (module_dir / "module.yaml").write_text(
+        """target: sub2api
+module: gateway_api
 module_type: multi_endpoint
-extra_imports:
-  - "from test_workspace.targets.sub2api.fixtures.gateway_api import setup_gateway_api"
-default_fixture: setup_gateway_api
-default_object: client
-```
+""",
+        encoding="utf-8",
+    )
+    (module_dir / "profile.md").write_text(
+        "```yaml\n{}\n```\n",
+        encoding="utf-8",
+    )
+    (module_dir / "harness.py").write_text(
+        """class GatewayApiHarness:
+    def health(self):
+        return {"status": "ok"}
+
+    def login(self, **kwargs):
+        return kwargs
+""",
+        encoding="utf-8",
+    )
+    (module_dir / "fixture.py").write_text(
+        """import pytest
+
+from .harness import GatewayApiHarness
+
+
+@pytest.fixture
+def setup_gateway_api() -> GatewayApiHarness:
+    return GatewayApiHarness()
 """,
         encoding="utf-8",
     )
@@ -62,10 +92,8 @@ parent_module: gateway_api
 suite: quota_billing_v2
 case_flows:
   TC-GW-041:
-    fixture: setup_gateway_api
-    object: client
     steps:
-      - call: client.health
+      - call: harness.health
         save_as: resp
       - assert: 'assert resp["status"] == "ok"'
 ```
@@ -75,33 +103,11 @@ case_flows:
     return suite_dir
 
 
-def test_suite_file_uses_target_defaults_for_profile_and_generated_dir(tmp_path):
+def test_suite_file_uses_canonical_module_profile_and_target_generated_dir(tmp_path):
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
         root = Path(cwd)
-        target_dir = root / "test_workspace" / "targets" / "sub2api"
-        profile_dir = target_dir / "profiles"
-        profile_dir.mkdir(parents=True)
-        (target_dir / "target.yaml").write_text(
-            """target: sub2api
-defaults:
-  profile_dir: test_workspace/targets/sub2api/profiles
-  generated_dir: test_workspace/generated/sub2api
-  reports_dir: test_workspace/reports/sub2api
-""",
-            encoding="utf-8",
-        )
-        (profile_dir / "profile_gateway_api.md").write_text(
-            """```yaml
-module_type: multi_endpoint
-extra_imports:
-  - "from test_workspace.targets.sub2api.fixtures.gateway_api import setup_gateway_api"
-default_fixture: setup_gateway_api
-default_object: client
-```
-""",
-            encoding="utf-8",
-        )
+        _write_module_profile(root)
         suite_dir = _write_suite(root)
         suite_file = suite_dir / "suite.yaml"
         suite_file.write_text(
@@ -115,7 +121,18 @@ case_files:
         )
 
         context = load_suite_context_for_paths(suite_file)
-        assert context.module_profile_path == profile_dir / "profile_gateway_api.md"
+        module_dir = (
+            root
+            / "test_workspace"
+            / "targets"
+            / "sub2api"
+            / "modules"
+            / "gateway_api"
+        )
+        assert context.module_profile_path == module_dir / "profile.md"
+        assert context.module_binding is not None
+        assert context.module_binding.fixture_name == "setup_gateway_api"
+        assert context.module_binding.object_name == "harness"
 
         generate = runner.invoke(codegen, ["--suite-file", str(suite_file)])
         assert generate.exit_code == 0, generate.output
@@ -133,56 +150,7 @@ def test_suite_file_auto_imports_target_module_fixture(tmp_path):
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
         root = Path(cwd)
-        target_dir = root / "test_workspace" / "targets" / "sub2api"
-        profile_dir = target_dir / "profiles"
-        fixture_dir = target_dir / "fixtures"
-        helper_dir = target_dir / "helpers"
-        module_dir = target_dir / "modules"
-        profile_dir.mkdir(parents=True)
-        fixture_dir.mkdir()
-        helper_dir.mkdir()
-        module_dir.mkdir()
-        (target_dir / "target.yaml").write_text(
-            """target: sub2api
-defaults:
-  module_dir: test_workspace/targets/sub2api/modules
-  fixture_dir: test_workspace/targets/sub2api/fixtures
-  profile_dir: test_workspace/targets/sub2api/profiles
-  generated_dir: test_workspace/generated/sub2api
-""",
-            encoding="utf-8",
-        )
-        (module_dir / "gateway_api.yaml").write_text(
-            """target: sub2api
-module: gateway_api
-module_type: multi_endpoint
-fixture:
-  file: gateway_api.py
-  default_fixture: setup_gateway_api
-""",
-            encoding="utf-8",
-        )
-        (fixture_dir / "gateway_api.py").write_text(
-            """import pytest
-
-
-@pytest.fixture
-def setup_gateway_api():
-    return object()
-""",
-            encoding="utf-8",
-        )
-        (helper_dir / "http.py").write_text(
-            "def post(*args, **kwargs):\n    raise NotImplementedError\n",
-            encoding="utf-8",
-        )
-        (profile_dir / "profile_gateway_api.md").write_text(
-            """```yaml
-default_fixture: setup_gateway_api
-```
-""",
-            encoding="utf-8",
-        )
+        _write_module_profile(root)
         suite_dir = _write_suite(root)
         suite_file = suite_dir / "suite.yaml"
         suite_file.write_text(
@@ -206,10 +174,12 @@ case_files:
         assert context.runtime_profile.data["module_type"] == "multi_endpoint"
         text = generated.read_text(encoding="utf-8")
         assert (
-            "from test_workspace.targets.sub2api.fixtures.gateway_api import setup_gateway_api"
+            'pytest_plugins = ["test_workspace.targets.sub2api.modules.gateway_api.fixture"]'
             in text
         )
-        assert "from test_workspace.targets.sub2api.helpers import http as http_helper" in text
+        assert "harness = setup_gateway_api" in text
+        assert "resp = harness.health()" in text
+        assert "test_workspace.targets.sub2api.fixtures" not in text
 
 
 def test_suite_context_uses_effective_target_module_suite_knowledge_refs(tmp_path):
@@ -229,34 +199,52 @@ def test_suite_context_uses_effective_target_module_suite_knowledge_refs(tmp_pat
         l2.write_text("# L2\n", encoding="utf-8")
 
         target_dir = root / "test_workspace" / "targets" / "sub2api"
-        module_dir = target_dir / "modules"
-        profile_dir = target_dir / "profiles"
+        module_dir = target_dir / "modules" / "gateway_api"
         module_dir.mkdir(parents=True)
-        profile_dir.mkdir()
+        for package_dir in (
+            root / "test_workspace",
+            root / "test_workspace" / "targets",
+            target_dir,
+            target_dir / "modules",
+            module_dir,
+        ):
+            (package_dir / "__init__.py").write_text("", encoding="utf-8")
         (target_dir / "target.yaml").write_text(
             """target: sub2api
 knowledge_refs:
   l0: test_workspace/knowledge/L0_system_architecture.md
 defaults:
   module_dir: test_workspace/targets/sub2api/modules
-  profile_dir: test_workspace/targets/sub2api/profiles
 """,
             encoding="utf-8",
         )
-        (module_dir / "gateway_api.yaml").write_text(
+        (module_dir / "module.yaml").write_text(
             """target: sub2api
 module: gateway_api
 module_type: multi_endpoint
 knowledge_refs:
   l1: test_workspace/knowledge/L1/gateway_api.md
-fixture:
-  file: gateway_api.py
-  default_fixture: setup_gateway_api
 """,
             encoding="utf-8",
         )
-        (profile_dir / "profile_gateway_api.md").write_text(
-            "```yaml\nmodule_type: multi_endpoint\n```\n",
+        (module_dir / "profile.md").write_text(
+            "```yaml\n{}\n```\n",
+            encoding="utf-8",
+        )
+        (module_dir / "harness.py").write_text(
+            "class GatewayApiHarness:\n    pass\n",
+            encoding="utf-8",
+        )
+        (module_dir / "fixture.py").write_text(
+            """import pytest
+
+from .harness import GatewayApiHarness
+
+
+@pytest.fixture
+def setup_gateway_api() -> GatewayApiHarness:
+    return GatewayApiHarness()
+""",
             encoding="utf-8",
         )
         suite_dir = _write_suite(root)
@@ -332,10 +320,8 @@ variables:
         value: wrong-password
 case_flows:
   TC-GW-051:
-    fixture: setup_gateway_api
-    object: client
     steps:
-      - call: client.login
+      - call: harness.login
         kwargs:
           base_url:
             var: base_url
@@ -376,38 +362,11 @@ case_flows:
         assert "os.environ" not in text
 
 
-def test_codegen_cases_suite_inherits_module_case_flow_defaults(tmp_path):
+def test_codegen_cases_suite_uses_fixed_module_harness_binding(tmp_path):
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
         root = Path(cwd)
-        target_dir = root / "test_workspace" / "targets" / "sub2api"
-        profile_dir = target_dir / "profiles"
-        profile_dir.mkdir(parents=True, exist_ok=True)
-        (target_dir / "target.yaml").write_text(
-            """target: sub2api
-defaults:
-  profile_dir: test_workspace/targets/sub2api/profiles
-  generated_dir: test_workspace/generated/sub2api
-  reports_dir: test_workspace/reports/sub2api
-""",
-            encoding="utf-8",
-        )
-        (profile_dir / "profile_gateway_api.md").write_text(
-            """```yaml
-module_type: multi_endpoint
-extra_imports:
-  - "from test_workspace.targets.sub2api.fixtures.gateway_api import setup_gateway_api"
-default_fixture: setup_gateway_api
-default_object: client_factory
-default_case_setup:
-  call: client_factory
-  kwargs:
-    case_id: "{case_id}"
-  save_as: client
-```
-""",
-            encoding="utf-8",
-        )
+        _write_module_profile(root)
         suite_dir = root / "test_workspace" / "suites" / "sub2api" / "factory_smoke"
         suite_dir.mkdir(parents=True, exist_ok=True)
         (suite_dir / "suite.yaml").write_text(
@@ -444,7 +403,7 @@ suite: factory_smoke
 case_flows:
   TC-GW-061:
     steps:
-      - call: client.health
+      - call: harness.health
         save_as: resp
       - assert: 'assert resp["status"] == "ok"'
 ```
@@ -461,7 +420,8 @@ case_flows:
         payload = json.loads(dump.output)
         case = payload["suites"][0]["files"][0]["cases"][0]
         assert case["fixtures"] == ["setup_gateway_api"]
-        assert case["case_flow"]["object_name"] == "client_factory"
-        assert case["case_flow"]["steps"][0]["call"] == "client_factory"
-        assert case["case_flow"]["steps"][0]["kwargs"] == {"case_id": "TC-GW-061"}
-        assert case["case_flow"]["steps"][1]["call"] == "client.health"
+        assert case["case_flow"]["fixture"] == "setup_gateway_api"
+        assert case["case_flow"]["object_name"] == "harness"
+        assert len(case["case_flow"]["steps"]) == 2
+        assert case["case_flow"]["steps"][0]["call"] == "harness.health"
+        assert case["case_flow"]["steps"][0]["kwargs"] == {}

@@ -4,8 +4,7 @@ import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
 from aitest_kit.runtime_context import reset_case_context, set_case_context
-from test_workspace.targets.coupon_system.fixtures.common import http_base_url, grpc_target, ab_base_url, redis_url, redis_tracker
-from test_workspace.targets.coupon_system.fixtures.e2e import setup_e2e
+pytest_plugins = ["test_workspace.targets.coupon_system.modules.e2e.fixture"]
 
 
 BASE_REQUEST = {
@@ -56,14 +55,14 @@ class TestE2eBusiness:
             # SETUP: 前置操作_3：设置 COUPON_ACT_001 库存为 5
             # SETUP: 请求覆盖：scene_name="game"、device="mobile"、external=0、score_threshold=0.2、max_claim_per_request=1、items 只包含 COUPON_ACT_001
 
-            e2e = setup_e2e
-            e2e = setup_e2e(case_id="TC-E2E-001")
-            e2e.set_stock("COUPON_ACT_001", 5)
-            body = e2e.request("u_e2e_http_internal_001", "req_e2e_001")
-            response = e2e.post_recommend_response(body)
+            harness = setup_e2e
+            harness.set_experiment_whitelist("u_e2e_http_internal_001")
+            harness.set_stock("COUPON_ACT_001", 5)
+            body = harness.request("u_e2e_http_internal_001", "req_e2e_001")
+            response = harness.post_recommend_response(body)
             assert response.status_code == 200
             resp = response.json()
-            coupons = e2e.query_coupons("u_e2e_http_internal_001")
+            coupons = harness.query_coupons("u_e2e_http_internal_001")
             assert resp["code"] == 0
             assert resp["scene_id"] == 1001
             assert resp["experiment_info"] == {"coarse_rank_exp_game": "cr_v2_full", "calibration_exp_game": "cal_on"}
@@ -73,7 +72,7 @@ class TestE2eBusiness:
             assert resp["coupon"]["item_id"] == "COUPON_ACT_001"
             assert resp["coupon"]["user_id"] == "u_e2e_http_internal_001"
             assert resp["coupon"]["status"] == "claimed"
-            assert e2e.stock("COUPON_ACT_001") == 4
+            assert harness.stock("COUPON_ACT_001") == 4
             assert coupons["total"] == 1
             assert coupons["coupons"][0]["instance_id"] == resp["coupon"]["instance_id"]
         finally:
@@ -98,14 +97,13 @@ class TestE2eBusiness:
             # SETUP: 前置操作_2：设置 COUPON_SHIP_001 库存为 5
             # SETUP: 请求覆盖：user_id="u_e2e_http_external_002"、scene_name="ad"、device="pc"、external=1、score_threshold=0.2、max_claim_per_request=1、items 只包含 COUPON_SHIP_001
 
-            e2e = setup_e2e
-            e2e = setup_e2e(case_id="TC-E2E-002")
-            e2e.set_stock("COUPON_SHIP_001", 5)
-            body = e2e.request("u_e2e_http_external_002", "req_e2e_002", coupon_id="COUPON_SHIP_001", scene_name="ad", device="pc", external=1)
-            response = e2e.post_recommend_response(body)
+            harness = setup_e2e
+            harness.set_stock("COUPON_SHIP_001", 5)
+            body = harness.request("u_e2e_http_external_002", "req_e2e_002", coupon_id="COUPON_SHIP_001", scene_name="ad", device="pc", external=1)
+            response = harness.post_recommend_response(body)
             assert response.status_code == 200
             resp = response.json()
-            coupons = e2e.query_coupons("u_e2e_http_external_002")
+            coupons = harness.query_coupons("u_e2e_http_external_002")
             assert resp["code"] == 0
             assert resp["scene_id"] == 2002
             assert resp["experiment_info"] == {}
@@ -139,14 +137,13 @@ class TestE2eBusiness:
             # SETUP: 前置操作：设置 COUPON_ACT_001 库存为 2
             # SETUP: 请求覆盖：HTTP 与 gRPC 使用同一业务请求，user_id="u_e2e_dual_proto_003"、scene_name="game"、device="mobile"、policy_id="policy_fallback_001"、external=0、score_threshold=0.4、max_claim_per_request=1、items 只包含 COUPON_ACT_001
 
-            e2e = setup_e2e
-            e2e = setup_e2e(case_id="TC-E2E-003")
-            e2e.set_stock("COUPON_ACT_001", 2)
-            body = e2e.request("u_e2e_dual_proto_003", "req_e2e_003", policy_id="policy_fallback_001", score_threshold=0.4)
-            http_response = e2e.post_recommend_response(body)
+            harness = setup_e2e
+            harness.set_stock("COUPON_ACT_001", 2)
+            body = harness.request("u_e2e_dual_proto_003", "req_e2e_003", policy_id="policy_fallback_001", score_threshold=0.4)
+            http_response = harness.post_recommend_response(body)
             assert http_response.status_code == 200
             http_json = http_response.json()
-            grpc_resp = e2e.grpc_recommend(body)
+            grpc_resp = harness.grpc_recommend(body)
             assert http_json["code"] == 0
             assert grpc_resp["code"] == 0
             assert http_json["scene_id"] == 3001
@@ -163,11 +160,10 @@ class TestE2eBusiness:
             assert grpc_resp["results"][0]["recommended"] is True
             assert http_json["coupon"]["item_id"] == "COUPON_ACT_001"
             assert grpc_resp["coupon"]["item_id"] == "COUPON_ACT_001"
-            assert e2e.stock("COUPON_ACT_001") == 0
+            assert harness.stock("COUPON_ACT_001") == 0
         finally:
             reset_case_context(__aitest_ctx_token)
 
 
-# TODO: setup_e2e fixture 需要手写实现（→ tests/fixtures/e2e.py）
 
 __codegen_skipped__ = []

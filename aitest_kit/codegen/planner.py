@@ -52,6 +52,7 @@ from aitest_kit.codegen.strategy import (
     STRATEGY_STRUCTURED_CASE_FLOW,
     resolve_case_strategy,
 )
+from aitest_kit.registry.models import ModuleBinding
 
 
 def _is_protocol_key(key: str) -> bool:
@@ -70,20 +71,16 @@ def _fixtures_for(
     module: str,
     tc: TestCase,
     strategy: str,
-    case_fixtures: dict[str, list[str]],
-    case_flows: dict[str, dict[str, Any]],
+    module_binding: ModuleBinding | None,
 ) -> tuple[list[str], str]:
     if strategy == STRATEGY_SKIPPED:
         return [], "skipped"
     if strategy == STRATEGY_CUSTOM_CASE_BODY:
-        if tc.id in case_fixtures:
-            return list(case_fixtures[tc.id]), f"profile.case_fixtures.{tc.id}"
-        return [f"setup_{module}"], "default custom body fixture"
+        fixture = module_binding.fixture_name if module_binding else f"setup_{module}"
+        return [fixture], "module binding"
     if strategy == STRATEGY_STRUCTURED_CASE_FLOW:
-        fixture = case_flows.get(tc.id, {}).get("fixture")
-        if isinstance(fixture, str) and fixture:
-            return [fixture], f"profile.case_flows.{tc.id}.fixture"
-        return [], f"profile.case_flows.{tc.id}.fixture"
+        fixture = module_binding.fixture_name if module_binding else f"setup_{module}"
+        return [fixture], "module binding"
     if strategy == STRATEGY_MANUAL:
         return [], "manual marker"
     return ["http_base_url"], "default HTTP fixtures"
@@ -391,7 +388,6 @@ def build_file_ir(
     profile_rules = profile.rules
     requests = profile.requests
     structured_assertions = profile.structured_assertions
-    case_fixtures = profile.case_fixtures
     case_bodies = profile.case_bodies
     case_flows = profile.case_flows
     profile_variables = profile.variables
@@ -450,8 +446,7 @@ def build_file_ir(
             parse_result.module,
             tc,
             strategy,
-            case_fixtures,
-            case_flows,
+            profile.module_binding,
         )
         request_refs: set[str] = set()
         if strategy == STRATEGY_DEFAULT_HTTP:
@@ -494,7 +489,13 @@ def build_file_ir(
                 lines=list(case_bodies.get(tc.id, [])),
             )
         case_flow = (
-            build_case_flow_ir(tc, case_flows, profile_rules, proj)
+            build_case_flow_ir(
+                tc,
+                case_flows,
+                profile_rules,
+                proj,
+                module_binding=profile.module_binding,
+            )
             if strategy == STRATEGY_STRUCTURED_CASE_FLOW
             else None
         )

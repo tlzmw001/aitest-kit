@@ -53,21 +53,16 @@ _YAML_BLOCK_RE = re.compile(r"```ya?ml\s*\n(.*?)```", re.DOTALL)
 _CASE_ID_RE = re.compile(r"^TC-[A-Z0-9]+-\d+$")
 _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _TOP_LEVEL_KEYS = {
-    "module_type",
     "profile_scope",
     "parent_module",
     "parent_profile",
     "suite",
     "knowledge_refs",
-    "default_fixture",
-    "default_object",
-    "default_case_setup",
     "assertion_rules",
     "structured_assertions",
     "variables",
     "requests",
     "extra_imports",
-    "case_fixtures",
     "case_bodies",
     "case_flows",
 }
@@ -116,14 +111,12 @@ def validate_profile_suite(
 
     suite_case_bodies = _mapping(suite_data, "case_bodies")
     suite_case_flows = _mapping(suite_data, "case_flows")
-    suite_case_fixtures = _mapping(suite_data, "case_fixtures")
     suite_requests = _mapping(suite_data, "requests")
     suite_structured_assertions = _mapping(suite_data, "structured_assertions")
     suite_variables = _mapping(suite_data, "variables")
     runtime_case_bodies = resolved.case_bodies
     runtime_requests = resolved.requests
     runtime_structured_assertions = resolved.structured_assertions
-    case_flow_defaults = resolved.case_flow_defaults
     runtime_case_flows = resolved.case_flows
     runtime_variables = resolved.variables
 
@@ -136,7 +129,6 @@ def validate_profile_suite(
 
     _validate_case_references(report, "case_bodies", suite_case_bodies)
     _validate_case_references(report, "case_flows", suite_case_flows)
-    _validate_case_references(report, "case_fixtures", suite_case_fixtures)
     _validate_case_references(report, "requests", suite_requests)
     _validate_case_references(report, "structured_assertions", suite_structured_assertions)
     _validate_case_references(report, "variables.cases", _variable_cases(suite_variables))
@@ -152,7 +144,20 @@ def validate_profile_suite(
     _warn_feasibility_suspect_strategies(report, suite_case_bodies, suite_case_flows)
     _warn_manual_comment_only_flows(report, suite_case_flows)
     _validate_non_manual_executable_flows(report, suite_case_flows)
-    _warn_fixture_reinvocation(report, runtime_case_flows, case_flow_defaults.case_setup)
+    if suite_data.get("extra_imports"):
+        _error(
+            report,
+            "E531",
+            "suite profile must not use extra_imports; expose runtime capabilities through harness",
+            "extra_imports",
+        )
+    if suite_data.get("assertion_rules"):
+        _error(
+            report,
+            "E532",
+            "suite profile assertion_rules belong to the module profile",
+            "assertion_rules",
+        )
     for message in validate_case_flow_variable_references(runtime_case_flows, runtime_variables):
         _error(report, "E507", message)
     for message in validate_request_variable_references(runtime_requests, runtime_variables):
@@ -224,23 +229,17 @@ def _validate_top_level_shape(report: ProfileValidationReport, data: dict[str, A
             _error(report, "E501", f"unknown top-level field {key}", key)
 
     _expect_mapping(report, data, "requests")
-    _expect_mapping(report, data, "case_fixtures")
     _expect_mapping(report, data, "case_bodies")
     _expect_mapping(report, data, "case_flows")
     _expect_mapping(report, data, "knowledge_refs")
     _expect_mapping(report, data, "variables")
     _expect_mapping(report, data, "structured_assertions")
-    _expect_string(report, data, "module_type")
     _expect_string(report, data, "profile_scope")
     _expect_string(report, data, "parent_module")
     _expect_string(report, data, "parent_profile")
     _expect_string(report, data, "suite")
-    _expect_string(report, data, "default_fixture")
-    _expect_string(report, data, "default_object")
-    _expect_mapping(report, data, "default_case_setup")
     _expect_string_list(report, data, "extra_imports")
     _expect_rule_list(report, data)
-    _expect_case_fixture_values(report, _mapping(data, "case_fixtures"))
     _expect_case_body_values(report, _mapping(data, "case_bodies"))
     _expect_request_values(report, _mapping(data, "requests"))
     _expect_structured_assertion_values(report, _mapping(data, "structured_assertions"))
@@ -282,13 +281,6 @@ def _expect_rule_list(report: ProfileValidationReport, data: dict[str, Any]) -> 
                 re.compile(regex)
             except re.error as exc:
                 _error(report, "E501", f"assertion rule regex is invalid: {exc}", source)
-
-
-def _expect_case_fixture_values(report: ProfileValidationReport, fixtures: dict[str, Any]) -> None:
-    for case_id, value in fixtures.items():
-        source = f"case_fixtures.{case_id}"
-        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-            _error(report, "E501", "case_fixtures value must be a list of strings", source)
 
 
 def _expect_case_body_values(report: ProfileValidationReport, bodies: dict[str, Any]) -> None:
@@ -545,7 +537,6 @@ def _validate_module_profile_scope(
     case_scoped_sections = (
         "case_bodies",
         "case_flows",
-        "case_fixtures",
         "requests",
         "structured_assertions",
     )
@@ -566,18 +557,14 @@ def _validate_module_profile_case_scoped_section(
     section: str,
     values: dict[str, Any],
 ) -> None:
-    suite_case_ids = sorted(
-        case_id
-        for case_id in values
-        if isinstance(case_id, str) and case_id in report.case_ids
-    )
-    if not suite_case_ids:
+    case_ids = sorted(case_id for case_id in values if isinstance(case_id, str))
+    if not case_ids:
         return
     _error(
         report,
         "E526",
         "suite-specific case-scoped profile entries must be defined in the suite "
-        f"profile, not the module profile: {', '.join(suite_case_ids)}",
+        f"profile, not the module profile: {', '.join(case_ids)}",
         section,
     )
 
@@ -694,49 +681,6 @@ def _validate_non_manual_executable_flows(
             "non-manual case_flow must contain at least one call or assert step",
             f"case_flows.{case_id}",
         )
-
-
-def _warn_fixture_reinvocation(
-    report: ProfileValidationReport,
-    case_flows: dict[str, Any],
-    default_case_setup: dict[str, Any] | None = None,
-) -> None:
-    for case_id, flow in case_flows.items():
-        if not isinstance(flow, dict):
-            continue
-        fixture = flow.get("fixture")
-        steps = flow.get("steps")
-        if not isinstance(fixture, str) or not isinstance(steps, list) or not steps:
-            continue
-        first_step = steps[0]
-        if not isinstance(first_step, dict):
-            continue
-        first_call = first_step.get("call")
-        if first_call != fixture:
-            continue
-        if _is_declared_factory_setup(first_step, default_case_setup):
-            continue
-        _warn(
-            report,
-            "W504",
-            "case_flow first step calls the declared fixture again; use the injected object "
-            "directly, or declare the fixture object as a factory explicitly",
-            f"case_flows.{case_id}.steps[0].call",
-        )
-
-
-def _is_declared_factory_setup(
-    first_step: dict[str, Any],
-    default_case_setup: dict[str, Any] | None,
-) -> bool:
-    """Return true when a fixture-as-factory call is declared by profile defaults."""
-    if not isinstance(default_case_setup, dict) or not default_case_setup:
-        return False
-    if first_step.get("call") != default_case_setup.get("call"):
-        return False
-    if first_step.get("save_as") != default_case_setup.get("save_as"):
-        return False
-    return True
 
 
 def _validate_request_refs(

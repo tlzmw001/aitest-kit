@@ -15,38 +15,37 @@ def _write_target(
     module_profile: str = "",
 ) -> Path:
     target_dir = root / "test_workspace" / "targets" / "sub2api"
-    module_dir = target_dir / "modules"
-    profile_dir = target_dir / "profiles"
+    modules_dir = target_dir / "modules"
+    module_dir = modules_dir / "gateway_api"
     module_dir.mkdir(parents=True, exist_ok=True)
-    profile_dir.mkdir(parents=True, exist_ok=True)
     (target_dir / "target.yaml").write_text(
         """target: sub2api
 defaults:
   module_dir: test_workspace/targets/sub2api/modules
-  fixture_dir: test_workspace/targets/sub2api/fixtures
   helper_dir: test_workspace/targets/sub2api/helpers
-  profile_dir: test_workspace/targets/sub2api/profiles
   suite_dir: test_workspace/suites/sub2api
   generated_dir: test_workspace/generated/sub2api
   reports_dir: test_workspace/reports/sub2api
 """,
         encoding="utf-8",
     )
-    (module_dir / "gateway_api.yaml").write_text(
+    (module_dir / "module.yaml").write_text(
         f"""target: sub2api
 module: gateway_api
 module_type: {module_type}
-fixture:
-  file: gateway_api.py
-  default_fixture: setup_gateway_api
 """,
         encoding="utf-8",
     )
-    (profile_dir / "profile_gateway_api.md").write_text(
+    (module_dir / "profile.md").write_text(
         f"```yaml\n{module_profile}```\n",
         encoding="utf-8",
     )
-    return profile_dir
+    (module_dir / "fixture.py").write_text(
+        "import pytest\n\n@pytest.fixture\ndef setup_gateway_api():\n    return object()\n",
+        encoding="utf-8",
+    )
+    (module_dir / "harness.py").write_text("class GatewayApiHarness:\n    pass\n", encoding="utf-8")
+    return modules_dir
 
 
 def _write_suite(
@@ -132,7 +131,6 @@ case_bodies:
     assert True
 case_flows:
   TC-GW-001:
-    fixture: setup_gateway_api
     steps:
       - assert: "`resp == ERR`"
 """,
@@ -166,6 +164,33 @@ requests:
     assert any("does not exist in suite markdown cases" in diag.message for diag in report.errors)
 
 
+def test_profile_validator_rejects_suite_assertion_rules(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile_dir = _write_target(tmp_path)
+    suite_dir = _write_suite(
+        tmp_path,
+        suite_profile="""profile_scope: case_suite
+parent_module: gateway_api
+suite: gateway_smoke
+assertion_rules:
+  - name: suite_only
+    pattern: response.code == 0
+    template: assert resp["code"] == 0
+case_flows:
+  TC-GW-001:
+    steps:
+      - call: harness.health
+        save_as: resp
+      - assert: 'assert resp["code"] == 0'
+""",
+    )
+
+    report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
+
+    assert any(diag.code == "E532" for diag in report.errors)
+    assert any("assertion_rules belong to the module profile" in diag.message for diag in report.errors)
+
+
 def test_profile_validator_rejects_legacy_request_overrides(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     profile_dir = _write_target(tmp_path)
@@ -196,9 +221,8 @@ parent_module: gateway_api
 suite: gateway_smoke
 case_flows:
   TC-GW-001:
-    fixture: setup_gateway_api
     steps:
-      - call: client.create
+      - call: harness.create
         kwargs:
           body: {request_ref: TC-GW-999}
         save_as: resp
@@ -331,10 +355,8 @@ parent_module: gateway_api
 suite: gateway_smoke
 case_flows:
   TC-GW-001:
-    fixture: setup_gateway_api
-    object: client
     steps:
-      - call: client.health
+      - call: harness.health
         save_as: resp
 structured_assertions:
   TC-GW-001:
@@ -362,10 +384,8 @@ parent_module: gateway_api
 suite: gateway_smoke
 case_flows:
   TC-GW-001:
-    fixture: setup_gateway_api
-    object: client
     steps:
-      - call: client.health
+      - call: harness.health
         save_as: resp
       - assign: query_resp
         expr: resp
@@ -395,10 +415,8 @@ parent_module: gateway_api
 suite: gateway_smoke
 case_flows:
   TC-GW-001:
-    fixture: setup_gateway_api
-    object: client
     steps:
-      - call: client.health
+      - call: harness.health
         save_as: resp
 structured_assertions:
   TC-GW-001:
@@ -496,7 +514,7 @@ def test_profile_validator_rejects_suite_structured_assertions_in_module_profile
     monkeypatch.chdir(tmp_path)
     profile_dir = _write_target(
         tmp_path,
-        module_profile="""module_type: standard_http
+        module_profile="""
 structured_assertions:
   TC-GW-001:
     - type: jsonpath_exists
@@ -529,9 +547,8 @@ parent_module: gateway_api
 suite: gateway_smoke
 case_flows:
   TC-GW-001:
-    fixture: setup_gateway_api
     steps:
-      - call: client.create
+      - call: harness.create
         kwargs:
           body: '{"user_id": "u_001"}'
         save_as: resp
@@ -577,8 +594,6 @@ parent_module: gateway_api
 suite: gateway_smoke
 case_flows:
   TC-GW-001:
-    fixture: setup_gateway_api
-    object: client
     steps:
       - assert: 'assert True'
 """,
@@ -603,10 +618,8 @@ parent_module: gateway_api
 suite: gateway_smoke
 case_flows:
   TC-GW-001:
-    fixture: setup_gateway_api
-    object: client
     steps:
-      - call: client.health
+      - call: harness.health
         save_as: resp
 structured_assertions:
   TC-GW-001:
@@ -675,10 +688,8 @@ parent_module: gateway_api
 suite: gateway_smoke
 case_flows:
   TC-GW-001:
-    fixture: setup_gateway_api
-    object: client
     steps:
-      - call: client.trigger
+      - call: harness.trigger
         save_as: resp
       - comment: 人工检查监控指标是否增加
 """,
@@ -710,7 +721,7 @@ case_flows:
     assert any(diag.code == "E527" for diag in report.errors)
 
 
-def test_profile_validator_warns_fixture_reinvocation(tmp_path, monkeypatch):
+def test_profile_validator_rejects_non_harness_root_call(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     profile_dir = _write_target(tmp_path)
     suite_dir = _write_suite(
@@ -720,8 +731,6 @@ parent_module: gateway_api
 suite: gateway_smoke
 case_flows:
   TC-GW-001:
-    fixture: setup_gateway_api
-    object: client
     steps:
       - call: setup_gateway_api
         save_as: client
@@ -731,7 +740,10 @@ case_flows:
 
     report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
 
-    assert any(diag.code == "W504" for diag in report.warnings)
+    assert any(
+        diag.code == "E503" and "root object must be harness" in diag.message
+        for diag in report.errors
+    )
 
 
 def test_profile_validator_allows_case_flow_description_metadata(tmp_path, monkeypatch):
@@ -744,11 +756,9 @@ parent_module: gateway_api
 suite: gateway_smoke
 case_flows:
   TC-GW-001:
-    fixture: setup_gateway_api
-    object: client
     description: login and query current user
     steps:
-      - call: client.health
+      - call: harness.health
         save_as: resp
       - assert: 'assert resp.status_code == 200'
 """,
@@ -759,15 +769,14 @@ case_flows:
     assert report.errors == []
 
 
-def test_profile_validator_uses_module_case_flow_defaults_in_runtime_view(
+def test_profile_validator_rejects_removed_module_flow_defaults(
     tmp_path,
     monkeypatch,
 ):
     monkeypatch.chdir(tmp_path)
     profile_dir = _write_target(
         tmp_path,
-        module_profile="""module_type: standard_http
-default_fixture: setup_gateway_api
+        module_profile="""default_fixture: setup_gateway_api
 default_object: client
 default_case_setup:
   call: client.seed
@@ -783,7 +792,7 @@ suite: gateway_smoke
 case_flows:
   TC-GW-001:
     steps:
-      - call: client.health
+      - call: harness.health
         save_as: resp
 structured_assertions:
   TC-GW-001:
@@ -795,18 +804,16 @@ structured_assertions:
 
     report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
 
-    assert report.errors == []
+    assert any(diag.code == "E501" for diag in report.errors)
+    assert any("Additional properties" in diag.message for diag in report.errors)
 
 
 def test_profile_validator_rejects_suite_case_flow_in_module_profile(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     profile_dir = _write_target(
         tmp_path,
-        module_profile="""module_type: standard_http
-case_flows:
+        module_profile="""case_flows:
   TC-GW-001:
-    fixture: setup_gateway_api
-    object: client
     steps:
       - assert: 'assert True'
 """,
@@ -830,7 +837,7 @@ def test_profile_validator_rejects_suite_variables_cases_in_module_profile(tmp_p
     monkeypatch.chdir(tmp_path)
     profile_dir = _write_target(
         tmp_path,
-        module_profile="""module_type: standard_http
+        module_profile="""
 variables:
   cases:
     TC-GW-001:
@@ -853,7 +860,7 @@ suite: gateway_smoke
     assert any(diag.source == "variables.cases" for diag in report.errors)
 
 
-def test_profile_validator_allows_declared_fixture_factory_setup(tmp_path, monkeypatch):
+def test_profile_validator_rejects_fixture_factory_fields(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     profile_dir = _write_target(tmp_path)
     suite_dir = _write_suite(
@@ -877,7 +884,8 @@ case_flows:
 
     report = validate_profile_suite(suite_dir, profile_dir=profile_dir, project=_project())
 
-    assert not any(diag.code == "W504" for diag in report.warnings)
+    assert any(diag.code == "E501" for diag in report.errors)
+    assert any("Additional properties" in diag.message for diag in report.errors)
 
 
 def test_profile_validator_checks_module_type_from_module_yaml(tmp_path, monkeypatch):

@@ -4,7 +4,7 @@ import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
 from aitest_kit.runtime_context import reset_case_context, set_case_context
-from test_workspace.targets.coupon_system.fixtures.feature_scoring import setup_feature_scoring
+pytest_plugins = ["test_workspace.targets.coupon_system.modules.feature_scoring.fixture"]
 
 
 BASE_REQUEST = {
@@ -145,17 +145,16 @@ class TestFeatureScoringBoundary:
             # SETUP: 协议：HTTP
             # SETUP: 前置操作：HTTP 请求 item_id="COUPON_FEAT_NOT_IN_TSV"，该 item 不在 TSV 中
 
-            client = setup_feature_scoring
-            client.prepare_user(user_id="u_feat_not_in_tsv", features={"gender": "male", "age": 28, "total_spend": 30000, "purchase_frequency": 4, "register_days": 120, "is_new_user": True, "is_member": True})
-            client.prepare_stock(coupon_id="COUPON_FEAT_NOT_IN_TSV", stock=100)
-            resp = client.recommend_http(request_overrides={"user_id": "u_feat_not_in_tsv", "items": [{"item_id": "COUPON_FEAT_NOT_IN_TSV", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]})
+            harness = setup_feature_scoring
+            harness.prepare_user(user_id="u_feat_not_in_tsv", features={"gender": "male", "age": 28, "total_spend": 30000, "purchase_frequency": 4, "register_days": 120, "is_new_user": True, "is_member": True})
+            harness.prepare_stock(coupon_id="COUPON_FEAT_NOT_IN_TSV", stock=100)
+            resp = harness.recommend_http(request_overrides={"user_id": "u_feat_not_in_tsv", "items": [{"item_id": "COUPON_FEAT_NOT_IN_TSV", "coupon_type": "discount", "value": 80, "min_spend": 5000, "expire_days": 7}]})
             assert resp["code"] == 0
             assert resp["results"][0]["item_id"] == "COUPON_FEAT_NOT_IN_TSV"
         finally:
             reset_case_context(__aitest_ctx_token)
 
 
-# TODO: setup_feature_scoring fixture 需要手写实现（→ tests/fixtures/feature_scoring.py）
 # SKIPPED: TC-FEAT-005 — `[!可行性存疑: 需要测试环境允许控制 Redis 可用性]`
 # SKIPPED: TC-SCORE-006 — `[!可行性存疑: 当前集成环境的内部 gRPC mock 打分服务没有公开控制接口可按用例触发超时]`
 # SKIPPED: TC-SCORE-007 — `[!可行性存疑: 当前集成环境的内部 gRPC mock 打分服务没有公开控制接口可按用例触发不可用]`

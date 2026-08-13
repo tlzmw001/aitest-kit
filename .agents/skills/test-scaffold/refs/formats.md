@@ -22,17 +22,14 @@ path: test_workspace/targets/{target}/api_maps/api_map_{module}.md
 
 ## 环境变量
 
-### 连接层（必须有才能发请求）
+### 连接层
 - {PROJECT}_BASE_URL — 服务地址
 
-### 认证层（必须有才能鉴权）
+### 认证层
 - {PROJECT}_USER_TOKEN — 用户 token
 
-### 资源层（特定 case 需要的已存在资源 ID）
+### 资源层
 - {PROJECT}_INACTIVE_KEY_ID — 已停用的 API Key
-
-### 业务层（可替换的测试输入）
-- （无，或注明来源）
 
 ## 信息缺口
 - {无法从现有来源确认的信息}
@@ -40,29 +37,22 @@ path: test_workspace/targets/{target}/api_maps/api_map_{module}.md
 
 ## Case variables/env 矩阵
 
-追加写入 api_map。
-
 ```markdown
 ## Case variables/env 矩阵
 
-| case_id    | profile variables | required env | optional env | 缺失行为 |
-|------------|-------------------|--------------|-------------|---------|
+| case_id | profile variables | required env | optional env | 缺失行为 |
+|---|---|---|---|---|
 | TC-XXX-001 | username, password | BASE_URL, USER_EMAIL, USER_PASSWORD | | fail |
 | TC-XXX-010 | token_absent=true | BASE_URL | USER_TOKEN | 测试无认证场景 |
 ```
 
-分类规则：
-- 连接/认证等模块级必需 env 写入 fixture，并用 `require_env()` fail-fast
-- case 级账号、token、资源 ID 写入 suite profile `variables.cases`
-- 认证类 env（token、API key、password）：默认 required，除非 case 明确测试"缺失认证"
-- 资源标识类 env（key_id、user_id）：required
-- 连接类 env（BASE_URL）：始终 required
-- 可选功能 env：optional，注明缺失行为
-- 同一模块不同 case 需要不同账号、token、URL path、非法值时，优先进入 suite profile `variables`，不要让 fixture 按 case_id 分发
-- 负向输入使用 `value`，不要用缺失 env 表达
-- `variables` 第一版只支持 `env` 和 `value` 两种来源；`env` 会先读进程环境变量，缺失时读当前工作目录 `.env` 或 `AITEST_ENV_FILE` 指定文件；不打印 env 值
+规则：
 
-suite profile 示例：
+- 连接/认证等必需 env 用 `require_env()` fail-fast。
+- case 级账号、token、资源 ID 写 suite profile `variables.cases`。
+- 负向输入使用 `value`，不要用缺失 env 表达。
+- 同一模块不同 case 的差异不得藏进 fixture/Harness 的 case_id 分发。
+- profile variables 只记录 env 名或 value，不记录凭证值。
 
 ```yaml
 variables:
@@ -80,89 +70,138 @@ variables:
         value: ""
 ```
 
-## 状态影响表
-
-追加写入 api_map。
+## 状态影响与可行性
 
 ```markdown
 ## 状态影响分析
 
-| case_id    | 动作类型 | 创建资源？ | 唯一值？ | cleanup？ | 幂等？ |
-|------------|---------|-----------|---------|----------|-------|
-| TC-XXX-001 | 查询     | 否        | 否      | 否       | 是    |
-| TC-XXX-003 | 创建 Key | 是        | 是(name)| 是(delete)| 否   |
-| TC-XXX-008 | 注册     | 是        | 是(email)| 无API   | 否    |
-```
+| case_id | 动作类型 | 创建资源 | 唯一值 | cleanup | 幂等 |
+|---|---|---|---|---|---|
+| TC-XXX-001 | 查询 | 否 | 否 | 否 | 是 |
+| TC-XXX-003 | 创建 Key | 是 | name | delete | 否 |
 
-## 可行性判定
-
-追加写入 api_map。非幂等且无 cleanup API 的 case 默认标为可行性存疑。
-
-```markdown
 ## 自动化可行性判定
 
 | case_id | automation_status | reason_type | required_capability | cleanup_strategy | evidence_ref | resume_condition |
-|---------|-------------------|-------------|---------------------|------------------|--------------|------------------|
-| TC-XXX-001 | auto_executable | none | public API | no state change | api_map | already executable |
-| TC-XXX-008 | skipped_infeasible | no_cleanup | delete user API | none | case precondition | cleanup API or disposable test resource available |
-
-automation_status 取值：
-- auto_executable
-- manual_pure
-- manual_semi_auto
-- skipped_infeasible
-- blocked_by_known_issue
+|---|---|---|---|---|---|---|
+| TC-XXX-001 | auto_executable | none | public API | none | api_map | executable |
+| TC-XXX-008 | skipped_infeasible | no_cleanup | delete API | none | case precondition | cleanup available |
 ```
 
-## Profile YAML 结构
+`automation_status`：`auto_executable`、`manual_pure`、`manual_semi_auto`、`skipped_infeasible`、`blocked_by_known_issue`。
 
-单 YAML 代码块，所有字段在同一块中。不需要的顶层字段省略。
+## Module package
+
+```text
+test_workspace/targets/{target}/modules/{module}/
+  __init__.py
+  module.yaml
+  profile.md
+  fixture.py
+  harness.py
+```
+
+`module.yaml`：
 
 ```yaml
-module_type: {type}
-extra_imports:
-  - "from test_workspace.targets.{target}.fixtures.{module} import setup_{module}"
+target: {target}
+module: {module}
+module_type: multi_endpoint
+knowledge_refs:
+  l1:
+    - test_workspace/knowledge/L1/{module}.md
+registered_suites:
+  - suite: {suite}
+    manifest: {suite_dir}/suite.yaml
+    status: active
+```
 
-default_fixture: setup_{module}
-default_object: client_factory
+`profile.md`：
 
-# 当 fixture 返回 factory，且每条 case_flow 都需要同一个 setup 时使用。
-# 如果 setup_{module} 直接返回 client，不写 default_case_setup。
-default_case_setup:
-  call: client_factory
-  kwargs:
-    case_id: "{case_id}"
-  save_as: case
-
+```yaml
 variables:
   defaults:
-    base_url:
-      env: PROJECT_BASE_URL
+    default_scene:
+      value: checkout
+assertion_rules: []
+```
+
+不要在 module profile 写 `module_type`、TC-ID、fixture/object/setup 或路径配置。
+
+## Harness 代码结构
+
+`harness.py`：
+
+```python
+from __future__ import annotations
+
+from functools import cached_property
+
+import httpx
+
+from aitest_kit.runtime_variables import require_env
+
+
+class {Module}Harness:
+    def __init__(self) -> None:
+        self._http = httpx.Client(transport=httpx.HTTPTransport())
+
+    @cached_property
+    def base_url(self) -> str:
+        return require_env("{PROJECT}_BASE_URL").rstrip("/")
+
+    def query(self, path: str) -> httpx.Response:
+        return self._http.get(f"{self.base_url}{path}")
+
+    def assert_items_active(self, payload: dict) -> bool:
+        return all(item["status"] == "active" for item in payload["items"])
+
+    def close(self) -> None:
+        self._http.close()
+```
+
+`fixture.py`：
+
+```python
+from __future__ import annotations
+
+from collections.abc import Iterator
+
+import pytest
+
+from .harness import {Module}Harness
+
+
+@pytest.fixture
+def setup_{module}() -> Iterator[{Module}Harness]:
+    harness = {Module}Harness()
+    try:
+        yield harness
+    finally:
+        harness.close()
+```
+
+fixture 只负责 Harness 生命周期，不提前读取某条用例未使用的环境变量。环境变量在对应 Harness capability 第一次执行时读取。能力较多时按职责拆为 `api.py`、`resources.py` 等，并由 Harness 组合；不要创建宽泛 `actions.py`/`utils.py`。
+
+## Suite profile
+
+```yaml
+profile_scope: case_suite
+parent_module: {module}
+suite: {suite}
+
+variables:
   cases:
     TC-XXX-001:
-      username:
-        env: PROJECT_TEST_USER
-      password:
-        value: wrong-password
+      token:
+        env: PROJECT_TEST_TOKEN
 
 requests:
   TC-XXX-001:
     patches:
       - op: replace
-        path: /field_name
-        value: value
-      - op: add
-        path: /items/-
-        value:
-          item_id: item_001
-      - op: replace
         path: /auth/token
         value_from: token
-
-assertion_rules:
-  - name: "..."
-    regex: "..."
-    template: "..."
 
 structured_assertions:
   TC-XXX-001:
@@ -170,21 +209,14 @@ structured_assertions:
       target: resp
       path: $.data.items[*].publishStatus
       equals: 0
-    - type: jsonpath_len_gte
-      target: resp
-      path: $.data.items
-      value: 1
 
 case_flows:
   TC-XXX-001:
-    description: 登录后查询当前用户信息
+    description: 查询并验证发布状态
     steps:
-      - call: case.method_name
-        kwargs:
-          username:
-            var: username
-          password:
-            var: password
+      - call: harness.query
+        args:
+          - /api/v1/items
         save_as: http_resp
       - assign: resp
         expr: http_resp.json()
@@ -192,46 +224,20 @@ case_flows:
 
 case_bodies:
   TC-XXX-002: |
-    # reason: 需要 mock transport
-    resp = client.call(...)
-    assert resp.status_code == 200
+    # reason: 测试函数本身需要并发编排
+    results = harness.run_concurrent_requests(5)
+    assert len(results) == 5
 ```
 
 规则：
-- `default_fixture/default_object/default_case_setup` 用于减少每条 `case_flow` 重复 setup。
-- `default_case_setup` 只在同一批 flow 都需要同一个 factory call 时写；普通 client fixture 不写。
-- fixture 直接返回 Client 时，`default_object` 写 Client 对象名；fixture 返回 factory 时，`default_object` 写 factory 对象名，并用 `default_case_setup` 保存业务对象。
-- 单条 `case_flow` 仍可显式声明 `fixture` 或 `object` 覆盖默认值。
-- 单条 `case_flow` 顶层可写 `description` 作为 profile 可读性 metadata；它不会进入 generated pytest。需要生成代码注释时，用 step 的 `comment`。
-- `case_flow` 的 `args/kwargs` 需要完整请求体时，不要把 JSON 写成字符串；优先在 `requests.<case_id>.patches` 声明请求变更，再用 `{request_ref: self}` 或 `{request_ref: TC-XXX-001}` 引用。
-- `requests.patches` 使用 JSON Patch 子集：`add` / `replace` / `remove`。`add/replace` 必须且只能写 `value` 或 `value_from`；`remove` 不写值。`value_from` 引用 `variables.defaults` 或 `variables.cases.<case_id>`。
-- `overrides` 只适合简单字段覆盖；涉及 list 追加/指定位置、删除字段、dict 整体替换或变量注入时使用 `patches`。
-- 集合遍历、JSONPath、字段存在性和长度断言优先写 `structured_assertions`，不要为了这类断言升级成 `case_body`。
-- default HTTP 路线的 `structured_assertions.target` 只能写 `resp`；case_flow 路线只能写当前 flow 中 `save_as` 或 `assign` 产出的变量。
-- 复杂业务计算、循环/条件/等待逻辑封装到 fixture/helper 方法，再由 `case_flow.call` 调用；不要扩展 YAML 控制流。
-- 非 manual 用例的 `case_flow` 至少包含一个 `call` 或 `assert`；纯人工 `[manual]` 不写 flow，半自动 manual 才写带 `call/assert` 的 flow。
-- `{case_id}` 会由 codegen 替换成当前用例 ID。
-- module profile 只放 L1 稳定能力；具体 TC-ID 绑定的 `requests/case_flows/case_bodies/case_fixtures/variables.cases` 必须写在 suite profile。
 
-## Fixture 代码结构
-
-```python
-from aitest_kit.runtime_variables import require_env
-
-
-class {Module}Client:
-    def __init__(self, base_url: str, auth_token: str, ...):
-        self._client = httpx.Client(transport=httpx.HTTPTransport())
-        ...
-
-    def {endpoint_method}(self, ...) -> httpx.Response:
-        ...
-
-@pytest.fixture
-def setup_{module}() -> {Module}Client:
-    base_url = require_env("{PROJECT}_BASE_URL")
-    return {Module}Client(base_url, ...)
-```
+- flow 不写 fixture/object，根对象固定 `harness`。
+- suite profile 不写 `extra_imports`。
+- `requests.patches` 支持 `add`、`replace`、`remove`；变量注入用 `value_from`。
+- 完整请求引用使用 `{request_ref: self}` 或指定 TC-ID。
+- JSONPath、集合、字段存在和长度优先用 structured assertions。
+- 循环/条件/等待优先封装 Harness capability；测试函数本身必须控制时才保留 case body。
+- module profile 只放 L1 稳定能力；所有 TC-ID 绑定内容放 suite profile。
 
 ## 输出摘要模板
 
@@ -239,64 +245,39 @@ def setup_{module}() -> {Module}Client:
 ## test-scaffold 摘要
 
 target：{target}
-模块：{module}
-模式：scaffold-module / scaffold-suite / incremental
-module_type：{type}
+module：{module}
+mode：scaffold-module / scaffold-suite / incremental
 
-创建/修改文件：
-- test_workspace/targets/{target}/target.yaml — target 默认目录
-- test_workspace/targets/{target}/modules/{module}.yaml — module registry
-- test_workspace/targets/{target}/fixtures/{module}.py — Client 类 + setup fixture
-- test_workspace/targets/{target}/profiles/profile_{module}.md — module profile
-- {suite_dir}/suite.yaml — suite manifest（suite 模式）
-- {suite_dir}/profile_{suite}_suite.md — suite profile（suite 模式）
-- test_workspace/targets/{target}/api_maps/api_map_{module}.md — API 面 + env 契约 + 可行性判定
+module package：
+- modules/{module}/module.yaml
+- modules/{module}/profile.md
+- modules/{module}/fixture.py
+- modules/{module}/harness.py
+- {其他职责文件或无}
 
-api_map：
-- path: test_workspace/targets/{target}/api_maps/api_map_{module}.md
-- skipped: {TC...}
-- manual_pure: {TC...}
-- manual_semi_auto: {TC...}
+Harness contract：
+- setup fixture：setup_{module}
+- Harness：{Module}Harness
+- public capabilities：{列表}
+- env/cleanup：{摘要}
 
-profile 归属：
-- module profile: L1 稳定能力、module_type、默认 fixture/object、公共 assertion_rules
-- suite profile: TC-ID 绑定的 variables/requests/case_flows/case_bodies/case_fixtures
+suite assets：
+- {suite_dir}/suite.yaml
+- {suite_dir}/profile_{suite}_suite.md
 
-Client 方法：
-- {method_name}({params}) [auth: yes/no]
+route distribution：
+- default_http：{N}
+- structured_case_flow：{N}
+- custom_case_body：{N，附原因}
+- manual/skipped：{N}
 
-路线分布：
-- default_http：{N} 条
-- structured_case_flow：{N} 条
-- custom_case_body：{N} 条（附保留原因）
-- manual：{N} 条
-- skipped（可行性存疑）：{N} 条
+validation：
+- doctor：PASS/FAIL
+- validate-profile：PASS/FAIL
+- explain/dump-ir binding：setup_{module} -> harness
+- codegen/check：PASS/FAIL
+- compileall/collect：PASS/FAIL
 
-环境变量（分层）：
-- 连接层：{VAR} — required
-- 认证层：{VAR} — required
-- 资源层：{VAR} — required
-- 业务层：{VAR} — optional
-
-验证结果：
-- validate-profile: {PASS/FAIL}
-- explain key cases: {PASS/FAIL}（strategy/case_flow/request bindings/structured assertions/review hint）
-- dump-ir strategy: {PASS/FAIL}
-- codegen --check: {PASS/FAIL}
-- suite collect: {N} / {可执行 case 数}
-- module selector check: {PASS/FAIL/NA}
-- module selector collect: {PASS/FAIL/NA}
-
-warnings：
-- validate-profile warnings: {列表或无}
-- accepted warnings: {列表或无}
-- must-fix warnings: {列表或无}
-
-report artifacts：
-- suite latest: test_workspace/reports/{target}/{module}/suites/{suite}/latest/result.json
-- module latest: test_workspace/reports/{target}/{module}/module/latest/result.json
-
-下一步：
-- 配置环境变量后执行 `aitest run --suite-file <suite_dir>/suite.yaml`
-- 或调用 `/test-codegen --suite-file <suite_dir>/suite.yaml` 处理 UNPARSED（如有）
+next：
+- 配置运行 env 后执行 `aitest run --suite-file {suite_dir}/suite.yaml`
 ```

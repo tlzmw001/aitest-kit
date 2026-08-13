@@ -15,27 +15,21 @@ from aitest_kit.codegen.suite import (
 
 def _write_module_profile(root: Path) -> None:
     target_dir = root / "test_workspace" / "targets" / "sub2api"
-    profile_dir = target_dir / "profiles"
-    module_dir = target_dir / "modules"
-    profile_dir.mkdir(parents=True, exist_ok=True)
+    module_dir = target_dir / "modules" / "gateway_api"
     module_dir.mkdir(parents=True, exist_ok=True)
     (target_dir / "target.yaml").write_text(
         """target: sub2api
 defaults:
   module_dir: test_workspace/targets/sub2api/modules
-  profile_dir: test_workspace/targets/sub2api/profiles
   generated_dir: test_workspace/generated/sub2api
   reports_dir: test_workspace/reports/sub2api
 """,
         encoding="utf-8",
     )
-    (module_dir / "gateway_api.yaml").write_text(
+    (module_dir / "module.yaml").write_text(
         """target: sub2api
 module: gateway_api
 module_type: multi_endpoint
-fixture:
-  file: gateway_api.py
-  default_fixture: setup_gateway_api
 registered_suites:
   - suite: quota_billing_v2
     manifest: test_workspace/suites/sub2api/quota_billing_v2/suite.yaml
@@ -43,14 +37,26 @@ registered_suites:
 """,
         encoding="utf-8",
     )
-    (profile_dir / "profile_gateway_api.md").write_text(
-        """```yaml
-module_type: multi_endpoint
-extra_imports:
-  - "from test_workspace.targets.sub2api.fixtures.gateway_api import setup_gateway_api"
-default_fixture: setup_gateway_api
-default_object: client
-```
+    (module_dir / "profile.md").write_text("```yaml\n{}\n```\n", encoding="utf-8")
+    (module_dir / "harness.py").write_text(
+        """class GatewayApiHarness:
+    def health(self):
+        return {"status": "ok"}
+
+    def submit(self, *, body):
+        return body
+""",
+        encoding="utf-8",
+    )
+    (module_dir / "fixture.py").write_text(
+        """import pytest
+
+from .harness import GatewayApiHarness
+
+
+@pytest.fixture
+def setup_gateway_api() -> GatewayApiHarness:
+    return GatewayApiHarness()
 """,
         encoding="utf-8",
     )
@@ -100,10 +106,8 @@ parent_module: gateway_api
 suite: quota_billing_v2
 case_flows:
   {profile_case_id}:
-    fixture: setup_gateway_api
-    object: client
     steps:
-      - call: client.health
+      - call: harness.health
         save_as: resp
       - assert: 'assert resp["status"] == "ok"'
 ```
@@ -177,10 +181,8 @@ parent_module: gateway_api
 suite: quota_billing_v2
 case_flows:
   TC-GW-041:
-    fixture: setup_gateway_api
-    object: client
     steps:
-      - call: client.health
+      - call: harness.health
         save_as: resp
       - assert: 'assert resp["status"] == "ok"'
 structured_assertions:
@@ -260,10 +262,8 @@ requests:
         value_from: auth_token
 case_flows:
   TC-GW-041:
-    fixture: setup_gateway_api
-    object: client
     steps:
-      - call: client.submit
+      - call: harness.submit
         kwargs:
           body: {request_ref: self}
         save_as: resp
@@ -293,27 +293,19 @@ def test_codegen_suite_explain_reports_unparsed_case_flow_assertion(tmp_path):
         root = Path(cwd)
         _write_module_profile(root)
         suite_dir = _write_suite(root)
-        module_dir = root / "test_workspace" / "targets" / "sub2api" / "modules"
-        profile_dir = root / "test_workspace" / "targets" / "sub2api" / "profiles"
-        (module_dir / "gateway_api.yaml").write_text(
+        module_dir = root / "test_workspace" / "targets" / "sub2api" / "modules" / "gateway_api"
+        (module_dir / "module.yaml").write_text(
             """target: sub2api
 module: gateway_api
 module_type: standard_http
-fixture:
-  file: gateway_api.py
-  default_fixture: setup_gateway_api
+registered_suites:
+  - suite: quota_billing_v2
+    manifest: test_workspace/suites/sub2api/quota_billing_v2/suite.yaml
+    status: active
 """,
             encoding="utf-8",
         )
-        (profile_dir / "profile_gateway_api.md").write_text(
-            """```yaml
-module_type: standard_http
-extra_imports:
-  - "from test_workspace.targets.sub2api.fixtures.gateway_api import setup_gateway_api"
-```
-""",
-            encoding="utf-8",
-        )
+        (module_dir / "profile.md").write_text("```yaml\n{}\n```\n", encoding="utf-8")
         (suite_dir / "quota_billing_business.md").write_text(
             """# quota billing cases
 
@@ -486,13 +478,13 @@ parent_module: gateway_api
 suite: quota_billing_v2
 case_bodies:
   TC-GW-071: |
-    resp = client.health()
+    resp = harness.health()
     assert resp["status"] == "ok"
   TC-GW-072: |
-    resp = client.health()
+    resp = harness.health()
     assert resp["status"] == "ok"
   TC-GW-073: |
-    resp = client.health()
+    resp = harness.health()
     assert resp["status"] == "ok"
 ```
 """,
@@ -606,7 +598,6 @@ def test_codegen_all_and_module_discover_targets_yaml_registry(tmp_path):
     target: sub2api
     defaults:
       module_dir: test_workspace/targets/sub2api/modules
-      profile_dir: test_workspace/targets/sub2api/profiles
       generated_dir: test_workspace/generated/sub2api
       reports_dir: test_workspace/reports/sub2api
 """,
@@ -638,7 +629,6 @@ def test_codegen_all_discovers_unified_aitest_yaml_target_registry(tmp_path):
     target: sub2api
     defaults:
       module_dir: test_workspace/targets/sub2api/modules
-      profile_dir: test_workspace/targets/sub2api/profiles
       generated_dir: test_workspace/generated/sub2api
       reports_dir: test_workspace/reports/sub2api
 """,
@@ -671,10 +661,7 @@ case_files:
         encoding="utf-8",
     )
 
-    context = load_suite_context(
-        suite_file,
-        profile_dir=root / "test_workspace" / "tests" / "fixtures",
-    )
+    context = load_suite_context(suite_file)
     case_file = context.case_files[0]
 
     assert suite_output_file_type(context, case_file) == "quota_billing_v2_quota_billing_business"
@@ -855,13 +842,13 @@ parent_module: gateway_api
 suite: promotion_smoke
 case_bodies:
   TC-GW-071: |
-    resp = client.health()
+    resp = harness.health()
     assert resp["status"] == "ok"
   TC-GW-072: |
-    resp = client.health()
+    resp = harness.health()
     assert resp["status"] == "ok"
   TC-GW-073: |
-    resp = client.health()
+    resp = harness.health()
     assert resp["status"] == "ok"
 ```
 """,

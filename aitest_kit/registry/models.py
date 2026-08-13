@@ -9,9 +9,7 @@ from typing import Any
 @dataclass(frozen=True)
 class TargetDefaults:
     module_dir: Path
-    fixture_dir: Path
     helper_dir: Path
-    profile_dir: Path
     suite_dir: Path
     generated_dir: Path
     reports_dir: Path
@@ -37,17 +35,30 @@ class RegisteredSuite:
 
 
 @dataclass(frozen=True)
+class ModuleBinding:
+    """Canonical runtime binding derived from one module package."""
+
+    target: str
+    module: str
+    fixture_import: str
+    fixture_name: str
+    fixture_module: str = ""
+    object_name: str = "harness"
+
+
+@dataclass(frozen=True)
 class ModuleContext:
     workspace_root: Path
     target: str
     module: str
     module_type: str
     config_path: Path | None
+    package_dir: Path
     knowledge_refs: dict[str, list[Path]]
-    fixture_path: Path | None
-    default_fixture: str
-    profile_path: Path | None
-    helper_paths: list[Path]
+    fixture_path: Path
+    harness_path: Path
+    profile_path: Path
+    binding: ModuleBinding
     registered_suites: list[RegisteredSuite]
     diagnostics: list[str] = field(default_factory=list)
 

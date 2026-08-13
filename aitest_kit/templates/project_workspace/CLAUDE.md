@@ -18,7 +18,7 @@
 aitest_config/          # 项目级配置、refs/、schemas/
 test_workspace/
   knowledge/            # 测试知识库（L0/L1/L2 + TEST_SPEC）
-  targets/              # target/module registry、fixture、helper、module profile
+  targets/              # target registry + canonical module packages
   suites/               # suite 用例（Markdown + suite.yaml + suite profile）
   generated/            # codegen 生成的 pytest（编译产物）
   reports/              # 测试执行报告（运行产物）
@@ -46,18 +46,21 @@ aitest report
 1. **文档审查**：确认接口定义、配置和错误行为是否足够支撑测试。
 2. **知识构建**：沉淀为 L0/L1/L2 测试知识库。
 3. **用例设计**：编写 Markdown 用例。
-4. **脚手架**：构建 fixture/helper/module profile，补 suite profile。
+4. **脚手架**：构建 canonical Module Harness 和 module profile，补 suite profile。
 5. **codegen**：profile gate → dump IR → check → 生成 pytest。
 6. **执行与报告**：`aitest run` 生成结构化报告。
-7. **失败分流**：区分用例问题、fixture/codegen 问题、环境问题和待测系统 bug。
-8. **规则沉淀**：稳定模式沉淀到 profile、fixture/helper 或 emitter 规则。
+7. **失败分流**：区分用例问题、Harness/codegen 问题、环境问题和待测系统 bug。
+8. **规则沉淀**：稳定模式沉淀到 profile、Harness capability 或 emitter 规则。
 
 ## 关键约定
 
 - 测试知识库是测试设计主输入，不要长期绕过知识层直接写 pytest。
 - Markdown 用例是源数据；generated pytest 是编译产物，优先改输入后重新生成。
 - 配置文件写法以 `aitest_config/refs/config-files.md` 为准。
-- `profile_{module}.md` 位于 `targets/{target}/profiles/`，放 L1 稳定能力；`profile_{suite}_suite.md` 跟随用例目录，放 TC-ID 绑定的 case_flows/case_bodies。
+- module package 固定为 `targets/{target}/modules/{module}/`，包含 `module.yaml`、`profile.md`、`fixture.py`、`harness.py`。
+- `setup_{module}` 是唯一公开 fixture，直接返回/yield `{Module}Harness`；generated 中固定命名为 `harness`。
+- `profile.md` 放 L1 稳定能力；`profile_{suite}_suite.md` 跟随 suite，放 TC-ID 绑定内容，flow 不配置 fixture/object。
+- 单 module 能力留在 module package；只有同 target 内已有多个 module 复用的纯技术适配才放 target helpers，不建立 workspace 顶层 helpers。
 - suite 通过 `aitest registry register-suite` 注册到 module 后，才进入 `--module`/`--target`/`--all` 聚合入口。
 - 不硬编码端口、URL、凭证或 token；走环境变量或配置文件。
 - 不放宽断言、不 skip 失败用例、不伪造成功响应。
@@ -68,7 +71,7 @@ aitest report
 1. Profile 校验是生成、`--check`、`--dump-ir`、`--explain` 和晋升分析的硬门禁。
 2. Parser 诊断报错时阻断生成。
 3. 断言匹配优先级：profile 规则 > `aitest.yaml` 内置规则 > UNPARSED。
-4. 生成的 pytest 应通过修改 Markdown/profile/config/fixture/helper 输入来刷新，而非长期手动编辑。
+4. 生成的 pytest 应通过修改 Markdown/profile/config/Module Harness 输入来刷新，而非长期手动编辑。
 
 ## 测试执行要点
 
@@ -93,7 +96,7 @@ aitest report
 |------|------|
 | `PRECONDITION_MISSING` | 补 env/token/测试账号，不当作待测系统 bug |
 | `ENVIRONMENT_ERROR` | 检查服务启动、端口、网络 |
-| `TEST_SCAFFOLD_ERROR` | 回 `test-scaffold` 修 fixture/profile |
+| `TEST_SCAFFOLD_ERROR` | 回 `test-scaffold` 修 Module Harness/profile |
 | `CODEGEN_ERROR` | 修 profile/emitter/生成链路 |
 | `ASSERTION_FAILURE` | 人工复核；断言失败不自动等于待测系统 bug |
 

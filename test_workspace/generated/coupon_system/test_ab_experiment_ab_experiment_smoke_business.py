@@ -4,7 +4,7 @@ import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
 from aitest_kit.runtime_context import reset_case_context, set_case_context
-from test_workspace.targets.coupon_system.fixtures.ab_experiment import setup_ab_experiment
+pytest_plugins = ["test_workspace.targets.coupon_system.modules.ab_experiment.fixture"]
 
 
 BASE_REQUEST = {
@@ -52,11 +52,11 @@ class TestAbExperimentBusiness:
             # SETUP: 请求覆盖：HTTP 请求 user_id="u_ab_hash_http"、scene_name="game"、device="mobile"、external=0、reqId="req-ab-001"
             # SETUP: 前置操作：不设置该用户白名单
 
-            client = setup_ab_experiment
-            client.prepare_stock(coupon_id="COUPON_AB_001", stock=100)
-            resp = client.recommend_http(request_overrides={"user_id": "u_ab_hash_http", "reqId": "req-ab-001", "scene_name": "game", "device": "mobile", "external": 0})
+            harness = setup_ab_experiment
+            harness.prepare_stock(coupon_id="COUPON_AB_001", stock=100)
+            resp = harness.recommend_http(request_overrides={"user_id": "u_ab_hash_http", "reqId": "req-ab-001", "scene_name": "game", "device": "mobile", "external": 0})
             assert resp["code"] == 0
-            assert client.experiment_keys(resp) <= {"coarse_rank_exp_game", "calibration_exp_game"}
+            assert harness.experiment_keys(resp) <= {"coarse_rank_exp_game", "calibration_exp_game"}
             assert "coarse_rank_exp_ad" not in resp["experiment_info"] and "calibration_exp_ad" not in resp["experiment_info"]
         finally:
             reset_case_context(__aitest_ctx_token)
@@ -78,11 +78,11 @@ class TestAbExperimentBusiness:
             # SETUP: 请求覆盖：gRPC 请求 user_id="u_ab_hash_grpc"、scene_name="ad"、device="pc"、external=0、req_id="req-ab-002"
             # SETUP: 前置操作：不设置该用户白名单
 
-            client = setup_ab_experiment
-            client.prepare_stock(coupon_id="COUPON_AB_001", stock=100)
-            resp = client.recommend_grpc(request_overrides={"user_id": "u_ab_hash_grpc", "req_id": "req-ab-002", "scene_name": "ad", "device": "pc", "external": 0})
+            harness = setup_ab_experiment
+            harness.prepare_stock(coupon_id="COUPON_AB_001", stock=100)
+            resp = harness.recommend_grpc(request_overrides={"user_id": "u_ab_hash_grpc", "req_id": "req-ab-002", "scene_name": "ad", "device": "pc", "external": 0})
             assert resp["code"] == 0
-            assert client.experiment_keys(resp) <= {"coarse_rank_exp_ad", "calibration_exp_ad"}
+            assert harness.experiment_keys(resp) <= {"coarse_rank_exp_ad", "calibration_exp_ad"}
             assert "coarse_rank_exp_game" not in resp["experiment_info"] and "calibration_exp_game" not in resp["experiment_info"]
         finally:
             reset_case_context(__aitest_ctx_token)
@@ -104,10 +104,10 @@ class TestAbExperimentBusiness:
             # SETUP: 请求覆盖：先执行 PUT /api/v1/ab/whitelist/u_ab_white，body 为 {"strategy_map":{"coarse_rank_exp_game":"cr_off","calibration_exp_game":"cal_off"}}
             # SETUP: 请求覆盖_2：HTTP 请求 user_id="u_ab_white"、scene_name="game"、device="mobile"、external=0、reqId="req-ab-003"
 
-            client = setup_ab_experiment
-            client.prepare_stock(coupon_id="COUPON_AB_001", stock=100)
-            client.set_whitelist(user_id="u_ab_white", strategy_map={"coarse_rank_exp_game": "cr_off", "calibration_exp_game": "cal_off"})
-            resp = client.recommend_http(request_overrides={"user_id": "u_ab_white", "reqId": "req-ab-003", "scene_name": "game", "device": "mobile", "external": 0})
+            harness = setup_ab_experiment
+            harness.prepare_stock(coupon_id="COUPON_AB_001", stock=100)
+            harness.set_whitelist(user_id="u_ab_white", strategy_map={"coarse_rank_exp_game": "cr_off", "calibration_exp_game": "cal_off"})
+            resp = harness.recommend_http(request_overrides={"user_id": "u_ab_white", "reqId": "req-ab-003", "scene_name": "game", "device": "mobile", "external": 0})
             assert resp["code"] == 0
             assert resp["experiment_info"].get("coarse_rank_exp_game") == "cr_off"
             assert resp["experiment_info"].get("calibration_exp_game") == "cal_off"
@@ -133,11 +133,11 @@ class TestAbExperimentBusiness:
             # SETUP: 请求覆盖：HTTP 请求 user_id="u_ab_scene_game"、scene_name="game"、device="mobile"、external=0
             # SETUP: 请求覆盖_2：AB 服务中同时存在 game/ad 两组实验
 
-            client = setup_ab_experiment
-            client.prepare_stock(coupon_id="COUPON_AB_001", stock=100)
-            resp = client.recommend_http(request_overrides={"user_id": "u_ab_scene_game", "reqId": "req-ab-004", "scene_name": "game", "device": "mobile", "external": 0})
+            harness = setup_ab_experiment
+            harness.prepare_stock(coupon_id="COUPON_AB_001", stock=100)
+            resp = harness.recommend_http(request_overrides={"user_id": "u_ab_scene_game", "reqId": "req-ab-004", "scene_name": "game", "device": "mobile", "external": 0})
             assert resp["code"] == 0
-            assert client.experiment_keys(resp) <= {"coarse_rank_exp_game", "calibration_exp_game"}
+            assert harness.experiment_keys(resp) <= {"coarse_rank_exp_game", "calibration_exp_game"}
             assert not any(k.endswith("_ad") for k in resp["experiment_info"])
         finally:
             reset_case_context(__aitest_ctx_token)
@@ -161,9 +161,9 @@ class TestAbExperimentBusiness:
             # SETUP: 请求覆盖：HTTP 请求 user_id="u_ab_external_http"、scene_name="game"、device="mobile"、external=1、reqId="req-ab-006"
             # SETUP: 请求覆盖_2：AB 服务可用且存在可命中实验
 
-            client = setup_ab_experiment
-            client.prepare_stock(coupon_id="COUPON_AB_001", stock=100)
-            resp = client.recommend_http(request_overrides={"user_id": "u_ab_external_http", "reqId": "req-ab-006", "scene_name": "game", "device": "mobile", "external": 1})
+            harness = setup_ab_experiment
+            harness.prepare_stock(coupon_id="COUPON_AB_001", stock=100)
+            resp = harness.recommend_http(request_overrides={"user_id": "u_ab_external_http", "reqId": "req-ab-006", "scene_name": "game", "device": "mobile", "external": 1})
             assert resp["code"] == 0
             assert resp["experiment_info"] == {}
         finally:
@@ -186,9 +186,9 @@ class TestAbExperimentBusiness:
             # SETUP: 请求覆盖：gRPC 请求 user_id="u_ab_external_grpc"、scene_name="game"、device="mobile"、external=1、req_id="req-ab-007"
             # SETUP: 请求覆盖_2：AB 服务可用且存在可命中实验
 
-            client = setup_ab_experiment
-            client.prepare_stock(coupon_id="COUPON_AB_001", stock=100)
-            resp = client.recommend_grpc(request_overrides={"user_id": "u_ab_external_grpc", "req_id": "req-ab-007", "scene_name": "game", "device": "mobile", "external": 1})
+            harness = setup_ab_experiment
+            harness.prepare_stock(coupon_id="COUPON_AB_001", stock=100)
+            resp = harness.recommend_grpc(request_overrides={"user_id": "u_ab_external_grpc", "req_id": "req-ab-007", "scene_name": "game", "device": "mobile", "external": 1})
             assert resp["code"] == 0
             assert resp["experiment_info"] == {}
         finally:
@@ -221,7 +221,6 @@ class TestAbExperimentBusiness:
             reset_case_context(__aitest_ctx_token)
 
 
-# TODO: setup_ab_experiment fixture 需要手写实现（→ tests/fixtures/ab_experiment.py）
 # SKIPPED: TC-AB-005 — `[!可行性存疑: 已确认为待测系统缺陷，主服务不支持运行时热更新 scene_experiments.json，详见 results/ab_experiment_scene_experiments_hot_reload_bug.md]`
 # SKIPPED: TC-AB-008 — `[!可行性存疑: 需要测试环境允许控制 AB 服务可用性或启动参数]`
 

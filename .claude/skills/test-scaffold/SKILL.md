@@ -1,7 +1,7 @@
 ---
 name: test-scaffold
-description: 构建模块级 fixture/module profile 或用例级 suite profile，把 Markdown 用例接入 test-codegen 管线
-when_to_use: 当新模块缺少 fixture/module profile，或已有模块新增一批 Markdown 用例需要生成 suite profile 时
+description: 构建或增量维护 canonical Module Harness、module registry/profile 和 suite profile，把 Markdown 用例接入 test-codegen 管线
+when_to_use: 当新模块缺少 Module Harness，或现有模块新增用例需要补动作能力、资源生命周期或 suite profile 时
 argument-hint: <target> <module> [scaffold-module|scaffold-suite|incremental] [suite_dir]
 arguments: [target, module, mode, suite_dir]
 user-invocable: true
@@ -11,184 +11,171 @@ effort: high
 
 # 测试脚手架构建
 
-为 `$target` 下的 `$module` 模块构建 fixture/module profile，或为某个用例目录构建 suite profile，使其能进入 `test-codegen` 管线。
+为一个 target/module 建立唯一 Module Harness，或把新 suite 接入现有 Harness。
 
-## 定位
+```text
+test-design -> Markdown suite
+                 |
+                 v
+          test-scaffold
+                 |
+                 v
+            test-codegen
 ```
-test-design 产出 Markdown 用例
-  ↓
-  test-scaffold ← 本 skill
-  ↓
-test-codegen 消费 fixture + profile 生成 pytest
+
+## Canonical 产物
+
+```text
+test_workspace/targets/{target}/
+  target.yaml
+  helpers/                              # 同一 target 内已有多个 module 复用时才存在
+  modules/{module}/
+    __init__.py
+    module.yaml
+    profile.md
+    fixture.py
+    harness.py
+    <responsibility>.py                 # 按需，如 api.py/resources.py
+
+{suite_dir}/
+  suite.yaml
+  *.md
+  profile_{suite}_suite.md
 ```
 
-## 产出
-| 文件 | 职责 |
-|------|------|
-| `test_workspace/targets/{target}/target.yaml` | 被测系统入口和默认目录 |
-| `test_workspace/targets/{target}/modules/{module}.yaml` | module 归属、fixture、L1 知识引用、registered_suites；手写 registered_suites 时推荐直接写 suite manifest 路径，需要 status 时再写 `{suite, manifest, status}` |
-| `test_workspace/targets/{target}/fixtures/{module}.py` | Client 类 + setup/teardown fixture |
-| `test_workspace/targets/{target}/helpers/` | target 专属 helper，通用 helper 不够时再新增 |
-| `test_workspace/targets/{target}/profiles/profile_{module}.md` | module_type、共享 assertion_rules、默认 fixture/object、L1 稳定能力 |
-| `{suite_dir}/suite.yaml` | 用例 suite 归属：target、module、suite、case_files、L2 知识引用；suite profile 走约定路径 |
-| `{suite_dir}/profile_{suite}_suite.md` | 本批用例的 variables、requests、case_flows/case_bodies |
-| `test_workspace/targets/{target}/api_maps/api_map_{module}.md` | API 面 + env 契约 + 可行性判定（scaffold 过程产物，保留供 review） |
+固定运行契约：
 
-模块级 fixture/profile/helper 归属于 `test_workspace/targets/{target}/`；suite 级文件跟随具体用例目录。
+```text
+setup_{module} -> {Module}Harness -> generated variable: harness
+```
 
-## 参考文档
+- `module.yaml`：target/module/module_type、knowledge refs、registered suites。
+- `profile.md`：模块级稳定 `assertion_rules` 和 `variables.defaults`。
+- `fixture.py`：只公开 `setup_{module}`，负责 pytest 生命周期和 Harness 装配。
+- `harness.py`：模块测试能力门面和资源所有者。
+- suite profile：TC-ID 绑定的 variables、requests、structured assertions、case flows/bodies。
+- 不建立 `test_workspace/helpers/`。单模块能力留在 module package；target helper 必须已有至少两个 module 真实复用。
 
-详细格式模板和约束规则拆分到 `refs/` 目录，按需读取：
-- `aitest_config/refs/config-files.md` — target/module/suite/profile/task/env 配置文件总手册，判断字段归属时优先读取
-- `refs/formats.md` — API Map、variables/env 矩阵、状态影响表、profile YAML、fixture 代码、输出摘要的模板
-- `refs/constraints.md` — fixture 硬约束、测试数据分类、注入一致性、case_flow 规则、路线映射、验证命令
+## 必读参考
 
-## 哲学
-AI 探索：理解 API 面、设计 Client、判断生成路线、写 case_flow。
-Skill 保障：分步交互、结构化数据流、验证闭环。
-用户 review 设计决策，机械产物呈现后自动推进。
+- `aitest_config/refs/config-files.md`：配置字段和目录归属。
+- `refs/constraints.md`：Harness contract、flow 边界和验证门禁。
+- `refs/formats.md`：API Map、profile、Harness 和输出模板。
 
 ## 读写边界
 
-默认不读待测系统源码。docs/、knowledge/、cases/ 不足时，列出缺口请求用户确认后读 API 声明层。
+默认只读 docs、knowledge、Markdown cases、公开 API/schema/路由声明、启动配置、现有测试资产和 `aitest.yaml`。文档不足时先列缺口，再请求用户确认是否读取更多声明层文件。
 
-允许读取：路由/端点声明、请求/响应 schema、认证/中间件配置、启动配置、其他模块 fixture/profile、`aitest.yaml`。
-允许写入：target 下的 fixture/profile/helper/module.yaml、api_map、suite 目录下的 suite.yaml 和 suite profile。
-禁止：读业务逻辑（handler body/DB 模型/内部调用/算法）、改 generated/、改 .env、硬编码凭证、编造 API 行为、import 待测系统、改待测系统代码、生成 case_id 分发表。
+禁止：
 
-读取过的 API 声明层文件记录到 api_map。
+- 修改待测系统、generated pytest、`.env` 或凭证文件。
+- import 待测系统内部实现来伪造测试状态。
+- 生成按 `case_id` 分发请求、账号、配置或断言的 fixture/Harness。
+- 为 suite 新建第二个公开 pytest fixture。
+- 在 suite profile 配置 fixture/object/extra imports。
 
-## Step 0：模式选择
-确认：**target** + **模块名** + **模式**（scaffold-module / scaffold-suite / incremental）。如果用户只给模块名，先从 suite manifest、module registry 或现有目录推断 target；推断不到时询问。
+## Step 0：选择模式
 
-### scaffold-module 模式
-模块尚无 fixture 和 module profile。输入必须包含 L1/API 文档和一份最小冒烟用例 suite，用于锚定真实调用路径、认证方式、响应结构和基础断言。生成 `module.yaml` 时应写入 `knowledge_refs.l1`；外部知识库可写文件、目录、列表或 `${ENV_NAME}` 路径。没有可用冒烟用例时，不编造 Markdown case；先回到 `test-design` 或请用户提供最小 case。产出见上方产出表。
+从 suite manifest、module registry 和目录推导 target/module；无法唯一确定才询问。
 
-module profile 禁止放当前 suite 的 `requests/case_flows/case_bodies/case_fixtures/variables.cases`；这些 TC-ID 绑定配置必须写入 suite profile，否则 profile gate 会报错。
-最小 suite 必须注册到 `module.yaml.registered_suites`，用于验证 module/target/all selector 能发现该模块。
+- `scaffold-module`：新模块。必须有 L1/API 输入和一份最小冒烟 suite。
+- `scaffold-suite`：Harness 已满足需求，只需补 suite manifest/profile。
+- `incremental`：新用例暴露了 Harness 能力、env、setup 或 cleanup 缺口。
 
-### scaffold-suite 模式
-已有 fixture 和 module profile，用户给出某个用例目录。产出 `suite.yaml` + `profile_{suite}_suite.md`。`suite.yaml.knowledge_refs` 只写本批用例相关 L2，L1 从 `module.yaml.knowledge_refs.l1` 合并。suite profile 文件名必须以 `_suite.md` 结尾，只覆盖该目录下的 case_id。
+只是新增参数、断言组合或调用已有 capability 时，留在 `test-codegen`；需要新端点、认证、环境依赖、资源准备或 cleanup 时，进入 incremental。
 
-### incremental 模式
-从 `test-codegen` 接手"fixture 能力不足"的问题，不是重做整个模块。
+## Step 1：建立 API Map
 
-1. 读取失败信号，判断缺口类型：只缺 suite profile → 退回 `test-codegen`
-2. 缺测试调用能力 → 按 Step 1 补 api_map 增量，按 Step 2 追加 Client 方法（最小追加，不重写已有）
-3. 按 Step 5 追加 profile 条目，不重写已有
-4. Step 6 验证后回到 `test-codegen`
+分析公开接口和用例，输出 `test_workspace/targets/{target}/api_maps/api_map_{module}.md`：
 
-## Step 1：API Map 全量分析（子 Agent）
+- 端点、协议、认证和请求体。
+- env 分层与 case variables/env 矩阵。
+- 状态副作用、cleanup 和可行性判定。
+- 信息缺口、manual/skipped 候选。
 
-单个子 Agent 一次完成 API 面提取、variables/env 矩阵、状态影响和可行性判定。
+向用户分两段 review：先端点/认证，再 env/状态/可行性。格式见 `refs/formats.md`。
 
-子 Agent 输入：cases/ + docs/knowledge + 代码 API 声明层（需用户先确认可读范围）。
-子 Agent 产出：完整 `api_map_{module}.md`，格式参考 `refs/formats.md`。包含：
-- 端点列表 + 认证模式 + 请求体参考
-- 环境变量分层（连接/认证/资源/业务）
-- case → variables/env 矩阵（分类规则参考 `refs/formats.md#case-variablesenv-矩阵`）
-- 状态影响表 + 可行性判定 + skip_list
+## Step 2：设计 Harness 能力
 
-主 Agent 分段呈现给用户确认：
-- **段 1**：端点列表、认证模式、信息缺口
-- **段 2**：env 分层、variables 矩阵、状态影响、可行性判定（用户可将可行性存疑的 case 移入可执行或确认 skipped）
+先给出能力签名表，不直接写完整代码：
 
-## Step 2：设计 fixture Client
-
-基于已确认的 API Map 设计方法签名。交付物是签名表，不是完整代码：
-
-```
-class {Module}Client:
-    __init__(base_url, auth_token)     # auth_token: required, 缺失时 fail
-    post_messages(model, messages)     → httpx.Response  [HTTP, auth: yes]
-    get_public_models()                → httpx.Response  [HTTP, auth: no]
-    recommend(request)                 → RecommendReply  [gRPC, auth: no]
-    create_api_key(name)               → httpx.Response  [HTTP, auth: yes, 状态变更: 创建]
-    delete_api_key(key_id)             → httpx.Response  [HTTP, auth: yes, 状态变更: 删除]
+```text
+class GatewayHarness
+  login(username, password) -> httpx.Response
+  create_key(name) -> dict
+  delete_key(key_id) -> None
+  assert_key_active(payload) -> bool
+  close() -> None
 ```
 
-每个方法标注 **auth 需求**（yes/no）和 **状态变更**（创建/修改/删除，有则标，无则省略）。
+每个 capability 标明：协议、认证、状态变更、env、cleanup。优先表达可复用业务动作，不写 `run_case(case_id)` 或每条用例一个方法。
 
-设计原则：每个端点一个方法，HTTP 返回 `httpx.Response`，gRPC 返回 protobuf message，env 驱动不硬编码。首次创建前读其他模块 fixture 参考项目惯例。
+复杂循环、条件、等待、临时文件和 mock 可以封装为 capability；fixture 仍只负责装配与生命周期。用户确认能力粒度后再实现。
 
-**用户确认**：方法粒度、命名、auth 标注。
+## Step 3：生成 module package
 
-## Step 3：生成 fixture + registry 接线（子 Agent，呈现不阻塞）
+生成 canonical 五个文件，必要时再按职责拆文件：
 
-子 Agent 输入：确认的 Client 签名 + api_map（env 分层、cleanup 策略）。
-子 Agent 产出：`fixtures/{module}.py` + registry 接线检查结果。
+1. `module.yaml` 不配置 fixture/helper/profile 路径。
+2. `harness.py` 定义 `{Module}Harness`。
+3. `fixture.py` 只公开 `setup_{module}`，直接 return/yield Harness。
+4. `profile.md` 不放 TC-ID 绑定内容，也不重复 `module_type`。
+5. 使用 `require_env()`/`require_envs()`；未调用的 capability 不应提前读取自己的可选 env。
 
-必需 env 统一用 `require_env()`，硬约束和代码结构参考 `refs/constraints.md` 和 `refs/formats.md#fixture-代码结构`。
+先运行 Harness contract 和 compileall，再进入 profile。
 
-registry 接线：生成 fixture 后立即检查 `module.yaml` 声明 `fixture.file/default_fixture`，且 `default_fixture` 符号可 import。
+## Step 4：确认 profile 路线
 
-主 Agent 呈现 fixture 代码和接线结果，自动推进到 Step 4；用户有异议可打断修改。
+选择 1-2 条代表 case 展示完整片段并让用户 review：
 
-## Step 4：Profile 模式确认
+- 默认 HTTP 是否足够。
+- 是否需要 `requests.patches`、structured assertions 或 `case_flow`。
+- flow 是否只调用 `harness.*` 和前序变量。
+- 复杂控制是否已封装为 capability，或确实需要 `case_body`。
 
-auto_fields 判断、module_type → 路线映射、逐条 case 路线评估参考 `refs/constraints.md`。api_map 中标为 skipped 的 case 不参与路线评估。
+`case_flow` 只支持 `call`、`assign`、`assert`、`comment`。profile 不选择 fixture/object，生成器从 module registry 绑定 `setup_{module}` 和 `harness`。
 
-从可执行 case 中挑 1-2 条最有代表性的，展示完整 profile 片段：路线理由、fixture/object、steps、断言。
+## Step 5：生成 suite profile
 
-注入模型和 case_flow 规则参考 `refs/constraints.md#fixture-注入一致性` 和 `refs/constraints.md#case_flow-规则`。Profile YAML 结构参考 `refs/formats.md#profile-yaml-结构`。
+- module profile 只放跨 suite 稳定规则/defaults。
+- suite profile 放具体 TC-ID 的 variables、requests、structured assertions、case flows/bodies。
+- pure manual 不写可执行 profile entry；半自动 manual 可写 flow/body 并保留 marker。
+- 可行性存疑保持 skipped，不用 comment-only flow 冒充执行。
+- `case_body` 只通过 `harness` 获取能力。
 
-**用户确认**：路线选择、step 结构、断言充分性。
+展示路线分布、manual/skipped 清单和保留 case_body 的原因。
 
-## Step 5：生成全量 profile（子 Agent，呈现不阻塞）
+## Step 6：验证闭环
 
-子 Agent 输入（全部为已确认的结构化文档）：
-- Step 4 确认的 profile 模式样本
-- cases/ 全部文件
-- Client 方法签名（Step 2）
-- api_map（env 矩阵 + skip_list）
+严格执行 `refs/constraints.md#验证命令与预期`：
 
-子 Agent 产出：scaffold-module 模式生成 `profile_{module}.md` + `profile_{suite}_suite.md`；scaffold-suite 模式只生成 suite profile。module profile 只放 L1 稳定能力；suite profile 承载 `variables` 和 TC-ID 绑定的 `requests/case_flows/case_bodies/case_fixtures`。纯人工 manual 不写入；半自动 manual 写入可执行 flow/body 并保留 manual marker。
+1. `aitest doctor`
+2. `--validate-profile`
+3. `--dump-ir` / 代表 case `--explain`
+4. 正式 codegen
+5. `--check`
+6. compileall + suite collect
+7. 已注册 suite 的 module selector 检查
 
-主 Agent 呈现路线分布统计 + skipped/manual 清单 + case_body 保留原因，自动推进到 Step 6；用户有异议可打断。
+scaffold 完成表示测试资产能稳定进入 codegen，不代表真实服务断言已经通过。
 
-## Step 6：验证闭环（子 Agent）
+## 跨模块 review
 
-子 Agent 按 `refs/constraints.md#验证命令与预期` 依次执行全部验证命令，产出 pass/fail 摘要表。
+第二个模块起检查真实复用：
 
-collect 预期数量 = 总 case - skipped - pure manual。已注册 suite 追加 module selector 级验证。
-
-验证通过 → 输出摘要，scaffold 完成。
-验证失败 → 主 Agent 呈现失败项 + 修复建议，用户确认后修复并重新验证。
-
-## Step 7：跨模块 review（第 2+ 模块时）
-
-检查跨模块可复用模式，只标记和建议，不自动提取：
-- Client 重复模式（auth header）→ helpers/ 或 base Client
-- 相同 assertion 模式 → `aitest.yaml.codegen.builtin_assertion_rules`
-- 相似 case_flow 结构 → `emitter-build` 候选
-
-## 子 Agent 策略
-
-| 步骤 | 任务 | 输入 | 输出 | 确认方式 |
-|------|------|------|------|----------|
-| Step 1 | API Map 全量分析 | cases/、docs/、API 声明层 | 完整 api_map | 阻塞：分段确认（端点+认证 → env+可行性） |
-| Step 3 | 生成 fixture + 接线 | Client 签名、api_map | fixture .py + 接线检查 | 呈现不阻塞 |
-| Step 5 | 生成全量 profile | 确认的模式、cases/、api_map | profile 文件 + 路线分布 | 呈现不阻塞 |
-| Step 6 | 验证闭环 | 生成产物、验证命令表 | pass/fail 摘要 | 失败时阻塞 |
-
-case < 10 条时主 Agent 可直接处理不委托子 Agent。
-
-api_map 是全流程的结构化中间文档，后续步骤从 api_map 读取，不依赖 AI 跨步骤记忆。
+- 同一 target 已有两个 module 使用的纯协议/认证适配，可提取到 target helpers。
+- 只属于当前 module 的业务动作、测试数据和断言继续留在 module package。
+- 跨项目稳定能力才考虑进入 `aitest_kit.helpers`。
+- 重复 flow/body 仅标记为 `emitter-build` 候选，不自动晋升。
 
 ## 完成标准
 
-1. api_map 存在，包含 API Map、env 分层、case variables/env 矩阵、状态影响表、可行性判定和 skip_list
-2. `fixtures/{module}.py` 和相关 helpers 存在且 `compileall` 通过
-3. `module.yaml` 已声明 `fixture.file/default_fixture/module_type/knowledge_refs.l1/registered_suites`，module profile 位于约定路径；缺 L1 只允许在用户确认暂无 L1 时保留 warning
-4. `default_fixture` 符号真实可 import
-5. module profile 只放 L1 稳定能力；suite profile 放 TC-ID 绑定内容
-6. `--validate-profile` 无 ERROR；WARNING 已列出并确认处理方式
-7. `--explain <TC-ID>` 中关键 case 的 strategy、case_flow、request bindings、structured assertions 和 review hint 符合 Step 4 路线；`--dump-ir` 用于机器可读全量复核
-8. `codegen` 后 `codegen --check` 通过
-9. `aitest run --suite-file <suite.yaml> -- --collect-only -q` 通过；已注册 suite 还要通过 module selector 的 `--check` 和 collect
+1. canonical module package 完整，`doctor` 的 Harness contract 无错误。
+2. 只有一个公开 `setup_{module}` fixture，并直接返回/yield Harness。
+3. fixture/Harness 不按 case_id 隐式分发；用例差异在 suite profile 显式表达。
+4. module/suite profile 归属正确，profile gate 无 ERROR。
+5. Case IR 的 structured flow 固定使用 `setup_{module}` 和 `harness`。
+6. codegen、freshness、compileall 和 collect 全部通过。
+7. module selector 能发现已注册 suite。
 
-scaffold 完成意味着"能进入 codegen 管线"，不意味着"测试通过"。真正连服务跑测试是 `aitest run` 的职责。
-
-## 输出摘要
-
-格式参考 `refs/formats.md#输出摘要模板`。
+输出格式见 `refs/formats.md#输出摘要模板`。

@@ -4,7 +4,7 @@ import pytest
 from test_workspace.targets.coupon_system.helpers import http as http_helper
 from aitest_kit.helpers.request_binding import build_request
 from aitest_kit.runtime_context import reset_case_context, set_case_context
-from test_workspace.targets.coupon_system.fixtures.logging import setup_logging
+pytest_plugins = ["test_workspace.targets.coupon_system.modules.logging.fixture"]
 
 
 BASE_REQUEST = {
@@ -51,8 +51,8 @@ class TestLoggingBusiness:
             # SETUP: 协议：HTTP
             # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_http_internal"、external=0、reqId="req-log-001"
 
-            case = setup_logging
-            result = case.run_http_with_logs(user_id="u_log_http_internal", req_id="req-log-001", external=0)
+            harness = setup_logging
+            result = harness.run_http_with_logs(user_id="u_log_http_internal", req_id="req-log-001", external=0)
             assert result["resp"]["code"] == 0
             assert "recommend request: reqId=req-log-001" in result["logs"]
             assert "user_id=u_log_http_internal" in result["logs"]
@@ -78,8 +78,8 @@ class TestLoggingBusiness:
             # SETUP: 协议：gRPC
             # SETUP: 请求覆盖：gRPC 请求 user_id="u_log_grpc_internal"、external=0、req_id="req-log-002"
 
-            case = setup_logging
-            result = case.run_grpc_with_logs(user_id="u_log_grpc_internal", req_id="req-log-002", external=0)
+            harness = setup_logging
+            result = harness.run_grpc_with_logs(user_id="u_log_grpc_internal", req_id="req-log-002", external=0)
             assert result["resp"]["code"] == 0
             assert "recommend request: reqId=req-log-002" in result["logs"]
             assert "user_id=u_log_grpc_internal" in result["logs"]
@@ -104,8 +104,8 @@ class TestLoggingBusiness:
             # SETUP: 协议：HTTP
             # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_http_external"、external=1、reqId="req-log-003"
 
-            case = setup_logging
-            result = case.run_http_with_logs(user_id="u_log_http_external", req_id="req-log-003", external=1)
+            harness = setup_logging
+            result = harness.run_http_with_logs(user_id="u_log_http_external", req_id="req-log-003", external=1)
             assert result["resp"]["code"] == 0
             assert "recommend request: reqId=req-log-003" in result["logs"]
             assert "user_id=u_log_http_external" in result["logs"]
@@ -130,8 +130,8 @@ class TestLoggingBusiness:
             # SETUP: 协议：gRPC
             # SETUP: 请求覆盖：gRPC 请求 user_id="u_log_grpc_external"、external=1、req_id="req-log-004"
 
-            case = setup_logging
-            result = case.run_grpc_with_logs(user_id="u_log_grpc_external", req_id="req-log-004", external=1)
+            harness = setup_logging
+            result = harness.run_grpc_with_logs(user_id="u_log_grpc_external", req_id="req-log-004", external=1)
             assert result["resp"]["code"] == 0
             assert "recommend request: reqId=req-log-004" in result["logs"]
             assert "user_id=u_log_grpc_external" in result["logs"]
@@ -158,10 +158,10 @@ class TestLoggingBusiness:
             # SETUP: 协议：HTTP
             # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_auto_reqid"、external=0、reqId=""
 
-            case = setup_logging
-            result = case.run_http_with_logs(user_id="u_log_auto_reqid", req_id="", external=0)
+            harness = setup_logging
+            result = harness.run_http_with_logs(user_id="u_log_auto_reqid", req_id="", external=0)
             assert result["resp"]["code"] == 0
-            assert case.has_auto_req_id_log(result["logs"])
+            assert harness.has_auto_req_id_log(result["logs"])
         finally:
             reset_case_context(__aitest_ctx_token)
 
@@ -181,8 +181,8 @@ class TestLoggingBusiness:
             # SETUP: 协议：HTTP
             # SETUP: 请求覆盖：HTTP 请求 user_id="u_log_fallback"、policy_id="policy_fallback_001"、external=0、reqId="req-log-006"
 
-            case = setup_logging
-            result = case.run_http_with_logs(user_id="u_log_fallback", req_id="req-log-006", external=0, policy_id="policy_fallback_001")
+            harness = setup_logging
+            result = harness.run_http_with_logs(user_id="u_log_fallback", req_id="req-log-006", external=0, policy_id="policy_fallback_001")
             assert result["resp"]["code"] == 0
             assert "recommend request: reqId=req-log-006" in result["logs"]
             assert "scene_id=3001" in result["logs"]
@@ -234,6 +234,5 @@ class TestLoggingBusiness:
             reset_case_context(__aitest_ctx_token)
 
 
-# TODO: setup_logging fixture 需要手写实现（→ tests/fixtures/logging.py）
 
 __codegen_skipped__ = []

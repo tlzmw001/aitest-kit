@@ -27,7 +27,15 @@ def test_registry_register_suite_adds_active_suite(tmp_path):
     )
 
     assert result.exit_code == 0, result.output
-    module_data = _read_yaml(workspace / "test_workspace" / "targets" / "demo_target" / "modules" / "demo_module.yaml")
+    module_data = _read_yaml(
+        workspace
+        / "test_workspace"
+        / "targets"
+        / "demo_target"
+        / "modules"
+        / "demo_module"
+        / "module.yaml"
+    )
     assert module_data["registered_suites"] == [
         {
             "suite": "demo_smoke",
@@ -60,7 +68,15 @@ def test_registry_register_suite_is_idempotent(tmp_path):
     assert first.exit_code == 0, first.output
     assert second.exit_code == 0, second.output
     assert "Already registered" in second.output
-    module_data = _read_yaml(workspace / "test_workspace" / "targets" / "demo_target" / "modules" / "demo_module.yaml")
+    module_data = _read_yaml(
+        workspace
+        / "test_workspace"
+        / "targets"
+        / "demo_target"
+        / "modules"
+        / "demo_module"
+        / "module.yaml"
+    )
     assert len(module_data["registered_suites"]) == 1
 
 
@@ -89,7 +105,15 @@ def test_registry_register_suite_rejects_same_suite_different_manifest(tmp_path)
 
 def test_registry_register_suite_normalizes_existing_string_entry(tmp_path):
     workspace, suite_file = _workspace_with_suite(tmp_path)
-    module_path = workspace / "test_workspace" / "targets" / "demo_target" / "modules" / "demo_module.yaml"
+    module_path = (
+        workspace
+        / "test_workspace"
+        / "targets"
+        / "demo_target"
+        / "modules"
+        / "demo_module"
+        / "module.yaml"
+    )
     module_data = _read_yaml(module_path)
     module_data["registered_suites"] = [
         "test_workspace/suites/demo_target/demo_smoke/suite.yaml",
@@ -214,40 +238,40 @@ def _workspace_with_suite(
 ):
     workspace = tmp_path / "workspace"
     target_dir = workspace / "test_workspace" / "targets" / "demo_target"
-    (target_dir / "modules").mkdir(parents=True)
-    (target_dir / "fixtures").mkdir()
-    (target_dir / "profiles").mkdir()
-    (target_dir / "helpers").mkdir()
+    module_dir = target_dir / "modules" / "demo_module"
+    module_dir.mkdir(parents=True)
     (workspace / "test_workspace" / "tasks").mkdir(parents=True)
     (target_dir / "target.yaml").write_text(
         """target: demo_target
 defaults:
   module_dir: test_workspace/targets/demo_target/modules
-  fixture_dir: test_workspace/targets/demo_target/fixtures
-  helper_dir: test_workspace/targets/demo_target/helpers
-  profile_dir: test_workspace/targets/demo_target/profiles
   suite_dir: test_workspace/suites/demo_target
   generated_dir: test_workspace/generated/demo_target
   reports_dir: test_workspace/reports/demo_target
 """,
         encoding="utf-8",
     )
-    (target_dir / "modules" / "demo_module.yaml").write_text(
+    (module_dir / "module.yaml").write_text(
         """target: demo_target
 module: demo_module
 module_type: multi_endpoint
-fixture:
-  file: demo_module.py
-  default_fixture: setup_demo_module
 registered_suites: []
 """,
         encoding="utf-8",
     )
-    (target_dir / "fixtures" / "demo_module.py").write_text(
-        "def setup_demo_module():\n    return object()\n",
+    (module_dir / "profile.md").write_text("```yaml\n{}\n```\n", encoding="utf-8")
+    (module_dir / "harness.py").write_text(
+        "class DemoModuleHarness:\n    pass\n",
         encoding="utf-8",
     )
-    (target_dir / "profiles" / "profile_demo_module.md").write_text("# module profile\n", encoding="utf-8")
+    (module_dir / "fixture.py").write_text(
+        "import pytest\n\n"
+        "from .harness import DemoModuleHarness\n\n\n"
+        "@pytest.fixture\n"
+        "def setup_demo_module() -> DemoModuleHarness:\n"
+        "    return DemoModuleHarness()\n",
+        encoding="utf-8",
+    )
     suite_file = _write_suite(workspace, "demo_smoke", suite_target=suite_target)
     return workspace, suite_file
 

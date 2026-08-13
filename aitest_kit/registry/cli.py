@@ -269,11 +269,11 @@ def _task_create_impl(
 
 
 def _validate_module_assets(module_context: Any) -> None:
-    if module_context.fixture_path is None:
-        raise click.ClickException("module fixture.file is required before registering suites")
     if not module_context.fixture_path.exists():
         raise click.ClickException(f"module fixture not found: {module_context.fixture_path}")
-    if module_context.profile_path is None or not module_context.profile_path.exists():
+    if not module_context.harness_path.exists():
+        raise click.ClickException(f"module harness not found: {module_context.harness_path}")
+    if not module_context.profile_path.exists():
         raise click.ClickException(f"canonical module profile not found: {module_context.profile_path}")
 
 

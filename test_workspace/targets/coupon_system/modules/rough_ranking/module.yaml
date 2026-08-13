@@ -1,0 +1,10 @@
+target: coupon_system
+module: rough_ranking
+module_type: isolated_service
+knowledge_refs:
+  l1:
+  - test_workspace/knowledge/L1/rough_ranking.md
+registered_suites:
+- suite: rough_ranking_smoke
+  manifest: test_workspace/suites/coupon_system/rough_ranking_smoke/suite.yaml
+  status: active
