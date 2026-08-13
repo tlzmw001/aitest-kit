@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.4.0 - 2026-08-12
+
+### Added
+
+- Added canonical Module Harness packages under `test_workspace/targets/{target}/modules/{module}/`, with contract validation for `module.yaml`, `profile.md`, `fixture.py`, `harness.py`, and the single public `setup_{module}` fixture.
+- Added `doctor` checks for module package completeness, Harness naming, fixture return/yield contracts, extra public fixtures, case-ID dispatch warnings, and oversized module files.
+- Added upgrade diagnostics that report legacy module/profile/fixture layouts as review-required blockers instead of guessing semantic migrations.
+
+### Changed
+
+- Replaced configurable fixture/object/factory injection with a registry-derived binding: `setup_{module} -> {Module}Harness -> harness`.
+- Restricted module profiles to stable assertion rules and default variables; TC-ID-bound requests, variables, structured assertions, flows, and bodies now stay in suite profiles.
+- Refactored the bundled coupon and discount targets into canonical module packages and regenerated all bundled pytest files.
+- Updated scaffold, codegen, maintain, and emitter-build skills across Codex, Claude, agents, and initialized workspace templates.
+- Changed promotion guidance from fixture/helper extraction to Module Harness capabilities for reusable module actions, resource ownership, cleanup, and complex assertions.
+
+### Removed
+
+- Removed legacy `fixture_dir`/`profile_dir`, flat `modules/{module}.yaml`, configurable profile fixture/object/setup fields, and workspace-level helper ownership from the active architecture.
+
+### Migration
+
+- Existing workspaces should run `aitest upgrade --workspace <path> --check`; safe template updates can be applied with `--apply`, while semantic module/Harness changes are reported as `BLOCKED` for review.
+
 ## 0.3.4 - 2026-06-14
 
 ### Added
