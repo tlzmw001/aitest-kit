@@ -28,6 +28,22 @@ jobs:
           python -m pip install build
           python -m pip install -e ".[dev,server]"
 
+      - name: Set up Node.js
+        if: matrix.python-version == '3.11'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.18.0"
+          cache: npm
+          cache-dependency-path: console_web/package-lock.json
+
+      - name: Verify Console frontend bundle
+        if: matrix.python-version == '3.11'
+        run: |
+          npm --prefix console_web ci --ignore-scripts
+          npm --prefix console_web test
+          npm --prefix console_web run build
+          git diff --exit-code -- aitest_kit/console/web
+
       - name: Compile package
         run: python -m compileall aitest_kit
 
@@ -62,6 +78,7 @@ jobs:
           sdist = next(Path("dist").glob("aitest_kit-*.tar.gz"))
           forbidden = ("coupon_system", "ab_experiment_sdk", "discount_system")
           required = (
+              "aitest_kit/console/web/index.html",
               "aitest_kit/templates/project_workspace/README.md",
               "aitest_kit/templates/project_workspace/AGENTS.md",
               "aitest_kit/templates/project_workspace/CLAUDE.md",
@@ -74,6 +91,13 @@ jobs:
           missing = [name for name in required if name not in wheel_names]
           if missing:
               raise SystemExit(f"wheel missing template files: {missing}")
+          console_assets = [
+              name for name in wheel_names
+              if name.startswith("aitest_kit/console/web/assets/")
+              and name.endswith((".css", ".js"))
+          ]
+          if not console_assets:
+              raise SystemExit("wheel missing Console frontend assets")
           leaked = [name for name in wheel_names if any(item in name for item in forbidden)]
           if leaked:
               raise SystemExit(f"wheel includes forbidden target assets: {leaked[:10]}")

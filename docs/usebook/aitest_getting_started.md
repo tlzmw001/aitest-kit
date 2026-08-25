@@ -62,6 +62,31 @@ doc-review -> knowledge-build -> test-design -> test-scaffold -> test-codegen ->
 
 建议第一轮只选一个小模块或一条主链路，不要一开始覆盖整个系统。
 
+### 使用本地 Console
+
+Console MVP 是现有确定性 CLI 的本地控制面，不复制 registry、Profile Gate、codegen 或报告
+逻辑。正式 wheel 内置编译后的 Vue 前端；安装用户不需要 Node.js，也不需要进入 AITest 源码目录：
+
+```bash
+python3 -m pip install "aitest-kit[server]"
+AITEST_CONSOLE_PORT=<本地端口> aitest console --workspace /path/to/aitest_workspace
+```
+
+源码开发者使用 Node.js 22.18+；修改 Vue 后运行 `npm --prefix console_web run build`；构建结果写入
+`aitest_kit/console/web/`，随后进入 wheel。`--workspace` 可以是任意已初始化目录。界面选择
+未初始化目录时，打开操作只返回状态，不写文件；用户明确点击“初始化并打开”后才调用既有
+`aitest init` 模板逻辑，而且不使用 force。模板冲突或部分初始化结构会停止并要求人工检查。
+省略 `--workspace` 时，Console 会先进入空态，用户可直接在工作台选择或初始化目录。
+
+`aitest console` 只允许 loopback IP。每次启动生成临时 Console session token，浏览器通过该
+token 调用本地 API。打开 workspace 只读取结构和文件，不执行项目 Python 代码；validate、
+codegen 和 run 必须由用户显式发起。
+
+环境页可以由用户显式创建或编辑 workspace `.env`、当前 `AITEST_ENV_FILE` 和 task
+`env_files`。敏感值默认隐藏，外部 env 文件需要逐文件授权。Console 不把 env 值写入
+localStorage；任务输出会对 Console 已知的敏感值做脱敏，测试资产仍不得主动打印凭证。
+Console 也不会自动修改 `.gitignore`。
+
 ## 二、迁移原则
 
 ### 首轮按黑盒边界执行

@@ -4,6 +4,7 @@ from __future__ import annotations
 import click
 
 from aitest_kit.codegen.cli import codegen
+from aitest_kit.console.cli import console_command
 from aitest_kit.doctor import doctor_command
 from aitest_kit.init_workspace import init_command
 from aitest_kit.registry.cli import registry_command, task_command
@@ -20,6 +21,7 @@ def main():
       init      create a clean AITest workspace skeleton
       doctor    diagnose workspace, registry, profile, generated pytest
       codegen   compile Markdown suites/tasks into generated pytest
+      console   run the local AITest web console
       run       execute generated pytest and write structured reports
       report    re-render report.md from existing result.json
       registry  wire suites into module/target/all aggregation
@@ -29,6 +31,7 @@ def main():
 
 
 main.add_command(codegen)
+main.add_command(console_command)
 main.add_command(doctor_command)
 main.add_command(init_command)
 main.add_command(registry_command)

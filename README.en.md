@@ -110,6 +110,31 @@ aitest run --all                                             # run all active su
 aitest report --suite-file/--target/--all ...                # re-render reports
 ```
 
+### Local Console
+
+The local Console uses Vue 3 and the AITest FastAPI backend and only binds to a loopback
+address. Release wheels include the compiled frontend, so installed users do not need Node.js
+or an AITest source checkout:
+
+```bash
+python3 -m pip install "aitest-kit[server]"
+AITEST_CONSOLE_PORT=<local-port> aitest console --workspace /path/to/aitest_workspace
+```
+
+Frontend contributors use Node.js 22.18+ and run `npm --prefix console_web run build` after Vue changes. The build is
+written to `aitest_kit/console/web/` and shipped in the wheel. `--workspace` may point to any
+initialized workspace. Opening an uninitialized directory never writes files automatically;
+the existing non-force initializer runs only after the user explicitly selects “Initialize and
+open”, and template conflicts preserve the existing files.
+Omit `--workspace` to open the empty Console first and choose or initialize a directory in the UI.
+
+The Console browses and edits Markdown, profiles, YAML, and Harness/helper source; runs
+profile validation, codegen, generated synchronization checks, and tests; and reads
+`result.json` / `report.md` history. Generated files and reports remain read-only. Users can
+explicitly edit authorized `.env`, `AITEST_ENV_FILE`, and task `env_files`; env values never
+enter the ordinary file API. Job output redacts values known to the Console, while test assets
+must still never print credentials deliberately.
+
 For real API tests, provide credentials via env file:
 
 ```bash

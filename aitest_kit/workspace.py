@@ -89,6 +89,19 @@ def init_workspace(target: str | Path, *, force: bool = False) -> InitWorkspaceR
     template_files = _template_files(template_root)
     result = InitWorkspaceResult(target=target_path)
 
+    unsafe_symlinks = _template_destination_symlinks(
+        target_path,
+        [*template_files, _WORKSPACE_METADATA],
+    )
+    if unsafe_symlinks:
+        names = ", ".join(str(item) for item in unsafe_symlinks[:8])
+        if len(unsafe_symlinks) > 8:
+            names += f", ... (+{len(unsafe_symlinks) - 8} more)"
+        raise FileExistsError(
+            "target contains symbolic link(s) in template-managed paths: "
+            f"{names}. Move or rename them before running init."
+        )
+
     blocked_directories = _blocked_template_directories(target_path, template_files)
     if blocked_directories:
         names = ", ".join(str(item) for item in blocked_directories[:8])
@@ -131,6 +144,19 @@ def init_workspace(target: str | Path, *, force: bool = False) -> InitWorkspaceR
         created_at=_now_utc(),
     )
     return result
+
+
+def _template_destination_symlinks(target: Path, relative_paths: list[Path]) -> list[Path]:
+    """Return existing symlinks that could redirect an init write outside target."""
+    found: set[Path] = set()
+    for relative in relative_paths:
+        current = target
+        for part in relative.parts:
+            current = current / part
+            if current.is_symlink():
+                found.add(current.relative_to(target))
+                break
+    return sorted(found)
 
 
 def upgrade_workspace(

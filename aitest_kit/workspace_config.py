@@ -19,14 +19,15 @@ class WorkspacePaths:
     project_config: Path
 
 
-def load_workspace_paths() -> WorkspacePaths:
+def load_workspace_paths(config_path: str | Path = AITEST_CONFIG_PATH) -> WorkspacePaths:
     """Load path settings from aitest.yaml."""
-    raw = _workspace_paths_data()
+    path = Path(config_path)
+    raw = _workspace_paths_data(path)
     return WorkspacePaths(
         generated_dir=Path(raw.get("generated_dir", "test_workspace/generated")),
         profile_dir=Path(raw.get("profile_dir", "test_workspace/targets")),
         reports_dir=Path(raw.get("reports_dir", "test_workspace/reports")),
-        project_config=AITEST_CONFIG_PATH,
+        project_config=path,
     )
 
 
@@ -46,9 +47,9 @@ def has_workspace_config() -> bool:
     return AITEST_CONFIG_PATH.exists()
 
 
-def _workspace_paths_data() -> dict[str, Any]:
-    if AITEST_CONFIG_PATH.exists():
-        data = _read_yaml_mapping(AITEST_CONFIG_PATH)
+def _workspace_paths_data(config_path: Path = AITEST_CONFIG_PATH) -> dict[str, Any]:
+    if config_path.exists():
+        data = _read_yaml_mapping(config_path)
         workspace = data.get("workspace", {})
         if isinstance(workspace, dict):
             paths = workspace.get("paths", {})

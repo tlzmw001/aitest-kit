@@ -110,6 +110,27 @@ aitest run --all                                             # 全量回归
 aitest report --suite-file/--target/--all ...                # 重渲染报告
 ```
 
+### 本地 Console
+
+本地 Console 使用 Vue 3 + AITest FastAPI，仅监听 loopback 地址。正式 wheel 自带编译后的
+前端资源，因此安装用户不需要 Node.js，也不需要进入 AITest 源码目录：
+
+```bash
+python3 -m pip install "aitest-kit[server]"
+AITEST_CONSOLE_PORT=<本地端口> aitest console --workspace /path/to/aitest_workspace
+```
+
+源码开发者使用 Node.js 22.18+；修改 Vue 后运行 `npm --prefix console_web run build`，构建结果写入
+`aitest_kit/console/web/` 并随 wheel 分发。`--workspace` 可以指向任意已初始化目录；未初始化
+目录不会在“打开”时被自动修改，只有用户在界面明确点击“初始化并打开”才调用安全的非 force
+初始化，模板冲突会停止并保留原文件。
+省略 `--workspace` 时会先打开 Console 空态，再从界面选择或初始化目录。
+
+Console 可以浏览和编辑 Markdown、Profile、YAML、Harness/helper，执行 profile validation、
+codegen、生成同步检查和 run，并读取 `result.json` / `report.md` 历史。generated 与报告保持
+只读。用户可以显式编辑已授权的 `.env`、`AITEST_ENV_FILE` 和 task `env_files`；env 值不会
+进入普通文件接口；任务输出会对 Console 已知的敏感值做脱敏，测试资产仍不得主动打印凭证。
+
 运行真实接口测试时通过 env 文件提供凭据：
 
 ```bash

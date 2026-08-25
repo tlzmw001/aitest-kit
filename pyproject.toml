@@ -83,6 +83,10 @@ markers = [
 include = ["aitest_kit*"]
 
 [tool.setuptools.package-data]
+"aitest_kit.console" = [
+    "web/index.html",
+    "web/assets/*",
+]
 "aitest_kit.templates.project_workspace" = [
     ".gitignore",
     "README.md",
