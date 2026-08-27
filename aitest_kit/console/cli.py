@@ -42,7 +42,10 @@ def console_command(workspace: Path | None, host: str, port: int, no_open: bool)
         )
     token = secrets.token_urlsafe(32)
     app = create_app(initial_workspace=root, token=token, static_dir=static_dir)
-    url = f"http://{host}:{port}/#token={token}"
+    launch_id = secrets.token_urlsafe(8)
+    # A unique document URL forces a reload when the browser reuses an existing tab.
+    # Keep the sensitive session token in the fragment so it is never sent to the server.
+    url = f"http://{host}:{port}/?launch={launch_id}#token={token}"
     click.echo(f"AITest Console: http://{host}:{port}/")
     if not no_open:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
