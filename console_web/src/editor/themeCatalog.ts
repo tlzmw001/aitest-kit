@@ -55,7 +55,7 @@ export const editorThemeCatalog: readonly EditorThemeDefinition[] = [
       gutter: '#181818',
       foreground: '#d4d4d4',
       muted: '#858585',
-      selection: '#264f78',
+      selection: '#356f9f',
       surface: {
         activeLine: '#292929',
         activeGutter: '#2b2b2b',
@@ -86,7 +86,7 @@ export const editorThemeCatalog: readonly EditorThemeDefinition[] = [
       gutter: '#181818',
       foreground: '#cccccc',
       muted: '#8c8c8c',
-      selection: '#264f78',
+      selection: '#356f9f',
       surface: {
         activeLine: '#282828',
         activeGutter: '#2a2d2e',
@@ -117,7 +117,7 @@ export const editorThemeCatalog: readonly EditorThemeDefinition[] = [
       gutter: '#050607',
       foreground: '#f1f4f8',
       muted: '#b7c0cc',
-      selection: '#164f78',
+      selection: '#086faf',
       surface: {
         activeLine: '#15191f',
         activeGutter: '#1b2028',

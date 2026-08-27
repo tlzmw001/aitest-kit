@@ -1,8 +1,8 @@
 # AITest Local Console Editor Theme Settings Spec
 
-状态：已实现，当前实现权威
-依赖：`docs/specs/local_console_editor_intelligence_spec.md`
-范围：编辑器配色预设、偏好持久化、CodeMirror 运行时主题切换
+状态：已实现；Monaco 运行时部分由 `local_console_monaco_editor_spike_spec.md` 覆盖
+依赖：`docs/specs/local_console_editor_intelligence_spec.md`、`docs/specs/local_console_monaco_editor_spike_spec.md`
+范围：编辑器配色预设、偏好持久化、Monaco 运行时主题切换
 
 ## 1. 目标
 
@@ -43,12 +43,11 @@ high-contrast-dark
 
 所有主语法前景色与编辑区背景的对比度必须不低于 4.5:1。selection 颜色不得复用为语法前景色。
 
-### 2.3 CodeMirror 动态重配置
+### 2.3 Monaco 动态重配置
 
-- 使用 `@codemirror/state` 的 `Compartment` 管理主题扩展。
 - `CodeEditor` 接收 theme id，不直接读取 Pinia store。
-- theme id 变化时只 dispatch `Compartment.reconfigure()`。
-- 主题变化不得调用 `EditorView.destroy()` 或重新创建 `EditorState`。
+- theme id 变化时只调用 Monaco theme API。
+- 主题变化不得 dispose 或重新创建 editor/model。
 - 未知 theme id 统一回退到 `aitest-dark`。
 
 ### 2.4 偏好是一个完整对象
@@ -91,7 +90,7 @@ interface EditorThemeDefinition {
 }
 ```
 
-`console_web/src/editor/theme.ts` 只负责把 catalog 转换为 CodeMirror `Extension`。这样设置面板和偏好 store 不会把 CodeMirror 内核提前打入主 bundle。
+`console_web/src/editor/theme.ts` 只负责把 catalog 转换为 Monaco theme definition。设置面板和偏好 store 不直接依赖编辑器运行时。
 
 主题 catalog 是唯一前端主题来源。设置面板、CodeEditor 和测试从同一 catalog 读取，不分别维护名称和 id。
 
@@ -106,7 +105,7 @@ interface EditorThemeDefinition {
 - keyword、string、number、function、type、property、comment、control
 - error 和 warning
 
-公共工厂负责生成 `EditorView.theme` 与 `HighlightStyle`，避免三套主题复制完整 CodeMirror 配置。
+公共工厂负责生成 Monaco color 与 token rules，避免三套主题复制完整运行时配置。
 
 ## 4. 设置界面
 
@@ -133,10 +132,10 @@ AppShell 设置项
 EditorView
   -> :theme="preferences.editorTheme"
   -> CodeEditor
-  -> theme Compartment.reconfigure(extension)
+  -> Monaco setTheme(theme id)
 ```
 
-设置面板不直接操作 CodeMirror 实例。CodeEditor 不知道设置面板存在，只响应稳定的 theme prop。
+设置面板不直接操作 Monaco 实例。CodeEditor 不知道设置面板存在，只响应稳定的 theme prop。
 
 ## 6. 影响文件
 
@@ -162,8 +161,7 @@ Spec：
 
 - 全局 Console 换肤。
 - 浅色主题或跟随操作系统。
-- Monaco 或 VS Code 扩展主题导入。
-- TextMate theme JSON 导入。
+- VS Code 扩展主题或 TextMate theme JSON 导入。
 - 用户自定义颜色、字体、字号、行高或字体连字。
 - 将主题写入 `aitest.yaml`、workspace 或仓库。
 - 跨浏览器、跨设备同步偏好。

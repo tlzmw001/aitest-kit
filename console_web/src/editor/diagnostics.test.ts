@@ -1,13 +1,17 @@
-import { EditorState } from '@codemirror/state'
+import { MarkerSeverity } from 'monaco-editor/editor/editor.api.js'
 import { describe, expect, it } from 'vitest'
-import { positionToOffset, toCodeMirrorDiagnostics } from './diagnostics'
+import { toMonacoMarkers } from './diagnostics'
+
+function textModel(lines: string[]) {
+  return {
+    getLineCount: () => lines.length,
+    getLineMaxColumn: (lineNumber: number) => (lines[lineNumber - 1]?.length ?? 0) + 1,
+  }
+}
 
 describe('editor diagnostics mapping', () => {
-  it('maps one-based backend positions into CodeMirror offsets', () => {
-    const state = EditorState.create({ doc: 'first\nsecond\n' })
-
-    expect(positionToOffset(state, 2, 3)).toBe(8)
-    expect(toCodeMirrorDiagnostics(state, [{
+  it('maps one-based backend positions into Monaco markers', () => {
+    const markers = toMonacoMarkers(textModel(['first', 'second']), [{
       severity: 'warning',
       code: 'PROFILE_FIELD_UNKNOWN',
       message: 'unknown field',
@@ -16,12 +20,36 @@ describe('editor diagnostics mapping', () => {
       end_line: 2,
       end_column: 7,
       source: 'aitest-profile',
-    }])[0]).toMatchObject({ from: 6, to: 12, severity: 'warning' })
+    }])
+
+    expect(markers[0]).toMatchObject({
+      startLineNumber: 2,
+      startColumn: 1,
+      endLineNumber: 2,
+      endColumn: 7,
+      severity: MarkerSeverity.Warning,
+      source: 'aitest-profile · PROFILE_FIELD_UNKNOWN',
+    })
   })
 
   it('clamps stale locations to the current document', () => {
-    const state = EditorState.create({ doc: 'one line' })
+    const [marker] = toMonacoMarkers(textModel(['one line']), [{
+      severity: 'error',
+      code: 'STALE',
+      message: 'stale range',
+      line: 99,
+      column: 99,
+      end_line: 99,
+      end_column: 99,
+      source: 'aitest',
+    }])
 
-    expect(positionToOffset(state, 99, 99)).toBe(state.doc.length)
+    expect(marker).toMatchObject({
+      startLineNumber: 1,
+      startColumn: 8,
+      endLineNumber: 1,
+      endColumn: 9,
+      severity: MarkerSeverity.Error,
+    })
   })
 })

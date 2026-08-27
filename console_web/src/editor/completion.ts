@@ -1,7 +1,8 @@
-import type { Completion, CompletionContext, CompletionResult, CompletionSource } from '@codemirror/autocomplete'
-
-export interface AITestCompletion extends Completion {
+export interface AITestCompletion {
+  label: string
   apply: string
+  type: 'property'
+  detail: string
 }
 
 const suiteKeys = entries({
@@ -81,21 +82,15 @@ export function isYamlKeyPosition(lineBeforeCursor: string): boolean {
     || /^\s*$/.test(lineBeforeCursor)
 }
 
-export function aitestCompletionSource(path: string): CompletionSource {
-  const options = completionKeysForPath(path)
-  return (context: CompletionContext): CompletionResult | null => {
-    if (!options.length) return null
-    const line = context.state.doc.lineAt(context.pos)
-    const before = context.state.sliceDoc(line.from, context.pos)
-    if (!isYamlKeyPosition(before) || !insideSupportedYaml(path, context)) return null
-    const word = context.matchBefore(/[A-Za-z_][A-Za-z0-9_-]*/)
-    if (!word && !context.explicit) return null
-    return {
-      from: word?.from ?? context.pos,
-      options,
-      validFor: /^[A-Za-z_][A-Za-z0-9_-]*$/,
-    }
+export function insideSupportedYaml(path: string, documentBeforeCursor: string): boolean {
+  if (!path.toLowerCase().endsWith('.md')) return true
+  const lines = documentBeforeCursor.split('\n')
+  let inside = false
+  for (const line of lines) {
+    if (/^\s*```(?:yaml|yml)\s*$/i.test(line)) inside = true
+    else if (inside && /^\s*```\s*$/.test(line)) inside = false
   }
+  return inside
 }
 
 function entries(items: Record<string, string>): AITestCompletion[] {
@@ -105,18 +100,4 @@ function entries(items: Record<string, string>): AITestCompletion[] {
     type: 'property',
     detail,
   }))
-}
-
-function insideSupportedYaml(path: string, context: CompletionContext): boolean {
-  if (!path.toLowerCase().endsWith('.md')) return true
-  const before = context.state.sliceDoc(0, context.pos)
-  const fences = before.match(/^\s*```(?:yaml|yml)?\s*$/gim) ?? []
-  if (!fences.length) return false
-  const lines = before.split('\n')
-  let inside = false
-  for (const line of lines) {
-    if (/^\s*```(?:yaml|yml)\s*$/i.test(line)) inside = true
-    else if (inside && /^\s*```\s*$/.test(line)) inside = false
-  }
-  return inside
 }

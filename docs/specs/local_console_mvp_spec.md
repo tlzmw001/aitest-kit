@@ -345,7 +345,7 @@ MVP 假设用户运行的是自己信任的本地 workspace。打开不可信仓
 主路径：
 
 - 工作台：真实 workspace 数量、模块列表、最近执行、错误所有权图例。
-- 用例：文件 tabs、CodeMirror 源编辑、保存状态、只读 generated/report 提示。
+- 用例：文件 tabs、Monaco 源编辑、保存状态、只读 generated/report 提示。
 - 运行：case/suite/module/task selector、命令预览、env source、启动与取消。
 - 报告：历史列表、summary、cases、原始 `result.json` 和 `report.md`。
 - 诊断：原始分类、展示归属、证据链和 source 跳转。

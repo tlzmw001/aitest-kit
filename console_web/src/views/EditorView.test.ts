@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { nextTick } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import EditorView from './EditorView.vue'
 import { api } from '../api/client'
@@ -75,6 +76,27 @@ describe('EditorView tabs', () => {
     expect(tabs[0].text()).toContain('first.md')
     expect(tabs[1].text()).toContain('second.md')
     expect(tabs[1].classes()).toContain('active')
+  })
+
+  it('keeps the editor instance mounted while a second file is loading', async () => {
+    const { wrapper, router } = await mountEditor('cases/first.md')
+    const editorElement = wrapper.get('.editor-stub').element
+    let finishLoading: ((document: FileDocument) => void) | undefined
+    vi.mocked(api.readFile).mockImplementation((path) => (
+      path === 'cases/second.md'
+        ? new Promise((resolve) => { finishLoading = resolve })
+        : Promise.resolve(documentFor(path))
+    ))
+
+    await router.push({ path: '/editor', query: { path: 'cases/second.md' } })
+    await nextTick()
+
+    expect(wrapper.get('.editor-stub').element).toBe(editorElement)
+    expect(wrapper.get('.editor-loading').text()).toContain('读取文件')
+
+    finishLoading?.(documentFor('cases/second.md'))
+    await flushPromises()
+    expect(wrapper.find('.editor-loading').exists()).toBe(false)
   })
 
   it('replaces the active clean tab when reuse mode is enabled', async () => {

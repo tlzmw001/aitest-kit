@@ -1,8 +1,8 @@
 # AITest Local Console Editor Intelligence Spec
 
-状态：已批准，进入实现
-依赖：`docs/specs/local_console_mvp_spec.md`、`docs/specs/local_console_asset_management_spec.md`
-范围：CodeMirror 编辑体验、保存前诊断、AITest 配置提示、Console 视觉收敛
+状态：已实现；编辑器运行时条款由 `local_console_monaco_editor_spike_spec.md` 覆盖
+依赖：`docs/specs/local_console_mvp_spec.md`、`docs/specs/local_console_asset_management_spec.md`、`docs/specs/local_console_monaco_editor_spike_spec.md`
+范围：Monaco 编辑体验、保存前诊断、AITest 配置提示、Console 视觉收敛
 
 ## 1. 目标
 
@@ -18,16 +18,16 @@
 
 ## 2. 锁定决策
 
-### 2.1 保留 CodeMirror 6
+### 2.1 Monaco Editor 内核
 
-- Phase 1 继续使用 CodeMirror 6，不迁移 Monaco。
-- 当前问题的根因是深色外壳叠加 CodeMirror 面向浅色背景的默认 HighlightStyle，不是编辑器内核能力不足。
-- Monaco 的 diff、models、workers 和 IDE 级语言服务当前不是首版必要能力，其体积和生命周期复杂度不进入本阶段。
-- 当产品同时出现至少三项 IDE 级刚需时再复核 Monaco：完整 Python LSP、definition/reference/rename/code action、语义 token、内置 diff、独立多 model undo/view state、outline/sticky scroll。
+- Phase 1 使用 Monaco Editor 内核，不引入完整 VS Code Workbench。
+- 迁移范围限定为源编辑、原生选区、独立 model/view state、补全、markers 和主题。
+- 完整 Python LSP、definition/reference/rename/code action、语义 token、内置 diff、outline 和 sticky scroll 仍不进入本阶段。
+- Worker、model 生命周期和静态分发规则以 `local_console_monaco_editor_spike_spec.md` 为权威。
 
 ### 2.2 Python 是校验权威
 
-- Vue 和 CodeMirror 只负责编辑交互、字段提示与诊断渲染。
+- Vue 和 Monaco 只负责编辑交互、字段提示与诊断渲染。
 - 未保存内容通过结构化 API 发送给本地 Python Console 做只读校验。
 - API 不写磁盘、不执行 workspace 代码、不 import fixture/Harness/helper、不启动 codegen 或 pytest。
 - 编辑器实时诊断是快速反馈，不替代 `profile validation`、`codegen --check` 和 `aitest run` 的确定性门禁。
@@ -109,7 +109,7 @@ POST /api/editor/validate
 
 - `path` 必须通过现有 workspace 内路径和普通文件访问策略，env 文件仍被拒绝。
 - 请求体内容上限为 2 MiB，超限返回结构化错误。
-- 所有位置使用 1-based line/column，前端转换为 CodeMirror offset。
+- 所有位置使用 1-based line/column，前端转换为 Monaco marker range。
 - 诊断按 error、warning、行号稳定排序。
 - API 返回零条诊断代表当前快速校验通过，不代表完整执行门禁通过。
 
@@ -148,7 +148,7 @@ Python：
 
 ## 5. Completion
 
-CodeMirror 使用官方 autocomplete 扩展。建议项按文件上下文提供：
+Monaco 使用 CompletionItemProvider。建议项按文件上下文提供：
 
 - `suite.yaml`：`target`、`module`、`suite`、`case_files`、`knowledge_refs`。
 - `target.yaml`：`target`、`source_root`、`docs`、`knowledge_refs`、`defaults` 及目录字段。
@@ -208,11 +208,11 @@ CodeMirror 使用官方 autocomplete 扩展。建议项按文件上下文提供�
 - `console_web/src/styles/views.css`
 - 对应 Vitest 测试与生产构建资产
 
-CodeMirror 的 `language`、`autocomplete`、`lint` 和 `@lezer/highlight` 已由现有 CodeMirror 包间接安装。实现会把直接 import 的包以当前锁文件版本声明为直接依赖，不升级版本，不引入新的编辑器框架。
+编辑器直接依赖固定版本的 `monaco-editor`。CodeMirror 及其 Lezer 依赖已从运行时移除，Monaco Worker 与前端静态产物一同本地分发。
 
 ## 9. 非目标
 
-- Monaco 迁移。
+- 完整 VS Code Workbench 或编辑器内核切换设置。
 - Python LSP、类型检查、definition/reference/rename/code action。
 - 完整 YAML language server 或任意 JSON Schema 引擎。
 - 格式化、自动修复、自动保存。

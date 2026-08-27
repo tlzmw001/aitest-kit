@@ -231,18 +231,19 @@ onBeforeRouteLeave(() => !hasDirtyTabs.value || window.confirm('有文件包含�
     <div class="editor-body">
       <div class="code-pane">
         <div class="breadcrumb"><span v-for="part in path.split('/')" :key="part">{{ part }}</span></div>
-        <div v-if="loading" class="loading-state compact"><span class="spinner" />读取文件</div>
-        <CodeEditor
-          v-else
-          ref="codeEditor"
-          v-model="content"
-          :path="path"
-          :language="language"
-          :read-only="document?.read_only"
-          :diagnostics="diagnostics"
-          :theme="preferences.editorTheme"
-          @save="save"
-        />
+        <div class="code-editor-stage">
+          <CodeEditor
+            ref="codeEditor"
+            v-model="content"
+            :path="path"
+            :language="language"
+            :read-only="document?.read_only"
+            :diagnostics="diagnostics"
+            :theme="preferences.editorTheme"
+            @save="save"
+          />
+          <div v-if="loading" class="loading-state compact editor-loading"><span class="spinner" />读取文件</div>
+        </div>
       </div>
       <aside class="inspector">
         <div class="inspector-head">
