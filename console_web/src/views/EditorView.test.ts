@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import EditorView from './EditorView.vue'
 import { ApiError, api } from '../api/client'
 import { usePreferencesStore } from '../stores/preferences'
+import { useWorkspaceStore } from '../stores/workspace'
 import type { FileDocument } from '../types'
 
 vi.mock('../api/client', async () => {
@@ -90,6 +91,7 @@ async function mountEditor(path: string) {
 
 describe('EditorView tabs', () => {
   beforeEach(() => {
+    vi.unstubAllGlobals()
     vi.clearAllMocks()
     disposeDocument.mockClear()
     reloadDocument.mockClear()
@@ -154,6 +156,66 @@ describe('EditorView tabs', () => {
 
     expect(disposeDocument).toHaveBeenCalledWith('cases/first.md')
     expect(wrapper.findAll('[data-test="editor-tab"]')).toHaveLength(1)
+  })
+
+  it('lets the user explicitly discard a dirty tab before closing it', async () => {
+    const confirm = vi.fn().mockReturnValue(true)
+    vi.stubGlobal('confirm', confirm)
+    const { wrapper } = await mountEditor('cases/dirty.md')
+    wrapper.getComponent(CodeEditorStub).vm.$emit('update:modelValue', '# unsaved')
+    await nextTick()
+
+    await wrapper.get('.tab-close').trigger('click')
+    await flushPromises()
+
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('放弃修改并关闭'))
+    expect(wrapper.findAll('[data-test="editor-tab"]')).toHaveLength(0)
+  })
+
+  it('keeps an explicitly closed last tab empty instead of reopening the first case', async () => {
+    const path = 'cases/only.md'
+    const { wrapper } = await mountEditor(path)
+    useWorkspaceStore().setSnapshot({
+      name: 'workspace', path: '/workspace', branch: 'main',
+      counts: { targets: 1, modules: 1, suites: 1, cases: 1, tasks: 0 },
+      targets: [{ name: 'demo', diagnostics: [], config_path: null, modules: [{
+        name: 'orders', module_type: 'multi_endpoint', diagnostics: [], assets: [], suites: [{
+          name: 'smoke', manifest_path: 'suite.yaml', profile_path: 'profile.md', diagnostics: [],
+          assets: [{ path, name: 'only.md', owner: 'CASE', exists: true }],
+          cases: [{ id: 'TC-001', title: 'only', priority: 'P0', source_path: path, source_line: 1 }],
+        }],
+      }] }],
+      tasks: [], recent_reports: [],
+    })
+
+    await wrapper.get('.tab-close').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('[data-test="editor-tab"]')).toHaveLength(0)
+    expect(api.readFile).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns a cancelled tab validation state to idle', async () => {
+    vi.useFakeTimers()
+    try {
+      const { wrapper, router } = await mountEditor('cases/first.md')
+      await router.push({ path: '/editor', query: { path: 'cases/second.md' } })
+      await flushPromises()
+
+      const tabs = (wrapper.vm as unknown as { tabs: Array<{ document: FileDocument; validationState: string }> }).tabs
+      expect(tabs.find((tab) => tab.document.path === 'cases/first.md')?.validationState).toBe('idle')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('renders repeated breadcrumb segments without duplicate-key warnings', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const { wrapper } = await mountEditor('cases/repeated/cases/file.md')
+    await nextTick()
+
+    expect(wrapper.findAll('.breadcrumb span').map((item) => item.text())).toEqual(['cases', 'repeated', 'cases', 'file.md'])
+    expect(warning.mock.calls.flat().join(' ')).not.toContain('Duplicate keys')
   })
 
   it('opens a disk-versus-local Diff on save conflict and can load the disk version', async () => {

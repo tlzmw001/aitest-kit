@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
 import { AlertTriangle, Check, Eye, EyeOff, FileKey2, KeyRound, Plus, Save, ShieldCheck } from '@lucide/vue'
 import CodeEditor from '../components/CodeEditor.vue'
 import { api } from '../api/client'
@@ -31,9 +32,19 @@ async function loadMetadata(): Promise<void> {
 }
 
 function requestReveal(path: string): void {
+  if (path === selectedPath.value && (document.value || revealPending.value)) return
+  if (!confirmDiscardSensitiveChanges()) return
   selectedPath.value = path
   clearSensitive()
   revealPending.value = true
+}
+
+function confirmDiscardSensitiveChanges(): boolean {
+  return !dirty.value || window.confirm('Env 文件包含未保存修改，确定放弃这些修改吗？')
+}
+
+function hideSensitive(): void {
+  if (confirmDiscardSensitiveChanges()) clearSensitive()
 }
 
 async function reveal(): Promise<void> {
@@ -91,6 +102,7 @@ async function setActive(): Promise<void> {
 
 onMounted(loadMetadata)
 onBeforeUnmount(clearSensitive)
+onBeforeRouteLeave(() => !dirty.value || window.confirm('Env 文件包含未保存修改，确定离开并放弃这些修改吗？'))
 </script>
 
 <template>
@@ -117,7 +129,7 @@ onBeforeUnmount(clearSensitive)
           <div><span class="eyebrow">SENSITIVE FILE</span><strong>{{ selectedPath || '选择 env source' }}</strong></div>
           <span class="toolbar-spacer" />
           <button v-if="selected && !selected.active" class="secondary-btn" @click="setActive"><Check :size="14" />设为运行 env</button>
-          <button v-if="document" class="secondary-btn" @click="clearSensitive"><EyeOff :size="14" />隐藏值</button>
+          <button v-if="document" class="secondary-btn" @click="hideSensitive"><EyeOff :size="14" />隐藏值</button>
           <button v-if="document" class="primary-btn" :disabled="!dirty" @click="save"><Save :size="14" />保存</button>
         </div>
 

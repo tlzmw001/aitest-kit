@@ -151,7 +151,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleEscape))
           <span :title="subtitle">{{ subtitle }}</span>
         </div>
         <PipelineRail />
-        <div class="runtime"><span class="state-dot success" />Local <kbd>⌘K</kbd></div>
+        <div class="runtime"><span class="state-dot success" />Local</div>
       </header>
 
       <div class="workspace-body">

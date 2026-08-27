@@ -72,4 +72,32 @@ describe('ReportsView', () => {
     expect(editor.attributes('data-path')).toContain('result.json')
     expect(editor.text()).toContain('run-20260827-1')
   })
+
+  it('reloads the selected report detail when refreshing history', async () => {
+    const updated = {
+      ...detail,
+      result: { run_id: summary.run_id, summary: { passed: 2, failed: 0, error: 0 } },
+      report_markdown: '# Refreshed report',
+    }
+    vi.mocked(api.reportDetail)
+      .mockResolvedValueOnce(detail)
+      .mockResolvedValueOnce(updated)
+    const wrapper = mount(ReportsView, {
+      global: {
+        plugins: [createPinia()],
+        stubs: {
+          RouterLink: { template: '<a><slot /></a>' },
+          CodeEditor: true,
+          SafeMarkdown: { props: ['source'], template: '<div class="markdown-preview">{{ source }}</div>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    await wrapper.get('.report-actions button').trigger('click')
+    await flushPromises()
+
+    expect(api.reportDetail).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('.markdown-preview').text()).toContain('Refreshed report')
+  })
 })

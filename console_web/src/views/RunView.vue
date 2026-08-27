@@ -18,6 +18,10 @@ const envFile = ref('')
 const job = ref<Job | null>(null)
 const error = ref('')
 let pollTimer: number | undefined
+let pollingActive = false
+let consecutivePollFailures = 0
+const POLL_INTERVAL_MS = 650
+const MAX_CONSECUTIVE_POLL_FAILURES = 5
 
 const targets = computed(() => store.targets)
 const target = computed(() => targets.value.find((item) => item.name === targetName.value) ?? targets.value[0])
@@ -97,21 +101,49 @@ async function start(): Promise<void> {
 }
 
 function startPolling(): void {
-  window.clearInterval(pollTimer)
-  pollTimer = window.setInterval(async () => {
-    if (!job.value) return
-    try {
-      job.value = await api.job(job.value.id)
-      store.setCurrentJob(job.value)
-      if (!running.value) {
-        window.clearInterval(pollTimer)
-        if (job.value.status === 'succeeded') await store.refresh()
-      }
-    } catch (cause) {
-      error.value = messageFrom(cause)
-      window.clearInterval(pollTimer)
+  stopPolling()
+  pollingActive = true
+  consecutivePollFailures = 0
+  schedulePoll()
+}
+
+function schedulePoll(): void {
+  if (!pollingActive) return
+  pollTimer = window.setTimeout(() => void pollJob(), POLL_INTERVAL_MS)
+}
+
+function stopPolling(): void {
+  pollingActive = false
+  window.clearTimeout(pollTimer)
+  pollTimer = undefined
+}
+
+async function pollJob(): Promise<void> {
+  if (!pollingActive || !job.value) return
+  try {
+    const nextJob = await api.job(job.value.id)
+    if (!pollingActive) return
+    job.value = nextJob
+    store.setCurrentJob(nextJob)
+    if (consecutivePollFailures) error.value = ''
+    consecutivePollFailures = 0
+    if (!running.value) {
+      stopPolling()
+      await store.refresh()
+      return
     }
-  }, 650)
+  } catch (cause) {
+    if (!pollingActive) return
+    consecutivePollFailures += 1
+    const pollError = messageFrom(cause)
+    if (consecutivePollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+      error.value = `${pollError}；轮询连续 ${MAX_CONSECUTIVE_POLL_FAILURES} 次失败，已停止自动更新。任务可能仍在后端运行。`
+      stopPolling()
+      return
+    }
+    error.value = `${pollError}；将在下一次轮询时重试（${consecutivePollFailures}/${MAX_CONSECUTIVE_POLL_FAILURES}）`
+  }
+  schedulePoll()
 }
 
 async function cancel(): Promise<void> {
@@ -119,6 +151,10 @@ async function cancel(): Promise<void> {
   try {
     job.value = await api.cancelJob(job.value.id)
     store.setCurrentJob(job.value)
+    if (!running.value) {
+      stopPolling()
+      await store.refresh()
+    }
   } catch (cause) {
     error.value = messageFrom(cause)
   }
@@ -129,7 +165,7 @@ onMounted(() => {
   void loadEnvironment()
   void restoreJob()
 })
-onBeforeUnmount(() => window.clearInterval(pollTimer))
+onBeforeUnmount(stopPolling)
 </script>
 
 <template>

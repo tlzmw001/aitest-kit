@@ -107,6 +107,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/?launch=e2e#/token=e2e-local-session')
   await expect(page).toHaveURL(/\?launch=e2e#\/$/)
   await expect(page.getByText('AITest e2e workspace', { exact: true }).first()).toBeVisible()
+  await expect(page.locator('.runtime kbd')).toHaveCount(0)
 })
 
 test('opens multiple files and preserves the compact close hover surface', async ({ page }) => {
@@ -118,6 +119,79 @@ test('opens multiple files and preserves the compact close hover surface', async
   const closeButton = page.getByRole('button', { name: '关闭 suite.yaml' })
   await closeButton.hover()
   await expect(closeButton).toHaveScreenshot('editor-tab-close-hover.png')
+})
+
+test('keeps the editor empty after the last tab is explicitly closed', async ({ page }) => {
+  await page.getByTitle(casesPath).click()
+  await expect(page.locator('[data-test="editor-tab"]')).toHaveCount(1)
+
+  await page.getByRole('button', { name: '关闭 cases.md' }).click()
+
+  await expect(page.locator('[data-test="editor-tab"]')).toHaveCount(0)
+  await expect(page.locator('.tab.empty.active')).toHaveText('没有打开文件')
+})
+
+test('recovers from one polling error and refreshes after a failed terminal job', async ({ page }) => {
+  let jobPolls = 0
+  let workspaceRefreshes = 0
+  const job = {
+    id: 'job-1', operation: 'run', command_summary: 'aitest run --suite-file suite.yaml',
+    status: 'running', output: '', exit_code: null, started_at: '2026-08-27T12:00:00Z',
+    finished_at: '', cancel_requested: false,
+  }
+  await page.route((url) => url.pathname === '/api/environment', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ sources: [], shell_keys: [], precedence: [] }),
+  }))
+  await page.route((url) => url.pathname === '/api/jobs', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ jobs: [job] }),
+  }))
+  await page.route((url) => url.pathname === '/api/jobs/job-1', async (route) => {
+    jobPolls += 1
+    if (jobPolls === 1) {
+      return route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'BACKEND_BUSY', message: 'backend busy' } }),
+      })
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ...job, status: 'failed', output: '1 failed', exit_code: 1 }),
+    })
+  })
+  await page.route((url) => url.pathname === '/api/workspace', (route) => {
+    workspaceRefreshes += 1
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(workspace) })
+  })
+
+  await page.getByRole('link', { name: '运行', exact: true }).click()
+
+  await expect(page.locator('.job-output-head strong')).toHaveText('failed', { timeout: 5_000 })
+  expect(jobPolls).toBe(2)
+  await expect.poll(() => workspaceRefreshes).toBe(1)
+})
+
+test('opens the Markdown source selected from a failed diagnostic', async ({ page }) => {
+  const failedSummary = { ...reportSummary, status: 'failed', summary: { passed: 0, failed: 1, error: 0 } }
+  await page.route((url) => url.pathname === '/api/reports', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ reports: [failedSummary] }),
+  }))
+  await page.route((url) => url.pathname === '/api/reports/detail', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      summary: failedSummary,
+      result: { cases: [{ case_id: 'TC-ORD-001', outcome: 'failed', failure_type: 'ASSERTION_FAILURE' }] },
+      report_markdown: '# Failed',
+    }),
+  }))
+
+  await page.getByRole('link', { name: '诊断', exact: true }).click()
+  await page.getByRole('link', { name: '定位 source' }).click()
+
+  await expect(page).toHaveURL(new RegExp(`path=${casesPath.replaceAll('/', '\\/')}`))
+  await expect(page.locator('.code-editor-stage .monaco-editor')).toBeVisible()
 })
 
 test('Reka dialog restores focus and the editor splitter supports the keyboard', async ({ page }) => {

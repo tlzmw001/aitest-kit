@@ -66,6 +66,9 @@ const hasDirtyTabs = computed(() => tabs.value.some((tab) => isDirty(tab)))
 const language = computed(() => languageFor(path.value))
 let validationTimer: number | undefined
 let validationController: AbortController | null = null
+let scheduledValidationTab: EditorTab | null = null
+let validatingTab: EditorTab | null = null
+let initialRouteHandled = false
 
 function languageFor(value: string): string {
   value = value.toLowerCase()
@@ -199,19 +202,33 @@ function activateTab(nextPath: string): void {
 }
 
 function scheduleValidation(tab: EditorTab | null): void {
-  window.clearTimeout(validationTimer)
-  validationController?.abort()
-  validationController = null
+  cancelPendingValidation()
   if (!tab || tab.document.read_only) return
   tab.validationState = 'waiting'
   tab.validationError = ''
-  validationTimer = window.setTimeout(() => void validateTab(tab), 350)
+  scheduledValidationTab = tab
+  validationTimer = window.setTimeout(() => {
+    scheduledValidationTab = null
+    void validateTab(tab)
+  }, 350)
+}
+
+function cancelPendingValidation(): void {
+  window.clearTimeout(validationTimer)
+  validationTimer = undefined
+  if (scheduledValidationTab?.validationState === 'waiting') scheduledValidationTab.validationState = 'idle'
+  scheduledValidationTab = null
+  if (validatingTab?.validationState === 'validating') validatingTab.validationState = 'idle'
+  validatingTab = null
+  validationController?.abort()
+  validationController = null
 }
 
 async function validateTab(tab: EditorTab): Promise<void> {
   const contentAtRequest = tab.content
   const controller = new AbortController()
   validationController = controller
+  validatingTab = tab
   tab.validationState = 'validating'
   tab.validationError = ''
   try {
@@ -224,7 +241,10 @@ async function validateTab(tab: EditorTab): Promise<void> {
     tab.validationError = messageFrom(cause)
     tab.validationState = 'ready'
   } finally {
-    if (validationController === controller) validationController = null
+    if (validationController === controller) {
+      validationController = null
+      validatingTab = null
+    }
   }
 }
 
@@ -241,13 +261,11 @@ function validationLabel(): string {
 }
 
 function closeTab(tab: EditorTab): void {
-  if (isDirty(tab)) {
-    error.value = `请先保存 ${tab.document.name}，再关闭标签。`
-    return
-  }
+  if (isDirty(tab) && !window.confirm(`${tab.document.name} 包含未保存修改，确定放弃修改并关闭吗？`)) return
   const index = tabs.value.indexOf(tab)
   if (index < 0) return
   const wasActive = tab.document.path === activePath.value
+  if (scheduledValidationTab === tab || validatingTab === tab) cancelPendingValidation()
   codeEditor.value?.disposeDocument(tab.document.path)
   tabs.value.splice(index, 1)
   if (!wasActive) return
@@ -264,12 +282,16 @@ function openFirstCase(): void {
 }
 
 watch(requestedPath, (nextPath) => {
-  if (nextPath) void openFile(nextPath)
-  else openFirstCase()
+  if (nextPath) {
+    initialRouteHandled = true
+    void openFile(nextPath)
+  } else if (!initialRouteHandled) {
+    initialRouteHandled = true
+    openFirstCase()
+  }
 }, { immediate: true })
 onBeforeUnmount(() => {
-  window.clearTimeout(validationTimer)
-  validationController?.abort()
+  cancelPendingValidation()
 })
 onBeforeRouteLeave(() => !hasDirtyTabs.value || window.confirm('有文件包含未保存修改，确定离开吗？'))
 </script>
@@ -298,7 +320,7 @@ onBeforeRouteLeave(() => !hasDirtyTabs.value || window.confirm('有文件包含�
     <SplitterGroup id="editor-inspector-split" direction="horizontal" auto-save-id="aitest-editor-inspector" class="editor-body">
       <SplitterPanel id="editor-code-panel" :default-size="76" :min-size="55" class="editor-code-panel">
         <div class="code-pane">
-        <div class="breadcrumb"><span v-for="part in path.split('/')" :key="part">{{ part }}</span></div>
+        <div class="breadcrumb"><span v-for="(part, index) in path.split('/')" :key="`${index}-${part}`">{{ part }}</span></div>
         <div class="code-editor-stage">
           <CodeEditor
             ref="codeEditor"

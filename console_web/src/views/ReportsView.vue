@@ -23,7 +23,13 @@ async function loadReports(): Promise<void> {
   error.value = ''
   try {
     reports.value = (await api.reports()).reports
-    if (!selected.value && reports.value.length) await selectReport(reports.value[0])
+    const selectedPath = selected.value?.result_path
+    const nextReport = reports.value.find((report) => report.result_path === selectedPath) ?? reports.value[0] ?? null
+    if (nextReport) await selectReport(nextReport)
+    else {
+      selected.value = null
+      detail.value = null
+    }
   } catch (cause) {
     error.value = messageFrom(cause)
   }
@@ -31,6 +37,7 @@ async function loadReports(): Promise<void> {
 
 async function selectReport(report: ReportSummary): Promise<void> {
   selected.value = report
+  detail.value = null
   error.value = ''
   try {
     detail.value = await api.reportDetail(report.result_path)

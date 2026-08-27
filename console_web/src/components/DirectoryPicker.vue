@@ -11,19 +11,25 @@ const listing = ref<DirectoryListing | null>(null)
 const loading = ref(false)
 const error = ref('')
 
-async function load(path?: string): Promise<void> {
+async function load(path?: string): Promise<boolean> {
   loading.value = true
   error.value = ''
   try {
     listing.value = await api.directories(path)
+    return true
   } catch (cause) {
     error.value = messageFrom(cause)
+    return false
   } finally {
     loading.value = false
   }
 }
 
-onMounted(() => load(props.initialPath || undefined))
+onMounted(async () => {
+  const initialPath = props.initialPath?.trim()
+  const loaded = await load(initialPath || undefined)
+  if (!loaded && initialPath) await load('~')
+})
 </script>
 
 <template>

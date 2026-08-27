@@ -60,4 +60,22 @@ describe('AppShell settings', () => {
     await wrapper.get('[data-test="editor-theme-high-contrast-dark"]').trigger('click')
     expect(usePreferencesStore().editorTheme).toBe('high-contrast-dark')
   })
+
+  it('does not advertise a command shortcut before the command palette exists', async () => {
+    const pinia = createPinia()
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', name: 'workbench', component: { template: '<div />' } }],
+    })
+    await router.push('/')
+    await router.isReady()
+
+    const wrapper = mount(AppShell, {
+      global: { plugins: [pinia, router], stubs: { ExplorerTree: true, PipelineRail: true } },
+      slots: { default: '<div />' },
+    })
+
+    expect(wrapper.find('.runtime kbd').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('⌘K')
+  })
 })

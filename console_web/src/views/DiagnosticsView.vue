@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { AlertCircle, ArrowRight, Check, Search } from '@lucide/vue'
 import { api } from '../api/client'
-import { messageFrom } from '../stores/workspace'
+import { messageFrom, useWorkspaceStore } from '../stores/workspace'
 import { displayOwner, ownerLabel, type DisplayOwner } from '../utils/classification'
 import type { ReportDetail, ReportSummary } from '../types'
 
@@ -12,8 +12,10 @@ interface FailureItem {
   raw: string
   message: string
   owner: DisplayOwner
+  sourcePath: string
 }
 
+const store = useWorkspaceStore()
 const reports = ref<ReportSummary[]>([])
 const selectedReport = ref<ReportSummary | null>(null)
 const detail = ref<ReportDetail | null>(null)
@@ -26,15 +28,30 @@ const failures = computed<FailureItem[]>(() => {
     .filter((item) => !['passed', 'skipped'].includes(String(item.outcome ?? item.status ?? '').toLowerCase()))
     .map((item) => {
       const raw = String(item.failure_type ?? item.classification ?? item.error_type ?? 'UNKNOWN')
+      const caseId = String(item.case_id ?? item.id ?? 'unknown-case')
+      const reportedSource = typeof item.source_path === 'string' ? item.source_path.trim() : ''
       return {
-        caseId: String(item.case_id ?? item.id ?? 'unknown-case'),
+        caseId,
         title: String(item.title ?? item.name ?? '没有 case 标题'),
         raw,
         message: String(item.message ?? item.error ?? item.longrepr ?? '本次结果没有提供失败详情'),
         owner: displayOwner(raw),
+        sourcePath: reportedSource || sourcePathFor(caseId),
       }
     })
 })
+
+function sourcePathFor(caseId: string): string {
+  const report = selectedReport.value
+  const scopedCase = store.targets
+    .find((target) => target.name === report?.target)?.modules
+    .find((module) => module.name === report?.module)?.suites
+    .find((suite) => suite.name === report?.suite)?.cases
+    .find((testCase) => testCase.id === caseId)
+  if (scopedCase) return scopedCase.source_path
+  const globalMatches = store.cases.filter((testCase) => testCase.id === caseId)
+  return globalMatches.length === 1 ? globalMatches[0].source_path : ''
+}
 
 async function load(): Promise<void> {
   try {
@@ -74,7 +91,7 @@ onMounted(load)
         </button>
       </section>
       <section v-if="selectedFailure" class="failure-detail">
-        <div class="detail-head"><div><code>{{ selectedFailure.caseId }}</code><h2>{{ selectedFailure.title }}</h2></div><RouterLink class="secondary-btn" to="/editor"><Search :size="14" />定位 source</RouterLink></div>
+        <div class="detail-head"><div><code>{{ selectedFailure.caseId }}</code><h2>{{ selectedFailure.title }}</h2></div><RouterLink v-if="selectedFailure.sourcePath" class="secondary-btn" :to="{ path: '/editor', query: { path: selectedFailure.sourcePath } }"><Search :size="14" />定位 source</RouterLink><span v-else class="secondary-btn disabled" title="当前报告和 workspace registry 都没有该 case 的 source path"><Search :size="14" />无 source</span></div>
         <div class="evidence-chain"><div class="passed"><span>1</span><strong>Profile</strong><small>查看 run 证据</small></div><i /><div class="passed"><span>2</span><strong>生成同步</strong><small>查看 codegen_check</small></div><i /><div class="failed"><span>3</span><strong>{{ selectedFailure.raw }}</strong><small>原始分类</small></div><i /><div><span>4</span><strong>SUT judgment</strong><small>人工确认</small></div></div>
         <div class="classification-callout">
           <span class="provenance" :class="selectedFailure.owner.toLowerCase()">{{ selectedFailure.owner }}</span>

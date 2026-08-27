@@ -276,7 +276,33 @@ git diff --check
 - SafeMarkdown 使用 `html: false` 与严格 DOMPurify allow-list；jsdom 单测和真实 Chromium 都确认 script、图片与危险 URL 不成为活动 DOM。
 - Monaco 新增本地 JSON worker、只读 `result.json` 与保存冲突 Diff。关闭/reuse 标签释放 model；同路径载入磁盘版本会释放旧 model 并立即重新挂载新 model。
 - Vitest 收集范围固定为 `src/**/*.test.ts`，避免把 Playwright spec 误当作单元测试。
-- Playwright 共 4 条真实浏览器路径，并提交标签关闭 hover 的小范围像素基线。
-- 生产构建共 29 个静态 assets。主要体积：`editor.api` 2,654.36 kB（gzip 682.20 kB）、`CodeEditor` 1,167.17 kB（gzip 298.28 kB）、JSON worker 429.59 kB、editor worker 300.37 kB。
-- 验证结果：Python 301 passed；Vitest 17 files / 51 tests passed；Playwright 4 passed；generated pytest 188 collected；11 个 suite profile validation 和 freshness check 全部通过；npm audit 0 vulnerabilities。
-- 从干净 sdist 构建 wheel 后，wheel 中 29 个 Console assets 与当前源码目录逐一一致，missing 和 stale 均为空。未使用本机旧 `build/lib` 缓存产物作为发布证据。
+- Playwright 共 7 条真实浏览器路径，并提交标签关闭 hover 的小范围像素基线；其中轮询瞬时失败恢复、失败终态刷新、诊断 source 定位和关闭最后标签均在真实 Chromium 验证。
+- 生产构建的 `assets/` 共 29 个文件，另有入口 `index.html`。主要体积：`editor.api` 2,654.36 kB（gzip 682.20 kB）、`CodeEditor` 1,167.17 kB（gzip 298.29 kB）、JSON worker 429.59 kB、editor worker 300.37 kB。
+- 验证结果：Python 301 passed；Vitest 19 files / 66 tests passed；Playwright 7 passed；generated pytest 188 collected；11 个 suite profile validation 和 freshness check 全部通过；npm audit 0 vulnerabilities。
+- 从干净 sdist 构建 wheel 后，wheel 中 30 个 Console 文件（29 个 assets 加 `index.html`）与当前源码目录逐一一致，missing 和 stale 均为空。未使用本机旧 `build/lib` 缓存产物作为发布证据。
+
+## 14. 交互与执行链路加固
+
+本节约束 Console 在短暂后端错误、失败执行和未保存编辑场景下的行为。实现不得把临时请求失败误判为任务终止，也不得因导航或标签关闭静默丢失用户输入。
+
+### 14.1 Job 轮询
+
+- Job 轮询采用串行调度，不允许同一个 job 的轮询请求重叠。
+- 单次轮询失败只显示错误并继续轮询；下一次成功后连续失败计数归零。
+- 连续 5 次轮询失败后停止自动轮询，并明确告诉用户自动轮询已停止；不得把 job 伪装成终态。
+- `succeeded`、`failed`、`cancelled` 都是终态。任何终态都必须刷新 workspace snapshot，使最近执行和报告索引与磁盘一致。
+
+### 14.2 导航与未保存内容
+
+- 诊断页只有在能够解析失败 case 的 Markdown source path 时才显示“定位 source”，并把 path 作为 editor query 传递。
+- 没有实现的快捷键不得出现在 UI 中；第一阶段不实现命令面板，因此顶栏不显示 `Command-K` 承诺。
+- Environment 页面存在未保存 env 内容时，路由离开、切换 env source 或隐藏敏感值都必须请求确认；拒绝后保留当前页面和内存内容。
+- 关闭脏编辑标签必须允许用户明确选择“继续编辑”或“放弃修改并关闭”，不得只显示不可操作的错误。
+- 用户显式关闭最后一个标签后，编辑器保持空状态；只有首次进入且没有 path 时才自动打开第一个 case。
+
+### 14.3 恢复与状态一致性
+
+- DirectoryPicker 的显式初始路径不可用时，自动回退到用户 home 目录；home 目录也不可用时才显示阻断错误。
+- 取消旧标签的待校验定时器或请求时，必须把旧标签从 `waiting` / `validating` 恢复为 `idle`，避免永久显示伪进行态。
+- 报告页刷新列表时必须重新读取当前选中报告的详情；若报告已不存在，选择新的第一项；若列表为空，清空选择和详情。
+- 面包屑的渲染 key 必须包含位置索引，支持路径中出现重复目录名。
