@@ -3,11 +3,12 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { autocompletion } from '@codemirror/autocomplete'
 import { basicSetup } from 'codemirror'
 import { lintGutter, setDiagnostics } from '@codemirror/lint'
-import { EditorState, type Extension } from '@codemirror/state'
+import { Compartment, EditorState, type Extension } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
 import { aitestCompletionSource } from '../editor/completion'
 import { positionToOffset, toCodeMirrorDiagnostics } from '../editor/diagnostics'
-import { aitestEditorTheme } from '../editor/theme'
+import { editorThemeExtension } from '../editor/theme'
+import { DEFAULT_EDITOR_THEME, type EditorThemeId } from '../editor/themeCatalog'
 import type { EditorDiagnostic } from '../types'
 
 const props = withDefaults(defineProps<{
@@ -16,16 +17,19 @@ const props = withDefaults(defineProps<{
   language?: string
   readOnly?: boolean
   diagnostics?: EditorDiagnostic[]
+  theme?: EditorThemeId
 }>(), {
   path: '',
   language: 'text',
   readOnly: false,
   diagnostics: () => [],
+  theme: DEFAULT_EDITOR_THEME,
 })
 const emit = defineEmits<{ 'update:modelValue': [value: string]; save: [] }>()
 const host = ref<HTMLElement | null>(null)
 let view: EditorView | null = null
 let editorGeneration = 0
+const themeCompartment = new Compartment()
 
 async function languageExtension(): Promise<Extension> {
   if (props.language === 'markdown') return (await import('@codemirror/lang-markdown')).markdown()
@@ -46,7 +50,7 @@ async function createEditor(): Promise<void> {
       extensions: [
         basicSetup,
         syntax,
-        aitestEditorTheme,
+        themeCompartment.of(editorThemeExtension(props.theme)),
         autocompletion({ override: [aitestCompletionSource(props.path)] }),
         lintGutter(),
         EditorView.editable.of(!props.readOnly),
@@ -80,6 +84,10 @@ onBeforeUnmount(() => {
 })
 
 watch(() => [props.path, props.language, props.readOnly], () => void createEditor())
+watch(() => props.theme, (theme) => {
+  if (!view) return
+  view.dispatch({ effects: themeCompartment.reconfigure(editorThemeExtension(theme)) })
+})
 watch(() => props.modelValue, (value) => {
   if (!view || view.state.doc.toString() === value) return
   view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } })

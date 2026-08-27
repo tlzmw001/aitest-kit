@@ -76,15 +76,16 @@ kbd { border: 1px solid var(--line-strong); border-radius: var(--r1); padding: 1
 .rail-action { display: grid; width: 40px; height: 40px; margin: auto 0 7px; place-items: center; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
 .rail-action:hover, .rail-action.active { background: var(--raised); color: var(--text); }
 
-.settings-panel { position: fixed; z-index: 60; bottom: 34px; left: 66px; width: min(350px, calc(100vw - 82px)); overflow: hidden; border: 1px solid var(--line-strong); border-radius: var(--r2); background: var(--surface-2); box-shadow: 0 18px 48px rgb(0 0 0 / 42%); }
+.settings-panel { position: fixed; z-index: 60; bottom: 34px; left: 66px; display: flex; width: min(370px, calc(100vw - 82px)); max-height: calc(100dvh - 68px); flex-direction: column; overflow: hidden; border: 1px solid var(--line-strong); border-radius: var(--r2); background: var(--surface-2); box-shadow: 0 18px 48px rgb(0 0 0 / 42%); }
 .settings-head { display: flex; min-height: 62px; align-items: center; justify-content: space-between; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--line); background: var(--surface); }
 .settings-head .eyebrow { margin-bottom: 3px; }
 .settings-head strong { font-size: 14px; }
 .settings-head button { display: grid; width: 40px; height: 40px; place-items: center; border: 0; border-radius: var(--r1); background: transparent; color: var(--muted); cursor: pointer; }
 .settings-head button:hover { background: var(--raised); color: var(--text); }
-.settings-section { padding: 16px; }
-.settings-section > strong { display: block; margin-top: 8px; font-size: 13px; }
-.settings-section > p { margin-top: 5px; color: var(--muted); font-size: 11px; }
+.settings-section { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px; }
+.settings-subsection > strong { display: block; margin-top: 8px; font-size: 13px; }
+.settings-subsection > p { margin-top: 5px; color: var(--muted); font-size: 11px; text-wrap: pretty; }
+.settings-subsection + .settings-subsection { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
 .setting-options { display: grid; gap: 7px; margin-top: 14px; }
 .setting-options button { position: relative; display: grid; min-height: 58px; gap: 3px; padding: 9px 12px 9px 34px; border: 1px solid var(--line-strong); border-radius: var(--r1); background: var(--surface); color: var(--text-2); text-align: left; cursor: pointer; }
 .setting-options button::before { position: absolute; top: 18px; left: 12px; width: 11px; height: 11px; border: 1px solid var(--muted); border-radius: 50%; content: ""; }
@@ -95,6 +96,11 @@ kbd { border: 1px solid var(--line-strong); border-radius: var(--r1); padding: 1
 .setting-options span { font-weight: 700; }
 .setting-options small { color: var(--muted); font-size: 10px; }
 .settings-section .settings-footnote { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.theme-options button { min-height: 76px; padding-right: 10px; }
+.theme-options button::before { top: 17px; }
+.theme-options .setting-copy { min-width: 0; padding-right: 4px; }
+.theme-preview { display: flex; min-width: 0; align-items: center; gap: 6px; overflow: hidden; border: 1px solid rgb(255 255 255 / 9%); border-radius: 3px; padding: 5px 7px; white-space: nowrap; }
+.theme-preview b { font: 9px/1.2 var(--mono); }
 
 .topbar { display: grid; grid-template-columns: minmax(280px, 0.85fr) minmax(540px, 1.6fr) 112px; align-items: center; min-width: 0; background: var(--surface); border-bottom: 1px solid var(--line); }
 .explorer-toggle { display: none; }

@@ -240,6 +240,7 @@ onBeforeRouteLeave(() => !hasDirtyTabs.value || window.confirm('有文件包含�
           :language="language"
           :read-only="document?.read_only"
           :diagnostics="diagnostics"
+          :theme="preferences.editorTheme"
           @save="save"
         />
       </div>

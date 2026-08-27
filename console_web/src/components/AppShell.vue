@@ -17,6 +17,7 @@ import ExplorerTree from './ExplorerTree.vue'
 import PipelineRail from './PipelineRail.vue'
 import { useWorkspaceStore } from '../stores/workspace'
 import { usePreferencesStore } from '../stores/preferences'
+import { editorThemeCatalog } from '../editor/themeCatalog'
 
 const route = useRoute()
 const store = useWorkspaceStore()
@@ -84,30 +85,56 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleEscape))
         <button aria-label="关闭设置" @click="settingsOpen = false"><X :size="17" /></button>
       </header>
       <section class="settings-section">
-        <span class="section-label">编辑器</span>
-        <strong>打开文件的方式</strong>
-        <p>控制从左侧资源树打开另一个文件时，是否保留当前标签。</p>
-        <div class="setting-options" role="radiogroup" aria-label="打开文件的方式">
-          <button
-            role="radio"
-            :aria-checked="preferences.editorOpenMode === 'tabs'"
-            :class="{ active: preferences.editorOpenMode === 'tabs' }"
-            data-test="open-mode-tabs"
-            @click="preferences.editorOpenMode = 'tabs'"
-          >
-            <span>多标签打开</span><small>保留已打开文件，像 VS Code 一样切换</small>
-          </button>
-          <button
-            role="radio"
-            :aria-checked="preferences.editorOpenMode === 'reuse'"
-            :class="{ active: preferences.editorOpenMode === 'reuse' }"
-            data-test="open-mode-reuse"
-            @click="preferences.editorOpenMode = 'reuse'"
-          >
-            <span>复用当前标签</span><small>打开新文件时替换当前的已保存标签</small>
-          </button>
+        <div class="settings-subsection">
+          <span class="section-label">编辑器</span>
+          <strong>打开文件的方式</strong>
+          <p>控制从左侧资源树打开另一个文件时，是否保留当前标签。</p>
+          <div class="setting-options" role="radiogroup" aria-label="打开文件的方式">
+            <button
+              role="radio"
+              :aria-checked="preferences.editorOpenMode === 'tabs'"
+              :class="{ active: preferences.editorOpenMode === 'tabs' }"
+              data-test="open-mode-tabs"
+              @click="preferences.editorOpenMode = 'tabs'"
+            >
+              <span>多标签打开</span><small>保留已打开文件，像 VS Code 一样切换</small>
+            </button>
+            <button
+              role="radio"
+              :aria-checked="preferences.editorOpenMode === 'reuse'"
+              :class="{ active: preferences.editorOpenMode === 'reuse' }"
+              data-test="open-mode-reuse"
+              @click="preferences.editorOpenMode = 'reuse'"
+            >
+              <span>复用当前标签</span><small>打开新文件时替换当前的已保存标签</small>
+            </button>
+          </div>
+          <p class="settings-footnote">存在未保存修改时会始终保留原标签，避免内容丢失。</p>
         </div>
-        <p class="settings-footnote">存在未保存修改时会始终保留原标签，避免内容丢失。</p>
+        <div class="settings-subsection theme-settings">
+          <span class="section-label">外观</span>
+          <strong>编辑器配色</strong>
+          <p>只改变代码区域，Console 外壳保持当前冷石墨主题。</p>
+          <div class="setting-options theme-options" role="radiogroup" aria-label="编辑器配色">
+            <button
+              v-for="theme in editorThemeCatalog"
+              :key="theme.id"
+              role="radio"
+              :aria-checked="preferences.editorTheme === theme.id"
+              :class="{ active: preferences.editorTheme === theme.id }"
+              :data-test="`editor-theme-${theme.id}`"
+              @click="preferences.editorTheme = theme.id"
+            >
+              <span class="setting-copy"><span>{{ theme.label }}</span><small>{{ theme.description }}</small></span>
+              <span class="theme-preview" :style="{ backgroundColor: theme.palette.background }" aria-hidden="true">
+                <b :style="{ color: theme.palette.syntax.keyword }">def</b>
+                <b :style="{ color: theme.palette.syntax.property }">target</b>
+                <b :style="{ color: theme.palette.syntax.string }">"suite"</b>
+                <b :style="{ color: theme.palette.syntax.function }">run()</b>
+              </span>
+            </button>
+          </div>
+        </div>
       </section>
     </aside>
 

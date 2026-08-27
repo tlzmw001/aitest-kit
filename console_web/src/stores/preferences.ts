@@ -1,25 +1,44 @@
 import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
+import {
+  DEFAULT_EDITOR_THEME,
+  isEditorThemeId,
+  type EditorThemeId,
+} from '../editor/themeCatalog'
 
 export type EditorOpenMode = 'tabs' | 'reuse'
 
 const STORAGE_KEY = 'aitest-console-preferences'
 
-function loadEditorOpenMode(): EditorOpenMode {
+interface ConsolePreferences {
+  editorOpenMode: EditorOpenMode
+  editorTheme: EditorThemeId
+}
+
+function loadPreferences(): ConsolePreferences {
   try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') as { editorOpenMode?: unknown }
-    return stored.editorOpenMode === 'reuse' ? 'reuse' : 'tabs'
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') as unknown
+    const stored = parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {}
+    return {
+      editorOpenMode: stored.editorOpenMode === 'reuse' ? 'reuse' : 'tabs',
+      editorTheme: isEditorThemeId(stored.editorTheme) ? stored.editorTheme : DEFAULT_EDITOR_THEME,
+    }
   } catch {
-    return 'tabs'
+    return { editorOpenMode: 'tabs', editorTheme: DEFAULT_EDITOR_THEME }
   }
 }
 
 export const usePreferencesStore = defineStore('preferences', () => {
-  const editorOpenMode = ref<EditorOpenMode>(loadEditorOpenMode())
+  const stored = loadPreferences()
+  const editorOpenMode = ref<EditorOpenMode>(stored.editorOpenMode)
+  const editorTheme = ref<EditorThemeId>(stored.editorTheme)
 
-  watch(editorOpenMode, (value) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ editorOpenMode: value }))
+  watch([editorOpenMode, editorTheme], ([openMode, theme]) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      editorOpenMode: openMode,
+      editorTheme: theme,
+    }))
   })
 
-  return { editorOpenMode }
+  return { editorOpenMode, editorTheme }
 })

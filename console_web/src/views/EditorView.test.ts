@@ -44,7 +44,10 @@ async function mountEditor(path: string) {
     global: {
       plugins: [pinia, router],
       stubs: {
-        CodeEditor: { props: ['modelValue'], template: '<div class="editor-stub">{{ modelValue }}</div>' },
+        CodeEditor: {
+          props: ['modelValue', 'theme'],
+          template: '<div class="editor-stub" :data-theme="theme">{{ modelValue }}</div>',
+        },
         RouterLink: { template: '<a><slot /></a>' },
       },
     },
@@ -84,6 +87,17 @@ describe('EditorView tabs', () => {
     const tabs = wrapper.findAll('[data-test="editor-tab"]')
     expect(tabs).toHaveLength(1)
     expect(tabs[0].text()).toContain('second.md')
+  })
+
+  it('passes the selected theme to the code editor', async () => {
+    localStorage.setItem('aitest-console-preferences', JSON.stringify({
+      editorOpenMode: 'tabs',
+      editorTheme: 'high-contrast-dark',
+    }))
+
+    const { wrapper } = await mountEditor('cases/first.md')
+
+    expect(wrapper.get('.editor-stub').attributes('data-theme')).toBe('high-contrast-dark')
   })
 
   it('shows backend diagnostics in the real Problems panel', async () => {

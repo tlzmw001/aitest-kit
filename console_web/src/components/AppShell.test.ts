@@ -36,4 +36,28 @@ describe('AppShell settings', () => {
     await wrapper.get('[data-test="open-mode-reuse"]').trigger('click')
     expect(usePreferencesStore().editorOpenMode).toBe('reuse')
   })
+
+  it('shows every editor theme and applies the selected preset', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', name: 'workbench', component: { template: '<div />' } }],
+    })
+    await router.push('/')
+    await router.isReady()
+
+    const wrapper = mount(AppShell, {
+      global: {
+        plugins: [pinia, router],
+        stubs: { ExplorerTree: true, PipelineRail: true },
+      },
+      slots: { default: '<div />' },
+    })
+    await wrapper.get('[data-test="open-settings"]').trigger('click')
+
+    expect(wrapper.findAll('[data-test^="editor-theme-"]')).toHaveLength(3)
+    await wrapper.get('[data-test="editor-theme-high-contrast-dark"]').trigger('click')
+    expect(usePreferencesStore().editorTheme).toBe('high-contrast-dark')
+  })
 })
