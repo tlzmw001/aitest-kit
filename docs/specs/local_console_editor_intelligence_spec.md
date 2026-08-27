@@ -1,7 +1,7 @@
 # AITest Local Console Editor Intelligence Spec
 
-状态：已实现；编辑器运行时条款由 `local_console_monaco_editor_spike_spec.md` 覆盖
-依赖：`docs/specs/local_console_mvp_spec.md`、`docs/specs/local_console_asset_management_spec.md`、`docs/specs/local_console_monaco_editor_spike_spec.md`
+状态：已实现；编辑器运行时条款由 `local_console_monaco_editor_spike_spec.md` 覆盖，JSON/Diff 与 model 回收由 `local_console_frontend_platform_spec.md` 覆盖
+依赖：`docs/specs/local_console_mvp_spec.md`、`docs/specs/local_console_asset_management_spec.md`、`docs/specs/local_console_monaco_editor_spike_spec.md`、`docs/specs/local_console_frontend_platform_spec.md`
 范围：Monaco 编辑体验、保存前诊断、AITest 配置提示、Console 视觉收敛
 
 ## 1. 目标
@@ -216,7 +216,7 @@ Monaco 使用 CompletionItemProvider。建议项按文件上下文提供：
 - Python LSP、类型检查、definition/reference/rename/code action。
 - 完整 YAML language server 或任意 JSON Schema 引擎。
 - 格式化、自动修复、自动保存。
-- diff editor、minimap、outline、sticky scroll。
+- 任意文件或任意历史结果之间的通用 diff、minimap、outline、sticky scroll。保存冲突的限定 Diff 以 `local_console_frontend_platform_spec.md` 为权威。
 - 浏览器内运行 fixture、Harness、helper、codegen 或 pytest。
 - case 级结构化增删改查。
 - 低代码 YAML/Profile 表单。

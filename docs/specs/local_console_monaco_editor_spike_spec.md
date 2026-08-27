@@ -1,7 +1,7 @@
 # Local Console Monaco 编辑器迁移 Spec
 
 > 状态：已实现，当前编辑器运行时权威
-> 当前权威范围：Local Console 编辑器运行时、主题应用、诊断标记、补全与文档模型生命周期
+> 当前权威范围：Local Console 编辑器运行时、主题应用、诊断标记与补全；JSON、限定 Diff 和关闭标签后的 model 回收由 `local_console_frontend_platform_spec.md` 覆盖
 > 不改变：Python Application Services、Local Web API、workspace 文件语义、env 权限模型与 Vue 工作台结构
 
 ## 1. 背景与决策
@@ -75,7 +75,7 @@ focusDiagnostic(diagnostic: EditorDiagnostic): void
 - 直接依赖固定版本的 `monaco-editor`，不增加 Vue wrapper 或 loader 依赖。
 - 使用 Monaco ESM API和 Vite `?worker` 导入配置本地 editor worker。
 - Worker 与主 bundle 一起构建到 `aitest_kit/console/web/assets/`，页面运行不访问公网。
-- 本阶段不加载 TypeScript/JavaScript、JSON、CSS 或 HTML language worker。
+- 本迁移阶段未加载 TypeScript/JavaScript、JSON、CSS 或 HTML language worker。后续只读报告接入的 JSON worker 以 `local_console_frontend_platform_spec.md` 为权威。
 
 ### 4.2 文档 model 与标签切换
 
@@ -228,7 +228,7 @@ npm run build
 
 - 固定依赖：`monaco-editor@0.56.0`；其锁定的 `dompurify@3.4.8` 通过 npm override 提升为已修复的 `3.4.14`，不改变 Monaco API。
 - CodeMirror 与 Lezer 运行时依赖已移除。
-- 生产构建只包含本地 editor worker，以及 Markdown、YAML、Python 的轻量语言定义 chunk；没有 TypeScript、JSON、CSS 或 HTML worker。
+- Monaco 迁移提交当时的生产构建只包含本地 editor worker，以及 Markdown、YAML、Python 的轻量语言定义 chunk；当前只读报告增加的 JSON worker 见 `local_console_frontend_platform_spec.md`，仍未加载 TypeScript、CSS 或 HTML worker。
 - Monaco 主 chunk：3,811.93 kB，gzip 974.68 kB；editor worker：300.37 kB。
 - Vitest 覆盖 model/view state、主题热切换、外部同步无回声、只读更新、marker 映射、补全上下文和父视图持续挂载。
 - 本地 Python Console 真实页面已验证：无 Worker/控制台错误；双击选区可见；打开两个标签后仍只有一个 Monaco editor 实例；切回标签后选区恢复；三套主题热切换不改变内容；关闭按钮根节点保持透明，hover 表面为 22px × 22px。

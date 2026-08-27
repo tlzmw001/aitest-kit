@@ -7,6 +7,18 @@ import { useWorkspaceStore } from '../stores/workspace'
 import type { WorkspaceSnapshot } from '../types'
 import AssetManager from './AssetManager.vue'
 
+const passthroughStub = { template: '<div><slot /></div>' }
+const rootDialogStub = { props: ['open'], template: '<div v-if="open"><slot /></div>' }
+const dialogStubs = {
+  DialogRoot: rootDialogStub,
+  DialogPortal: passthroughStub,
+  DialogOverlay: passthroughStub,
+  DialogContent: passthroughStub,
+  DialogDescription: passthroughStub,
+  DialogTitle: passthroughStub,
+  DialogClose: passthroughStub,
+}
+
 function snapshot(): WorkspaceSnapshot {
   return {
     name: 'workspace', path: '/workspace', branch: 'main',
@@ -44,7 +56,7 @@ describe('AssetManager', () => {
     })
     const createSuite = vi.spyOn(api, 'createSuite').mockResolvedValue(created)
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/editor', component: { template: '<div />' } }] })
-    const wrapper = mount(AssetManager, { global: { plugins: [router] } })
+    const wrapper = mount(AssetManager, { global: { plugins: [router], stubs: dialogStubs } })
 
     await (wrapper.vm as unknown as { openCreate: (kind: string, defaults: object) => Promise<void> })
       .openCreate('suite', { target: 'demo', module: 'orders' })
@@ -73,7 +85,7 @@ describe('AssetManager', () => {
       blockers: ['suite 被 task nightly 引用'], can_delete: false, recoverable: true, message: '可恢复删除',
     })
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { template: '<div />' } }] })
-    const wrapper = mount(AssetManager, { global: { plugins: [router] } })
+    const wrapper = mount(AssetManager, { global: { plugins: [router], stubs: dialogStubs } })
 
     await (wrapper.vm as unknown as { openDelete: (identity: object) => Promise<void> })
       .openDelete({ kind: 'suite', target: 'demo', module: 'orders', suite: 'smoke' })

@@ -1,10 +1,10 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { nextTick } from 'vue'
+import { defineComponent, h, nextTick } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import EditorView from './EditorView.vue'
-import { api } from '../api/client'
+import { ApiError, api } from '../api/client'
 import { usePreferencesStore } from '../stores/preferences'
 import type { FileDocument } from '../types'
 
@@ -32,6 +32,27 @@ function documentFor(path: string): FileDocument {
   }
 }
 
+const disposeDocument = vi.fn()
+const reloadDocument = vi.fn()
+const CodeEditorStub = defineComponent({
+  name: 'CodeEditor',
+  props: ['modelValue', 'theme'],
+  emits: ['update:modelValue', 'save'],
+  setup(props, { expose }) {
+    expose({ disposeDocument, focusDiagnostic: vi.fn(), reloadDocument })
+    return () => h('div', {
+      class: 'editor-stub',
+      'data-theme': props.theme,
+    }, String(props.modelValue ?? ''))
+  },
+})
+
+const passthroughStub = { template: '<div><slot /></div>' }
+const rootDialogStub = {
+  props: ['open'],
+  template: '<div v-if="open"><slot /></div>',
+}
+
 async function mountEditor(path: string) {
   const pinia = createPinia()
   setActivePinia(pinia)
@@ -45,10 +66,20 @@ async function mountEditor(path: string) {
     global: {
       plugins: [pinia, router],
       stubs: {
-        CodeEditor: {
-          props: ['modelValue', 'theme'],
-          template: '<div class="editor-stub" :data-theme="theme">{{ modelValue }}</div>',
+        CodeEditor: CodeEditorStub,
+        DiffEditor: {
+          props: ['original', 'modified', 'path'],
+          template: '<div data-test="diff-stub" :data-path="path"><span class="original">{{ original }}</span><span class="modified">{{ modified }}</span></div>',
         },
+        DialogRoot: rootDialogStub,
+        DialogPortal: passthroughStub,
+        DialogOverlay: passthroughStub,
+        DialogContent: passthroughStub,
+        DialogDescription: passthroughStub,
+        DialogTitle: passthroughStub,
+        SplitterGroup: passthroughStub,
+        SplitterPanel: passthroughStub,
+        SplitterResizeHandle: { template: '<div />' },
         RouterLink: { template: '<a><slot /></a>' },
       },
     },
@@ -60,6 +91,8 @@ async function mountEditor(path: string) {
 describe('EditorView tabs', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    disposeDocument.mockClear()
+    reloadDocument.mockClear()
     localStorage.clear()
     vi.mocked(api.readFile).mockImplementation(async (path) => documentFor(path))
     vi.mocked(api.validateEditor).mockResolvedValue({ diagnostics: [] })
@@ -109,6 +142,47 @@ describe('EditorView tabs', () => {
     const tabs = wrapper.findAll('[data-test="editor-tab"]')
     expect(tabs).toHaveLength(1)
     expect(tabs[0].text()).toContain('second.md')
+    expect(disposeDocument).toHaveBeenCalledWith('cases/first.md')
+  })
+
+  it('releases the Monaco document when a clean tab closes', async () => {
+    const { wrapper, router } = await mountEditor('cases/first.md')
+    await router.push({ path: '/editor', query: { path: 'cases/second.md' } })
+    await flushPromises()
+
+    await wrapper.findAll('.tab-close')[0].trigger('click')
+
+    expect(disposeDocument).toHaveBeenCalledWith('cases/first.md')
+    expect(wrapper.findAll('[data-test="editor-tab"]')).toHaveLength(1)
+  })
+
+  it('opens a disk-versus-local Diff on save conflict and can load the disk version', async () => {
+    const path = 'cases/conflict.md'
+    const disk = { ...documentFor(path), content: '# disk v2', sha256: 'sha-disk-v2' }
+    vi.mocked(api.readFile)
+      .mockResolvedValueOnce(documentFor(path))
+      .mockResolvedValueOnce(disk)
+    vi.mocked(api.saveFile).mockRejectedValue(new ApiError('FILE_CONFLICT', '文件已变化', 409))
+    const { wrapper } = await mountEditor(path)
+
+    wrapper.getComponent(CodeEditorStub).vm.$emit('update:modelValue', '# local edit')
+    await nextTick()
+    await wrapper.get('.tab-action').trigger('click')
+    await flushPromises()
+
+    const diff = wrapper.get('[data-test="diff-stub"]')
+    expect(diff.get('.original').text()).toBe('# disk v2')
+    expect(diff.get('.modified').text()).toBe('# local edit')
+    expect(wrapper.text()).toContain('AITest 不会自动覆盖任何一侧')
+
+    const loadDisk = wrapper.findAll('button').find((button) => button.text().includes('载入磁盘版本'))
+    expect(loadDisk).toBeDefined()
+    await loadDisk?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('.editor-stub').text()).toBe('# disk v2')
+    expect(reloadDocument).toHaveBeenCalledOnce()
+    expect(wrapper.find('[data-test="diff-stub"]').exists()).toBe(false)
   })
 
   it('passes the selected theme to the code editor', async () => {

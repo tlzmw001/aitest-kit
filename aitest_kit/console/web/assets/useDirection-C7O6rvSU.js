@@ -1,0 +1,1 @@
+import{s as e}from"./preferences-DX6_kuCC.js";import{_ as t,yn as n}from"./createLucideIcon-7lnY3C8d.js";function r(r){let i=e({dir:n(`ltr`)});return t(()=>r?.value||i.dir?.value||`ltr`)}export{r as t};

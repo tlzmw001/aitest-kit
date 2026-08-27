@@ -128,4 +128,52 @@ describe('CodeEditor Monaco runtime', () => {
       wrapper.unmount()
     }
   })
+
+  it('disposes a closed document model and its saved view state', async () => {
+    const create = vi.spyOn(monaco.editor, 'create')
+    const firstPath = 'test_workspace/suites/demo/first.md'
+    const secondPath = 'test_workspace/suites/demo/second.md'
+    const wrapper = mount(CodeEditor, {
+      props: { modelValue: '# first', path: firstPath, language: 'markdown' },
+    })
+    try {
+      const editor = create.mock.results[0]?.value
+      const firstModel = editor?.getModel()
+      const disposeFirst = firstModel ? vi.spyOn(firstModel, 'dispose') : null
+
+      await wrapper.setProps({ modelValue: '# second', path: secondPath })
+      await wrapper.setProps({ modelValue: '# first', path: firstPath })
+      ;(wrapper.vm as unknown as { disposeDocument(path: string): void }).disposeDocument(firstPath)
+
+      expect(disposeFirst).toHaveBeenCalledOnce()
+      expect(monaco.editor.getModels()).not.toContain(firstModel)
+      expect(editor?.getModel()).toBeNull()
+
+      await wrapper.setProps({ modelValue: '# second', path: secondPath })
+      expect(editor?.getModel()?.getValue()).toBe('# second')
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
+  it('recreates and attaches a document model when the same path is reloaded', () => {
+    const create = vi.spyOn(monaco.editor, 'create')
+    const path = 'test_workspace/suites/demo/conflict.md'
+    const wrapper = mount(CodeEditor, {
+      props: { modelValue: '# disk version', path, language: 'markdown' },
+    })
+    try {
+      const editor = create.mock.results[0]?.value
+      const previousModel = editor?.getModel()
+      const disposePrevious = previousModel ? vi.spyOn(previousModel, 'dispose') : null
+
+      ;(wrapper.vm as unknown as { reloadDocument(): void }).reloadDocument()
+
+      expect(disposePrevious).toHaveBeenCalledOnce()
+      expect(editor?.getModel()).not.toBe(previousModel)
+      expect(editor?.getModel()?.getValue()).toBe('# disk version')
+    } finally {
+      wrapper.unmount()
+    }
+  })
 })

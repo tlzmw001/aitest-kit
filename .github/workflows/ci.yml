@@ -41,6 +41,8 @@ jobs:
         run: |
           npm --prefix console_web ci --ignore-scripts
           npm --prefix console_web test
+          npx --prefix console_web playwright install --with-deps chromium
+          npm --prefix console_web run test:e2e
           npm --prefix console_web run build
           git diff --exit-code -- aitest_kit/console/web
 

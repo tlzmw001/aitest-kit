@@ -58,6 +58,7 @@ kbd { border: 1px solid var(--line-strong); border-radius: var(--r1); padding: 1
 
 .skip-link { position: fixed; left: 8px; top: -60px; z-index: 100; padding: 8px 12px; border-radius: var(--r2); background: var(--signal); color: #1b120a; }
 .skip-link:focus { top: 8px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .app-shell { display: grid; grid-template-columns: 58px minmax(0, 1fr); width: 100%; height: 100dvh; overflow: hidden; }
 .workspace-shell { display: grid; grid-template-rows: 54px minmax(0, 1fr) 26px; min-width: 0; min-height: 0; overflow: hidden; }
 .workspace-body { display: grid; grid-template-columns: 272px minmax(0, 1fr); min-height: 0; overflow: hidden; }

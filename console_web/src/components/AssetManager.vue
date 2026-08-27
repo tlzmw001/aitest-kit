@@ -1,6 +1,15 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { ArchiveRestore, Plus, Trash2, X } from '@lucide/vue'
+import {
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogOverlay,
+  DialogPortal,
+  DialogRoot,
+  DialogTitle,
+} from 'reka-ui'
 import { useRouter } from 'vue-router'
 import { api } from '../api/client'
 import { messageFrom, useWorkspaceStore } from '../stores/workspace'
@@ -92,6 +101,10 @@ function reset(): void {
 
 function close(): void {
   mode.value = null
+}
+
+function handleOpenChange(open: boolean): void {
+  if (!open) close()
 }
 
 function syncParentChoices(): void {
@@ -186,11 +199,14 @@ defineExpose({ openCreate, openDelete, openTrash })
 </script>
 
 <template>
-  <div v-if="mode" class="asset-modal-backdrop" @click.self="close">
-    <section class="asset-modal" role="dialog" aria-modal="true" :aria-label="title">
+  <DialogRoot :open="Boolean(mode)" @update:open="handleOpenChange">
+    <DialogPortal>
+      <DialogOverlay class="asset-modal-backdrop">
+        <DialogContent as="section" class="asset-modal">
+      <DialogDescription class="sr-only">创建、删除或恢复当前 workspace 中由 AITest 管理的测试资产。</DialogDescription>
       <header>
-        <div><span class="eyebrow">WORKSPACE ASSETS</span><strong>{{ title }}</strong></div>
-        <button aria-label="关闭" @click="close"><X :size="17" /></button>
+        <div><span class="eyebrow">WORKSPACE ASSETS</span><DialogTitle as="strong">{{ title }}</DialogTitle></div>
+        <DialogClose as-child><button aria-label="关闭"><X :size="17" /></button></DialogClose>
       </header>
 
       <form v-if="mode === 'create'" class="asset-form" @submit.prevent="createAsset">
@@ -244,6 +260,8 @@ defineExpose({ openCreate, openDelete, openTrash })
         <article v-for="entry in trashEntries" :key="entry.entry_id"><div><strong>{{ identityLabel(entry.identity) }}</strong><small>{{ new Date(entry.created_at).toLocaleString('zh-CN') }}</small><code>{{ entry.paths[0] }}</code></div><button class="secondary-btn" :disabled="busy" @click="restore(entry)"><ArchiveRestore :size="14" />恢复</button></article>
         <p v-if="error" class="inline-error">{{ error }}</p>
       </div>
-    </section>
-  </div>
+        </DialogContent>
+      </DialogOverlay>
+    </DialogPortal>
+  </DialogRoot>
 </template>

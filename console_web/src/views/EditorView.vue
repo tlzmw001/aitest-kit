@@ -1,9 +1,21 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { AlertTriangle, Check, LockKeyhole, Save, X } from '@lucide/vue'
+import {
+  DialogContent,
+  DialogDescription,
+  DialogOverlay,
+  DialogPortal,
+  DialogRoot,
+  DialogTitle,
+  SplitterGroup,
+  SplitterPanel,
+  SplitterResizeHandle,
+} from 'reka-ui'
 import CodeEditor from '../components/CodeEditor.vue'
-import { api } from '../api/client'
+import DiffEditor from '../components/DiffEditor.vue'
+import { ApiError, api } from '../api/client'
 import { messageFrom, useWorkspaceStore } from '../stores/workspace'
 import { usePreferencesStore } from '../stores/preferences'
 import type { EditorDiagnostic, FileDocument } from '../types'
@@ -16,6 +28,12 @@ interface EditorTab {
   validationState: 'idle' | 'waiting' | 'validating' | 'ready'
 }
 
+interface FileConflict {
+  path: string
+  disk: FileDocument
+  localContent: string
+}
+
 const route = useRoute()
 const router = useRouter()
 const store = useWorkspaceStore()
@@ -26,6 +44,7 @@ const activePath = ref('')
 const loadingPath = ref('')
 const error = ref('')
 const savedMessage = ref('')
+const conflict = ref<FileConflict | null>(null)
 const requestedPath = computed(() => String(route.query.path || ''))
 const activeTab = computed(() => tabs.value.find((tab) => tab.document.path === activePath.value) ?? null)
 const document = computed(() => activeTab.value?.document ?? null)
@@ -92,8 +111,10 @@ async function openFile(nextPath: string): Promise<void> {
     const mayReplace = preferences.editorOpenMode === 'reuse'
       && replaceIndex >= 0
       && !isDirty(tabs.value[replaceIndex])
-    if (mayReplace) tabs.value.splice(replaceIndex, 1, nextTab)
-    else tabs.value.push(nextTab)
+    if (mayReplace) {
+      codeEditor.value?.disposeDocument(replacePath)
+      tabs.value.splice(replaceIndex, 1, nextTab)
+    } else tabs.value.push(nextTab)
     activePath.value = loaded.path
     scheduleValidation(tabs.value.find((tab) => tab.document.path === loaded.path) ?? null)
   } catch (cause) {
@@ -119,7 +140,52 @@ async function save(): Promise<void> {
     scheduleValidation(current ?? tab)
     window.setTimeout(() => (savedMessage.value = ''), 2400)
   } catch (cause) {
-    error.value = messageFrom(cause)
+    if (cause instanceof ApiError && cause.code === 'FILE_CONFLICT') await openConflict(tab)
+    else error.value = messageFrom(cause)
+  }
+}
+
+async function openConflict(tab: EditorTab): Promise<void> {
+  try {
+    const disk = await api.readFile(tab.document.path)
+    const current = tabs.value.find((item) => item.document.path === tab.document.path)
+    if (!current) return
+    conflict.value = { path: tab.document.path, disk, localContent: current.content }
+    error.value = '文件已在 Console 外发生变化。请比较两个版本后再决定。'
+  } catch (cause) {
+    error.value = `文件冲突，且无法读取最新磁盘版本：${messageFrom(cause)}`
+  }
+}
+
+function closeConflict(): void {
+  conflict.value = null
+}
+
+function handleConflictOpenChange(open: boolean): void {
+  if (!open) closeConflict()
+}
+
+async function loadDiskVersion(): Promise<void> {
+  const state = conflict.value
+  if (!state) return
+  const tab = tabs.value.find((item) => item.document.path === state.path)
+  if (!tab) {
+    closeConflict()
+    return
+  }
+  tab.document = state.disk
+  tab.content = state.disk.content
+  tab.diagnostics = []
+  tab.validationError = ''
+  tab.validationState = 'idle'
+  error.value = ''
+  closeConflict()
+  if (tab.document.path === activePath.value) {
+    await nextTick()
+    codeEditor.value?.reloadDocument()
+    scheduleValidation(tab)
+  } else {
+    codeEditor.value?.disposeDocument(tab.document.path)
   }
 }
 
@@ -182,6 +248,7 @@ function closeTab(tab: EditorTab): void {
   const index = tabs.value.indexOf(tab)
   if (index < 0) return
   const wasActive = tab.document.path === activePath.value
+  codeEditor.value?.disposeDocument(tab.document.path)
   tabs.value.splice(index, 1)
   if (!wasActive) return
   const replacement = tabs.value[Math.min(index, tabs.value.length - 1)]
@@ -228,8 +295,9 @@ onBeforeRouteLeave(() => !hasDirtyTabs.value || window.confirm('有文件包含�
       <span class="tab-spacer" />
       <button v-if="document && !document.read_only" class="tab-action" :disabled="!dirty" @click="save"><Save :size="14" />保存 <kbd>⌘S</kbd></button>
     </div>
-    <div class="editor-body">
-      <div class="code-pane">
+    <SplitterGroup id="editor-inspector-split" direction="horizontal" auto-save-id="aitest-editor-inspector" class="editor-body">
+      <SplitterPanel id="editor-code-panel" :default-size="76" :min-size="55" class="editor-code-panel">
+        <div class="code-pane">
         <div class="breadcrumb"><span v-for="part in path.split('/')" :key="part">{{ part }}</span></div>
         <div class="code-editor-stage">
           <CodeEditor
@@ -244,8 +312,11 @@ onBeforeRouteLeave(() => !hasDirtyTabs.value || window.confirm('有文件包含�
           />
           <div v-if="loading" class="loading-state compact editor-loading"><span class="spinner" />读取文件</div>
         </div>
-      </div>
-      <aside class="inspector">
+        </div>
+      </SplitterPanel>
+      <SplitterResizeHandle id="editor-inspector-handle" class="editor-split-handle" aria-label="调整源码与 Inspector 宽度" />
+      <SplitterPanel id="editor-inspector-panel" :default-size="24" :min-size="18" :max-size="40" class="editor-inspector-panel">
+        <aside class="inspector">
         <div class="inspector-head">
           <span class="eyebrow">SOURCE OWNERSHIP</span>
           <strong>{{ document?.owner ?? 'NO FILE' }}</strong>
@@ -257,8 +328,9 @@ onBeforeRouteLeave(() => !hasDirtyTabs.value || window.confirm('有文件包含�
         <div v-if="savedMessage" class="inspector-note success"><Check :size="17" /><div><strong>{{ savedMessage }}</strong></div></div>
         <div v-if="error" class="inspector-error">{{ error }}</div>
         <RouterLink class="wide-btn secondary-btn" to="/run">进入确定性执行</RouterLink>
-      </aside>
-    </div>
+        </aside>
+      </SplitterPanel>
+    </SplitterGroup>
     <div class="bottom-panel">
       <div class="panel-tabs">
         <button class="active">Problems <span>{{ diagnostics.length }}</span></button>
@@ -290,4 +362,35 @@ onBeforeRouteLeave(() => !hasDirtyTabs.value || window.confirm('有文件包含�
       </div>
     </div>
   </section>
+
+  <DialogRoot :open="Boolean(conflict)" @update:open="handleConflictOpenChange">
+    <DialogPortal>
+      <DialogOverlay class="asset-modal-backdrop conflict-dialog-backdrop">
+        <DialogContent as="section" class="conflict-dialog">
+          <DialogDescription class="sr-only">比较最新磁盘版本与当前未保存的编辑内容。</DialogDescription>
+          <header>
+            <div><span class="eyebrow">FILE CONFLICT</span><DialogTitle as="strong">文件已在外部修改</DialogTitle></div>
+            <button aria-label="关闭版本对比" @click="closeConflict"><X :size="17" /></button>
+          </header>
+          <div v-if="conflict" class="conflict-copy">
+            <p>左侧是最新磁盘版本，右侧是你尚未保存的编辑内容。AITest 不会自动覆盖任何一侧。</p>
+            <code>{{ conflict.path }}</code>
+          </div>
+          <div v-if="conflict" class="conflict-diff-stage">
+            <DiffEditor
+              :original="conflict.disk.content"
+              :modified="conflict.localContent"
+              :path="conflict.path"
+              :language="languageFor(conflict.path)"
+              :theme="preferences.editorTheme"
+            />
+          </div>
+          <footer>
+            <button class="secondary-btn" @click="closeConflict">继续编辑</button>
+            <button class="conflict-load-btn" @click="loadDiskVersion">丢弃当前修改并载入磁盘版本</button>
+          </footer>
+        </DialogContent>
+      </DialogOverlay>
+    </DialogPortal>
+  </DialogRoot>
 </template>

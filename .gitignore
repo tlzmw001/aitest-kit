@@ -30,6 +30,8 @@ test_workspace/backups/
 .pytest_cache/
 htmlcov/
 .coverage
+console_web/playwright-report/
+console_web/test-results/
 test_workspace/reports/
 test_workspace/plans/
 

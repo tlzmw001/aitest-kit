@@ -1,0 +1,204 @@
+import { expect, test, type Page, type Route } from '@playwright/test'
+
+const casesPath = 'test_workspace/suites/demo/orders-smoke/cases.md'
+const suitePath = 'test_workspace/suites/demo/orders-smoke/suite.yaml'
+const reportResultPath = 'test_workspace/reports/run-20260827-1/result.json'
+
+const workspace = {
+  name: 'AITest e2e workspace',
+  path: '/tmp/aitest-console-e2e',
+  branch: 'codex/e2e',
+  counts: { targets: 1, modules: 1, suites: 1, cases: 1, tasks: 0 },
+  targets: [{
+    name: 'demo',
+    diagnostics: [],
+    config_path: 'test_workspace/targets/demo/target.yaml',
+    modules: [{
+      name: 'orders',
+      module_type: 'standard_http',
+      diagnostics: [],
+      assets: [],
+      suites: [{
+        name: 'orders-smoke',
+        manifest_path: suitePath,
+        profile_path: 'test_workspace/suites/demo/orders-smoke/profile_orders-smoke_suite.md',
+        diagnostics: [],
+        cases: [{ id: 'TC-ORD-001', title: '创建订单', priority: 'P0', source_path: casesPath, source_line: 4 }],
+        assets: [
+          { path: suitePath, name: 'suite.yaml', owner: 'CONFIG', exists: true },
+          { path: casesPath, name: 'cases.md', owner: 'CASE', exists: true },
+        ],
+      }],
+    }],
+  }],
+  tasks: [],
+  recent_reports: [],
+}
+
+const reportSummary = {
+  run_id: 'run-20260827-1',
+  status: 'passed',
+  timestamp: '2026-08-27T12:00:00Z',
+  duration_seconds: 1.27,
+  summary: { passed: 1, failed: 0, error: 0 },
+  scope: { type: 'suite' },
+  target: 'demo',
+  module: 'orders',
+  suite: 'orders-smoke',
+  result_path: reportResultPath,
+  report_path: 'test_workspace/reports/run-20260827-1/report.md',
+}
+
+async function mockConsoleApi(page: Page): Promise<void> {
+  await page.route((url) => url.pathname.startsWith('/api/'), async (route) => respond(route))
+}
+
+async function respond(route: Route): Promise<void> {
+  const request = route.request()
+  const url = new URL(request.url())
+  const json = (body: unknown, status = 200) => route.fulfill({
+    status,
+    contentType: 'application/json',
+    body: JSON.stringify(body),
+  })
+
+  if (url.pathname === '/api/workspace') return json(workspace)
+  if (url.pathname === '/api/assets/options') {
+    return json({ module_types: [{ name: 'standard_http', description: 'HTTP 模块' }] })
+  }
+  if (url.pathname === '/api/editor/validate') return json({ diagnostics: [] })
+  if (url.pathname === '/api/files') {
+    const path = url.searchParams.get('path') || ''
+    const content = path === casesPath
+      ? '# Orders smoke\n\n## TC-ORD-001 创建订单\n\n- 期望：订单创建成功\n'
+      : 'target: demo\nmodule: orders\nsuite: orders-smoke\ncase_files:\n  - cases.md\n'
+    return json({
+      path,
+      name: path.split('/').at(-1) || path,
+      content,
+      sha256: `sha-${path}`,
+      owner: path.endsWith('.md') ? 'CASE' : 'CONFIG',
+      read_only: false,
+    })
+  }
+  if (url.pathname === '/api/reports') return json({ reports: [reportSummary] })
+  if (url.pathname === '/api/reports/detail') {
+    return json({
+      summary: reportSummary,
+      result: { run_id: reportSummary.run_id, status: 'passed', summary: reportSummary.summary },
+      report_markdown: [
+        '# Orders smoke',
+        '',
+        '<script>window.__unsafeReport = true</script>',
+        '',
+        '![remote image](https://example.com/tracker.png)',
+        '',
+        '| case | status |',
+        '| --- | --- |',
+        '| TC-ORD-001 | passed |',
+      ].join('\n'),
+    })
+  }
+  return json({ error: { code: 'NOT_MOCKED', message: `${request.method()} ${url.pathname}` } }, 404)
+}
+
+test.beforeEach(async ({ page }) => {
+  await mockConsoleApi(page)
+  await page.goto('/?launch=e2e#/token=e2e-local-session')
+  await expect(page).toHaveURL(/\?launch=e2e#\/$/)
+  await expect(page.getByText('AITest e2e workspace', { exact: true }).first()).toBeVisible()
+})
+
+test('opens multiple files and preserves the compact close hover surface', async ({ page }) => {
+  await page.getByTitle(suitePath).click()
+  await expect(page.locator('.monaco-editor')).toHaveCount(1)
+  await page.getByTitle(casesPath).click()
+
+  await expect(page.locator('[data-test="editor-tab"]')).toHaveCount(2)
+  const closeButton = page.getByRole('button', { name: '关闭 suite.yaml' })
+  await closeButton.hover()
+  await expect(closeButton).toHaveScreenshot('editor-tab-close-hover.png')
+})
+
+test('Reka dialog restores focus and the editor splitter supports the keyboard', async ({ page }) => {
+  const createAsset = page.getByRole('button', { name: '新建资产' })
+  await createAsset.click()
+  const dialog = page.getByRole('dialog', { name: '新建测试资产' })
+  await expect(dialog).toBeVisible()
+  expect(await page.evaluate(() => Boolean(document.activeElement?.closest('[role="dialog"]')))).toBe(true)
+
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  await expect(createAsset).toBeFocused()
+
+  await page.getByTitle(suitePath).click()
+  const splitter = page.getByRole('separator', { name: '调整源码与 Inspector 宽度' })
+  await expect(splitter).toBeVisible()
+  await splitter.focus()
+  const before = await splitter.getAttribute('aria-valuenow')
+  await splitter.press('ArrowLeft')
+  await expect(splitter).not.toHaveAttribute('aria-valuenow', before || '')
+})
+
+test('shows the real Monaco Diff when the disk changes during save', async ({ page }) => {
+  let readCount = 0
+  await page.route((url) => url.pathname === '/api/files', async (route) => {
+    if (route.request().method() === 'PUT') {
+      return route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'FILE_CONFLICT', message: '文件已在 Console 外发生变化' } }),
+      })
+    }
+    readCount += 1
+    const content = readCount === 1 ? '# original content\n' : '# disk changed outside Console\n'
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        path: casesPath,
+        name: 'cases.md',
+        content,
+        sha256: `sha-read-${readCount}`,
+        owner: 'CASE',
+        read_only: false,
+      }),
+    })
+  })
+
+  await page.getByTitle(casesPath).click()
+  const editor = page.locator('.code-editor-stage .monaco-editor')
+  await expect(editor).toBeVisible()
+  await editor.click()
+  await page.keyboard.press('ControlOrMeta+A')
+  await page.keyboard.type('# local unsaved edit')
+  await page.getByRole('button', { name: /保存/ }).click()
+
+  const dialog = page.getByRole('dialog', { name: '文件已在外部修改' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.locator('.monaco-diff-editor')).toBeVisible()
+  await expect(dialog).toContainText('左侧是最新磁盘版本')
+  await dialog.getByRole('button', { name: '丢弃当前修改并载入磁盘版本' }).click()
+  await expect(dialog).toBeHidden()
+  await expect(page.locator('.code-editor-stage .monaco-editor')).toBeVisible()
+  await expect(page.locator('.code-editor-stage .view-lines')).toContainText('disk changed outside Console')
+})
+
+test('renders sanitized Markdown and opens result.json with keyboard tabs', async ({ page }) => {
+  await page.getByRole('link', { name: '报告', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Orders smoke', level: 1 })).toBeVisible()
+  await expect(page.locator('.markdown-preview script')).toHaveCount(0)
+  await expect(page.locator('.markdown-preview img')).toHaveCount(0)
+  await expect(page.locator('.markdown-preview table')).toContainText('TC-ORD-001')
+
+  const reportTab = page.getByRole('tab', { name: 'report.md' })
+  await reportTab.focus()
+  await reportTab.press('ArrowRight')
+
+  const jsonTab = page.getByRole('tab', { name: 'result.json' })
+  await expect(jsonTab).toHaveAttribute('aria-selected', 'true')
+  await expect(page.locator('.json-editor-panel .monaco-editor')).toBeVisible()
+  await expect(page.locator('.json-editor-panel')).toContainText('run-20260827-1')
+  expect(await page.evaluate(() => sessionStorage.getItem('aitest-console-session-token'))).toBe('e2e-local-session')
+  expect(page.url()).not.toContain('e2e-local-session')
+})

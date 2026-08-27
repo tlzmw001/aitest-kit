@@ -1,16 +1,23 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { Braces, FileText, RefreshCw, RotateCcw } from '@lucide/vue'
+import { TabsContent, TabsList, TabsRoot, TabsTrigger } from 'reka-ui'
 import { api } from '../api/client'
+import CodeEditor from '../components/CodeEditor.vue'
+import SafeMarkdown from '../components/SafeMarkdown.vue'
+import { usePreferencesStore } from '../stores/preferences'
 import { messageFrom } from '../stores/workspace'
 import type { ReportDetail, ReportSummary } from '../types'
 
 const reports = ref<ReportSummary[]>([])
+const preferences = usePreferencesStore()
 const selected = ref<ReportSummary | null>(null)
 const detail = ref<ReportDetail | null>(null)
 const tab = ref<'report' | 'json'>('report')
 const error = ref('')
 const summary = computed(() => detail.value?.summary.summary ?? {})
+const resultJson = computed(() => detail.value ? JSON.stringify(detail.value.result, null, 2) : '')
+const resultPath = computed(() => detail.value?.summary.result_path ?? 'result.json')
 
 async function loadReports(): Promise<void> {
   error.value = ''
@@ -55,12 +62,25 @@ onMounted(loadReports)
     </div>
 
     <div class="report-layout">
-      <section class="report-document">
-        <div class="document-tabs"><button :class="{ active: tab === 'report' }" @click="tab = 'report'"><FileText :size="14" />report.md</button><button :class="{ active: tab === 'json' }" @click="tab = 'json'"><Braces :size="14" />result.json</button></div>
-        <pre v-if="detail && tab === 'report'" class="markdown-report">{{ detail.report_markdown || '本次执行没有 report.md。' }}</pre>
-        <pre v-else-if="detail" class="json-report">{{ JSON.stringify(detail.result, null, 2) }}</pre>
-        <div v-else class="section-empty tall">{{ error || '选择一条历史执行查看详情。' }}</div>
-      </section>
+      <TabsRoot v-if="detail" v-model="tab" class="report-document">
+        <TabsList class="document-tabs" aria-label="报告文件">
+          <TabsTrigger value="report"><FileText :size="14" />report.md</TabsTrigger>
+          <TabsTrigger value="json" data-test="result-json-tab"><Braces :size="14" />result.json</TabsTrigger>
+        </TabsList>
+        <TabsContent value="report" class="report-panel">
+          <SafeMarkdown :source="detail.report_markdown" empty-text="本次执行没有 report.md。" />
+        </TabsContent>
+        <TabsContent value="json" class="report-panel json-editor-panel">
+          <CodeEditor
+            :model-value="resultJson"
+            :path="resultPath"
+            language="json"
+            read-only
+            :theme="preferences.editorTheme"
+          />
+        </TabsContent>
+      </TabsRoot>
+      <section v-else class="report-document"><div class="section-empty tall">{{ error || '选择一条历史执行查看详情。' }}</div></section>
       <aside class="history-panel">
         <div class="section-heading"><div><span class="eyebrow">FILESYSTEM HISTORY</span><h2>最近执行</h2></div><span>{{ reports.length }}</span></div>
         <div v-if="!reports.length" class="section-empty">当前 reports 目录没有历史执行。</div>

@@ -154,6 +154,27 @@ function focusDiagnostic(diagnostic: EditorDiagnostic): void {
   codeEditor.focus()
 }
 
+function disposeDocument(path: string): void {
+  const key = documentKey(path)
+  const model = models.get(key)
+  if (!model) return
+  if (codeEditor?.getModel() === model) {
+    contentListener?.dispose()
+    contentListener = null
+    codeEditor.setModel(null)
+    activeKey = ''
+  }
+  monaco.editor.setModelMarkers(model, 'aitest', [])
+  model.dispose()
+  models.delete(key)
+  viewStates.delete(key)
+}
+
+function reloadDocument(): void {
+  disposeDocument(props.path)
+  switchDocument()
+}
+
 function setModelValue(model: editor.ITextModel, value: string): void {
   if (model.getValue() === value) return
   applyingExternalValue = true
@@ -165,7 +186,7 @@ function setModelValue(model: editor.ITextModel, value: string): void {
 }
 
 function languageId(language: string): string {
-  if (language === 'markdown' || language === 'yaml' || language === 'python') return language
+  if (language === 'json' || language === 'markdown' || language === 'yaml' || language === 'python') return language
   return 'plaintext'
 }
 
@@ -205,7 +226,7 @@ watch(() => props.modelValue, (value) => {
 })
 watch(() => props.diagnostics, syncDiagnostics, { deep: true })
 
-defineExpose({ focusDiagnostic })
+defineExpose({ disposeDocument, focusDiagnostic, reloadDocument })
 </script>
 
 <template><div ref="host" class="code-editor monaco-host" /></template>
