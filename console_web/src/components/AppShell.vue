@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   Activity,
@@ -16,10 +16,13 @@ import {
 import ExplorerTree from './ExplorerTree.vue'
 import PipelineRail from './PipelineRail.vue'
 import { useWorkspaceStore } from '../stores/workspace'
+import { usePreferencesStore } from '../stores/preferences'
 
 const route = useRoute()
 const store = useWorkspaceStore()
+const preferences = usePreferencesStore()
 const explorerOpen = ref(false)
+const settingsOpen = ref(false)
 const nav = [
   { name: 'workbench', label: '工作台', icon: FolderTree, to: '/' },
   { name: 'editor', label: '用例', icon: FileText, to: '/editor' },
@@ -33,6 +36,13 @@ const subtitle = computed(() => {
   if (route.name === 'editor' && route.query.path) return String(route.query.path)
   return store.snapshot?.path ?? 'No workspace'
 })
+
+function handleEscape(event: KeyboardEvent): void {
+  if (event.key === 'Escape') settingsOpen.value = false
+}
+
+onMounted(() => window.addEventListener('keydown', handleEscape))
+onBeforeUnmount(() => window.removeEventListener('keydown', handleEscape))
 </script>
 
 <template>
@@ -51,8 +61,55 @@ const subtitle = computed(() => {
           <small>{{ item.label }}</small>
         </RouterLink>
       </div>
-      <button class="rail-action" aria-label="设置"><Settings :size="17" /></button>
+      <button
+        class="rail-action"
+        :class="{ active: settingsOpen }"
+        aria-label="设置"
+        aria-controls="console-settings"
+        :aria-expanded="settingsOpen"
+        data-test="open-settings"
+        @click="settingsOpen = !settingsOpen"
+      ><Settings :size="18" /></button>
     </nav>
+
+    <aside
+      v-if="settingsOpen"
+      id="console-settings"
+      class="settings-panel"
+      aria-label="Console 设置"
+      data-test="settings-panel"
+    >
+      <header class="settings-head">
+        <div><span class="eyebrow">PREFERENCES</span><strong>Console 设置</strong></div>
+        <button aria-label="关闭设置" @click="settingsOpen = false"><X :size="17" /></button>
+      </header>
+      <section class="settings-section">
+        <span class="section-label">编辑器</span>
+        <strong>打开文件的方式</strong>
+        <p>控制从左侧资源树打开另一个文件时，是否保留当前标签。</p>
+        <div class="setting-options" role="radiogroup" aria-label="打开文件的方式">
+          <button
+            role="radio"
+            :aria-checked="preferences.editorOpenMode === 'tabs'"
+            :class="{ active: preferences.editorOpenMode === 'tabs' }"
+            data-test="open-mode-tabs"
+            @click="preferences.editorOpenMode = 'tabs'"
+          >
+            <span>多标签打开</span><small>保留已打开文件，像 VS Code 一样切换</small>
+          </button>
+          <button
+            role="radio"
+            :aria-checked="preferences.editorOpenMode === 'reuse'"
+            :class="{ active: preferences.editorOpenMode === 'reuse' }"
+            data-test="open-mode-reuse"
+            @click="preferences.editorOpenMode = 'reuse'"
+          >
+            <span>复用当前标签</span><small>打开新文件时替换当前的已保存标签</small>
+          </button>
+        </div>
+        <p class="settings-footnote">存在未保存修改时会始终保留原标签，避免内容丢失。</p>
+      </section>
+    </aside>
 
     <section class="workspace-shell">
       <header class="topbar">

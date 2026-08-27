@@ -1,16 +1,31 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { autocompletion } from '@codemirror/autocomplete'
 import { basicSetup } from 'codemirror'
+import { lintGutter, setDiagnostics } from '@codemirror/lint'
 import { EditorState, type Extension } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
+import { aitestCompletionSource } from '../editor/completion'
+import { positionToOffset, toCodeMirrorDiagnostics } from '../editor/diagnostics'
+import { aitestEditorTheme } from '../editor/theme'
+import type { EditorDiagnostic } from '../types'
 
-const props = withDefaults(defineProps<{ modelValue: string; language?: string; readOnly?: boolean }>(), {
+const props = withDefaults(defineProps<{
+  modelValue: string
+  path?: string
+  language?: string
+  readOnly?: boolean
+  diagnostics?: EditorDiagnostic[]
+}>(), {
+  path: '',
   language: 'text',
   readOnly: false,
+  diagnostics: () => [],
 })
 const emit = defineEmits<{ 'update:modelValue': [value: string]; save: [] }>()
 const host = ref<HTMLElement | null>(null)
 let view: EditorView | null = null
+let editorGeneration = 0
 
 async function languageExtension(): Promise<Extension> {
   if (props.language === 'markdown') return (await import('@codemirror/lang-markdown')).markdown()
@@ -20,8 +35,9 @@ async function languageExtension(): Promise<Extension> {
 }
 
 async function createEditor(): Promise<void> {
+  const generation = ++editorGeneration
   const syntax = await languageExtension()
-  if (!host.value) return
+  if (!host.value || generation !== editorGeneration) return
   view?.destroy()
   view = new EditorView({
     parent: host.value,
@@ -30,34 +46,47 @@ async function createEditor(): Promise<void> {
       extensions: [
         basicSetup,
         syntax,
+        aitestEditorTheme,
+        autocompletion({ override: [aitestCompletionSource(props.path)] }),
+        lintGutter(),
         EditorView.editable.of(!props.readOnly),
         EditorState.readOnly.of(props.readOnly),
         keymap.of([{ key: 'Mod-s', run: () => (emit('save'), true) }]),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) emit('update:modelValue', update.state.doc.toString())
         }),
-        EditorView.theme({
-          '&': { height: '100%', backgroundColor: 'transparent', color: 'var(--text)' },
-          '.cm-scroller': { fontFamily: 'var(--mono)', fontSize: '12px', lineHeight: '1.72' },
-          '.cm-content': { padding: '12px 0 40px', caretColor: 'var(--signal)' },
-          '.cm-gutters': { backgroundColor: 'transparent', color: 'var(--muted-2)', border: '0' },
-          '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'color-mix(in oklch, var(--signal) 7%, transparent)' },
-          '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: 'var(--selection)' },
-          '&.cm-focused': { outline: 'none' },
-        }, { dark: true }),
       ],
     }),
   })
+  syncDiagnostics()
+}
+
+function syncDiagnostics(): void {
+  if (!view) return
+  view.dispatch(setDiagnostics(view.state, toCodeMirrorDiagnostics(view.state, props.diagnostics)))
+}
+
+function focusDiagnostic(diagnostic: EditorDiagnostic): void {
+  if (!view) return
+  const anchor = positionToOffset(view.state, diagnostic.line, diagnostic.column)
+  view.dispatch({ selection: { anchor }, scrollIntoView: true })
+  view.focus()
 }
 
 onMounted(() => void createEditor())
-onBeforeUnmount(() => view?.destroy())
+onBeforeUnmount(() => {
+  editorGeneration += 1
+  view?.destroy()
+})
 
-watch(() => [props.language, props.readOnly], () => void createEditor())
+watch(() => [props.path, props.language, props.readOnly], () => void createEditor())
 watch(() => props.modelValue, (value) => {
   if (!view || view.state.doc.toString() === value) return
   view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } })
 })
+watch(() => props.diagnostics, syncDiagnostics, { deep: true })
+
+defineExpose({ focusDiagnostic })
 </script>
 
 <template><div ref="host" class="code-editor" /></template>

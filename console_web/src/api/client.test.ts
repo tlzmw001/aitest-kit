@@ -17,6 +17,30 @@ describe('console API session', () => {
     expect(localStorage.length).toBe(0)
   })
 
+  it('captures the token before hash router initialization can normalize the fragment', async () => {
+    vi.resetModules()
+    sessionStorage.clear()
+    window.history.replaceState({}, '', '/#token=router-order-token')
+
+    const { createConsoleRouter } = await import('../router')
+    expect(window.location.hash).toBe('#token=router-order-token')
+    configureTokenFromUrl()
+    createConsoleRouter()
+
+    expect(hasSessionToken()).toBe(true)
+    expect(window.location.hash).toBe('#/')
+  })
+
+  it('recovers a token fragment normalized by hash history', () => {
+    sessionStorage.clear()
+    window.history.replaceState({}, '', '/#/token=normalized-token')
+
+    configureTokenFromUrl()
+
+    expect(hasSessionToken()).toBe(true)
+    expect(window.location.hash).toBe('#/')
+  })
+
   it('sends the session token in a header', async () => {
     configureTokenFromUrl()
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(

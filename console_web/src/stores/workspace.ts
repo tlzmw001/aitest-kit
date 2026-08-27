@@ -17,8 +17,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const tasks = computed<Task[]>(() => snapshot.value?.tasks ?? [])
   const recentReports = computed<ReportSummary[]>(() => snapshot.value?.recent_reports ?? [])
   const assets = computed<Asset[]>(() => [
+    ...targets.value.flatMap((target) => target.config_path
+      ? [{ path: target.config_path, name: 'target.yaml', owner: 'CONFIG' as const, exists: true }]
+      : []),
     ...modules.value.flatMap((module) => module.assets),
     ...suites.value.flatMap((suite) => suite.assets),
+    ...tasks.value.map((task) => ({ path: task.path, name: task.path.split('/').pop() || task.name, owner: 'CONFIG' as const, exists: true })),
   ])
 
   async function refresh(): Promise<void> {
@@ -78,6 +82,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     currentJob.value = job
   }
 
+  function setSnapshot(next: WorkspaceSnapshot): void {
+    snapshot.value = next
+    error.value = ''
+  }
+
   return {
     snapshot,
     loading,
@@ -95,6 +104,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     open,
     initialize,
     dismissInitialization,
+    setSnapshot,
     setCurrentJob,
   }
 })

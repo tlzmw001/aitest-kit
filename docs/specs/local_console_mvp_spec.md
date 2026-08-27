@@ -450,3 +450,5 @@ python3 -m aitest_kit.cli codegen --all --check
 Local Console 是 AITest 确定性测试内核的本地控制面，不是第二套测试框架。它允许用户直接
 管理自己的 workspace 与 env，但不把这种用户权限扩散给 Agent、任意命令或远程服务。
 Console 与 Pi 通过未来的 AITest 控制面组合，任何一方都不成为另一方的运行前提。
+
+target/module/suite/task 的结构化创建、可恢复删除和本地目录选择由增量 Spec `docs/specs/local_console_asset_management_spec.md` 覆盖。

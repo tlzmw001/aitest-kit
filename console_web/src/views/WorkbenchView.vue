@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { ArrowRight, Check, FolderOpen, History } from '@lucide/vue'
+import DirectoryPicker from '../components/DirectoryPicker.vue'
 import { useWorkspaceStore } from '../stores/workspace'
 
 const store = useWorkspaceStore()
 const showOpen = ref(!store.snapshot)
 const workspacePath = ref(store.snapshot?.path ?? '')
+const browsing = ref(false)
 const latest = computed(() => store.recentReports[0] ?? null)
 
 async function openWorkspace(): Promise<void> {
@@ -25,6 +27,11 @@ async function initializeWorkspace(): Promise<void> {
 function date(value: string): string {
   return value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '没有时间记录'
 }
+
+function selectDirectory(path: string): void {
+  workspacePath.value = path
+  browsing.value = false
+}
 </script>
 
 <template>
@@ -43,8 +50,18 @@ function date(value: string): string {
 
     <form v-if="showOpen" class="open-workspace" @submit.prevent="openWorkspace">
       <label for="workspace-path">本地 workspace 路径</label>
-      <div><input id="workspace-path" v-model="workspacePath" autocomplete="off" /><button class="primary-btn">打开</button></div>
+      <div>
+        <input id="workspace-path" v-model="workspacePath" autocomplete="off" />
+        <button type="button" class="secondary-btn" data-test="browse-directory" @click="browsing = !browsing">浏览目录</button>
+        <button class="primary-btn">打开</button>
+      </div>
       <small>打开只读取 workspace 结构，不执行 fixture、Harness 或 pytest。</small>
+      <DirectoryPicker
+        v-if="browsing"
+        :initial-path="workspacePath || store.snapshot?.path"
+        @select="selectDirectory"
+        @close="browsing = false"
+      />
       <div v-if="store.pendingInitializationPath" class="initialization-confirmation" role="alert">
         <div>
           <strong>该目录尚未初始化</strong>

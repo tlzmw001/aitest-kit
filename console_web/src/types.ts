@@ -89,6 +89,21 @@ export interface FileDocument {
   external?: boolean
 }
 
+export interface EditorDiagnostic {
+  severity: 'error' | 'warning'
+  code: string
+  message: string
+  line: number
+  column: number
+  end_line: number
+  end_column: number
+  source: string
+}
+
+export interface EditorValidationResult {
+  diagnostics: EditorDiagnostic[]
+}
+
 export interface EnvSource {
   path: string
   absolute_path: string | null
@@ -131,4 +146,47 @@ export interface ReportDetail {
   summary: ReportSummary
   result: Record<string, unknown>
   report_markdown: string
+}
+
+export interface DirectoryEntry {
+  name: string
+  path: string
+  initialized: boolean
+}
+
+export interface DirectoryListing {
+  path: string
+  parent: string | null
+  initialized: boolean
+  directories: DirectoryEntry[]
+}
+
+export interface ModuleTypeOption {
+  name: string
+  description: string
+}
+
+export type AssetIdentity =
+  | { kind: 'target'; target: string }
+  | { kind: 'module'; target: string; module: string }
+  | { kind: 'suite'; target: string; module: string; suite: string }
+  | { kind: 'task'; task: string }
+
+export interface DeletePreview {
+  kind: AssetIdentity['kind']
+  identity: AssetIdentity
+  paths: string[]
+  modified_files: string[]
+  blockers: string[]
+  can_delete: boolean
+  recoverable: boolean
+  message: string
+}
+
+export interface TrashEntry {
+  entry_id: string
+  created_at: string
+  kind: AssetIdentity['kind']
+  identity: AssetIdentity
+  paths: string[]
 }
