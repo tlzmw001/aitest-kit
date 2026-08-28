@@ -100,6 +100,7 @@ aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --c
 ```bash
 aitest init --target <dir>                                   # 初始化 workspace
 aitest doctor                                                # 体检
+aitest agent doctor                                          # 检查本地 Pi Runtime
 aitest codegen --suite-file <suite.yaml> --validate-profile  # profile 门禁
 aitest codegen --suite-file <suite.yaml>                     # 生成 pytest
 aitest codegen --suite-file <suite.yaml> --check             # 检查 generated 是否过期
@@ -131,6 +132,11 @@ codegen、生成同步检查和 run，并读取 `result.json` / `report.md` 历�
 只读。用户可以显式编辑已授权的 `.env`、`AITEST_ENV_FILE` 和 task `env_files`；env 值不会
 进入普通文件接口；任务输出会对 Console 已知的敏感值做脱敏，测试资产仍不得主动打印凭证。
 
+在 Console 的“设置 → 模型连接”中，用户只需填写连接名称、接口类型、Base URL、模型名和
+API Key，无需查询 Pi Provider。连接测试会通过 Pi Worker 发起一次不调用工具的真实模型请求；
+非敏感配置写入 workspace，API Key 只保存在当前 Console 进程内存，重启 Console 或切换
+workspace 后需要重新输入。
+
 运行真实接口测试时通过 env 文件提供凭据：
 
 ```bash
@@ -140,6 +146,48 @@ AITEST_ENV_FILE=/tmp/test.env aitest run --suite-file <suite.yaml>
 报告只记录变量名，不记录变量值。完整选项见 `aitest --help`。
 
 排查失败时可加 `--capture`，运行目录下会生成一个 `capture.jsonl`。框架只自动捕获默认 HTTP 用例；自定义 fixture、gRPC 或 SDK 调用可以手动调用 `aitest_kit.helpers.capture.capture_io()`。在 generated 测试函数体内调用时，`capture_io()` 可自动归因到当前 case；显式传入 `case_id` 仍然有效。pytest fixture setup/teardown 阶段不在该 context 内。capture 不自动脱敏，敏感字段应在用户 fixture 中处理后再写入。
+
+### 本地 Pi Agent Runtime（源码 PoC）
+
+第一阶段 Agent Runtime 只保证 AITest 源码 checkout 使用，不依赖全局 `pi` 命令，也尚未随
+PyPI wheel 分发 Node Worker。Node.js 必须满足 `>=22.19.0`：
+
+```bash
+npm ci --prefix agent_runtime/pi_worker
+aitest agent doctor --workspace /path/to/aitest_workspace
+```
+
+在 workspace 的 `aitest_config/aitest.yaml` 中只配置模型引用和环境变量名，不保存 Key 值：
+
+```yaml
+agent:
+  runtime: pi
+  connection_name: Anthropic
+  model:
+    protocol: anthropic_messages
+    provider: anthropic
+    name: claude-sonnet-4-5
+    api_key_env: ANTHROPIC_API_KEY
+    base_url: null
+    base_url_env: null
+```
+
+Key 由当前 shell 提供。审批模式是默认值；完全信任模式必须逐次明确确认，它会让原生
+read/write/edit/grep/find/ls/bash 继承当前本机用户权限，不是 Sandbox：
+
+```bash
+export ANTHROPIC_API_KEY=<your-key>
+aitest agent run --workspace /path/to/aitest_workspace \
+  --skill-path /path/to/skill \
+  --prompt "检查当前测试资产，并运行 profile validation"
+
+aitest agent run --workspace /path/to/aitest_workspace \
+  --mode full_trust \
+  --prompt "执行已确认的测试维护任务"
+```
+
+协议和日志只传环境变量名，不传 Key。审批模式下 workspace 内 read/search 默认允许，
+write/edit/bash/外部目录需批准，`.env`、私钥等敏感路径默认拒绝。
 
 ## AI Skills
 

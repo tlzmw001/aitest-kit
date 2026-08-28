@@ -49,6 +49,16 @@ const reportSummary = {
   report_path: 'test_workspace/reports/run-20260827-1/report.md',
 }
 
+const agentConnection = {
+  connection_name: 'E2E gateway',
+  protocol: 'auto',
+  base_url: 'https://gateway.example.test',
+  model: 'gpt-5.5',
+  api_key_env: 'AITEST_AGENT_API_KEY',
+  has_api_key: false,
+  credential_source: 'missing',
+}
+
 async function mockConsoleApi(page: Page): Promise<void> {
   await page.route((url) => url.pathname.startsWith('/api/'), async (route) => respond(route))
 }
@@ -63,6 +73,22 @@ async function respond(route: Route): Promise<void> {
   })
 
   if (url.pathname === '/api/workspace') return json(workspace)
+  if (url.pathname === '/api/agent/connection') {
+    if (request.method() === 'PUT') {
+      return json({ ...agentConnection, has_api_key: true, credential_source: 'session' })
+    }
+    return json(agentConnection)
+  }
+  if (url.pathname === '/api/agent/connection/test') {
+    return json({
+      status: 'connected',
+      detected_protocol: 'openai_responses',
+      internal_provider: 'openai',
+      model: 'gpt-5.5',
+      response_text: 'OK',
+      latency_ms: 6218,
+    })
+  }
   if (url.pathname === '/api/assets/options') {
     return json({ module_types: [{ name: 'standard_http', description: 'HTTP 模块' }] })
   }
@@ -105,7 +131,8 @@ async function respond(route: Route): Promise<void> {
 test.beforeEach(async ({ page }) => {
   await mockConsoleApi(page)
   await page.goto('/?launch=e2e#/token=e2e-local-session')
-  await expect(page).toHaveURL(/\?launch=e2e#\/$/)
+  await expect(page).toHaveURL(/#\/$/)
+  await expect(page).not.toHaveURL(/[?&]launch=/)
   await expect(page.getByText('AITest e2e workspace', { exact: true }).first()).toBeVisible()
   await expect(page.locator('.runtime kbd')).toHaveCount(0)
 })
@@ -214,10 +241,27 @@ test('Reka dialog restores focus and the editor splitter supports the keyboard',
   await expect(splitter).not.toHaveAttribute('aria-valuenow', before || '')
 })
 
-test('shows the real Monaco Diff when the disk changes during save', async ({ page }) => {
+test('shows the real Monaco Diff and can overwrite with the local edit', async ({ page }) => {
   let readCount = 0
+  const writes: Array<Record<string, unknown>> = []
   await page.route((url) => url.pathname === '/api/files', async (route) => {
     if (route.request().method() === 'PUT') {
+      const payload = route.request().postDataJSON() as Record<string, unknown>
+      writes.push(payload)
+      if (writes.length > 1) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            path: casesPath,
+            name: 'cases.md',
+            content: payload.content,
+            sha256: 'sha-overwritten',
+            owner: 'CASE',
+            read_only: false,
+          }),
+        })
+      }
       return route.fulfill({
         status: 409,
         contentType: 'application/json',
@@ -252,10 +296,13 @@ test('shows the real Monaco Diff when the disk changes during save', async ({ pa
   await expect(dialog).toBeVisible()
   await expect(dialog.locator('.monaco-diff-editor')).toBeVisible()
   await expect(dialog).toContainText('左侧是最新磁盘版本')
-  await dialog.getByRole('button', { name: '丢弃当前修改并载入磁盘版本' }).click()
+  await dialog.getByRole('button', { name: '保留我的修改并覆盖磁盘' }).click()
   await expect(dialog).toBeHidden()
   await expect(page.locator('.code-editor-stage .monaco-editor')).toBeVisible()
-  await expect(page.locator('.code-editor-stage .view-lines')).toContainText('disk changed outside Console')
+  await expect(page.locator('.code-editor-stage .view-lines')).toContainText('local unsaved edit')
+  expect(writes).toHaveLength(2)
+  expect(writes[0].content).toContain('local unsaved edit')
+  expect(writes[1]).toMatchObject({ content: writes[0].content, sha256: 'sha-read-2' })
 })
 
 test('renders sanitized Markdown and opens result.json with keyboard tabs', async ({ page }) => {
@@ -275,4 +322,33 @@ test('renders sanitized Markdown and opens result.json with keyboard tabs', asyn
   await expect(page.locator('.json-editor-panel')).toContainText('run-20260827-1')
   expect(await page.evaluate(() => sessionStorage.getItem('aitest-console-session-token'))).toBe('e2e-local-session')
   expect(page.url()).not.toContain('e2e-local-session')
+})
+
+test('configures an agent connection without asking for a Pi provider', async ({ page }) => {
+  await page.getByRole('button', { name: '设置' }).click()
+  await page.getByRole('link', { name: /打开模型连接/ }).click()
+
+  await expect(page).toHaveURL(/#\/settings\/agent$/)
+  await expect(page.getByRole('heading', { name: '模型连接' })).toBeVisible()
+  await expect(page.locator('[name="provider"]')).toHaveCount(0)
+  await page.locator('[data-test="connection-api-key"]').fill('e2e-session-key')
+  await page.locator('[data-test="test-connection"]').click()
+
+  await expect(page.getByText('连接测试成功')).toBeVisible()
+  await expect(page.getByRole('definition').filter({ hasText: 'OpenAI Responses' })).toBeVisible()
+  await expect(page.getByText('6.22 s')).toBeVisible()
+  await expect(page.locator('.model-response')).toContainText('OK')
+
+  await page.locator('[data-test="save-connection"]').click()
+  await expect(page.getByText('配置已保存', { exact: false })).toBeVisible()
+  await expect(page.getByText('当前 Console 会话已提供 Key')).toBeVisible()
+  await expect(page.locator('[data-test="connection-api-key"]')).toHaveValue('')
+  const persistedValues = await page.evaluate(() => {
+    const values = (storage: Storage) => Array.from(
+      { length: storage.length },
+      (_, index) => storage.getItem(storage.key(index) || ''),
+    )
+    return [...values(localStorage), ...values(sessionStorage)]
+  })
+  expect(persistedValues).not.toContain('e2e-session-key')
 })

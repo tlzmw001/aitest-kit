@@ -87,6 +87,12 @@ kbd { border: 1px solid var(--line-strong); border-radius: var(--r1); padding: 1
 .settings-subsection > strong { display: block; margin-top: 8px; font-size: 13px; }
 .settings-subsection > p { margin-top: 5px; color: var(--muted); font-size: 11px; text-wrap: pretty; }
 .settings-subsection + .settings-subsection { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.settings-route { display: flex; min-height: 58px; align-items: center; gap: 11px; margin-top: 13px; padding: 9px 12px; border: 1px solid var(--line-strong); border-radius: var(--r1); background: var(--surface); color: var(--text-2); text-decoration: none; }
+.settings-route:hover { border-color: color-mix(in oklch, var(--signal) 45%, var(--line-strong)); background: var(--raised); color: var(--text); }
+.settings-route > svg { color: var(--signal); }
+.settings-route b, .settings-route small { display: block; }
+.settings-route b { font-size: 11px; }
+.settings-route small { margin-top: 3px; color: var(--muted); font-size: 10px; }
 .setting-options { display: grid; gap: 7px; margin-top: 14px; }
 .setting-options button { position: relative; display: grid; min-height: 58px; gap: 3px; padding: 9px 12px 9px 34px; border: 1px solid var(--line-strong); border-radius: var(--r1); background: var(--surface); color: var(--text-2); text-align: left; cursor: pointer; }
 .setting-options button::before { position: absolute; top: 18px; left: 12px; width: 11px; height: 11px; border: 1px solid var(--muted); border-radius: 50%; content: ""; }

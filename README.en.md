@@ -100,6 +100,7 @@ Public docs / API contracts
 ```bash
 aitest init --target <dir>                                   # initialize workspace
 aitest doctor                                                # health check
+aitest agent doctor                                          # check the local Pi Runtime
 aitest codegen --suite-file <suite.yaml> --validate-profile  # profile gate
 aitest codegen --suite-file <suite.yaml>                     # generate pytest
 aitest codegen --suite-file <suite.yaml> --check             # check generated freshness
@@ -135,6 +136,12 @@ explicitly edit authorized `.env`, `AITEST_ENV_FILE`, and task `env_files`; env 
 enter the ordinary file API. Job output redacts values known to the Console, while test assets
 must still never print credentials deliberately.
 
+Under **Settings → Model connection**, users provide a connection name, API type, Base URL,
+model name, and API key without looking up a Pi provider. The connection test sends one real,
+tool-free request through the Pi Worker. Non-sensitive settings are written to the workspace;
+the API key remains only in the current Console process memory and must be entered again after
+restarting the Console or switching workspaces.
+
 For real API tests, provide credentials via env file:
 
 ```bash
@@ -149,6 +156,52 @@ call `aitest_kit.helpers.capture.capture_io()` manually. When called inside a ge
 function body, `capture_io()` can infer the current case; explicit `case_id` still works and
 wins. Pytest fixture setup/teardown runs outside this context. Capture does not redact; redact
 in your fixture before writing sensitive data.
+
+### Local Pi Agent Runtime (source-checkout PoC)
+
+Phase 1 supports the Agent Runtime from an AITest source checkout only. It does not depend on a
+global `pi` command, and the Node Worker is not yet bundled in PyPI wheels. Node.js must satisfy
+`>=22.19.0`:
+
+```bash
+npm ci --prefix agent_runtime/pi_worker
+aitest agent doctor --workspace /path/to/aitest_workspace
+```
+
+Store only model references and environment variable names in
+`aitest_config/aitest.yaml`, never the key value:
+
+```yaml
+agent:
+  runtime: pi
+  connection_name: Anthropic
+  model:
+    protocol: anthropic_messages
+    provider: anthropic
+    name: claude-sonnet-4-5
+    api_key_env: ANTHROPIC_API_KEY
+    base_url: null
+    base_url_env: null
+```
+
+Provide the key through the current shell. Approval mode is the default. Full trust requires an
+explicit confirmation for every session and gives the native read/write/edit/grep/find/ls/bash
+tools the current local user's host permissions. It is not a sandbox:
+
+```bash
+export ANTHROPIC_API_KEY=<your-key>
+aitest agent run --workspace /path/to/aitest_workspace \
+  --skill-path /path/to/skill \
+  --prompt "Inspect the test assets and run profile validation"
+
+aitest agent run --workspace /path/to/aitest_workspace \
+  --mode full_trust \
+  --prompt "Perform the approved test-maintenance task"
+```
+
+The protocol and logs carry the environment variable name, not the key. In approval mode,
+workspace reads and searches are allowed by default; write/edit/bash/external-directory access
+asks for approval, while `.env` and private-key paths are denied by default.
 
 ## AI Skills
 

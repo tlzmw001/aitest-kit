@@ -12,6 +12,9 @@ import type {
   TrashEntry,
   SelectorPayload,
   WorkspaceSnapshot,
+  AgentConnection,
+  AgentConnectionInput,
+  AgentConnectionTestResult,
 } from '../types'
 
 const TOKEN_KEY = 'aitest-console-session-token'
@@ -34,6 +37,7 @@ export function configureTokenFromUrl(): void {
   const token = fragment.get('token') || import.meta.env.VITE_CONSOLE_TOKEN
   if (token) {
     sessionStorage.setItem(TOKEN_KEY, token)
+    url.searchParams.delete('launch')
     url.hash = '#/'
     window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
   }
@@ -121,6 +125,17 @@ export const api = {
     request<{ path: string | null }>('/api/environment/active', {
       method: 'PUT',
       body: json({ path, confirmed: true }),
+    }),
+  agentConnection: () => request<AgentConnection>('/api/agent/connection'),
+  testAgentConnection: (payload: AgentConnectionInput) =>
+    request<AgentConnectionTestResult>('/api/agent/connection/test', {
+      method: 'POST',
+      body: json(payload),
+    }),
+  saveAgentConnection: (payload: AgentConnectionInput) =>
+    request<AgentConnection>('/api/agent/connection', {
+      method: 'PUT',
+      body: json(payload),
     }),
   reports: () => request<{ reports: ReportSummary[] }>('/api/reports'),
   reportDetail: (path: string) =>

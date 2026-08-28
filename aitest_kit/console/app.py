@@ -11,6 +11,11 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from aitest_kit.console.assets import AssetService
+from aitest_kit.console.agent_connections import (
+    AgentConnectionService,
+    ConnectionTester,
+    create_agent_connection_router,
+)
 from aitest_kit.console.directories import browse_directories
 from aitest_kit.console.editor_validation import EDITOR_CONTENT_LIMIT, validate_editor_content
 from aitest_kit.console.errors import ConsoleError
@@ -107,16 +112,18 @@ class DeleteAssetRequest(AssetIdentityRequest):
 
 
 class ConsoleRuntime:
-    def __init__(self, initial_workspace: str | Path | None) -> None:
+    def __init__(self, initial_workspace: str | Path | None, agent_connection_tester: ConnectionTester | None = None) -> None:
         self.workspace = WorkspaceState(initial_workspace)
         self.jobs = JobManager(self.workspace.root) if initial_workspace is not None else None
         self.assets = AssetService(self.workspace)
         self.trash = TrashService(self.workspace)
+        self.agent_connections = AgentConnectionService(agent_connection_tester)
 
     def open_workspace(self, path: str) -> dict[str, Any]:
         self._ensure_workspace_switch_allowed()
         root = self.workspace.open(path)
         self.jobs = JobManager(root)
+        self.agent_connections.clear_session_keys()
         return self.workspace.snapshot()
 
     def initialize_workspace(self, path: str, *, confirmed: bool) -> dict[str, Any]:
@@ -129,6 +136,7 @@ class ConsoleRuntime:
         self._ensure_workspace_switch_allowed()
         root = self.workspace.initialize(path)
         self.jobs = JobManager(root)
+        self.agent_connections.clear_session_keys()
         return self.workspace.snapshot()
 
     def _ensure_workspace_switch_allowed(self) -> None:
@@ -157,9 +165,10 @@ def create_app(
     initial_workspace: str | Path | None = None,
     token: str,
     static_dir: str | Path | None = None,
+    agent_connection_tester: ConnectionTester | None = None,
 ) -> FastAPI:
     app = FastAPI(title="AITest Local Console", docs_url=None, redoc_url=None)
-    runtime = ConsoleRuntime(initial_workspace)
+    runtime = ConsoleRuntime(initial_workspace, agent_connection_tester)
     app.state.console_runtime = runtime
     app.add_middleware(
         CORSMiddleware,
@@ -182,6 +191,11 @@ def create_app(
             raise ConsoleError("UNAUTHORIZED", "Console session token 无效", status_code=401)
 
     auth = Depends(require_token)
+
+    app.include_router(
+        create_agent_connection_router(runtime.agent_connections, lambda: runtime.workspace.root),
+        dependencies=[auth],
+    )
 
     @app.get("/api/health", dependencies=[auth])
     async def health() -> dict[str, str]:

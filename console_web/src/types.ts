@@ -190,3 +190,37 @@ export interface TrashEntry {
   identity: AssetIdentity
   paths: string[]
 }
+
+export type AgentProtocol =
+  | 'auto'
+  | 'openai_responses'
+  | 'openai_chat_completions'
+  | 'anthropic_messages'
+
+export interface AgentConnection {
+  connection_name: string
+  protocol: AgentProtocol
+  base_url: string
+  model: string
+  api_key_env: string
+  has_api_key: boolean
+  credential_source: 'session' | 'environment' | 'missing'
+}
+
+export interface AgentConnectionInput {
+  connection_name: string
+  protocol: AgentProtocol
+  base_url: string
+  model: string
+  api_key_env: string
+  api_key: string
+}
+
+export interface AgentConnectionTestResult {
+  status: 'connected'
+  detected_protocol: Exclude<AgentProtocol, 'auto'>
+  internal_provider: string
+  model: string
+  response_text: string
+  latency_ms: number
+}

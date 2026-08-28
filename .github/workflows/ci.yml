@@ -32,9 +32,18 @@ jobs:
         if: matrix.python-version == '3.11'
         uses: actions/setup-node@v4
         with:
-          node-version: "22.18.0"
+          node-version: "22.19.0"
           cache: npm
-          cache-dependency-path: console_web/package-lock.json
+          cache-dependency-path: |
+            console_web/package-lock.json
+            agent_runtime/pi_worker/package-lock.json
+
+      - name: Verify Pi Worker
+        if: matrix.python-version == '3.11'
+        run: |
+          npm --prefix agent_runtime/pi_worker ci --ignore-scripts
+          npm --prefix agent_runtime/pi_worker test
+          npm --prefix agent_runtime/pi_worker run check
 
       - name: Verify Console frontend bundle
         if: matrix.python-version == '3.11'

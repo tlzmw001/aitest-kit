@@ -10,6 +10,7 @@ export function createConsoleRouter() {
       { path: '/reports', name: 'reports', component: () => import('./views/ReportsView.vue') },
       { path: '/diagnostics', name: 'diagnostics', component: () => import('./views/DiagnosticsView.vue') },
       { path: '/environment', name: 'environment', component: () => import('./views/EnvironmentView.vue') },
+      { path: '/settings/agent', name: 'agent-connection', component: () => import('./views/AgentConnectionView.vue') },
       { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('./views/NotFoundView.vue') },
     ],
   })

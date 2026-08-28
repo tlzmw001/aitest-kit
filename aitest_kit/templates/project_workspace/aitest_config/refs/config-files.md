@@ -6,7 +6,7 @@
 
 ```text
 aitest_config/aitest.yaml
-  全局 workspace 路径、codegen 默认规则、module_type、通用断言规则
+  全局 workspace 路径、codegen 默认规则、module_type、通用断言规则、可选 Agent 模型引用
 
 aitest_config/capture.yaml
   可选运行捕获配置，控制 aitest run 是否写 capture.jsonl 以及写哪些字段
@@ -40,6 +40,7 @@ test_workspace/tasks/{task}.yaml
 | 字段/内容 | 应写位置 | 不应写位置 |
 |---|---|---|
 | workspace 路径、generated/reports 默认目录 | `aitest_config/aitest.yaml` | suite profile |
+| Agent runtime、Provider、Model、凭证环境变量名 | `aitest_config/aitest.yaml.agent` | `.env` 值、profile、Markdown 用例 |
 | 通用 `module_type` 定义 | `aitest_config/aitest.yaml` | suite profile |
 | 通用断言规则 | `aitest_config/aitest.yaml.codegen.builtin_assertion_rules` | 单个 suite profile，除非只服务该 suite |
 | target 默认目录 | `target.yaml` 或 `aitest.yaml.targets` | suite.yaml |
@@ -103,6 +104,34 @@ targets: {}
 - 新项目不要急着配置 `default_request.auto_fields`。只有字段命名稳定且跨用例一致时才配置。
 - 多端点模块优先使用 module Harness + suite profile `case_flows`。
 - `api_path: /api/v1/replace-me` 是占位默认值，真实 suite 不应依赖它。
+
+可选的本地 Pi Agent 配置只保存引用，不保存凭证值：
+
+```yaml
+agent:
+  runtime: pi
+  connection_name: Local model gateway
+  model:
+    protocol: openai_responses
+    provider: openai
+    name: gpt-5.5
+    api_key_env: MODEL_GATEWAY_API_KEY
+    base_url: https://gateway.example.com
+    base_url_env: null
+```
+
+规则：
+
+- `runtime` 首期只支持 `pi`。
+- `connection_name` 是 Console 展示名称，不参与模型路由。
+- `protocol` 支持 `auto`、`openai_responses`、`openai_chat_completions` 和 `anthropic_messages`。Console 普通表单不要求用户填写 `provider`，而是根据协议生成内部映射。
+- `base_url` 可以保存非敏感的 HTTP(S) 兼容端点；需要从 shell 注入时继续使用 `base_url_env`。
+- Console 不读取或回显 `base_url_env` 的实际值；在界面中使用自定义地址时应填写非敏感 `base_url`。CLI 会在启动 Worker 前验证 `base_url_env` 的值是安全 HTTP(S) URL。
+- `api_key_env` 必须是环境变量名，禁止添加 `api_key`、`token`、`secret` 或 `password` 值字段。
+- `base_url_env` 可选，也只能引用环境变量名；Worker 从当前 shell 的显式 allowlist 读取实际值。
+- `aitest agent doctor` 只显示变量名及是否存在，不输出变量值。
+- 权限模式是会话启动参数，不从 workspace YAML 开启完全信任，避免 workspace 内容自行升级权限。
+- Console 的模型连接页可以接收一次性 API Key，但只保存在当前本地 Console 进程内存；重启 Console 或切换 workspace 后需要重新输入。
 
 ## `aitest_config/capture.yaml`
 

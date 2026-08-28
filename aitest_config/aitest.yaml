@@ -9,6 +9,16 @@ workspace:
     reports_dir: test_workspace/reports
     docs_dir: docs
     refs_dir: aitest_config/refs
+agent:
+  runtime: pi
+  connection_name: 黑羽 Code
+  model:
+    protocol: openai_responses
+    provider: openai
+    name: gpt-5.5
+    api_key_env: HEIYU_API_KEY
+    base_url: https://www.heiyucode.com
+    base_url_env: null
 codegen:
   helper_import: from aitest_kit.helpers import http as http_helper
   api_path: /api/v1/recommend

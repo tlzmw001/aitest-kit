@@ -129,6 +129,11 @@ async function openFile(nextPath: string): Promise<void> {
 
 async function save(): Promise<void> {
   const tab = activeTab.value
+  if (!tab) return
+  await saveTab(tab)
+}
+
+async function saveTab(tab: EditorTab): Promise<void> {
   if (!tab || tab.document.read_only || !isDirty(tab)) return
   error.value = ''
   try {
@@ -166,6 +171,20 @@ function closeConflict(): void {
 
 function handleConflictOpenChange(open: boolean): void {
   if (!open) closeConflict()
+}
+
+async function keepLocalVersion(): Promise<void> {
+  const state = conflict.value
+  if (!state) return
+  const tab = tabs.value.find((item) => item.document.path === state.path)
+  if (!tab) {
+    closeConflict()
+    return
+  }
+  tab.document = state.disk
+  error.value = ''
+  closeConflict()
+  await saveTab(tab)
 }
 
 async function loadDiskVersion(): Promise<void> {
@@ -409,6 +428,7 @@ onBeforeRouteLeave(() => !hasDirtyTabs.value || window.confirm('有文件包含�
           </div>
           <footer>
             <button class="secondary-btn" @click="closeConflict">继续编辑</button>
+            <button class="primary-btn" @click="keepLocalVersion">保留我的修改并覆盖磁盘</button>
             <button class="conflict-load-btn" @click="loadDiskVersion">丢弃当前修改并载入磁盘版本</button>
           </footer>
         </DialogContent>

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import click
 
+from aitest_kit.agent.cli import agent_command
 from aitest_kit.codegen.cli import codegen
 from aitest_kit.console.cli import console_command
 from aitest_kit.doctor import doctor_command
@@ -20,6 +21,7 @@ def main():
     Command map:
       init      create a clean AITest workspace skeleton
       doctor    diagnose workspace, registry, profile, generated pytest
+      agent     run or diagnose the local Pi Agent Runtime
       codegen   compile Markdown suites/tasks into generated pytest
       console   run the local AITest web console
       run       execute generated pytest and write structured reports
@@ -31,6 +33,7 @@ def main():
 
 
 main.add_command(codegen)
+main.add_command(agent_command)
 main.add_command(console_command)
 main.add_command(doctor_command)
 main.add_command(init_command)

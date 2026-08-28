@@ -43,6 +43,24 @@ describe('EnvironmentView', () => {
     expect(api.revealEnv).toHaveBeenCalledWith('.env')
   })
 
+  it('uses the selected env path as the Monaco document identity', async () => {
+    const CodeEditorStub = defineComponent({
+      name: 'CodeEditor',
+      props: ['modelValue', 'path'],
+      template: '<div class="editor-stub" :data-path="path" />',
+    })
+    const wrapper = mount(EnvironmentView, {
+      global: { stubs: { CodeEditor: CodeEditorStub } },
+    })
+    await flushPromises()
+
+    await wrapper.get('.env-source').trigger('click')
+    await wrapper.get('.sensitive-gate .primary-btn').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.getComponent(CodeEditorStub).props('path')).toBe('.env')
+  })
+
   it('blocks route navigation while env changes are unsaved', async () => {
     const CodeEditorStub = defineComponent({
       props: ['modelValue'],

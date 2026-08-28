@@ -136,7 +136,7 @@ onBeforeRouteLeave(() => !dirty.value || window.confirm('Env 文件包含未保�
         <div v-if="selected && (selected.git_status === 'tracked' || selected.git_status === 'untracked')" class="env-warning"><AlertTriangle :size="17" /><div><strong>{{ selected.git_status === 'tracked' ? '该 env 文件已被 Git 跟踪' : '该 env 文件未被 Git 忽略' }}</strong><small>Console 不会自动修改 .gitignore，请在保存凭证前确认版本控制边界。</small></div></div>
 
         <div v-if="revealPending" class="sensitive-gate"><Eye :size="24" /><span class="eyebrow">EXPLICIT REVEAL</span><h2>显示敏感 env 内容</h2><p>内容会进入当前浏览器页面内存，但不会写入日志、报告、Agent 上下文或浏览器持久化存储。</p><div><button class="secondary-btn" @click="clearSensitive">取消</button><button class="primary-btn" @click="reveal">确认并显示</button></div></div>
-        <CodeEditor v-else-if="document" v-model="content" language="text" @save="save" />
+        <CodeEditor v-else-if="document" v-model="content" :path="selectedPath" language="text" @save="save" />
         <div v-else class="env-placeholder"><EyeOff :size="28" /><strong>敏感值默认隐藏</strong><small>选择一个 env source，再显式确认显示和编辑。</small></div>
 
         <div v-if="error || message" class="env-message" :class="{ error }"><AlertTriangle v-if="error" :size="15" /><Check v-else :size="15" />{{ error || message }}</div>

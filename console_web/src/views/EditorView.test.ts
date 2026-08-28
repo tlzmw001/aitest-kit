@@ -18,6 +18,7 @@ vi.mock('../api/client', async () => {
       readFile: vi.fn(),
       saveFile: vi.fn(),
       validateEditor: vi.fn(),
+      workspace: vi.fn(),
     },
   }
 })
@@ -98,6 +99,15 @@ describe('EditorView tabs', () => {
     localStorage.clear()
     vi.mocked(api.readFile).mockImplementation(async (path) => documentFor(path))
     vi.mocked(api.validateEditor).mockResolvedValue({ diagnostics: [] })
+    vi.mocked(api.workspace).mockResolvedValue({
+      name: 'workspace',
+      path: '/workspace',
+      branch: 'main',
+      counts: { targets: 0, modules: 0, suites: 0, cases: 0, tasks: 0 },
+      targets: [],
+      tasks: [],
+      recent_reports: [],
+    })
   })
 
   it('keeps multiple opened files as tabs by default', async () => {
@@ -245,6 +255,35 @@ describe('EditorView tabs', () => {
     expect(wrapper.get('.editor-stub').text()).toBe('# disk v2')
     expect(reloadDocument).toHaveBeenCalledOnce()
     expect(wrapper.find('[data-test="diff-stub"]').exists()).toBe(false)
+  })
+
+  it('can keep the local edit and retry a conflicted save with the latest disk hash', async () => {
+    const path = 'cases/conflict.md'
+    const original = documentFor(path)
+    const disk = { ...original, content: '# disk v2', sha256: 'sha-disk-v2' }
+    const saved = { ...disk, content: '# local edit', sha256: 'sha-saved' }
+    vi.mocked(api.readFile)
+      .mockResolvedValueOnce(original)
+      .mockResolvedValueOnce(disk)
+    vi.mocked(api.saveFile)
+      .mockRejectedValueOnce(new ApiError('FILE_CONFLICT', '文件已变化', 409))
+      .mockResolvedValueOnce(saved)
+    const { wrapper } = await mountEditor(path)
+
+    wrapper.getComponent(CodeEditorStub).vm.$emit('update:modelValue', '# local edit')
+    await nextTick()
+    await wrapper.get('.tab-action').trigger('click')
+    await flushPromises()
+
+    const keepLocal = wrapper.findAll('button').find((button) => button.text().includes('保留我的修改'))
+    expect(keepLocal).toBeDefined()
+    await keepLocal?.trigger('click')
+    await flushPromises()
+
+    expect(api.saveFile).toHaveBeenNthCalledWith(2, disk, '# local edit')
+    expect(wrapper.get('.editor-stub').text()).toBe('# local edit')
+    expect(wrapper.find('[data-test="diff-stub"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('已保存并更新文件 hash')
   })
 
   it('passes the selected theme to the code editor', async () => {
