@@ -23,7 +23,7 @@ test("session event mapper normalizes text and tool lifecycle events", () => {
     mapSessionEvent({ type: "tool_execution_end", toolCallId: "t-1", toolName: "bash", result: {}, isError: false }),
     {
       type: "tool_call_finished",
-      payload: { tool_call_id: "t-1", tool_name: "bash", is_error: false },
+      payload: { tool_call_id: "t-1", tool_name: "bash", is_error: false, result: {} },
     },
   );
   assert.deepEqual(mapSessionEvent({ type: "agent_settled" }), {
@@ -50,18 +50,69 @@ test("session event mapper does not copy tool output or credential content", () 
 });
 
 
-test("write tool events expose a bounded content summary instead of the full body", () => {
+test("write tool events preserve diff input and bound oversized content", () => {
   const mapped = mapSessionEvent({
     type: "tool_execution_start",
     toolCallId: "t-write",
     toolName: "write",
-    args: { path: "suite.md", content: `prefix-${"x".repeat(500)}-suffix` },
+    args: { path: "suite.md", content: `prefix-${"x".repeat(80 * 1024)}-suffix` },
   });
   const rendered = JSON.stringify(mapped);
 
-  assert.match(rendered, /"characters":514/);
+  assert.match(rendered, /"original_bytes":/);
   assert.match(rendered, /"truncated":true/);
-  assert.doesNotMatch(rendered, /suffix/);
+  assert.ok(Buffer.byteLength(JSON.stringify(mapped?.payload.input), "utf8") <= 64 * 1024);
+});
+
+
+test("write and edit tool events preserve bounded text needed by diff", () => {
+  assert.deepEqual(
+    mapSessionEvent({
+      type: "tool_execution_start",
+      toolCallId: "t-write-small",
+      toolName: "write",
+      args: { path: "suite.md", content: "new suite" },
+    }),
+    {
+      type: "tool_call_requested",
+      payload: {
+        tool_call_id: "t-write-small",
+        tool_name: "write",
+        input: { path: "suite.md", content: "new suite" },
+      },
+    },
+  );
+  assert.deepEqual(
+    mapSessionEvent({
+      type: "tool_execution_start",
+      toolCallId: "t-edit",
+      toolName: "edit",
+      args: { path: "suite.md", oldText: "old", newText: "new" },
+    })?.payload.input,
+    { path: "suite.md", old_text: "old", new_text: "new" },
+  );
+});
+
+
+test("session event mapper emits bounded tool progress and results", () => {
+  const update = mapSessionEvent({
+    type: "tool_execution_update",
+    toolCallId: "t-stream",
+    toolName: "bash",
+    partialResult: { output: "x".repeat(80 * 1024) },
+  });
+  const finished = mapSessionEvent({
+    type: "tool_execution_end",
+    toolCallId: "t-stream",
+    toolName: "bash",
+    result: { output: "done" },
+    isError: false,
+  });
+
+  assert.equal(update?.type, "tool_call_updated");
+  assert.equal((update?.payload.partial_result as Record<string, unknown>).truncated, true);
+  assert.ok(Buffer.byteLength(JSON.stringify(update?.payload.partial_result), "utf8") <= 64 * 1024);
+  assert.deepEqual(finished?.payload.result, { output: "done" });
 });
 
 

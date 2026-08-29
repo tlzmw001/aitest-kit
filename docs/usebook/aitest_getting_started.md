@@ -87,6 +87,12 @@ codegen 和 run 必须由用户显式发起。
 localStorage；任务输出会对 Console 已知的敏感值做脱敏，测试资产仍不得主动打印凭证。
 Console 也不会自动修改 `.gitignore`。
 
+源码 checkout 安装 Pi Worker 依赖后，可从主导航“Agent”创建本地 session。approval 模式下，
+write/edit、Shell 和外部目录请求由页面内审批卡处理；write/edit 可以查看 Monaco Diff。
+full_trust 会继承 Console 进程的本地权限，读取内容可能进入模型上下文，因此每次创建都必须
+针对当前 workspace 明确确认。页面刷新会使用 `after_seq` 恢复当前 Console 进程内保存的事件；
+Console 或 Pi Worker 进程重启后的 session 恢复尚未提供。
+
 ## 二、迁移原则
 
 ### 首轮按黑盒边界执行

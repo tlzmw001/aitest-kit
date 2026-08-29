@@ -42,6 +42,7 @@ test("approval bridge maps one-shot and session decisions to official UI options
   const selection = bridge.select("Permission\nwrite suite.md", ["Yes", "Yes, for this session", "No"]);
 
   assert.equal(requested.length, 1);
+  assert.equal((requested[0] as any).payload.tool_name, "write");
   bridge.resolve("permission-1", "allow_session");
   assert.equal(await selection, "Yes, for this session");
 });

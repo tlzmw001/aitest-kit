@@ -17,6 +17,7 @@ import { createMessage, redact } from "./protocol.ts";
 
 
 const AGENT_TOOL_NAMES = ["read", "write", "edit", "grep", "find", "ls", "bash"] as const;
+const MAX_EVENT_VALUE_BYTES = 64 * 1024;
 type AgentToolName = typeof AGENT_TOOL_NAMES[number];
 
 export interface InitializePayload {
@@ -60,6 +61,16 @@ export function mapSessionEvent(
       },
     };
   }
+  if (event.type === "tool_execution_update") {
+    return {
+      type: "tool_call_updated",
+      payload: {
+        tool_call_id: String(event.toolCallId),
+        tool_name: String(event.toolName),
+        partial_result: boundedEventValue(event.partialResult),
+      },
+    };
+  }
   if (event.type === "tool_execution_end") {
     return {
       type: "tool_call_finished",
@@ -67,6 +78,7 @@ export function mapSessionEvent(
         tool_call_id: String(event.toolCallId),
         tool_name: String(event.toolName),
         is_error: Boolean(event.isError),
+        result: boundedEventValue(event.result),
       },
     };
   }
@@ -340,18 +352,18 @@ function summarizeToolInput(toolName: string, raw: unknown): Record<string, unkn
     return redact(compactRecord({ command: raw.command, timeout: raw.timeout })) as Record<string, unknown>;
   }
   if (toolName === "write") {
-    return redact(compactRecord({
+    return boundedEventRecord(compactRecord({
       path: raw.path,
-      content: textSummary(raw.content),
-    })) as Record<string, unknown>;
+      content: raw.content,
+    }));
   }
   if (toolName === "edit") {
-    return redact(compactRecord({
+    return boundedEventRecord(compactRecord({
       path: raw.path,
-      old_text: textSummary(raw.oldText),
-      new_text: textSummary(raw.newText),
+      old_text: raw.oldText,
+      new_text: raw.newText,
       edit_count: Array.isArray(raw.edits) ? raw.edits.length : undefined,
-    })) as Record<string, unknown>;
+    }));
   }
   if (["read", "grep", "find", "ls"].includes(toolName)) {
     return redact(compactRecord({
@@ -362,21 +374,34 @@ function summarizeToolInput(toolName: string, raw: unknown): Record<string, unkn
       limit: raw.limit,
     })) as Record<string, unknown>;
   }
-  return redact(raw) as Record<string, unknown>;
-}
-
-function textSummary(value: unknown): Record<string, unknown> | undefined {
-  if (typeof value !== "string") return undefined;
-  return {
-    characters: value.length,
-    lines: value.length === 0 ? 0 : value.split("\n").length,
-    preview: value.slice(0, 240),
-    truncated: value.length > 240,
-  };
+  return boundedEventRecord(raw);
 }
 
 function compactRecord(value: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value).filter(([, child]) => child !== undefined));
+}
+
+function boundedEventRecord(value: Record<string, unknown>): Record<string, unknown> {
+  const bounded = boundedEventValue(value);
+  return isRecord(bounded) ? bounded : { value: bounded };
+}
+
+function boundedEventValue(value: unknown): unknown {
+  const safe = redact(value);
+  const serialized = safe === undefined ? "null" : JSON.stringify(safe);
+  const bytes = Buffer.byteLength(serialized, "utf8");
+  if (bytes <= MAX_EVENT_VALUE_BYTES) return safe ?? null;
+  return {
+    preview: truncateUtf8(serialized, MAX_EVENT_VALUE_BYTES - 160),
+    truncated: true,
+    original_bytes: bytes,
+  };
+}
+
+function truncateUtf8(value: string, maxBytes: number): string {
+  const source = Buffer.from(value, "utf8");
+  if (source.byteLength <= maxBytes) return value;
+  return source.subarray(0, maxBytes).toString("utf8").replace(/\uFFFD$/u, "");
 }
 
 function restoreAgentDirEnvironment(previous: string | undefined): void {

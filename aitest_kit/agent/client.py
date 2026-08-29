@@ -50,6 +50,7 @@ class WorkerClient:
         self._secret_values = _environment_secret_values(self.env or {})
         self._stdout_thread: threading.Thread | None = None
         self._stderr_thread: threading.Thread | None = None
+        self._write_lock = threading.Lock()
         self._started = False
         self._closed = False
 
@@ -108,11 +109,40 @@ class WorkerClient:
             raise self._exited_error()
         message = ProtocolMessage.create(message_type, payload)
         try:
-            process.stdin.write(message.to_line() + "\n")
-            process.stdin.flush()
+            with self._write_lock:
+                process.stdin.write(message.to_line() + "\n")
+                process.stdin.flush()
         except (BrokenPipeError, OSError) as exc:
             raise self._exited_error() from exc
         return message.id
+
+    def send_prompt(self, text: str) -> str:
+        """Send a prompt without consuming its event stream."""
+        return self.send("prompt", {"text": text})
+
+    def send_permission_decision(self, request_id: str, decision: str) -> str:
+        """Resolve one permission request without consuming worker events."""
+        return self.send(
+            "permission_decision",
+            {"request_id": request_id, "decision": decision},
+        )
+
+    def request_abort(self) -> str:
+        """Request abort while leaving acknowledgement consumption to the caller."""
+        return self.send("abort")
+
+    def request_shutdown(self) -> str:
+        """Request shutdown while leaving acknowledgement consumption to the caller."""
+        return self.send("shutdown")
+
+    def wait_for_exit(self, *, timeout: float | None = None) -> None:
+        """Wait for a previously requested shutdown and terminate on timeout."""
+        process = self._require_process()
+        try:
+            process.wait(timeout=self.shutdown_timeout if timeout is None else timeout)
+        except subprocess.TimeoutExpired:
+            self._terminate()
+        self._closed = True
 
     def read_event(self, *, timeout: float | None = None) -> ProtocolMessage:
         wait = self.message_timeout if timeout is None else timeout

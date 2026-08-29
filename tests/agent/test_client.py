@@ -80,6 +80,38 @@ def test_client_abort_and_cleanup() -> None:
     assert client.returncode == 0
 
 
+def test_client_non_consuming_commands_support_external_event_loop() -> None:
+    client = make_client()
+    try:
+        client.start({"cwd": "/tmp/workspace"})
+        prompt_id = client.send_prompt("write the suite")
+        events = [client.read_event() for _ in range(3)]
+        permission = events[-1]
+        decision_id = client.send_permission_decision(permission.payload["request_id"], "allow_once")
+        remaining = [client.read_event() for _ in range(4)]
+    finally:
+        client.close()
+
+    assert prompt_id == events[0].id
+    assert decision_id == remaining[0].id
+    assert remaining[-1].type == "agent_finished"
+
+
+def test_client_request_abort_does_not_consume_confirmation() -> None:
+    client = make_client()
+    try:
+        client.start({"cwd": "/tmp/workspace"})
+        client.send_prompt("hang")
+        assert client.read_event().type == "session_started"
+        abort_id = client.request_abort()
+        aborted = client.read_event()
+    finally:
+        client.close()
+
+    assert aborted.id == abort_id
+    assert aborted.type == "aborted"
+
+
 def test_client_reports_worker_crash() -> None:
     client = make_client()
     try:

@@ -142,6 +142,15 @@ tool-free request through the Pi Worker. Non-sensitive settings are written to t
 the API key remains only in the current Console process memory and must be entered again after
 restarting the Console or switching workspaces.
 
+From a source checkout with the Pi Worker dependencies installed, the **Agent** navigation item
+can create either an approval or full-trust local session. A resumable SSE stream presents the
+conversation, tool timeline, and inline approval cards. Write/edit requests can open Monaco Diff,
+and backend-validated workspace paths and AITest run/report events link to the editor or reports.
+Approval mode supports allow once, allow for session, and deny. Every full-trust session requires
+an explicit confirmation for the current workspace. Browser refresh can replay events retained by
+the current Console process; session recovery after a Console or Pi Worker process restart remains
+out of scope.
+
 For real API tests, provide credentials via env file:
 
 ```bash

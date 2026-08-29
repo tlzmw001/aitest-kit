@@ -6,6 +6,7 @@ export function createConsoleRouter() {
     routes: [
       { path: '/', name: 'workbench', component: () => import('./views/WorkbenchView.vue') },
       { path: '/editor', name: 'editor', component: () => import('./views/EditorView.vue') },
+      { path: '/agent', name: 'agent', component: () => import('./views/AgentView.vue') },
       { path: '/run', name: 'run', component: () => import('./views/RunView.vue') },
       { path: '/reports', name: 'reports', component: () => import('./views/ReportsView.vue') },
       { path: '/diagnostics', name: 'diagnostics', component: () => import('./views/DiagnosticsView.vue') },

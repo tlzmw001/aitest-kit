@@ -16,6 +16,7 @@ from aitest_kit.console.agent_connections import (
     ConnectionTester,
     create_agent_connection_router,
 )
+from aitest_kit.console.agent_sessions import AgentSessionManager, WorkerFactory, create_agent_session_router
 from aitest_kit.console.directories import browse_directories
 from aitest_kit.console.editor_validation import EDITOR_CONTENT_LIMIT, validate_editor_content
 from aitest_kit.console.errors import ConsoleError
@@ -112,15 +113,26 @@ class DeleteAssetRequest(AssetIdentityRequest):
 
 
 class ConsoleRuntime:
-    def __init__(self, initial_workspace: str | Path | None, agent_connection_tester: ConnectionTester | None = None) -> None:
+    def __init__(
+        self,
+        initial_workspace: str | Path | None,
+        agent_connection_tester: ConnectionTester | None = None,
+        agent_worker_factory: WorkerFactory | None = None,
+    ) -> None:
         self.workspace = WorkspaceState(initial_workspace)
         self.jobs = JobManager(self.workspace.root) if initial_workspace is not None else None
         self.assets = AssetService(self.workspace)
         self.trash = TrashService(self.workspace)
         self.agent_connections = AgentConnectionService(agent_connection_tester)
+        self.agent_sessions = AgentSessionManager(
+            self.agent_connections,
+            lambda: self.workspace.root,
+            agent_worker_factory,
+        )
 
     def open_workspace(self, path: str) -> dict[str, Any]:
         self._ensure_workspace_switch_allowed()
+        self.agent_sessions.close()
         root = self.workspace.open(path)
         self.jobs = JobManager(root)
         self.agent_connections.clear_session_keys()
@@ -134,6 +146,7 @@ class ConsoleRuntime:
                 status_code=403,
             )
         self._ensure_workspace_switch_allowed()
+        self.agent_sessions.close()
         root = self.workspace.initialize(path)
         self.jobs = JobManager(root)
         self.agent_connections.clear_session_keys()
@@ -166,15 +179,16 @@ def create_app(
     token: str,
     static_dir: str | Path | None = None,
     agent_connection_tester: ConnectionTester | None = None,
+    agent_worker_factory: WorkerFactory | None = None,
 ) -> FastAPI:
     app = FastAPI(title="AITest Local Console", docs_url=None, redoc_url=None)
-    runtime = ConsoleRuntime(initial_workspace, agent_connection_tester)
+    runtime = ConsoleRuntime(initial_workspace, agent_connection_tester, agent_worker_factory)
     app.state.console_runtime = runtime
     app.add_middleware(
         CORSMiddleware,
         allow_origin_regex=r"^https?://(127\.0\.0\.1|localhost)(:\d+)?$",
         allow_credentials=False,
-        allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "X-AITest-Console-Token"],
     )
 
@@ -196,6 +210,8 @@ def create_app(
         create_agent_connection_router(runtime.agent_connections, lambda: runtime.workspace.root),
         dependencies=[auth],
     )
+    app.include_router(create_agent_session_router(runtime.agent_sessions), dependencies=[auth])
+    app.add_event_handler("shutdown", runtime.agent_sessions.close)
 
     @app.get("/api/health", dependencies=[auth])
     async def health() -> dict[str, str]:

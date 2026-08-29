@@ -117,7 +117,9 @@ export class ApprovalBridge {
     const request = isRecord(prompt.request) ? prompt.request : {};
     const surface = stringOrNull(prompt.surface) ?? stringOrNull(request.surface);
     const value = stringOrNull(prompt.value) ?? stringOrNull(request.value);
-    const toolName = stringOrNull(request.toolName) ?? stringOrNull(request.invokedToolName);
+    const toolName = stringOrNull(request.toolName)
+      ?? stringOrNull(request.invokedToolName)
+      ?? (surface && ["read", "write", "edit", "grep", "find", "ls", "bash"].includes(surface) ? surface : null);
     const command = surface === "bash" ? value : null;
     this.send(createMessage(requestId, "permission_requested", redact({
       request_id: requestId,

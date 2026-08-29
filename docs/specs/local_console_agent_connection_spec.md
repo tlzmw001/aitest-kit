@@ -1,6 +1,6 @@
 # AITest Local Console Agent Connection Spec
 
-状态：已实现并验证，待提交
+状态：已实现、已验证并已提交（commit `8026c24`）
 依赖：`test_workspace/plans/pi_agent_runtime_integration_spec.md`
 范围：本地 Console 的模型连接配置、真实连接测试和 Pi 协议映射
 

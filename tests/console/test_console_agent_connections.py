@@ -209,6 +209,32 @@ def test_workspace_switch_clears_session_key(console_workspace: Path, tmp_path: 
     assert service.get(console_workspace)["has_api_key"] is False
 
 
+def test_runtime_launch_uses_session_key_without_exposing_it_in_payload(console_workspace: Path) -> None:
+    service = AgentConnectionService()
+    service.save(console_workspace, _payload())
+    (console_workspace / ".codex" / "skills").mkdir(parents=True)
+
+    launch = service.runtime_launch(console_workspace, permission_mode="approval")
+
+    assert launch.environment["GATEWAY_API_KEY"] == "sk-test-secret-value"
+    assert launch.initialize_payload["permission_mode"] == "approval"
+    assert launch.initialize_payload["tools"] == ["read", "write", "edit", "grep", "find", "ls", "bash"]
+    assert launch.initialize_payload["skill_paths"] == [str(console_workspace / ".codex" / "skills")]
+    assert "sk-test-secret-value" not in str(launch.initialize_payload)
+
+
+def test_runtime_launch_requires_available_key(console_workspace: Path) -> None:
+    service = AgentConnectionService()
+    service.save(console_workspace, _payload(api_key=None))
+
+    try:
+        service.runtime_launch(console_workspace, permission_mode="approval")
+    except Exception as exc:
+        assert getattr(exc, "code", None) == "AGENT_API_KEY_REQUIRED"
+    else:
+        raise AssertionError("runtime launch accepted a missing API key")
+
+
 def test_real_connection_helper_disables_all_agent_tools(console_workspace: Path, monkeypatch) -> None:
     captured: dict[str, object] = {}
 

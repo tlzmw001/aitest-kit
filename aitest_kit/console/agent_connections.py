@@ -15,7 +15,7 @@ from fastapi import APIRouter, Response
 from pydantic import BaseModel, Field, SecretStr
 
 from aitest_kit.agent.client import AgentWorkerError, WorkerClient, default_worker_command
-from aitest_kit.agent.config import AGENT_PROTOCOLS
+from aitest_kit.agent.config import AGENT_PROTOCOLS, AgentConfigError, build_worker_environment, load_agent_config
 from aitest_kit.agent.protocol import redact
 from aitest_kit.console.errors import ConsoleError
 
@@ -47,6 +47,12 @@ class AgentConnectionAttempt:
     base_url: str
     model: str
     api_key: str
+
+
+@dataclass(frozen=True)
+class AgentRuntimeLaunch:
+    initialize_payload: dict[str, Any]
+    environment: dict[str, str]
 
 
 class AgentConnectionAttemptError(RuntimeError):
@@ -136,6 +142,44 @@ class AgentConnectionService:
 
     def clear_session_keys(self) -> None:
         self._session_keys.clear()
+
+    def runtime_launch(self, workspace: str | Path, *, permission_mode: str) -> AgentRuntimeLaunch:
+        root = Path(workspace).resolve()
+        try:
+            config = load_agent_config(root)
+        except AgentConfigError as exc:
+            raise ConsoleError("AGENT_CONFIG_INVALID", str(exc), status_code=422) from exc
+        api_key = self._session_keys.get(root) or os.environ.get(config.model.api_key_env, "")
+        if not api_key:
+            raise ConsoleError("AGENT_API_KEY_REQUIRED", "请先配置 API Key，或设置对应环境变量", status_code=422)
+        source_environment = dict(os.environ)
+        source_environment[config.model.api_key_env] = api_key
+        try:
+            environment = build_worker_environment(config, environ=source_environment)
+        except AgentConfigError as exc:
+            raise ConsoleError("AGENT_CONFIG_INVALID", str(exc), status_code=422) from exc
+        skill_paths = [
+            str(candidate)
+            for relative in (".codex/skills", ".agents/skills", "skills")
+            if (candidate := root / relative).is_dir()
+        ]
+        return AgentRuntimeLaunch(
+            initialize_payload={
+                "cwd": str(root),
+                "model": {
+                    "protocol": config.model.protocol,
+                    "provider": config.model.provider,
+                    "name": config.model.name,
+                    "api_key_env": config.model.api_key_env,
+                    "base_url": config.model.base_url,
+                    "base_url_env": config.model.base_url_env,
+                },
+                "skill_paths": skill_paths,
+                "tools": ["read", "write", "edit", "grep", "find", "ls", "bash"],
+                "permission_mode": permission_mode,
+            },
+            environment=environment,
+        )
 
     def _normalize(self, payload: AgentConnectionPayload | Mapping[str, Any]) -> dict[str, str]:
         raw = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict() if hasattr(payload, "dict") else dict(payload)

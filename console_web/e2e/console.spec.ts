@@ -59,6 +59,56 @@ const agentConnection = {
   credential_source: 'missing',
 }
 
+let agentSession: Record<string, unknown> | null = null
+let agentPhase = 0
+let agentCreatePayload: Record<string, unknown> | null = null
+
+function agentSnapshot(overrides: Record<string, unknown> = {}) {
+  return {
+    session_id: 'agent-session-1',
+    pi_session_id: 'pi-session-1',
+    permission_mode: 'approval',
+    status: agentPhase === 0 ? 'created' : agentPhase === 1 ? 'awaiting_approval' : 'succeeded',
+    active_prompt: agentPhase === 1,
+    pending_approval_ids: agentPhase === 1 ? ['permission-1'] : [],
+    last_seq: agentPhase === 0 ? 1 : agentPhase === 1 ? 6 : 10,
+    created_at: '2026-08-28T12:00:00Z',
+    updated_at: '2026-08-28T12:00:01Z',
+    ...overrides,
+  }
+}
+
+function agentEvents() {
+  const base = [
+    { event_id: 'ae-1', seq: 1, type: 'session_created', payload: { permission_mode: agentSession?.permission_mode ?? 'approval' } },
+  ]
+  if (agentPhase >= 1) base.push(
+    { event_id: 'ae-2', seq: 2, type: 'user_message', payload: { text: '检查并运行当前 suite' } },
+    { event_id: 'ae-3', seq: 3, type: 'text_delta', payload: { delta: '我先检查用例和 profile。' } },
+    {
+      event_id: 'ae-4', seq: 4, type: 'tool_call_requested',
+      payload: {
+        tool_call_id: 'tool-1', tool_name: 'write', aitest_operation: 'run',
+        input: { path: casesPath, workspace_path: casesPath, content: '# Orders smoke\n\nupdated by Agent\n' },
+      },
+    },
+    {
+      event_id: 'ae-5', seq: 5, type: 'permission_requested',
+      payload: { request_id: 'permission-1', tool_name: 'write', surface: 'write', target: casesPath, summary: '写入 Markdown suite' },
+    },
+  )
+  if (agentPhase >= 2) base.push(
+    { event_id: 'ae-6', seq: 6, type: 'approval_submitted', payload: { request_id: 'permission-1', decision: 'allow_once' } },
+    { event_id: 'ae-7', seq: 7, type: 'permission_resolved', payload: { request_id: 'permission-1', decision: 'allow_once' } },
+    { event_id: 'ae-8', seq: 8, type: 'tool_call_finished', payload: { tool_call_id: 'tool-1', tool_name: 'write', is_error: false, result: {} } },
+    { event_id: 'ae-9', seq: 9, type: 'text_delta', payload: { delta: '用例已更新。' } },
+    { event_id: 'ae-10', seq: 10, type: 'agent_finished', payload: { status: 'succeeded' } },
+  )
+  return base.map((event) => ({
+    session_id: 'agent-session-1', timestamp: '2026-08-28T12:00:01Z', correlation_id: 'prompt-1', ...event,
+  }))
+}
+
 async function mockConsoleApi(page: Page): Promise<void> {
   await page.route((url) => url.pathname.startsWith('/api/'), async (route) => respond(route))
 }
@@ -73,6 +123,41 @@ async function respond(route: Route): Promise<void> {
   })
 
   if (url.pathname === '/api/workspace') return json(workspace)
+  if (url.pathname === '/api/agent/session') return json(agentSession)
+  if (url.pathname === '/api/agent/sessions' && request.method() === 'POST') {
+    const input = request.postDataJSON() as { permission_mode: string }
+    agentCreatePayload = input as unknown as Record<string, unknown>
+    agentPhase = 0
+    agentSession = agentSnapshot({ permission_mode: input.permission_mode })
+    return json(agentSession)
+  }
+  if (/^\/api\/agent\/sessions\/[^/]+\/messages$/.test(url.pathname)) {
+    agentPhase = 1
+    agentSession = agentSnapshot()
+    return json(agentSession)
+  }
+  if (/^\/api\/agent\/sessions\/[^/]+\/approvals\/[^/]+$/.test(url.pathname)) {
+    agentPhase = 2
+    agentSession = agentSnapshot()
+    return json(agentSession)
+  }
+  if (/^\/api\/agent\/sessions\/[^/]+\/abort$/.test(url.pathname)) {
+    agentSession = agentSnapshot({ status: 'aborted', active_prompt: false, pending_approval_ids: [] })
+    return json(agentSession)
+  }
+  if (/^\/api\/agent\/sessions\/[^/]+\/events$/.test(url.pathname)) {
+    const afterSeq = Number(url.searchParams.get('after_seq') || '0')
+    const body = agentEvents()
+      .filter((event) => event.seq > afterSeq)
+      .map((event) => `id: ${event.seq}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+      .join('')
+    return route.fulfill({ status: 200, contentType: 'text/event-stream', body })
+  }
+  if (/^\/api\/agent\/sessions\/[^/]+$/.test(url.pathname) && request.method() === 'DELETE') {
+    agentSession = null
+    agentPhase = 0
+    return route.fulfill({ status: 204, body: '' })
+  }
   if (url.pathname === '/api/agent/connection') {
     if (request.method() === 'PUT') {
       return json({ ...agentConnection, has_api_key: true, credential_source: 'session' })
@@ -129,12 +214,59 @@ async function respond(route: Route): Promise<void> {
 }
 
 test.beforeEach(async ({ page }) => {
+  agentSession = null
+  agentPhase = 0
+  agentCreatePayload = null
   await mockConsoleApi(page)
   await page.goto('/?launch=e2e#/token=e2e-local-session')
   await expect(page).toHaveURL(/#\/$/)
   await expect(page).not.toHaveURL(/[?&]launch=/)
   await expect(page.getByText('AITest e2e workspace', { exact: true }).first()).toBeVisible()
   await expect(page.locator('.runtime kbd')).toHaveCount(0)
+})
+
+test('runs an approval Agent session, shows Monaco Diff, and recovers after refresh', async ({ page }) => {
+  await page.getByRole('link', { name: 'Agent', exact: true }).click()
+  await page.locator('[data-test="create-approval-session"]').click()
+  await page.locator('[data-test="agent-composer"]').fill('检查并运行当前 suite')
+  await page.locator('[data-test="send-agent-message"]').click()
+
+  const approval = page.locator('[data-test="agent-approval-card"]')
+  await expect(approval).toBeVisible()
+  await expect(approval).toContainText(casesPath)
+  await approval.getByRole('button', { name: '查看 Monaco Diff' }).click()
+  await expect(page.locator('.approval-diff [role="code"]')).toHaveCount(2)
+  const composer = page.locator('[data-test="agent-composer"]')
+  await expect(composer).toBeVisible()
+  await expect.poll(() => composer.evaluate((element) => element.getBoundingClientRect().bottom < window.innerHeight - 26)).toBe(true)
+  await expect(approval.locator('.section-label')).toHaveCSS('display', 'block')
+  await expect(page).toHaveScreenshot('agent-approval-workbench.png')
+
+  await page.locator('[data-test="allow-session"]').click()
+  await expect(page.getByText('本轮完成')).toBeVisible()
+  await expect(page.getByText('用例已更新。')).toBeVisible()
+  await page.locator('.agent-tool-summary').click()
+  await expect(page.getByRole('link', { name: '在编辑器打开' })).toHaveAttribute('href', /#\/editor\?path=.*cases\.md/)
+  await expect(page.getByRole('link', { name: '查看执行报告' })).toHaveAttribute('href', '#/reports')
+
+  await page.reload()
+  await expect(page.getByText('本轮完成')).toBeVisible()
+  await expect(page.locator('.user-message')).toHaveCount(1)
+  await expect(page.getByText('用例已更新。')).toBeVisible()
+})
+
+test('requires a workspace-specific confirmation before full trust', async ({ page }) => {
+  await page.getByRole('link', { name: 'Agent', exact: true }).click()
+  await page.locator('[data-test="create-full-trust-session"]').click()
+
+  const dialog = page.locator('[data-test="full-trust-dialog"]')
+  await expect(dialog).toContainText('/tmp/aitest-console-e2e')
+  await expect(dialog).toContainText('文件内容可能发送给当前模型服务')
+  await page.locator('[data-test="confirm-full-trust"]').click()
+
+  await expect(page.getByText('完全信任', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('该确认只对本次 session 生效')).toBeHidden()
+  expect(agentCreatePayload).toMatchObject({ permission_mode: 'full_trust', confirmed: true })
 })
 
 test('opens multiple files and preserves the compact close hover surface', async ({ page }) => {

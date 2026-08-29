@@ -137,6 +137,13 @@ API Key，无需查询 Pi Provider。连接测试会通过 Pi Worker 发起一�
 非敏感配置写入 workspace，API Key 只保存在当前 Console 进程内存，重启 Console 或切换
 workspace 后需要重新输入。
 
+在源码 checkout 且 Pi Worker 依赖已安装时，主导航的“Agent”可以创建 approval 或 full_trust
+本地 session。页面通过可恢复的 SSE 事件流展示对话、工具时间线和审批卡；write/edit 可展开
+Monaco Diff，已验证的 workspace 路径和 AITest run/report 工具事件可以跳转到编辑器或报告页。
+approval 模式支持允许一次、本会话允许和拒绝；full_trust 每次创建 session 都必须针对当前
+workspace 明确确认。刷新页面可恢复当前 Console 进程内的事件，Console 或 Pi Worker 进程
+重启后的 session 恢复仍不在当前范围内。
+
 运行真实接口测试时通过 env 文件提供凭据：
 
 ```bash

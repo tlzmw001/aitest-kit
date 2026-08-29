@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   Activity,
+  Bot,
   Bug,
   Cable,
   FileText,
@@ -28,6 +29,7 @@ const settingsOpen = ref(false)
 const nav = [
   { name: 'workbench', label: '工作台', icon: FolderTree, to: '/' },
   { name: 'editor', label: '用例', icon: FileText, to: '/editor' },
+  { name: 'agent', label: 'Agent', icon: Bot, to: '/agent' },
   { name: 'run', label: '运行', icon: Play, to: '/run' },
   { name: 'reports', label: '报告', icon: Activity, to: '/reports' },
   { name: 'diagnostics', label: '诊断', icon: Bug, to: '/diagnostics' },

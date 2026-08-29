@@ -224,3 +224,30 @@ export interface AgentConnectionTestResult {
   response_text: string
   latency_ms: number
 }
+
+export type AgentPermissionMode = 'approval' | 'full_trust'
+export type AgentSessionStatus = 'created' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed' | 'aborted'
+
+export interface AgentSessionSnapshot {
+  session_id: string
+  pi_session_id: string
+  permission_mode: AgentPermissionMode
+  status: AgentSessionStatus
+  active_prompt: boolean
+  pending_approval_ids: string[]
+  last_seq: number
+  created_at: string
+  updated_at: string
+}
+
+export interface AgentEvent {
+  event_id: string
+  seq: number
+  session_id: string
+  type: string
+  timestamp: string
+  correlation_id: string
+  payload: Record<string, unknown>
+}
+
+export type AgentApprovalDecision = 'allow_once' | 'allow_session' | 'deny'
