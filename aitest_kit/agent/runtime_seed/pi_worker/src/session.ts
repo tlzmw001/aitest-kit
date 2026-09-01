@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -34,6 +35,8 @@ export interface InitializePayload {
   tools?: AgentToolName[];
   permission_mode: PermissionMode;
   approval_timeout_ms?: number;
+  session_dir?: string;
+  session_file?: string;
 }
 
 interface NormalizedEvent {
@@ -42,6 +45,28 @@ interface NormalizedEvent {
 }
 
 type EventSink = (message: unknown) => void;
+
+
+export function createPiSessionManager(
+  payload: Pick<InitializePayload, "cwd" | "session_dir" | "session_file">,
+): SessionManager {
+  if (!payload.session_dir && !payload.session_file) {
+    return SessionManager.inMemory(payload.cwd);
+  }
+  if (!payload.session_dir) {
+    throw new Error("session_dir is required when session_file is provided");
+  }
+  const sessionDir = realpathSync(resolve(payload.session_dir));
+  if (!payload.session_file) {
+    return SessionManager.create(payload.cwd, sessionDir);
+  }
+  const sessionFile = realpathSync(resolve(payload.session_file));
+  const relativePath = relative(sessionDir, sessionFile);
+  if (!relativePath || relativePath.startsWith("..") || isAbsolute(relativePath)) {
+    throw new Error("session_file must be inside session_dir");
+  }
+  return SessionManager.open(sessionFile, sessionDir, payload.cwd);
+}
 
 
 export function mapSessionEvent(
@@ -181,7 +206,7 @@ export class PiSessionController {
         model,
         modelRuntime,
         resourceLoader,
-        sessionManager: SessionManager.inMemory(payload.cwd),
+        sessionManager: createPiSessionManager(payload),
         settingsManager,
         tools: payload.tools ?? [...AGENT_TOOL_NAMES],
       });
@@ -201,6 +226,10 @@ export class PiSessionController {
 
   get sessionId(): string {
     return String(this.session.sessionId);
+  }
+
+  get sessionFile(): string | undefined {
+    return this.session.sessionFile;
   }
 
   async prompt(messageId: string, text: string): Promise<void> {

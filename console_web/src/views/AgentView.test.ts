@@ -7,10 +7,13 @@ import { api } from '../api/client'
 vi.mock('../api/client', () => ({
   api: {
     agentSession: vi.fn(),
+    agentSessions: vi.fn(),
+    agentSessionHistory: vi.fn(),
     agentConnection: vi.fn(),
     agentRuntime: vi.fn(),
     streamAgentEvents: vi.fn(() => new Promise(() => undefined)),
     createAgentSession: vi.fn(),
+    activateAgentSession: vi.fn(),
     closeAgentSession: vi.fn(),
   },
 }))
@@ -34,6 +37,7 @@ describe('AgentView Runtime gate', () => {
     setActivePinia(createPinia())
     vi.resetAllMocks()
     vi.mocked(api.agentSession).mockResolvedValue(null)
+    vi.mocked(api.agentSessions).mockResolvedValue({ sessions: [] })
     vi.mocked(api.agentConnection).mockResolvedValue({
       connection_name: 'Gateway', protocol: 'auto', base_url: '', model: 'gpt-5.5',
       api_key_env: 'AITEST_AGENT_API_KEY', has_api_key: true, credential_source: 'environment',
@@ -58,5 +62,22 @@ describe('AgentView Runtime gate', () => {
     expect(wrapper.find('[data-test="agent-runtime-required"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="create-approval-session"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="create-full-trust-session"]').exists()).toBe(true)
+  })
+
+  it('shows persisted sessions as history without attaching a worker', async () => {
+    vi.mocked(api.agentSessions).mockResolvedValue({
+      sessions: [{
+        session_id: 'session-1', pi_session_id: 'pi-1', permission_mode: 'approval', title: '检查订单用例',
+        status: 'interrupted', active_prompt: false, pending_approval_ids: [], last_seq: 2,
+        created_at: '2026-09-01T00:00:00Z', updated_at: '2026-09-01T00:01:00Z', is_active: false,
+      }],
+    })
+    vi.mocked(api.agentSessionHistory).mockResolvedValue({ events: [], last_seq: 2, resync_required: false })
+    const wrapper = mount(AgentView, { global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } } })
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="agent-session-list"]').text()).toContain('检查订单用例')
+    expect(wrapper.get('[data-test="activate-agent-session"]').text()).toContain('继续会话')
+    expect(wrapper.text()).toContain('最后持久化位置')
   })
 })

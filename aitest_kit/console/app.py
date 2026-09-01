@@ -16,7 +16,8 @@ from aitest_kit.console.agent_connections import (
     ConnectionTester,
     create_agent_connection_router,
 )
-from aitest_kit.console.agent_sessions import AgentSessionManager, WorkerFactory, create_agent_session_router
+from aitest_kit.console.agent_session_api import create_agent_session_router
+from aitest_kit.console.agent_sessions import AgentSessionManager, WorkerFactory
 from aitest_kit.console.agent_runtime import AgentRuntimeService, create_agent_runtime_router
 from aitest_kit.console.directories import browse_directories
 from aitest_kit.console.editor_validation import EDITOR_CONTENT_LIMIT, validate_editor_content
@@ -119,6 +120,7 @@ class ConsoleRuntime:
         initial_workspace: str | Path | None,
         agent_connection_tester: ConnectionTester | None = None,
         agent_worker_factory: WorkerFactory | None = None,
+        agent_session_home: str | Path | None = None,
     ) -> None:
         self.workspace = WorkspaceState(initial_workspace)
         self.jobs = JobManager(self.workspace.root) if initial_workspace is not None else None
@@ -129,6 +131,7 @@ class ConsoleRuntime:
             self.agent_connections,
             lambda: self.workspace.root,
             agent_worker_factory,
+            session_home=agent_session_home,
         )
         self.agent_runtime = AgentRuntimeService(self.agent_sessions.snapshot)
 
@@ -155,6 +158,7 @@ class ConsoleRuntime:
         return self.workspace.snapshot()
 
     def _ensure_workspace_switch_allowed(self) -> None:
+        self.agent_sessions.ensure_switch_allowed()
         if self.jobs is not None and any(job["status"] in {"queued", "running"} for job in self.jobs.list()):
             raise ConsoleError("JOB_ALREADY_RUNNING", "任务运行期间不能切换 workspace", status_code=409)
 
@@ -182,9 +186,15 @@ def create_app(
     static_dir: str | Path | None = None,
     agent_connection_tester: ConnectionTester | None = None,
     agent_worker_factory: WorkerFactory | None = None,
+    agent_session_home: str | Path | None = None,
 ) -> FastAPI:
     app = FastAPI(title="AITest Local Console", docs_url=None, redoc_url=None)
-    runtime = ConsoleRuntime(initial_workspace, agent_connection_tester, agent_worker_factory)
+    runtime = ConsoleRuntime(
+        initial_workspace,
+        agent_connection_tester,
+        agent_worker_factory,
+        agent_session_home,
+    )
     app.state.console_runtime = runtime
     app.add_middleware(
         CORSMiddleware,

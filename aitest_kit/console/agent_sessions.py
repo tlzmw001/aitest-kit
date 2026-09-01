@@ -1,30 +1,22 @@
-"""In-memory Pi Agent sessions and authenticated Console transport."""
+"""Persistent Pi Agent session lifecycle for the local Console."""
 from __future__ import annotations
 
-import asyncio
-import json
 import shlex
 import threading
-import uuid
-from collections import deque
-from collections.abc import Callable, Iterator, Mapping
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, Protocol
-
-from fastapi import APIRouter, Request, Response
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from typing import Any, Protocol
 
 from aitest_kit.agent.client import AgentWorkerError, WorkerClient, default_worker_command
 from aitest_kit.agent.protocol import ProtocolMessage, redact
 from aitest_kit.console.agent_connections import AgentConnectionService
+from aitest_kit.console.agent_event_log import AgentEventLog
+from aitest_kit.console.agent_session_store import AgentSessionRecord, AgentSessionStore
+from aitest_kit.console.agent_worker_lease import AgentWorkerLease
 from aitest_kit.console.errors import ConsoleError
 
 
-MAX_EVENT_COUNT = 1000
-MAX_EVENT_BYTES = 2 * 1024 * 1024
 MAX_PROMPT_BYTES = 64 * 1024
 TERMINAL_STATES = {"succeeded", "failed", "aborted"}
 PERMISSION_DECISIONS = {"allow_once", "allow_session", "deny"}
@@ -43,111 +35,43 @@ class SessionWorker(Protocol):
 WorkerFactory = Callable[[Mapping[str, str]], SessionWorker]
 
 
-class CreateAgentSessionRequest(BaseModel):
-    permission_mode: str
-    confirmed: bool = False
-
-
-class AgentMessageRequest(BaseModel):
-    text: str = Field(max_length=MAX_PROMPT_BYTES)
-
-
-class AgentApprovalRequest(BaseModel):
-    decision: str
-
-
-@dataclass(frozen=True)
-class ReplayResult:
-    events: list[dict[str, Any]]
-    resync_required: bool
-
-
-class AgentEventLog:
-    def __init__(self) -> None:
-        self._events: deque[tuple[dict[str, Any], int]] = deque()
-        self._bytes = 0
-        self._last_seq = 0
-        self._closed = False
-        self._condition = threading.Condition()
-
-    @property
-    def last_seq(self) -> int:
-        with self._condition:
-            return self._last_seq
-
-    def append(self, session_id: str, event_type: str, payload: Mapping[str, Any], correlation_id: str = "") -> dict[str, Any]:
-        with self._condition:
-            self._last_seq += 1
-            event = {
-                "event_id": str(uuid.uuid4()),
-                "seq": self._last_seq,
-                "session_id": session_id,
-                "type": event_type,
-                "timestamp": _now(),
-                "correlation_id": correlation_id,
-                "payload": redact(dict(payload)),
-            }
-            size = len(json.dumps(event, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
-            self._events.append((event, size))
-            self._bytes += size
-            while len(self._events) > MAX_EVENT_COUNT or self._bytes > MAX_EVENT_BYTES:
-                _, removed = self._events.popleft()
-                self._bytes -= removed
-            self._condition.notify_all()
-            return dict(event)
-
-    def replay(self, after_seq: int) -> ReplayResult:
-        with self._condition:
-            oldest = self._events[0][0]["seq"] if self._events else self._last_seq + 1
-            required = bool(self._events and after_seq < oldest - 1)
-            return ReplayResult(
-                events=[dict(event) for event, _ in self._events if event["seq"] > after_seq],
-                resync_required=required,
-            )
-
-    def wait_after(self, after_seq: int, timeout: float) -> tuple[list[dict[str, Any]], bool]:
-        with self._condition:
-            if self._last_seq <= after_seq and not self._closed:
-                self._condition.wait(timeout)
-            return (
-                [dict(event) for event, _ in self._events if event["seq"] > after_seq],
-                self._closed,
-            )
-
-    def close(self) -> None:
-        with self._condition:
-            self._closed = True
-            self._condition.notify_all()
-
-
 class AgentSession:
     def __init__(
         self,
         *,
         workspace: Path,
-        permission_mode: str,
+        record: AgentSessionRecord,
+        store: AgentSessionStore,
         worker: SessionWorker,
         initialize_payload: Mapping[str, Any],
+        resumed: bool,
     ) -> None:
-        self.session_id = str(uuid.uuid4())
+        self.session_id = record.session_id
         self.workspace = workspace.resolve()
-        self.permission_mode = permission_mode
+        self.permission_mode = record.permission_mode
+        self.title = record.title
+        self._record = record
+        self._store = store
         self.worker = worker
-        self.events = AgentEventLog()
-        self.status = "created"
-        self.pi_session_id = ""
+        self.events = AgentEventLog(journal_path=store.event_path(self.workspace, self.session_id))
+        self.status = record.status
+        self.pi_session_id = record.pi_session_id
         self.active_prompt = False
         self.pending_approvals: dict[str, dict[str, Any]] = {}
-        self.created_at = _now()
-        self.updated_at = self.created_at
+        self.created_at = record.created_at
+        self.updated_at = record.updated_at
         self._lock = threading.RLock()
         self._closing = False
         self._terminal_emitted = False
         ready = worker.start(initialize_payload)
         self.pi_session_id = str(ready.payload.get("session_id") or "")
+        self._store.set_pi_session_file(record, str(ready.payload.get("session_file") or ""))
         self._reader = threading.Thread(target=self._read_worker, name="aitest-console-agent", daemon=True)
         self._reader.start()
-        self._append("session_created", {"permission_mode": permission_mode})
+        self._append(
+            "session_resumed" if resumed else "session_created",
+            {"permission_mode": self.permission_mode},
+        )
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
@@ -155,12 +79,14 @@ class AgentSession:
                 "session_id": self.session_id,
                 "pi_session_id": self.pi_session_id,
                 "permission_mode": self.permission_mode,
+                "title": self.title,
                 "status": self.status,
                 "active_prompt": self.active_prompt,
                 "pending_approval_ids": list(self.pending_approvals),
                 "last_seq": self.events.last_seq,
                 "created_at": self.created_at,
                 "updated_at": self.updated_at,
+                "is_active": True,
             }
 
     def send_message(self, text: str) -> dict[str, Any]:
@@ -173,6 +99,8 @@ class AgentSession:
             if self.active_prompt:
                 raise ConsoleError("AGENT_PROMPT_ALREADY_RUNNING", "当前 Agent 正在处理上一条消息", status_code=409)
             message_id = self.worker.send_prompt(normalized)
+            if self.title == "新会话":
+                self.title = _session_title(normalized)
             self.active_prompt = True
             self._terminal_emitted = False
             self.status = "running"
@@ -205,12 +133,24 @@ class AgentSession:
             if self._closing:
                 return
             self._closing = True
+            was_active = self.active_prompt or bool(self.pending_approvals)
             try:
                 self.worker.request_shutdown()
             except AgentWorkerError:
                 pass
         self.worker.wait_for_exit(timeout=5)
         self._reader.join(timeout=1)
+        with self._lock:
+            if was_active:
+                self.status = "interrupted"
+                self.active_prompt = False
+                self.pending_approvals.clear()
+                self._append(
+                    "session_interrupted",
+                    {"reason": "runtime_stopped", "tool_result_unknown": True},
+                )
+            else:
+                self._persist()
         self.events.close()
 
     def _read_worker(self) -> None:
@@ -291,6 +231,18 @@ class AgentSession:
     def _append(self, event_type: str, payload: Mapping[str, Any], correlation_id: str = "") -> None:
         self.updated_at = _now()
         self.events.append(self.session_id, event_type, payload, correlation_id)
+        self._persist()
+
+    def _persist(self) -> None:
+        self._record.pi_session_id = self.pi_session_id
+        self._record.permission_mode = self.permission_mode
+        self._record.title = self.title
+        self._record.status = self.status
+        self._record.active_prompt = self.active_prompt
+        self._record.pending_approval_ids = list(self.pending_approvals)
+        self._record.last_seq = self.events.last_seq
+        self._record.updated_at = self.updated_at
+        self._store.save(self._record)
 
 
 class AgentSessionManager:
@@ -299,39 +251,81 @@ class AgentSessionManager:
         connections: AgentConnectionService,
         workspace_root: Callable[[], Path],
         worker_factory: WorkerFactory | None = None,
+        *,
+        session_home: str | Path | None = None,
     ) -> None:
         self._connections = connections
         self._workspace_root = workspace_root
         self._worker_factory = worker_factory or (
             lambda environment: WorkerClient(default_worker_command(), env=environment)
         )
+        self._store = AgentSessionStore(session_home)
         self._current: AgentSession | None = None
+        self._worker_lease: AgentWorkerLease | None = None
         self._lock = threading.RLock()
 
     def create(self, permission_mode: str, *, confirmed: bool) -> dict[str, Any]:
-        if permission_mode not in {"approval", "full_trust"}:
-            raise ConsoleError("AGENT_PERMISSION_MODE_INVALID", "权限模式不受支持", status_code=422)
-        if permission_mode == "full_trust" and not confirmed:
-            raise ConsoleError(
-                "FULL_TRUST_CONFIRMATION_REQUIRED",
-                "完全信任模式继承本地权限，文件内容可能进入模型上下文，需要明确确认",
-                status_code=403,
-            )
         with self._lock:
-            self.close()
+            self._validate_mode(permission_mode, confirmed=confirmed)
+            self._deactivate(require_idle=True)
             workspace = self._workspace_root().resolve()
-            launch = self._connections.runtime_launch(workspace, permission_mode=permission_mode)
+            record = self._store.create(workspace, permission_mode)
             try:
-                worker = self._worker_factory(launch.environment)
-                self._current = AgentSession(
-                    workspace=workspace,
-                    permission_mode=permission_mode,
-                    worker=worker,
-                    initialize_payload=launch.initialize_payload,
-                )
-            except AgentWorkerError as exc:
-                raise ConsoleError(exc.code, str(exc), status_code=502) from exc
-            return self._current.snapshot()
+                return self._start(record, confirmed=confirmed, resumed=False)
+            except Exception:
+                self._store.remove_new(workspace, record.session_id)
+                raise
+
+    def activate(self, session_id: str, *, confirmed: bool) -> dict[str, Any]:
+        with self._lock:
+            if self._current and self._current.session_id == session_id:
+                return self._current.snapshot()
+            workspace = self._workspace_root().resolve()
+            record = self._recover(self._store.load(workspace, session_id))
+            return self._start(record, confirmed=confirmed, resumed=True)
+
+    def list_sessions(self) -> list[dict[str, Any]]:
+        with self._lock:
+            workspace = self._workspace_root().resolve()
+            current_id = self._current.session_id if self._current else ""
+            snapshots: list[dict[str, Any]] = []
+            for record in self._store.list(workspace):
+                if self._current and record.session_id == current_id:
+                    snapshots.append(self._current.snapshot())
+                    continue
+                recovered = self._recover(record)
+                snapshots.append(recovered.snapshot(is_active=recovered.session_id == current_id))
+            return snapshots
+
+    def get(self, session_id: str) -> dict[str, Any]:
+        with self._lock:
+            if self._current and self._current.session_id == session_id:
+                return self._current.snapshot()
+            workspace = self._workspace_root().resolve()
+            record = self._recover(self._store.load(workspace, session_id))
+            return record.snapshot(is_active=False)
+
+    def history(self, session_id: str, *, after_seq: int) -> dict[str, Any]:
+        with self._lock:
+            if self._current and self._current.session_id == session_id:
+                events = self._current.events
+            else:
+                workspace = self._workspace_root().resolve()
+                record = self._recover(self._store.load(workspace, session_id))
+                events = AgentEventLog(journal_path=self._store.event_path(workspace, record.session_id))
+            replay = events.replay(after_seq)
+            return {
+                "events": replay.events,
+                "last_seq": events.last_seq,
+                "resync_required": replay.resync_required,
+            }
+
+    def archive(self, session_id: str) -> None:
+        with self._lock:
+            workspace = self._workspace_root().resolve()
+            if self._current and self._current.session_id == session_id:
+                self._deactivate(require_idle=True)
+            self._store.archive(workspace, session_id)
 
     def snapshot(self) -> dict[str, Any] | None:
         with self._lock:
@@ -347,92 +341,88 @@ class AgentSessionManager:
         with self._lock:
             if session_id is not None:
                 self.require(session_id)
-            current = self._current
-            self._current = None
-        if current:
-            current.close()
+            self._deactivate(require_idle=False)
 
+    def ensure_switch_allowed(self) -> None:
+        with self._lock:
+            if self._current and (self._current.active_prompt or self._current.pending_approvals):
+                raise ConsoleError("AGENT_SESSION_BUSY", "Agent 运行期间不能切换 workspace", status_code=409)
 
-def create_agent_session_router(manager: AgentSessionManager) -> APIRouter:
-    router = APIRouter(prefix="/api/agent")
+    def _start(self, record: AgentSessionRecord, *, confirmed: bool, resumed: bool) -> dict[str, Any]:
+        self._validate_mode(record.permission_mode, confirmed=confirmed)
+        self._deactivate(require_idle=True)
+        workspace = self._workspace_root().resolve()
+        launch = self._connections.runtime_launch(workspace, permission_mode=record.permission_mode)
+        payload = dict(launch.initialize_payload)
+        payload["session_dir"] = str(self._store.pi_dir(workspace, record.session_id))
+        session_file = self._store.resolve_pi_session_file(record)
+        if session_file is not None and session_file.is_file():
+            payload["session_file"] = str(session_file)
+        lease = self._store.worker_lease(workspace)
+        lease.acquire()
+        try:
+            worker = self._worker_factory(launch.environment)
+            self._current = AgentSession(
+                workspace=workspace,
+                record=record,
+                store=self._store,
+                worker=worker,
+                initialize_payload=payload,
+                resumed=resumed,
+            )
+            self._worker_lease = lease
+        except Exception as exc:
+            lease.release()
+            if isinstance(exc, AgentWorkerError):
+                raise ConsoleError(exc.code, str(exc), status_code=502) from exc
+            raise
+        return self._current.snapshot()
 
-    @router.post("/sessions")
-    async def create_session(payload: CreateAgentSessionRequest, response: Response) -> dict[str, Any]:
-        response.headers["Cache-Control"] = "no-store"
-        return manager.create(payload.permission_mode, confirmed=payload.confirmed)
+    @staticmethod
+    def _validate_mode(permission_mode: str, *, confirmed: bool) -> None:
+        if permission_mode not in {"approval", "full_trust"}:
+            raise ConsoleError("AGENT_PERMISSION_MODE_INVALID", "权限模式不受支持", status_code=422)
+        if permission_mode == "full_trust" and not confirmed:
+            raise ConsoleError(
+                "FULL_TRUST_CONFIRMATION_REQUIRED",
+                "完全信任模式继承本地权限，文件内容可能进入模型上下文，需要明确确认",
+                status_code=403,
+            )
 
-    @router.get("/session")
-    async def get_session(response: Response) -> Optional[dict[str, Any]]:
-        response.headers["Cache-Control"] = "no-store"
-        return manager.snapshot()
-
-    @router.post("/sessions/{session_id}/messages")
-    async def send_message(session_id: str, payload: AgentMessageRequest, response: Response) -> dict[str, Any]:
-        response.headers["Cache-Control"] = "no-store"
-        return manager.require(session_id).send_message(payload.text)
-
-    @router.post("/sessions/{session_id}/approvals/{request_id}")
-    async def approve(session_id: str, request_id: str, payload: AgentApprovalRequest, response: Response) -> dict[str, Any]:
-        response.headers["Cache-Control"] = "no-store"
-        return manager.require(session_id).resolve_approval(request_id, payload.decision)
-
-    @router.post("/sessions/{session_id}/abort")
-    async def abort(session_id: str, response: Response) -> dict[str, Any]:
-        response.headers["Cache-Control"] = "no-store"
-        return manager.require(session_id).abort()
-
-    @router.delete("/sessions/{session_id}", status_code=204)
-    async def delete_session(session_id: str) -> Response:
-        manager.close(session_id)
-        return Response(status_code=204, headers={"Cache-Control": "no-store"})
-
-    @router.get("/sessions/{session_id}/events")
-    async def session_events(session_id: str, request: Request, after_seq: int = 0) -> StreamingResponse:
-        if after_seq < 0:
-            raise ConsoleError("AGENT_EVENT_CURSOR_INVALID", "after_seq 不能小于 0", status_code=422)
-        session = manager.require(session_id)
-        return StreamingResponse(
-            _stream_events(session, request, after_seq),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+    def _recover(self, record: AgentSessionRecord) -> AgentSessionRecord:
+        stale = record.active_prompt or record.pending_approval_ids or record.status in {"running", "awaiting_approval"}
+        if not stale:
+            return record
+        events = AgentEventLog(
+            journal_path=self._store.event_path(Path(record.workspace_path), record.session_id)
         )
+        events.append(
+            record.session_id,
+            "session_interrupted",
+            {"reason": "runtime_restart", "tool_result_unknown": True},
+        )
+        record.status = "interrupted"
+        record.active_prompt = False
+        record.pending_approval_ids = []
+        record.last_seq = events.last_seq
+        record.updated_at = _now()
+        self._store.save(record)
+        return record
 
-    return router
-
-
-async def _stream_events(session: AgentSession, request: Request, after_seq: int) -> Iterator[str]:
-    cursor = after_seq
-    replay = session.events.replay(cursor)
-    if replay.resync_required:
-        yield _encode_sse({
-            "event_id": str(uuid.uuid4()),
-            "seq": session.events.last_seq,
-            "session_id": session.session_id,
-            "type": "resync_required",
-            "timestamp": _now(),
-            "correlation_id": "",
-            "payload": {"session": session.snapshot()},
-        })
-        cursor = session.events.last_seq
-    else:
-        for event in replay.events:
-            yield _encode_sse(event)
-            cursor = event["seq"]
-    while not await request.is_disconnected():
-        events, closed = await asyncio.to_thread(session.events.wait_after, cursor, 15.0)
-        for event in events:
-            yield _encode_sse(event)
-            cursor = event["seq"]
-        if closed:
+    def _deactivate(self, *, require_idle: bool) -> None:
+        current = self._current
+        if current is None:
             return
-        if not events:
-            yield ": heartbeat\n\n"
-
-
-def _encode_sse(event: Mapping[str, Any]) -> str:
-    data = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
-    return f"id: {event['seq']}\nevent: {event['type']}\ndata: {data}\n\n"
-
+        if require_idle and (current.active_prompt or current.pending_approvals):
+            raise ConsoleError("AGENT_SESSION_BUSY", "Agent 运行期间不能切换会话", status_code=409)
+        self._current = None
+        lease = self._worker_lease
+        self._worker_lease = None
+        try:
+            current.close()
+        finally:
+            if lease is not None:
+                lease.release()
 
 def _valid_permission(payload: Mapping[str, Any]) -> bool:
     request_id = payload.get("request_id")
@@ -475,6 +465,12 @@ def _aitest_operation(command: str) -> str | None:
             operation_index = index + 3
             return parts[operation_index] if operation_index < len(parts) and parts[operation_index] in {"codegen", "run", "report"} else None
     return None
+
+
+def _session_title(text: str) -> str:
+    first_line = next((line.strip() for line in text.splitlines() if line.strip()), "新会话")
+    safe = str(redact(first_line))
+    return safe if len(safe) <= 48 else safe[:47].rstrip() + "…"
 
 
 def _now() -> str:

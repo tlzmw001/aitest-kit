@@ -68,12 +68,14 @@ function agentSnapshot(overrides: Record<string, unknown> = {}) {
     session_id: 'agent-session-1',
     pi_session_id: 'pi-session-1',
     permission_mode: 'approval',
+    title: '检查并运行当前 suite',
     status: agentPhase === 0 ? 'created' : agentPhase === 1 ? 'awaiting_approval' : 'succeeded',
     active_prompt: agentPhase === 1,
     pending_approval_ids: agentPhase === 1 ? ['permission-1'] : [],
     last_seq: agentPhase === 0 ? 1 : agentPhase === 1 ? 6 : 10,
     created_at: '2026-08-28T12:00:00Z',
     updated_at: '2026-08-28T12:00:01Z',
+    is_active: true,
     ...overrides,
   }
 }
@@ -130,6 +132,9 @@ async function respond(route: Route): Promise<void> {
     registry: 'https://registry.npmjs.org/', dependencies: [], setup_command: 'aitest agent setup',
   })
   if (url.pathname === '/api/agent/session') return json(agentSession)
+  if (url.pathname === '/api/agent/sessions' && request.method() === 'GET') {
+    return json({ sessions: agentSession ? [agentSession] : [] })
+  }
   if (url.pathname === '/api/agent/sessions' && request.method() === 'POST') {
     const input = request.postDataJSON() as { permission_mode: string }
     agentCreatePayload = input as unknown as Record<string, unknown>
@@ -151,6 +156,15 @@ async function respond(route: Route): Promise<void> {
     agentSession = agentSnapshot({ status: 'aborted', active_prompt: false, pending_approval_ids: [] })
     return json(agentSession)
   }
+  if (/^\/api\/agent\/sessions\/[^/]+\/history$/.test(url.pathname)) {
+    const afterSeq = Number(url.searchParams.get('after_seq') || '0')
+    const events = agentEvents().filter((event) => event.seq > afterSeq)
+    return json({ events, last_seq: agentSnapshot().last_seq, resync_required: false })
+  }
+  if (/^\/api\/agent\/sessions\/[^/]+\/activate$/.test(url.pathname)) {
+    agentSession = agentSnapshot({ is_active: true })
+    return json(agentSession)
+  }
   if (/^\/api\/agent\/sessions\/[^/]+\/events$/.test(url.pathname)) {
     const afterSeq = Number(url.searchParams.get('after_seq') || '0')
     const body = agentEvents()
@@ -163,6 +177,14 @@ async function respond(route: Route): Promise<void> {
     agentSession = null
     agentPhase = 0
     return route.fulfill({ status: 204, body: '' })
+  }
+  if (/^\/api\/agent\/sessions\/[^/]+\/archive$/.test(url.pathname) && request.method() === 'POST') {
+    agentSession = null
+    agentPhase = 0
+    return route.fulfill({ status: 204, body: '' })
+  }
+  if (/^\/api\/agent\/sessions\/[^/]+$/.test(url.pathname) && request.method() === 'GET') {
+    return agentSession ? json(agentSession) : json({ error: { code: 'AGENT_SESSION_NOT_FOUND', message: 'not found' } }, 404)
   }
   if (url.pathname === '/api/agent/connection') {
     if (request.method() === 'PUT') {

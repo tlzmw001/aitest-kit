@@ -49,6 +49,7 @@ async function handleLine(line: string): Promise<void> {
         runtime: "pi",
         protocol_version: 1,
         session_id: controller.sessionId,
+        session_file: controller.sessionFile,
       }));
       return;
     }

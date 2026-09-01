@@ -1,10 +1,53 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { mapSessionEvent, PiSessionController } from "../src/session.ts";
+import { createPiSessionManager, mapSessionEvent, PiSessionController } from "../src/session.ts";
+
+
+test("persistent session manager creates and reopens one exact Pi session", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "aitest-pi-persistent-cwd-"));
+  const sessionDir = await mkdtemp(join(tmpdir(), "aitest-pi-persistent-store-"));
+  try {
+    const created = createPiSessionManager({ cwd, session_dir: sessionDir });
+    assert.equal(created.isPersisted(), true);
+    created.appendCustomEntry("aitest-test", { value: 1 });
+    const sessionFile = created.getSessionFile();
+    assert.ok(sessionFile);
+    const serialized = [created.getHeader(), ...created.getEntries()].map((entry) => JSON.stringify(entry)).join("\n");
+    await writeFile(sessionFile, `${serialized}\n`, "utf8");
+    assert.equal(existsSync(sessionFile), true);
+
+    const reopened = createPiSessionManager({ cwd, session_dir: sessionDir, session_file: sessionFile });
+    assert.equal(reopened.getSessionId(), created.getSessionId());
+    assert.equal(reopened.getEntries().length, 1);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+    await rm(sessionDir, { recursive: true, force: true });
+  }
+});
+
+
+test("session manager keeps legacy in-memory mode and rejects files outside its directory", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "aitest-pi-session-mode-"));
+  const sessionDir = await mkdtemp(join(tmpdir(), "aitest-pi-session-boundary-"));
+  try {
+    assert.equal(createPiSessionManager({ cwd }).isPersisted(), false);
+    const outside = join(tmpdir(), `outside-${Date.now()}.jsonl`);
+    await writeFile(outside, "{}\n", "utf8");
+    assert.throws(
+      () => createPiSessionManager({ cwd, session_dir: sessionDir, session_file: outside }),
+      /inside session_dir/,
+    );
+    await rm(outside, { force: true });
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+    await rm(sessionDir, { recursive: true, force: true });
+  }
+});
 
 
 test("session event mapper normalizes text and tool lifecycle events", () => {

@@ -576,7 +576,7 @@ cd .. && git diff --check
 
 - Pi Worker 增加 `tool_call_updated`、受限工具输入、受限结果和完整终态事件。
 - Python Worker client 增加不消费事件队列的 prompt、approval、abort、shutdown 控制方法，并用写锁保护并发 JSONL 写入。
-- Console 增加内存 session registry、有界 EventLog、`seq/after_seq` replay、SSE、审批、abort、关闭和 workspace 切换清理。
+- Console 第一版增加内存 session registry、有界 EventLog、`seq/after_seq` replay、SSE、审批、abort、关闭和 workspace 切换清理；后续持久化与多会话由 `local_console_agent_persistent_sessions_spec.md` 增量覆盖。
 - full_trust 同时由 API `confirmed=true` 门禁和 Reka UI 一次性确认 Dialog 保护。
 - Vue 增加 `/agent`、Pinia 投影、断线重连、对话流、工具时间线、内联审批和 Monaco Diff。
 - 工具路径只有通过后端 workspace 边界验证后才生成编辑器链接；识别到的 AITest run/report 命令可跳转报告页。
@@ -605,8 +605,8 @@ cd .. && git diff --check
 |---|---|---|
 | 当前 Console/Pi 分支创建 PR、合并并发布 | 已记录，暂不执行 | 跨平台 Playwright 视觉基线验证通过，并由用户明确授权提交、push、PR 或发布 |
 | Pi Worker 随安装包分发 | 待方案讨论 | 先确认 wheel 内置构建产物、独立 npm 包或首次启动下载等交付路线，再写分发 Spec |
-| Console/Worker 重启后的持久 session 恢复 | 待方案讨论 | 与多 session、事件存储边界和清理策略一起确认后再写 Spec |
-| 多 session 和会话列表 | 待方案讨论 | 与持久 session 作为同一产品决策处理，不先添加临时数据库或第二套状态源 |
+| Console/Worker 重启后的持久 session 恢复 | 已由后续 Spec 实现 | 权威增量见 `docs/specs/local_console_agent_persistent_sessions_spec.md` |
+| 多 session 和会话列表 | 已由后续 Spec 实现 | 多历史 session、单 active Worker，不引入数据库或第二套模型上下文状态源 |
 | 外部 API Capability Registry | 已记录，未批准设计 | 先确认首方受审能力与第三方可安装能力的供应边界；不先暴露通用 `http_request` |
 | typed AITest tools | 已记录，按证据增强 | 原生 Shell 调用中出现稳定、高频且需要结构化进度的 AITest 动作后再晋升 |
 | 结构化长期 Memory | 已记录，按证据增强 | 先确认检索、提议、人工确认、来源、过期和删除契约，不把聊天记录直接当长期事实 |

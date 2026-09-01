@@ -20,6 +20,7 @@ import type {
   AgentEvent,
   AgentPermissionMode,
   AgentSessionSnapshot,
+  AgentSessionHistory,
 } from '../types'
 import { consumeSseStream } from './sse'
 
@@ -151,10 +152,22 @@ export const api = {
   cancelAgentRuntimeSetup: (id: string) =>
     request<Job>(`/api/agent/runtime/setup/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
   agentSession: () => request<AgentSessionSnapshot | null>('/api/agent/session'),
+  agentSessions: () => request<{ sessions: AgentSessionSnapshot[] }>('/api/agent/sessions'),
+  agentSessionDetail: (sessionId: string) =>
+    request<AgentSessionSnapshot>(`/api/agent/sessions/${encodeURIComponent(sessionId)}`),
+  agentSessionHistory: (sessionId: string, afterSeq = 0) =>
+    request<AgentSessionHistory>(
+      `/api/agent/sessions/${encodeURIComponent(sessionId)}/history?after_seq=${afterSeq}`,
+    ),
   createAgentSession: (permissionMode: AgentPermissionMode, confirmed = false) =>
     request<AgentSessionSnapshot>('/api/agent/sessions', {
       method: 'POST',
       body: json({ permission_mode: permissionMode, confirmed }),
+    }),
+  activateAgentSession: (sessionId: string, confirmed = false) =>
+    request<AgentSessionSnapshot>(`/api/agent/sessions/${encodeURIComponent(sessionId)}/activate`, {
+      method: 'POST',
+      body: json({ confirmed }),
     }),
   sendAgentMessage: (sessionId: string, text: string) =>
     request<AgentSessionSnapshot>(`/api/agent/sessions/${encodeURIComponent(sessionId)}/messages`, {

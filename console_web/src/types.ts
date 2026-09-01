@@ -242,18 +242,20 @@ export interface AgentRuntimeStatus {
 }
 
 export type AgentPermissionMode = 'approval' | 'full_trust'
-export type AgentSessionStatus = 'created' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed' | 'aborted'
+export type AgentSessionStatus = 'created' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed' | 'aborted' | 'interrupted'
 
 export interface AgentSessionSnapshot {
   session_id: string
   pi_session_id: string
   permission_mode: AgentPermissionMode
+  title: string
   status: AgentSessionStatus
   active_prompt: boolean
   pending_approval_ids: string[]
   last_seq: number
   created_at: string
   updated_at: string
+  is_active: boolean
 }
 
 export interface AgentEvent {
@@ -264,6 +266,12 @@ export interface AgentEvent {
   timestamp: string
   correlation_id: string
   payload: Record<string, unknown>
+}
+
+export interface AgentSessionHistory {
+  events: AgentEvent[]
+  last_seq: number
+  resync_required: boolean
 }
 
 export type AgentApprovalDecision = 'allow_once' | 'allow_session' | 'deny'
