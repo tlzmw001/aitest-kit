@@ -123,6 +123,12 @@ async function respond(route: Route): Promise<void> {
   })
 
   if (url.pathname === '/api/workspace') return json(workspace)
+  if (url.pathname === '/api/agent/runtime') return json({
+    state: 'ready', source: 'source', message: 'ready',
+    runtime_dir: '/repo/agent_runtime/pi_worker', bundle_hash: 'a'.repeat(64),
+    minimum_node_version: '22.19.0', node_version: 'v24.14.0', npm_version: '11.9.0',
+    registry: 'https://registry.npmjs.org/', dependencies: [], setup_command: 'aitest agent setup',
+  })
   if (url.pathname === '/api/agent/session') return json(agentSession)
   if (url.pathname === '/api/agent/sessions' && request.method() === 'POST') {
     const input = request.postDataJSON() as { permission_mode: string }
@@ -462,6 +468,8 @@ test('configures an agent connection without asking for a Pi provider', async ({
 
   await expect(page).toHaveURL(/#\/settings\/agent$/)
   await expect(page.getByRole('heading', { name: '模型连接' })).toBeVisible()
+  await expect(page.locator('[data-test="agent-runtime-card"]')).toContainText('源码 checkout')
+  await expect(page.locator('[data-test="agent-runtime-card"]')).toContainText('v24.14.0')
   await expect(page.locator('[name="provider"]')).toHaveCount(0)
   await page.locator('[data-test="connection-api-key"]').fill('e2e-session-key')
   await page.locator('[data-test="test-connection"]').click()

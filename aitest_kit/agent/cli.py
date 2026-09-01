@@ -8,11 +8,25 @@ import click
 from aitest_kit.agent.client import AgentWorkerError, WorkerClient, default_worker_command
 from aitest_kit.agent.config import AgentConfigError, build_worker_environment, load_agent_config
 from aitest_kit.agent.doctor import format_doctor_checks, run_agent_doctor
+from aitest_kit.agent.runtime import AgentRuntimeError, install_runtime
 
 
 @click.group(name="agent")
 def agent_command() -> None:
     """Run and diagnose the local Pi Agent Runtime."""
+
+
+@agent_command.command(name="setup")
+def agent_setup_command() -> None:
+    """Install the locked Pi Worker into the current user's runtime directory."""
+    click.echo("AITest Agent Runtime Setup")
+    try:
+        result = install_runtime(progress=click.echo)
+    except AgentRuntimeError as exc:
+        raise click.ClickException(f"{exc.code}: {exc}") from exc
+    action = "Installed" if result["installed"] else "Already ready"
+    click.echo(f"{action}: {result['runtime_dir']}")
+    click.echo(f"Bundle: {result['bundle_hash']}")
 
 
 @agent_command.command(name="doctor")

@@ -90,4 +90,20 @@ describe('console API session', () => {
     )
     expect(sessionValues).not.toContain('session-secret')
   })
+
+  it('starts Runtime setup only through the confirmed fixed endpoint', async () => {
+    configureTokenFromUrl()
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ id: 'setup-1', status: 'queued' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await api.setupAgentRuntime()
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/agent/runtime/setup')
+    expect(fetchMock.mock.calls[0][1]?.method).toBe('POST')
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({ confirmed: true })
+  })
 })

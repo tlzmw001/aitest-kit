@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Check, CircleAlert, KeyRound, LoaderCircle, PlugZap, Save, ShieldCheck } from '@lucide/vue'
+import { Check, CircleAlert, Download, KeyRound, LoaderCircle, PackageCheck, PlugZap, Save, ShieldCheck, Square, X } from '@lucide/vue'
+import { DialogContent, DialogDescription, DialogOverlay, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui'
 import { api, ApiError } from '../api/client'
 import type {
   AgentConnection,
   AgentConnectionInput,
   AgentConnectionTestResult,
   AgentProtocol,
+  AgentRuntimeStatus,
+  Job,
 } from '../types'
 
 const protocols: Array<{ value: AgentProtocol; label: string; description: string }> = [
@@ -30,8 +33,20 @@ const saving = ref(false)
 const loadError = ref('')
 const testError = ref('')
 const saveMessage = ref('')
+const runtime = ref<AgentRuntimeStatus | null>(null)
+const runtimeDialog = ref(false)
+const setupJob = ref<Job | null>(null)
+const setupError = ref('')
+let setupTimer: ReturnType<typeof setTimeout> | null = null
 
 const canSubmit = computed(() => Boolean(connectionName.value.trim() && model.value.trim()))
+const canTestConnection = computed(() => canSubmit.value && runtime.value?.state === 'ready')
+const runtimeInstalling = computed(() => setupJob.value?.status === 'queued' || setupJob.value?.status === 'running')
+const runtimeSetupDisabled = computed(() => {
+  if (!runtime.value || runtimeInstalling.value) return true
+  return runtime.value.state === 'ready' || runtime.value.state === 'node_missing' || runtime.value.state === 'node_unsupported'
+})
+const runtimeSource = computed(() => runtime.value?.source === 'source' ? '源码 checkout' : '用户级安装')
 const credentialLabel = computed(() => {
   if (connection.value?.credential_source === 'session') return '当前 Console 会话已提供 Key'
   if (connection.value?.credential_source === 'environment') return `已读取环境变量 ${connection.value.api_key_env}`
@@ -45,7 +60,9 @@ watch([connectionName, protocol, baseUrl, model], () => {
 
 onMounted(async () => {
   try {
-    applyConnection(await api.agentConnection())
+    const [savedConnection, runtimeStatus] = await Promise.all([api.agentConnection(), api.agentRuntime()])
+    applyConnection(savedConnection)
+    runtime.value = runtimeStatus
   } catch (cause) {
     loadError.value = messageFrom(cause)
   } finally {
@@ -55,6 +72,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   apiKey.value = ''
+  if (setupTimer) clearTimeout(setupTimer)
 })
 
 function applyConnection(value: AgentConnection): void {
@@ -104,6 +122,53 @@ async function saveConnection(): Promise<void> {
   }
 }
 
+async function startRuntimeSetup(): Promise<void> {
+  setupError.value = ''
+  try {
+    setupJob.value = await api.setupAgentRuntime()
+    if (isTerminal(setupJob.value)) await finishRuntimeSetup()
+    else scheduleRuntimePoll()
+  } catch (cause) {
+    setupError.value = messageFrom(cause)
+  }
+}
+
+function scheduleRuntimePoll(): void {
+  if (!setupJob.value || isTerminal(setupJob.value)) return
+  setupTimer = setTimeout(async () => {
+    try {
+      setupJob.value = await api.agentRuntimeSetupJob(setupJob.value!.id)
+      if (isTerminal(setupJob.value)) await finishRuntimeSetup()
+      else scheduleRuntimePoll()
+    } catch (cause) {
+      setupError.value = messageFrom(cause)
+      scheduleRuntimePoll()
+    }
+  }, 750)
+}
+
+async function finishRuntimeSetup(): Promise<void> {
+  if (setupJob.value?.status === 'failed') setupError.value = 'Agent Runtime 安装失败，请查看安装日志。'
+  try {
+    runtime.value = await api.agentRuntime()
+  } catch (cause) {
+    setupError.value = messageFrom(cause)
+  }
+}
+
+async function cancelRuntimeSetup(): Promise<void> {
+  if (!setupJob.value) return
+  try {
+    setupJob.value = await api.cancelAgentRuntimeSetup(setupJob.value.id)
+  } catch (cause) {
+    setupError.value = messageFrom(cause)
+  }
+}
+
+function isTerminal(job: Job): boolean {
+  return ['succeeded', 'failed', 'cancelled'].includes(job.status)
+}
+
 function protocolLabel(value: AgentConnectionTestResult['detected_protocol']): string {
   return protocols.find((item) => item.value === value)?.label ?? value
 }
@@ -134,8 +199,30 @@ function messageFrom(cause: unknown): string {
     <div v-if="loading" class="loading-state"><span class="spinner" /><span>正在读取连接配置</span></div>
     <p v-else-if="loadError" class="inline-error"><CircleAlert :size="15" />{{ loadError }}</p>
 
-    <div v-else class="agent-connection-layout">
-      <form class="connection-form" @submit.prevent="saveConnection">
+    <template v-else>
+      <section v-if="runtime" class="agent-runtime-card" :class="runtime.state" data-test="agent-runtime-card">
+        <div class="runtime-mark"><PackageCheck v-if="runtime.state === 'ready'" :size="19" /><CircleAlert v-else :size="19" /></div>
+        <div class="runtime-copy">
+          <span class="section-label">PI AGENT RUNTIME</span>
+          <strong>{{ runtime.state === 'ready' ? `已就绪 · ${runtimeSource}` : '需要安装本地运行时' }}</strong>
+          <p>{{ runtime.message }}</p>
+          <dl>
+            <div><dt>Node</dt><dd>{{ runtime.node_version || `需要 ≥ ${runtime.minimum_node_version}` }}</dd></div>
+            <div><dt>Bundle</dt><dd><code>{{ runtime.bundle_hash ? runtime.bundle_hash.slice(0, 12) : '—' }}</code></dd></div>
+            <div><dt>目录</dt><dd><code>{{ runtime.runtime_dir || '—' }}</code></dd></div>
+          </dl>
+        </div>
+        <div class="runtime-action">
+          <span class="status-chip" :class="{ ok: runtime.state === 'ready', danger: runtime.state !== 'ready' }"><i />{{ runtime.state }}</span>
+          <button class="secondary-btn" type="button" data-test="open-runtime-setup" :disabled="runtimeSetupDisabled" @click="runtimeDialog = true">
+            <Download :size="15" />{{ runtime.state === 'ready' ? '运行时已就绪' : '安装 Agent Runtime' }}
+          </button>
+          <a v-if="runtime.state === 'node_missing' || runtime.state === 'node_unsupported'" href="https://nodejs.org/en/download" target="_blank" rel="noreferrer">安装 Node.js 24 LTS</a>
+        </div>
+      </section>
+
+      <div class="agent-connection-layout">
+        <form class="connection-form" @submit.prevent="saveConnection">
         <div class="connection-section-head">
           <div><span class="section-label">连接信息</span><strong>你需要提供的内容</strong></div>
           <span>非敏感配置会写入 workspace</span>
@@ -172,7 +259,7 @@ function messageFrom(cause: unknown): string {
         </label>
 
         <footer class="connection-actions">
-          <button class="secondary-btn" type="button" data-test="test-connection" :disabled="!canSubmit || testing || saving" @click="testConnection">
+          <button class="secondary-btn" type="button" data-test="test-connection" :disabled="!canTestConnection || testing || saving" @click="testConnection">
             <LoaderCircle v-if="testing" class="spin-icon" :size="16" /><PlugZap v-else :size="16" />
             {{ testing ? '正在真实请求' : '测试连接' }}
           </button>
@@ -182,9 +269,9 @@ function messageFrom(cause: unknown): string {
           </button>
         </footer>
         <p v-if="saveMessage" class="connection-save-message" :class="{ error: saveMessage.includes(':') }">{{ saveMessage }}</p>
-      </form>
+        </form>
 
-      <aside class="connection-result" aria-live="polite">
+        <aside class="connection-result" aria-live="polite">
         <div class="connection-section-head">
           <div><span class="section-label">连接状态</span><strong>最近一次真实测试</strong></div>
           <ShieldCheck :size="18" />
@@ -215,7 +302,39 @@ function messageFrom(cause: unknown): string {
           <strong>尚未测试当前配置</strong>
           <small>测试会产生一次最小模型请求，不读取 workspace 文件，也不调用工具。</small>
         </div>
-      </aside>
-    </div>
+        </aside>
+      </div>
+    </template>
   </section>
+
+  <DialogRoot v-model:open="runtimeDialog">
+    <DialogPortal>
+      <DialogOverlay class="asset-modal-backdrop">
+        <DialogContent class="runtime-setup-dialog" data-test="runtime-setup-dialog">
+          <header><div><span class="eyebrow">LOCAL RUNTIME SETUP</span><DialogTitle>安装 Pi Agent Runtime</DialogTitle></div><button aria-label="关闭" @click="runtimeDialog = false"><X :size="17" /></button></header>
+          <DialogDescription>将使用精确 lockfile 安装 Pi Worker。该操作与 Agent 的工具审批权限相互独立。</DialogDescription>
+          <dl v-if="runtime" class="runtime-install-details">
+            <div><dt>网络访问</dt><dd><code>{{ runtime.registry || 'npm 当前 registry' }}</code></dd></div>
+            <div><dt>写入目录</dt><dd><code>{{ runtime.runtime_dir }}</code></dd></div>
+            <div><dt>工作空间</dt><dd>不修改 workspace</dd></div>
+            <div><dt>模型凭证</dt><dd>不读取模型 API Key</dd></div>
+          </dl>
+          <div v-if="runtime" class="runtime-dependencies">
+            <span>锁定依赖</span>
+            <code v-for="dependency in runtime.dependencies" :key="dependency.name">{{ dependency.name }}@{{ dependency.version }}</code>
+          </div>
+          <div v-if="setupJob" class="runtime-setup-output" aria-live="polite">
+            <div><span>{{ setupJob.status }}</span><code>{{ setupJob.command_summary }}</code></div>
+            <pre>{{ setupJob.output || '等待安装日志…' }}</pre>
+          </div>
+          <p v-if="setupError" class="inline-error"><CircleAlert :size="15" />{{ setupError }}</p>
+          <footer>
+            <button class="secondary-btn" type="button" @click="runtimeDialog = false">关闭</button>
+            <button v-if="runtimeInstalling" class="danger-btn compact" type="button" @click="cancelRuntimeSetup"><Square :size="14" />取消安装</button>
+            <button v-else class="primary-btn" type="button" data-test="confirm-runtime-setup" :disabled="runtime?.state === 'ready'" @click="startRuntimeSetup"><Download :size="15" />确认安装</button>
+          </footer>
+        </DialogContent>
+      </DialogOverlay>
+    </DialogPortal>
+  </DialogRoot>
 </template>

@@ -100,6 +100,7 @@ aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --c
 ```bash
 aitest init --target <dir>                                   # 初始化 workspace
 aitest doctor                                                # 体检
+aitest agent setup                                           # 安装当前用户的 Pi Runtime
 aitest agent doctor                                          # 检查本地 Pi Runtime
 aitest codegen --suite-file <suite.yaml> --validate-profile  # profile 门禁
 aitest codegen --suite-file <suite.yaml>                     # 生成 pytest
@@ -137,8 +138,9 @@ API Key，无需查询 Pi Provider。连接测试会通过 Pi Worker 发起一�
 非敏感配置写入 workspace，API Key 只保存在当前 Console 进程内存，重启 Console 或切换
 workspace 后需要重新输入。
 
-在源码 checkout 且 Pi Worker 依赖已安装时，主导航的“Agent”可以创建 approval 或 full_trust
-本地 session。页面通过可恢复的 SSE 事件流展示对话、工具时间线和审批卡；write/edit 可展开
+Pi Agent Runtime 通过 Console 的 Runtime 卡片或 `aitest agent setup` 显式安装到当前用户目录；
+不会修改 workspace，也不会读取模型 API Key。安装就绪后，主导航的“Agent”可以创建 approval
+或 full_trust 本地 session。页面通过可恢复的 SSE 事件流展示对话、工具时间线和审批卡；write/edit 可展开
 Monaco Diff，已验证的 workspace 路径和 AITest run/report 工具事件可以跳转到编辑器或报告页。
 approval 模式支持允许一次、本会话允许和拒绝；full_trust 每次创建 session 都必须针对当前
 workspace 明确确认。刷新页面可恢复当前 Console 进程内的事件，Console 或 Pi Worker 进程
@@ -154,15 +156,20 @@ AITEST_ENV_FILE=/tmp/test.env aitest run --suite-file <suite.yaml>
 
 排查失败时可加 `--capture`，运行目录下会生成一个 `capture.jsonl`。框架只自动捕获默认 HTTP 用例；自定义 fixture、gRPC 或 SDK 调用可以手动调用 `aitest_kit.helpers.capture.capture_io()`。在 generated 测试函数体内调用时，`capture_io()` 可自动归因到当前 case；显式传入 `case_id` 仍然有效。pytest fixture setup/teardown 阶段不在该 context 内。capture 不自动脱敏，敏感字段应在用户 fixture 中处理后再写入。
 
-### 本地 Pi Agent Runtime（源码 PoC）
+### 本地 Pi Agent Runtime
 
-第一阶段 Agent Runtime 只保证 AITest 源码 checkout 使用，不依赖全局 `pi` 命令，也尚未随
-PyPI wheel 分发 Node Worker。Node.js 必须满足 `>=22.19.0`：
+Python wheel 携带锁定的 Pi Worker 安装种子，不携带体积较大的 `node_modules`。用户先安装
+Node.js（最低 `22.19.0`，推荐 Node.js 24 LTS），再显式安装用户级 Runtime：
 
 ```bash
-npm ci --prefix agent_runtime/pi_worker
+aitest agent setup
 aitest agent doctor --workspace /path/to/aitest_workspace
 ```
+
+默认安装到 `~/.aitest/runtimes/pi-worker/<bundle-hash>/`，可以用 `AITEST_RUNTIME_HOME` 覆盖根目录。
+setup 使用 wheel 内的精确 lockfile，不安装 Node、不写 workspace、不修改 Python `site-packages`，
+也不会读取模型凭证。源码开发仍可运行 `npm ci --prefix agent_runtime/pi_worker`；resolver 会优先
+使用依赖完整的源码 Worker，再使用当前 bundle 对应的用户级 Runtime。
 
 在 workspace 的 `aitest_config/aitest.yaml` 中只配置模型引用和环境变量名，不保存 Key 值：
 

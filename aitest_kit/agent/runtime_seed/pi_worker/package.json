@@ -1,0 +1,17 @@
+{
+  "name": "@aitest/pi-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "check": "node --experimental-strip-types --check src/worker.ts",
+    "test": "node --experimental-strip-types --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.3",
+    "@gotgenes/pi-permission-system": "27.1.1"
+  }
+}

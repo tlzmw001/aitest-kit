@@ -34,6 +34,24 @@ def test_agent_doctor_cli_reports_checks_without_revealing_key(monkeypatch, tmp_
     assert "ANTHROPIC_API_KEY is set" in result.output
 
 
+def test_agent_setup_uses_shared_runtime_installer_without_workspace(monkeypatch) -> None:
+    calls = []
+
+    def fake_install(*, progress):
+        progress("Installing locked dependencies...")
+        calls.append("install")
+        return {"installed": True, "runtime_dir": "/tmp/runtime", "bundle_hash": "a" * 64}
+
+    monkeypatch.setattr("aitest_kit.agent.cli.install_runtime", fake_install)
+
+    result = CliRunner().invoke(agent_command, ["setup"])
+
+    assert result.exit_code == 0
+    assert calls == ["install"]
+    assert "Installing locked dependencies" in result.output
+    assert "/tmp/runtime" in result.output
+
+
 def test_full_trust_requires_explicit_confirmation_before_loading_config(monkeypatch, tmp_path: Path) -> None:
     loaded = []
     monkeypatch.setattr("aitest_kit.agent.cli.load_agent_config", lambda _workspace: loaded.append(True))

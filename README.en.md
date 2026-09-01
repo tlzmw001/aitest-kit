@@ -100,6 +100,7 @@ Public docs / API contracts
 ```bash
 aitest init --target <dir>                                   # initialize workspace
 aitest doctor                                                # health check
+aitest agent setup                                           # install the current user's Pi Runtime
 aitest agent doctor                                          # check the local Pi Runtime
 aitest codegen --suite-file <suite.yaml> --validate-profile  # profile gate
 aitest codegen --suite-file <suite.yaml>                     # generate pytest
@@ -142,8 +143,10 @@ tool-free request through the Pi Worker. Non-sensitive settings are written to t
 the API key remains only in the current Console process memory and must be entered again after
 restarting the Console or switching workspaces.
 
-From a source checkout with the Pi Worker dependencies installed, the **Agent** navigation item
-can create either an approval or full-trust local session. A resumable SSE stream presents the
+Install the Pi Agent Runtime explicitly from the Console Runtime card or with `aitest agent setup`.
+The install writes only to the current user's Runtime directory and does not read model API keys or
+modify the workspace. Once ready, the **Agent** navigation item can create either an approval or
+full-trust local session. A resumable SSE stream presents the
 conversation, tool timeline, and inline approval cards. Write/edit requests can open Monaco Diff,
 and backend-validated workspace paths and AITest run/report events link to the editor or reports.
 Approval mode supports allow once, allow for session, and deny. Every full-trust session requires
@@ -166,16 +169,22 @@ function body, `capture_io()` can infer the current case; explicit `case_id` sti
 wins. Pytest fixture setup/teardown runs outside this context. Capture does not redact; redact
 in your fixture before writing sensitive data.
 
-### Local Pi Agent Runtime (source-checkout PoC)
+### Local Pi Agent Runtime
 
-Phase 1 supports the Agent Runtime from an AITest source checkout only. It does not depend on a
-global `pi` command, and the Node Worker is not yet bundled in PyPI wheels. Node.js must satisfy
-`>=22.19.0`:
+The Python wheel carries a locked Pi Worker installation seed, not the large expanded
+`node_modules`. Install Node.js first (minimum `22.19.0`; Node.js 24 LTS is recommended), then
+explicitly install the user-level Runtime:
 
 ```bash
-npm ci --prefix agent_runtime/pi_worker
+aitest agent setup
 aitest agent doctor --workspace /path/to/aitest_workspace
 ```
+
+The default destination is `~/.aitest/runtimes/pi-worker/<bundle-hash>/`; override the root with
+`AITEST_RUNTIME_HOME`. Setup uses the exact lockfile shipped in the wheel. It does not install Node,
+write to the workspace, modify Python `site-packages`, or read model credentials. Source contributors
+can still run `npm ci --prefix agent_runtime/pi_worker`; the resolver prefers a complete source Worker
+and otherwise uses the user Runtime matching the current bundle.
 
 Store only model references and environment variable names in
 `aitest_config/aitest.yaml`, never the key value:

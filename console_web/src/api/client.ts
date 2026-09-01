@@ -15,6 +15,7 @@ import type {
   AgentConnection,
   AgentConnectionInput,
   AgentConnectionTestResult,
+  AgentRuntimeStatus,
   AgentApprovalDecision,
   AgentEvent,
   AgentPermissionMode,
@@ -142,6 +143,13 @@ export const api = {
       method: 'PUT',
       body: json(payload),
     }),
+  agentRuntime: () => request<AgentRuntimeStatus>('/api/agent/runtime'),
+  setupAgentRuntime: () =>
+    request<Job>('/api/agent/runtime/setup', { method: 'POST', body: json({ confirmed: true }) }),
+  agentRuntimeSetupJob: (id: string) =>
+    request<Job>(`/api/agent/runtime/setup/${encodeURIComponent(id)}`),
+  cancelAgentRuntimeSetup: (id: string) =>
+    request<Job>(`/api/agent/runtime/setup/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
   agentSession: () => request<AgentSessionSnapshot | null>('/api/agent/session'),
   createAgentSession: (permissionMode: AgentPermissionMode, confirmed = false) =>
     request<AgentSessionSnapshot>('/api/agent/sessions', {

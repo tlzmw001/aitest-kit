@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -12,9 +10,7 @@ from typing import Any
 from aitest_kit.agent.client import WorkerClient, default_worker_command, default_worker_dir
 from aitest_kit.agent.config import AgentConfigError, build_worker_environment, load_agent_config
 from aitest_kit.agent.protocol import redact
-
-
-MINIMUM_NODE_VERSION = (22, 19, 0)
+from aitest_kit.agent.runtime import runtime_status
 
 
 @dataclass(frozen=True)
@@ -27,12 +23,26 @@ class DoctorCheck:
 
 def run_agent_doctor(workspace: str | Path) -> list[DoctorCheck]:
     root = Path(workspace).expanduser().resolve()
-    worker_dir = default_worker_dir()
     checks: list[DoctorCheck] = []
-    node_ok, node_message = _check_node()
+    status = runtime_status()
+    node_ok = status["state"] not in {"node_missing", "node_unsupported"}
+    node_message = status["message"] if not node_ok else (
+        f"Node {status['node_version']}; required >= {status['minimum_node_version']}"
+    )
     checks.append(DoctorCheck("node", node_ok, node_message))
-    dependencies_ok, dependencies_message = _check_dependencies(worker_dir)
-    checks.append(DoctorCheck("dependencies", dependencies_ok, dependencies_message))
+    runtime_ok = status["state"] == "ready"
+    checks.append(
+        DoctorCheck(
+            "runtime",
+            runtime_ok,
+            status["message"],
+            details={
+                "source": status["source"],
+                "runtime_dir": status["runtime_dir"],
+                "bundle_hash": status["bundle_hash"],
+            },
+        )
+    )
     try:
         config = load_agent_config(root)
     except AgentConfigError as exc:
@@ -53,8 +63,9 @@ def run_agent_doctor(workspace: str | Path) -> list[DoctorCheck]:
             f"{config.model.api_key_env} is {'set' if key_exists else 'not set'}",
         )
     )
-    if not (node_ok and dependencies_ok and key_exists):
+    if not (node_ok and runtime_ok and key_exists):
         return checks
+    worker_dir = default_worker_dir()
     client = WorkerClient(
         default_worker_command(worker_dir),
         env=build_worker_environment(config),
@@ -93,43 +104,3 @@ def format_doctor_checks(checks: list[DoctorCheck]) -> str:
         if check.details:
             lines.append(json.dumps(redact(check.details), ensure_ascii=False, sort_keys=True))
     return "\n".join(lines)
-
-
-def _check_node() -> tuple[bool, str]:
-    try:
-        completed = subprocess.run(
-            ["node", "--version"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        return False, f"Node.js unavailable: {exc}"
-    raw = completed.stdout.strip()
-    match = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)", raw)
-    if completed.returncode != 0 or match is None:
-        return False, f"cannot parse Node.js version: {raw or completed.stderr.strip()}"
-    version = tuple(int(part) for part in match.groups())
-    minimum = ".".join(str(part) for part in MINIMUM_NODE_VERSION)
-    return version >= MINIMUM_NODE_VERSION, f"Node {raw}; required >= {minimum}"
-
-
-def _check_dependencies(worker_dir: Path) -> tuple[bool, str]:
-    lock_path = worker_dir / "package-lock.json"
-    package_path = worker_dir / "package.json"
-    if not package_path.is_file() or not lock_path.is_file():
-        return False, f"missing package.json or package-lock.json under {worker_dir}"
-    try:
-        package = json.loads(package_path.read_text(encoding="utf-8"))
-        lock = json.loads(lock_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        return False, f"cannot read Pi Worker package metadata: {exc}"
-    expected = package.get("dependencies", {})
-    locked = lock.get("packages", {}).get("", {}).get("dependencies", {})
-    if expected != locked:
-        return False, "package-lock root dependencies do not match package.json"
-    missing = [name for name in expected if not (worker_dir / "node_modules" / name).exists()]
-    if missing:
-        return False, "npm dependencies not installed: " + ", ".join(sorted(missing))
-    return True, "Pi Worker dependencies and lockfile are present"

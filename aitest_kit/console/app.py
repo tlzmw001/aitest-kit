@@ -17,6 +17,7 @@ from aitest_kit.console.agent_connections import (
     create_agent_connection_router,
 )
 from aitest_kit.console.agent_sessions import AgentSessionManager, WorkerFactory, create_agent_session_router
+from aitest_kit.console.agent_runtime import AgentRuntimeService, create_agent_runtime_router
 from aitest_kit.console.directories import browse_directories
 from aitest_kit.console.editor_validation import EDITOR_CONTENT_LIMIT, validate_editor_content
 from aitest_kit.console.errors import ConsoleError
@@ -129,6 +130,7 @@ class ConsoleRuntime:
             lambda: self.workspace.root,
             agent_worker_factory,
         )
+        self.agent_runtime = AgentRuntimeService(self.agent_sessions.snapshot)
 
     def open_workspace(self, path: str) -> dict[str, Any]:
         self._ensure_workspace_switch_allowed()
@@ -211,7 +213,9 @@ def create_app(
         dependencies=[auth],
     )
     app.include_router(create_agent_session_router(runtime.agent_sessions), dependencies=[auth])
+    app.include_router(create_agent_runtime_router(runtime.agent_runtime), dependencies=[auth])
     app.add_event_handler("shutdown", runtime.agent_sessions.close)
+    app.add_event_handler("shutdown", runtime.agent_runtime.close)
 
     @app.get("/api/health", dependencies=[auth])
     async def health() -> dict[str, str]:

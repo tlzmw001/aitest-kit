@@ -2,17 +2,19 @@
 
 ## 1. 文档状态
 
-- 状态：已批准，进入实现
+- 状态：核心 MVP 已实现并完成本地验证；当前进入跨平台视觉回归稳定化与主线交付阶段
 - 实现分支：`codex/vue-console-mvp`
 - 产品形态：本地优先、单用户、用户自己 clone workspace
 - 前端技术：Vue 3、TypeScript、Vite
 - 前端构建：Node.js 22.18+，生产 bundle 随 Python wheel 分发
 - 后端技术：复用现有 Python/FastAPI 依赖
 - 视觉基线：已批准的深色高密度工程工作台
-- 与 Pi 的关系：Console MVP 不依赖 Pi，后续通过 AITest 控制面接入
+- 与 Pi 的关系：Console MVP 的确定性工作台不依赖 Pi；Pi Agent 已通过独立连接与会话 Spec 接入 AITest 控制面
 
 本 Spec 是 Local Console MVP 的实现权威。`test_workspace/plans/pi_agent_runtime_integration_spec.md`
-继续作为 Pi Agent Runtime Phase 1 的权威，两条实现线互不混入。
+继续作为 Pi Agent Runtime 的权威；Console MVP 与 Pi Runtime 保持职责分层，已通过
+`docs/specs/local_console_agent_connection_spec.md` 和
+`docs/specs/local_console_agent_session_spec.md` 完成 Phase 2 接线。
 
 ## 2. 背景
 

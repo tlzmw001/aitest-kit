@@ -1,0 +1,20 @@
+{
+  "bundle_hash": "50687cde14a649678c0e6eef13305ab0813ddc102fa8acb86eb9dba960ee6c45",
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.3",
+    "@gotgenes/pi-permission-system": "27.1.1"
+  },
+  "entrypoint": "src/worker.ts",
+  "files": {
+    "package-lock.json": "ecdc164d12c3dc6d4d6d993a3ae3d761dbc0941c84aade24393531755ada2052",
+    "package.json": "d40f50984e5943ace95a9d9a13ea1d187da50b614e390ea2ea303e6c4284bde9",
+    "src/permissions.ts": "3dc81c6a58a879eace1858a5c3c7f5db67abef03688a9079931644c2d3653097",
+    "src/protocol.ts": "851912abbdb024fd6505211adda5835c6b5e3fa9ea1c15b670a6a3bf7e68bb64",
+    "src/session.ts": "66cee4cabd7a84e4da39efe6effc18a8f6c8d3e6f2a7e0d5767edfe641491cc2",
+    "src/worker.ts": "f3aec0d0f8cd16d0fd11a4c63d0bf3dcecf23e1fd410788f48d656c622c73971"
+  },
+  "minimum_node_version": "22.19.0",
+  "runtime": "pi",
+  "schema_version": 1,
+  "worker_version": "0.1.0"
+}

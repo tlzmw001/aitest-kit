@@ -274,29 +274,31 @@ def create_agent_connection_router(
 def test_pi_connection(attempt: AgentConnectionAttempt) -> str:
     env = {name: value for name, value in os.environ.items() if name in {"HOME", "LANG", "LC_ALL", "LC_CTYPE", "PATH", "SYSTEMROOT", "TEMP", "TMP", "TMPDIR"}}
     env[_SESSION_API_KEY_ENV] = attempt.api_key
-    with WorkerClient(default_worker_command(), env=env, startup_timeout=20, message_timeout=90) as client:
-        client.start({
-            "cwd": str(attempt.workspace),
-            "model": {
-                "protocol": attempt.protocol,
-                "provider": attempt.provider,
-                "name": attempt.model,
-                "api_key_env": _SESSION_API_KEY_ENV,
-                "base_url": attempt.base_url or None,
-            },
-            "skill_paths": [],
-            "tools": [],
-            "permission_mode": "approval",
-        })
-        try:
+    try:
+        with WorkerClient(default_worker_command(), env=env, startup_timeout=20, message_timeout=90) as client:
+            client.start({
+                "cwd": str(attempt.workspace),
+                "model": {
+                    "protocol": attempt.protocol,
+                    "provider": attempt.provider,
+                    "name": attempt.model,
+                    "api_key_env": _SESSION_API_KEY_ENV,
+                    "base_url": attempt.base_url or None,
+                },
+                "skill_paths": [],
+                "tools": [],
+                "permission_mode": "approval",
+            })
             events = client.run_prompt(
                 "Reply with exactly OK. Do not call tools.",
                 approval_handler=lambda _event: "deny",
             )
-        except AgentWorkerError as exc:
-            message = _redact_exact(str(exc), attempt.api_key)
-            details = _redact_exact(str(redact(exc.details)), attempt.api_key)
-            raise AgentConnectionAttemptError(_classify_worker_error(message, details), message) from exc
+    except AgentWorkerError as exc:
+        message = _redact_exact(str(exc), attempt.api_key)
+        if exc.code in {"AGENT_RUNTIME_NOT_INSTALLED", "AGENT_RUNTIME_INVALID", "AGENT_RUNTIME_SEED_INVALID"}:
+            raise ConsoleError(exc.code, message, status_code=502) from exc
+        details = _redact_exact(str(redact(exc.details)), attempt.api_key)
+        raise AgentConnectionAttemptError(_classify_worker_error(message, details), message) from exc
     text = "".join(str(event.payload.get("delta", "")) for event in events if event.type == "text_delta").strip()
     if not text:
         raise AgentConnectionAttemptError("service", "模型没有返回文本")

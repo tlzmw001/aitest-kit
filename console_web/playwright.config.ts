@@ -14,7 +14,9 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',
-  snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}{ext}',
+  // Full-page Console snapshots contain platform-rendered CJK and monospace text.
+  // Keep one reviewed baseline per OS instead of comparing macOS glyphs on Linux CI.
+  snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}-{platform}{ext}',
   expect: {
     timeout: 10_000,
     toHaveScreenshot: {

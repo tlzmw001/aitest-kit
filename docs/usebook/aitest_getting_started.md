@@ -87,7 +87,10 @@ codegen 和 run 必须由用户显式发起。
 localStorage；任务输出会对 Console 已知的敏感值做脱敏，测试资产仍不得主动打印凭证。
 Console 也不会自动修改 `.gitignore`。
 
-源码 checkout 安装 Pi Worker 依赖后，可从主导航“Agent”创建本地 session。approval 模式下，
+首次使用 Agent 前，在“设置 → 模型连接”的 Runtime 卡片确认安装，或从任意目录运行
+`aitest agent setup`。Python wheel 携带精确 lockfile 和 Worker seed，依赖安装到当前用户的
+`~/.aitest/runtimes/`，不修改 workspace；Node.js 最低为 22.19.0，推荐 Node.js 24 LTS。
+安装就绪后可从主导航“Agent”创建本地 session。approval 模式下，
 write/edit、Shell 和外部目录请求由页面内审批卡处理；write/edit 可以查看 Monaco Diff。
 full_trust 会继承 Console 进程的本地权限，读取内容可能进入模型上下文，因此每次创建都必须
 针对当前 workspace 明确确认。页面刷新会使用 `after_seq` 恢复当前 Console 进程内保存的事件；

@@ -308,7 +308,12 @@ class WorkerClient:
 
 
 def default_worker_dir() -> Path:
-    return Path(__file__).resolve().parents[2] / "agent_runtime" / "pi_worker"
+    from aitest_kit.agent.runtime import AgentRuntimeError, resolve_worker_dir
+
+    try:
+        return resolve_worker_dir()
+    except AgentRuntimeError as exc:
+        raise AgentWorkerError(exc.code, str(exc), details=exc.details) from exc
 
 
 def default_worker_command(worker_dir: str | Path | None = None) -> list[str]:

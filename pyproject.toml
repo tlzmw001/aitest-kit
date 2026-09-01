@@ -83,6 +83,10 @@ markers = [
 include = ["aitest_kit*"]
 
 [tool.setuptools.package-data]
+"aitest_kit.agent" = [
+    "runtime_seed/pi_worker/*.json",
+    "runtime_seed/pi_worker/src/*.ts",
+]
 "aitest_kit.console" = [
     "web/index.html",
     "web/assets/*",

@@ -6,7 +6,7 @@ import AgentActivityStream from '../components/AgentActivityStream.vue'
 import { api } from '../api/client'
 import { messageFrom, useWorkspaceStore } from '../stores/workspace'
 import { useAgentStore } from '../stores/agent'
-import type { AgentApprovalDecision, AgentPermissionMode } from '../types'
+import type { AgentApprovalDecision, AgentPermissionMode, AgentRuntimeStatus } from '../types'
 
 const store = useAgentStore()
 const workspace = useWorkspaceStore()
@@ -17,6 +17,7 @@ const pageError = ref('')
 const fullTrustDialog = ref(false)
 const streamHost = ref<HTMLElement | null>(null)
 const modelName = ref('')
+const runtime = ref<AgentRuntimeStatus | null>(null)
 const statusLabel = computed(() => ({
   created: '已就绪',
   running: '正在运行',
@@ -29,8 +30,13 @@ const canSend = computed(() => Boolean(store.session && store.draft.trim() && !s
 
 onMounted(async () => {
   try {
-    await store.loadSession()
-    modelName.value = (await api.agentConnection()).model
+    const [, connection, runtimeStatus] = await Promise.all([
+      store.loadSession(),
+      api.agentConnection(),
+      api.agentRuntime(),
+    ])
+    modelName.value = connection.model
+    runtime.value = runtimeStatus
   } catch (cause) {
     pageError.value = messageFrom(cause)
   } finally {
@@ -112,6 +118,14 @@ function handleComposerKey(event: KeyboardEvent): void {
 <template>
   <section class="agent-view">
     <div v-if="loading" class="loading-state"><span class="spinner" /><span>正在恢复 Agent session</span></div>
+
+    <div v-else-if="!store.session && runtime?.state !== 'ready'" class="agent-runtime-required" data-test="agent-runtime-required">
+      <span class="agent-mark"><CircleAlert :size="22" /></span>
+      <div><span class="eyebrow">LOCAL PI AGENT</span><h1>Agent Runtime 尚未就绪</h1></div>
+      <p>{{ runtime?.message || pageError || '无法读取本地 Agent Runtime 状态。' }}</p>
+      <p>编辑、codegen、执行与报告功能不受影响。安装完成后才能创建 Pi Agent session。</p>
+      <RouterLink class="primary-btn" to="/settings/agent">打开模型连接与 Runtime 设置</RouterLink>
+    </div>
 
     <div v-else-if="!store.session" class="agent-onboarding">
       <header>

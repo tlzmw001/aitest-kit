@@ -4,6 +4,7 @@
 日期：2026-08-28
 依赖：`test_workspace/plans/pi_agent_runtime_integration_spec.md`
 前置实现：`docs/specs/local_console_agent_connection_spec.md`
+运行时分发：`docs/specs/pi_worker_distribution_spec.md`
 技术调研：`research/console-agent-ux-technical-route/report.md`
 
 ## 1. 目标
@@ -596,13 +597,19 @@ cd .. && git diff --check
 
 构建仍会报告 Monaco 相关 chunk 超过 500 kB 的 Vite warning；这是已有 Monaco 按路由加载后的体积提示，不是构建错误，也未在本阶段通过自定义拆包扩大实现范围。
 
-## 13. 后续阶段
+## 13. 后续阶段与待办状态
 
-以下内容必须根据真实使用再决定：
+以下条目用于防止遗漏，不代表已经批准设计或实现：
 
-- Console/Worker 重启后的持久 session 恢复。
-- 多 session 和会话列表。
-- typed AITest tools。
-- 大型日志虚拟化和 TanStack Virtual。
-- 多文件 Changeset、hash 校验和原子 apply。
-- Sandbox/worktree/Docker/OpenShell。
+| 待办 | 当前状态 | 进入条件 |
+|---|---|---|
+| 当前 Console/Pi 分支创建 PR、合并并发布 | 已记录，暂不执行 | 跨平台 Playwright 视觉基线验证通过，并由用户明确授权提交、push、PR 或发布 |
+| Pi Worker 随安装包分发 | 待方案讨论 | 先确认 wheel 内置构建产物、独立 npm 包或首次启动下载等交付路线，再写分发 Spec |
+| Console/Worker 重启后的持久 session 恢复 | 待方案讨论 | 与多 session、事件存储边界和清理策略一起确认后再写 Spec |
+| 多 session 和会话列表 | 待方案讨论 | 与持久 session 作为同一产品决策处理，不先添加临时数据库或第二套状态源 |
+| 外部 API Capability Registry | 已记录，未批准设计 | 先确认首方受审能力与第三方可安装能力的供应边界；不先暴露通用 `http_request` |
+| typed AITest tools | 已记录，按证据增强 | 原生 Shell 调用中出现稳定、高频且需要结构化进度的 AITest 动作后再晋升 |
+| 结构化长期 Memory | 已记录，按证据增强 | 先确认检索、提议、人工确认、来源、过期和删除契约，不把聊天记录直接当长期事实 |
+| 大型日志虚拟化和 TanStack Virtual | 已记录，按规模增强 | 真实日志、树或列表规模出现可复现的性能问题后再引入 |
+| 多文件 Changeset、hash 校验和原子 apply | 已记录，按证据增强 | 逐文件审批无法支撑真实批量修改时再评估 |
+| Sandbox/worktree/Docker/OpenShell | 已记录，条件性冻结 | 无人值守、第三方 Extension、不可信项目或强隔离成为真实需求时再评估 |

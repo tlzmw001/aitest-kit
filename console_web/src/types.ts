@@ -225,6 +225,22 @@ export interface AgentConnectionTestResult {
   latency_ms: number
 }
 
+export type AgentRuntimeState = 'ready' | 'missing' | 'node_missing' | 'node_unsupported' | 'invalid'
+
+export interface AgentRuntimeStatus {
+  state: AgentRuntimeState
+  source: 'source' | 'user' | null
+  message: string
+  runtime_dir: string
+  bundle_hash: string
+  minimum_node_version: string
+  node_version: string
+  npm_version: string
+  registry: string
+  dependencies: Array<{ name: string; version: string }>
+  setup_command: string
+}
+
 export type AgentPermissionMode = 'approval' | 'full_trust'
 export type AgentSessionStatus = 'created' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed' | 'aborted'
 

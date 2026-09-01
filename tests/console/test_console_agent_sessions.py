@@ -133,6 +133,23 @@ def test_full_trust_requires_explicit_confirmation(console_workspace: Path) -> N
         raise AssertionError("full trust was created without confirmation")
 
 
+def test_session_creation_surfaces_missing_runtime_as_structured_error(console_workspace: Path) -> None:
+    connection = AgentConnectionService()
+    connection.save(console_workspace, _connection_payload())
+
+    def missing_runtime(_environment):
+        raise AgentWorkerError("AGENT_RUNTIME_NOT_INSTALLED", "run aitest agent setup")
+
+    manager = AgentSessionManager(connection, lambda: console_workspace, missing_runtime)
+
+    try:
+        manager.create("approval", confirmed=False)
+    except Exception as exc:
+        assert getattr(exc, "code", None) == "AGENT_RUNTIME_NOT_INSTALLED"
+    else:
+        raise AssertionError("missing Runtime must block session creation")
+
+
 def test_session_projects_prompt_approval_and_terminal_events(console_workspace: Path) -> None:
     manager, worker = _manager(console_workspace)
     snapshot = manager.create("approval", confirmed=False)

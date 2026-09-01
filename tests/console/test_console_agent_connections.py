@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from aitest_kit.agent.client import AgentWorkerError
 from aitest_kit.console.agent_connections import (
     AgentConnectionAttempt,
     AgentConnectionAttemptError,
@@ -66,6 +67,19 @@ def test_connection_get_never_returns_session_key(console_workspace: Path) -> No
     assert response.headers["cache-control"] == "no-store"
     assert "sk-test-secret-value" not in rendered
     assert '"api_key":' not in rendered
+
+
+def test_connection_test_surfaces_missing_runtime_as_structured_error(console_workspace: Path, monkeypatch) -> None:
+    def missing_runtime():
+        raise AgentWorkerError("AGENT_RUNTIME_NOT_INSTALLED", "run aitest agent setup")
+
+    monkeypatch.setattr("aitest_kit.console.agent_connections.default_worker_command", missing_runtime)
+    client = TestClient(create_app(initial_workspace=console_workspace, token="console-token"))
+
+    response = client.post("/api/agent/connection/test", headers=_headers(), json=_payload())
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "AGENT_RUNTIME_NOT_INSTALLED"
 
 
 def test_connection_get_never_resolves_base_url_environment(

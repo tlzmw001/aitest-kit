@@ -321,8 +321,8 @@ class AgentSessionManager:
             self.close()
             workspace = self._workspace_root().resolve()
             launch = self._connections.runtime_launch(workspace, permission_mode=permission_mode)
-            worker = self._worker_factory(launch.environment)
             try:
+                worker = self._worker_factory(launch.environment)
                 self._current = AgentSession(
                     workspace=workspace,
                     permission_mode=permission_mode,
