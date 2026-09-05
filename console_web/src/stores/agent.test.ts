@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { api } from '../api/client'
 import { useAgentStore } from './agent'
+import { useWorkspaceStore } from './workspace'
 import type { AgentEvent, AgentSessionSnapshot } from '../types'
 
 vi.mock('../api/client', () => ({
@@ -16,6 +17,7 @@ vi.mock('../api/client', () => ({
     resolveAgentApproval: vi.fn(),
     abortAgent: vi.fn(),
     closeAgentSession: vi.fn(),
+    workspace: vi.fn(),
   },
 }))
 
@@ -40,6 +42,106 @@ function event(seq: number, type: string, payload: Record<string, unknown> = {})
 beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
+})
+
+test.each(['send', 'approval', 'abort'])('late %s HTTP response cannot revert newer SSE state', async (action) => {
+  const store = useAgentStore()
+  store.session = structuredClone(snapshot)
+  let finish!: (value: AgentSessionSnapshot) => void
+  const pending = new Promise<AgentSessionSnapshot>((resolve) => { finish = resolve })
+  vi.mocked(api.sendAgentMessage).mockReturnValue(pending)
+  vi.mocked(api.resolveAgentApproval).mockReturnValue(pending)
+  vi.mocked(api.abortAgent).mockReturnValue(pending)
+  const request = action === 'send' ? store.sendMessage('hello')
+    : action === 'approval' ? store.resolveApproval('p', 'allow_once') : store.abort()
+  store.applyEvent(event(5, 'session_interrupted'))
+  finish({ ...snapshot, last_seq: 1, status: 'running', active_prompt: true })
+  await request
+  expect(store.session?.status).toBe('interrupted')
+  expect(store.session?.active_prompt).toBe(false)
+  expect(store.session?.last_seq).toBe(5)
+})
+
+test('history from an older selection cannot overwrite the selected session', async () => {
+  const store = useAgentStore()
+  store.sessions = [snapshot, { ...snapshot, session_id: 'session-2', is_active: false }]
+  let finish!: (value: Awaited<ReturnType<typeof api.agentSessionHistory>>) => void
+  vi.mocked(api.agentSessionHistory).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+  const old = store.selectSession('session-1')
+  vi.mocked(api.agentSessionHistory).mockResolvedValueOnce({ events: [], last_seq: 2, resync_required: false })
+  await store.selectSession('session-2')
+  finish({ events: [event(10, 'text_delta')], last_seq: 10, resync_required: false })
+  await old
+  expect(store.session?.session_id).toBe('session-2')
+  expect(store.events).toEqual([])
+  expect(store.lastSeq).toBe(2)
+})
+
+test('resync restores retained history and pending approval payloads', () => {
+  const store = useAgentStore()
+  store.session = structuredClone(snapshot)
+  const approval = { request_id: 'p-1', tool_name: 'bash', surface: 'bash', command: 'git status' }
+  store.applyEvent(event(1005, 'resync_required', {
+    session: { ...snapshot, last_seq: 1005, status: 'awaiting_approval', pending_approval_ids: ['p-1'] },
+    events: [event(1005, 'text_delta', { delta: 'retained' })],
+    pending_approvals: [approval],
+  }))
+  expect(store.events[0]?.payload.delta).toBe('retained')
+  expect(store.pendingApprovals).toHaveLength(1)
+  expect(store.pendingApprovals[0]?.payload.command).toBe('git status')
+  expect(store.activityEvents.some((item) => item.type === 'permission_requested')).toBe(true)
+})
+
+test('SSE still refreshes reports when HTTP already supplied the terminal snapshot', async () => {
+  const store = useAgentStore()
+  store.session = { ...snapshot, last_seq: 5, status: 'succeeded' }
+  const refresh = vi.spyOn(useWorkspaceStore(), 'refresh').mockResolvedValue(undefined)
+  store.applyEvent(event(2, 'user_message'))
+  expect(store.session.status).toBe('succeeded')
+  store.applyEvent(event(5, 'agent_finished', { status: 'succeeded' }))
+  expect(refresh).toHaveBeenCalledOnce()
+  expect(store.events).toHaveLength(2)
+})
+
+test('history response carries its current snapshot instead of a stale selection snapshot', async () => {
+  const store = useAgentStore()
+  store.sessions = [{ ...snapshot, is_active: false }]
+  vi.mocked(api.agentSessionHistory).mockResolvedValue({
+    events: [event(5, 'agent_finished', { status: 'succeeded' })], last_seq: 5, resync_required: false,
+    session: { ...snapshot, is_active: false, last_seq: 5, status: 'succeeded' },
+  })
+  await store.selectSession(snapshot.session_id)
+  expect(store.session?.status).toBe('succeeded')
+})
+
+test('browsing inactive history preserves the active session and reconnects when returning', async () => {
+  const store = useAgentStore()
+  const active = structuredClone(snapshot)
+  const history = { ...snapshot, session_id: 'history', is_active: false }
+  store.sessions = [active, history]
+  vi.mocked(api.agentSessionHistory).mockResolvedValueOnce({
+    events: [], last_seq: 0, resync_required: false, session: history,
+  })
+  await store.selectSession('history')
+  expect(store.sessions.find((item) => item.session_id === active.session_id)?.is_active).toBe(true)
+  expect(api.streamAgentEvents).not.toHaveBeenCalled()
+  vi.mocked(api.agentSessionHistory).mockResolvedValueOnce({
+    events: [], last_seq: 0, resync_required: false, session: active,
+  })
+  await store.selectSession(active.session_id)
+  expect(api.streamAgentEvents).toHaveBeenCalledOnce()
+  store.disconnectEvents()
+})
+
+test('history snapshot activity controls reconnection instead of the stale list entry', async () => {
+  const store = useAgentStore()
+  store.sessions = [{ ...snapshot, is_active: false }]
+  vi.mocked(api.agentSessionHistory).mockResolvedValue({
+    events: [], last_seq: 0, resync_required: false, session: structuredClone(snapshot),
+  })
+  await store.selectSession(snapshot.session_id)
+  expect(api.streamAgentEvents).toHaveBeenCalledOnce()
+  store.disconnectEvents()
 })
 
 test('event projection is idempotent and tracks pending approval', () => {

@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AgentView from './AgentView.vue'
 import { api } from '../api/client'
+import { useAgentStore } from '../stores/agent'
 
 vi.mock('../api/client', () => ({
   api: {
@@ -62,6 +63,31 @@ describe('AgentView Runtime gate', () => {
     expect(wrapper.find('[data-test="agent-runtime-required"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="create-approval-session"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="create-full-trust-session"]').exists()).toBe(true)
+  })
+
+  it('does not send on IME confirmation but sends on a subsequent ordinary Enter', async () => {
+    const wrapper = mount(AgentView, { global: { stubs: { RouterLink: true, AgentActivityStream: true } } })
+    await flushPromises()
+    const store = useAgentStore()
+    store.session = {
+      session_id: 'session-1', pi_session_id: 'pi-1', permission_mode: 'approval', title: 'test',
+      status: 'created', active_prompt: false, pending_approval_ids: [], last_seq: 0,
+      created_at: 'now', updated_at: 'now', is_active: true,
+    }
+    store.draft = '你好'
+    const send = vi.spyOn(store, 'sendMessage').mockResolvedValue(undefined)
+    await flushPromises()
+    const input = wrapper.get('textarea')
+    await input.trigger('keydown', { key: 'Enter', isComposing: true })
+    expect(send).not.toHaveBeenCalled()
+    await input.trigger('compositionstart')
+    await input.trigger('keydown', { key: 'Enter' })
+    expect(send).not.toHaveBeenCalled()
+    await input.trigger('compositionend')
+    await input.trigger('keydown', { key: 'Enter', keyCode: 229 })
+    expect(send).not.toHaveBeenCalled()
+    await input.trigger('keydown', { key: 'Enter' })
+    expect(send).toHaveBeenCalledOnce()
   })
 
   it('shows persisted sessions as history without attaching a worker', async () => {

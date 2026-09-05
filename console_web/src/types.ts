@@ -269,6 +269,8 @@ export interface AgentEvent {
 }
 
 export interface AgentSessionHistory {
+  session?: AgentSessionSnapshot
+  pending_approvals?: Record<string, unknown>[]
   events: AgentEvent[]
   last_seq: number
   resync_required: boolean

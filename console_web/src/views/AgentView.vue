@@ -19,6 +19,7 @@ const fullTrustAction = ref<'create' | 'activate'>('create')
 const streamHost = ref<HTMLElement | null>(null)
 const modelName = ref('')
 const runtime = ref<AgentRuntimeStatus | null>(null)
+const composing = ref(false)
 const statusLabel = computed(() => ({
   created: '已就绪',
   running: '正在运行',
@@ -163,6 +164,7 @@ async function closeSession(): Promise<void> {
 }
 
 function handleComposerKey(event: KeyboardEvent): void {
+  if (event.isComposing || composing.value || event.keyCode === 229) return
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
     void send()
@@ -245,7 +247,7 @@ function handleComposerKey(event: KeyboardEvent): void {
 
       <div ref="streamHost" class="agent-stream-host">
         <AgentActivityStream
-          :events="store.events"
+          :events="store.activityEvents"
           :pending-ids="store.session.pending_approval_ids"
           @decide="decide"
         />
@@ -259,6 +261,8 @@ function handleComposerKey(event: KeyboardEvent): void {
           :disabled="store.session.status === 'awaiting_approval'"
           placeholder="让 Pi 检查 suite、运行 Skill，或生成新的测试资产…"
           @keydown="handleComposerKey"
+          @compositionstart="composing = true"
+          @compositionend="composing = false"
         />
         <div>
           <span>Enter 发送 · Shift Enter 换行</span>

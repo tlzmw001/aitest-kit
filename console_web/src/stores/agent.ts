@@ -19,13 +19,19 @@ export const useAgentStore = defineStore('agent', () => {
   const connectionState = ref<AgentConnectionState>('idle')
   const error = ref('')
   const draft = ref('')
+  const approvalEvents = ref<AgentEvent[]>([])
   let streamController: AbortController | null = null
+  let selectionVersion = 0
 
   const pendingApprovals = computed(() => {
     const pending = new Set(session.value?.pending_approval_ids ?? [])
-    return events.value.filter(
+    return [...new Map([...approvalEvents.value, ...events.value].filter(
       (event) => event.type === 'permission_requested' && pending.has(String(event.payload.request_id ?? '')),
-    )
+    ).map((event) => [String(event.payload.request_id), event])).values()]
+  })
+  const activityEvents = computed(() => {
+    const ids = new Set(events.value.filter((event) => event.type === 'permission_requested').map((event) => String(event.payload.request_id)))
+    return [...events.value, ...pendingApprovals.value.filter((event) => !ids.has(String(event.payload.request_id)))]
   })
 
   async function loadSession(): Promise<void> {
@@ -37,35 +43,54 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   async function createSession(mode: AgentPermissionMode, confirmed = false): Promise<void> {
+    const version = ++selectionVersion
     disconnectEvents()
     events.value = []
     lastSeq.value = 0
+    approvalEvents.value = []
     error.value = ''
-    session.value = await api.createAgentSession(mode, confirmed)
+    const created = await api.createAgentSession(mode, confirmed)
+    if (version !== selectionVersion) return
+    session.value = created
     syncSession(session.value)
     connectEvents()
   }
 
   async function selectSession(sessionId: string): Promise<void> {
     if (session.value?.session_id === sessionId) return
+    const version = ++selectionVersion
     const selected = sessions.value.find((item) => item.session_id === sessionId)
       ?? await api.agentSessionDetail(sessionId)
+    if (version !== selectionVersion) return
     await selectSnapshot(selected)
   }
 
   async function selectSnapshot(selected: AgentSessionSnapshot): Promise<void> {
+    const version = ++selectionVersion
     disconnectEvents()
     session.value = selected
+    events.value = []
+    approvalEvents.value = []
+    lastSeq.value = 0
     const history = await api.agentSessionHistory(selected.session_id)
+    if (version !== selectionVersion) return
+    if (history.session) acceptSnapshot(history.session)
     events.value = history.events
+    approvalEvents.value = (history.pending_approvals ?? []).map((payload) => ({
+      event_id: `pending-${String(payload.request_id)}`, seq: history.last_seq,
+      session_id: selected.session_id, type: 'permission_requested', timestamp: selected.updated_at,
+      correlation_id: '', payload,
+    }))
     lastSeq.value = history.last_seq
     error.value = ''
-    if (selected.is_active) connectEvents()
+    if (session.value?.is_active) connectEvents()
   }
 
   async function activateSession(sessionId = session.value?.session_id, confirmed = false): Promise<void> {
     if (!sessionId) return
+    const version = selectionVersion
     const activated = await api.activateAgentSession(sessionId, confirmed)
+    if (version !== selectionVersion || session.value?.session_id !== sessionId) return
     disconnectEvents()
     session.value = activated
     syncSession(session.value)
@@ -89,10 +114,12 @@ export const useAgentStore = defineStore('agent', () => {
           lastSeq.value,
           controller.signal,
           (event) => {
+            if (controller.signal.aborted || streamController !== controller) return
             failures = 0
             applyEvent(event)
           },
           () => {
+            if (controller.signal.aborted || streamController !== controller) return
             connectionState.value = 'connected'
           },
           () => {
@@ -117,19 +144,22 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   function applyEvent(event: AgentEvent): void {
+    if (!session.value || event.session_id !== session.value.session_id) return
     if (event.type === 'resync_required') {
+      if (event.seq < lastSeq.value) return
       const snapshot = event.payload.session as AgentSessionSnapshot | undefined
-      if (snapshot) {
-        session.value = snapshot
-        syncSession(snapshot)
-      }
-      events.value = []
+      if (snapshot) acceptSnapshot(snapshot)
+      events.value = (event.payload.events as AgentEvent[] | undefined) ?? []
+      approvalEvents.value = ((event.payload.pending_approvals as Record<string, unknown>[] | undefined) ?? []).map((payload) => ({
+        ...event, event_id: `pending-${String(payload.request_id)}`, type: 'permission_requested', payload,
+      }))
       lastSeq.value = event.seq
       connectionState.value = 'connected'
       return
     }
     if (event.seq <= lastSeq.value || (session.value && event.session_id !== session.value.session_id)) return
     events.value.push(event)
+    if (event.type === 'permission_requested') approvalEvents.value.push(event)
     if (events.value.length > 1000) events.value.splice(0, events.value.length - 1000)
     lastSeq.value = event.seq
     connectionState.value = 'connected'
@@ -138,7 +168,8 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   function projectSession(event: AgentEvent): void {
-    if (!session.value) return
+    if (['agent_finished', 'aborted', 'error'].includes(event.type)) void useWorkspaceStore().refresh()
+    if (!session.value || event.seq <= session.value.last_seq) return
     session.value.last_seq = event.seq
     session.value.updated_at = event.timestamp
     if (event.type === 'user_message') {
@@ -161,32 +192,40 @@ export const useAgentStore = defineStore('agent', () => {
         : event.type === 'aborted' ? 'aborted' : 'failed'
       session.value.active_prompt = false
       session.value.pending_approval_ids = []
-      void useWorkspaceStore().refresh()
     } else if (event.type === 'session_interrupted') {
       session.value.status = 'interrupted'
       session.value.active_prompt = false
       session.value.pending_approval_ids = []
     }
     syncSession(session.value)
+    approvalEvents.value = approvalEvents.value.filter((item) => session.value?.pending_approval_ids.includes(String(item.payload.request_id)))
+  }
+
+  function acceptSnapshot(value: AgentSessionSnapshot, version = selectionVersion): void {
+    if (version !== selectionVersion || value.session_id !== session.value?.session_id || value.last_seq < session.value.last_seq) return
+    session.value = value
+    syncSession(value)
+    approvalEvents.value = approvalEvents.value.filter((item) => value.pending_approval_ids.includes(String(item.payload.request_id)))
   }
 
   async function sendMessage(text = draft.value): Promise<void> {
     if (!session.value?.is_active) return
-    session.value = await api.sendAgentMessage(session.value.session_id, text)
-    syncSession(session.value)
-    draft.value = ''
+    const version = selectionVersion
+    const sentDraft = draft.value
+    acceptSnapshot(await api.sendAgentMessage(session.value.session_id, text), version)
+    if (version === selectionVersion && draft.value === sentDraft) draft.value = ''
   }
 
   async function resolveApproval(requestId: string, decision: AgentApprovalDecision): Promise<void> {
     if (!session.value?.is_active) return
-    session.value = await api.resolveAgentApproval(session.value.session_id, requestId, decision)
-    syncSession(session.value)
+    const version = selectionVersion
+    acceptSnapshot(await api.resolveAgentApproval(session.value.session_id, requestId, decision), version)
   }
 
   async function abort(): Promise<void> {
     if (!session.value?.is_active) return
-    session.value = await api.abortAgent(session.value.session_id)
-    syncSession(session.value)
+    const version = selectionVersion
+    acceptSnapshot(await api.abortAgent(session.value.session_id), version)
   }
 
   async function closeSession(): Promise<void> {
@@ -207,16 +246,18 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   function resetSelection(): void {
+    selectionVersion += 1
     disconnectEvents()
     session.value = null
     events.value = []
+    approvalEvents.value = []
     lastSeq.value = 0
     error.value = ''
     draft.value = ''
   }
 
   function syncSession(value: AgentSessionSnapshot): void {
-    sessions.value = sessions.value.map((item) => ({ ...item, is_active: false }))
+    if (value.is_active) sessions.value = sessions.value.map((item) => ({ ...item, is_active: false }))
     const index = sessions.value.findIndex((item) => item.session_id === value.session_id)
     if (index >= 0) sessions.value[index] = { ...value }
     else sessions.value.unshift({ ...value })
@@ -230,6 +271,7 @@ export const useAgentStore = defineStore('agent', () => {
     sessions,
     session,
     events,
+    activityEvents,
     lastSeq,
     connectionState,
     pendingApprovals,
