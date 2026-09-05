@@ -153,3 +153,18 @@ def test_client_redacts_arbitrary_key_values_from_worker_stderr() -> None:
 
     assert "arbitrary-provider-credential" not in str(exc_info.value.details)
     assert "[REDACTED]" in str(exc_info.value.details)
+
+
+def test_handshake_timeout_reaps_child_without_caller_close() -> None:
+    client = WorkerClient(
+        [sys.executable, '-c', 'import sys; sys.stdin.readline(); sys.stdin.read()'],
+        startup_timeout=0.2, shutdown_timeout=1,
+    )
+    try:
+        with pytest.raises(AgentWorkerError) as caught:
+            client.start({})
+        assert caught.value.code == 'WORKER_TIMEOUT'
+        assert client._process is not None
+        assert client._process.poll() is not None
+    finally:
+        client.close()

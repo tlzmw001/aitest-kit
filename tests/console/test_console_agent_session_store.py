@@ -122,3 +122,28 @@ def test_event_log_ignores_only_an_incomplete_final_line(tmp_path: Path) -> None
 
     assert restored.last_seq == 1
     assert restored.replay(0).events == [first]
+
+
+@pytest.mark.parametrize('tail', [b'{"seq":2', b'{"text":"\xe4\xbd', b''])
+def test_event_log_can_append_after_recovering_tail(tmp_path: Path, tail: bytes) -> None:
+    journal = tmp_path / 'events.jsonl'
+    log = AgentEventLog(journal_path=journal)
+    log.append('s', 'text_delta', {'delta': '你好'})
+    initial = journal.read_bytes().rstrip(b'\n') if not tail else journal.read_bytes() + tail
+    journal.write_bytes(initial)
+    restored = AgentEventLog(journal_path=journal)
+    assert journal.read_bytes() == initial  # Loading history is read-only.
+    restored.append('s', 'agent_finished', {'status': 'succeeded'})
+    reopened = AgentEventLog(journal_path=journal)
+    assert [event['seq'] for event in reopened.replay(0).events] == [1, 2]
+
+
+def test_failed_persistence_does_not_advance_event_seq(tmp_path: Path, monkeypatch) -> None:
+    log = AgentEventLog(journal_path=tmp_path / 'events.jsonl')
+    def fail(_event):
+        raise OSError('disk full')
+    monkeypatch.setattr(log, '_persist', fail)
+    with pytest.raises(OSError, match='disk full'):
+        log.append('s', 'text_delta', {'delta': 'hello'})
+    assert log.last_seq == 0
+    assert log.replay(0).events == []

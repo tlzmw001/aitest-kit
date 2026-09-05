@@ -40,6 +40,7 @@ class AgentSessionProtocol(Protocol):
     events: Any
 
     def snapshot(self) -> dict[str, Any]: ...
+    def event_replay(self, after_seq: int) -> dict[str, Any]: ...
     def send_message(self, text: str) -> dict[str, Any]: ...
     def resolve_approval(self, request_id: str, decision: str) -> dict[str, Any]: ...
     def abort(self) -> dict[str, Any]: ...
@@ -136,30 +137,25 @@ def create_agent_session_router(manager: AgentSessionManagerProtocol) -> APIRout
 
 async def _stream_events(session: AgentSessionProtocol, request: Request, after_seq: int) -> Iterator[str]:
     cursor = after_seq
-    replay = session.events.replay(cursor)
-    if replay.resync_required:
-        yield _encode_sse({
-            "event_id": str(uuid.uuid4()),
-            "seq": session.events.last_seq,
-            "session_id": session.session_id,
-            "type": "resync_required",
-            "timestamp": _now(),
-            "correlation_id": "",
-            "payload": {"session": session.snapshot()},
-        })
-        cursor = session.events.last_seq
-    else:
-        for event in replay.events:
-            yield _encode_sse(event)
-            cursor = event["seq"]
-    while not await request.is_disconnected():
-        events, closed = await asyncio.to_thread(session.events.wait_after, cursor, 15.0)
-        for event in events:
-            yield _encode_sse(event)
-            cursor = event["seq"]
-        if closed:
+    closed = False
+    while True:
+        replay = session.event_replay(cursor)
+        if replay["resync_required"]:
+            cursor = replay["session"]["last_seq"]
+            yield _encode_sse({
+                "event_id": str(uuid.uuid4()), "seq": cursor,
+                "session_id": session.session_id, "type": "resync_required",
+                "timestamp": _now(), "correlation_id": "",
+                "payload": {key: replay[key] for key in ("session", "events", "pending_approvals")},
+            })
+        else:
+            for event in replay["events"]:
+                yield _encode_sse(event)
+                cursor = event["seq"]
+        if closed or await request.is_disconnected():
             return
-        if not events:
+        events, closed = await asyncio.to_thread(session.events.wait_after, cursor, 15.0)
+        if not events and not closed:
             yield ": heartbeat\n\n"
 
 

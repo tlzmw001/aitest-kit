@@ -35,6 +35,9 @@ class AgentEventLog:
         self._closed = False
         self._condition = threading.Condition()
         self._journal_path = Path(journal_path).resolve(strict=False) if journal_path else None
+        self._disk_size = 0
+        self._valid_bytes = 0
+        self._needs_separator = False
         if self._journal_path is not None:
             self._load_journal()
 
@@ -51,18 +54,18 @@ class AgentEventLog:
         correlation_id: str = "",
     ) -> dict[str, Any]:
         with self._condition:
-            self._last_seq += 1
             event = {
                 "event_id": str(uuid.uuid4()),
-                "seq": self._last_seq,
+                "seq": self._last_seq + 1,
                 "session_id": session_id,
                 "type": event_type,
                 "timestamp": _now(),
                 "correlation_id": correlation_id,
                 "payload": redact(dict(payload)),
             }
-            self._remember(event)
             self._persist(event)
+            self._last_seq = event["seq"]
+            self._remember(event)
             self._condition.notify_all()
             return dict(event)
 
@@ -106,11 +109,21 @@ class AgentEventLog:
         except OSError:
             pass
         persisted = _persistent_event(event)
-        descriptor = os.open(self._journal_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
-        with os.fdopen(descriptor, "a", encoding="utf-8") as handle:
-            handle.write(_serialize(persisted) + "\n")
+        descriptor = os.open(self._journal_path, os.O_RDWR | os.O_CREAT, 0o600)
+        with os.fdopen(descriptor, "r+b") as handle:
+            if os.fstat(handle.fileno()).st_size != self._disk_size:
+                raise ValueError("Agent event journal changed outside its writer lease")
+            if self._valid_bytes != self._disk_size:
+                _LOGGER.warning("Repairing incomplete Agent journal tail before append: %s", self._journal_path)
+                handle.truncate(self._valid_bytes)
+            handle.seek(self._valid_bytes)
+            if self._needs_separator:
+                handle.write(b"\n")
+            handle.write((_serialize(persisted) + "\n").encode("utf-8"))
             handle.flush()
             os.fsync(handle.fileno())
+            self._disk_size = self._valid_bytes = handle.tell()
+            self._needs_separator = False
         try:
             self._journal_path.chmod(0o600)
         except OSError:
@@ -120,25 +133,29 @@ class AgentEventLog:
         if self._journal_path is None or not self._journal_path.exists():
             return
         try:
-            content = self._journal_path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as exc:
+            content = self._journal_path.read_bytes()
+        except OSError as exc:
             raise ValueError(f"cannot read Agent event journal: {exc}") from exc
+        self._disk_size = len(content)
         lines = content.splitlines(keepends=True)
         for index, line in enumerate(lines):
-            raw = line.rstrip("\r\n")
+            raw = line.rstrip(b"\r\n")
             if not raw:
+                self._valid_bytes += len(line)
                 continue
             try:
                 event = json.loads(raw)
                 _validate_event(event, previous_seq=self._last_seq)
-            except (json.JSONDecodeError, TypeError, ValueError) as exc:
-                is_incomplete_tail = index == len(lines) - 1 and not line.endswith(("\n", "\r"))
+            except (UnicodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+                is_incomplete_tail = index == len(lines) - 1 and not line.endswith((b"\n", b"\r"))
                 if is_incomplete_tail:
                     _LOGGER.warning("Ignoring incomplete final Agent event journal line: %s", self._journal_path)
                     break
                 raise ValueError(f"invalid Agent event journal at line {index + 1}") from exc
             self._last_seq = int(event["seq"])
             self._remember(event)
+            self._valid_bytes += len(line)
+            self._needs_separator = not line.endswith((b"\n", b"\r"))
 
 
 def _persistent_event(event: Mapping[str, Any]) -> dict[str, Any]:

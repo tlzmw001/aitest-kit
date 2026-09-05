@@ -90,16 +90,19 @@ class WorkerClient:
             name="aitest-agent-stderr",
             daemon=True,
         )
-        self._stdout_thread.start()
-        self._stderr_thread.start()
-        message_id = self.send("initialize", initialize_payload)
-        event = self.read_event(timeout=self.startup_timeout)
-        if event.id != message_id or event.type != "ready":
+        try:
+            self._stdout_thread.start()
+            self._stderr_thread.start()
+            message_id = self.send("initialize", initialize_payload)
+            event = self.read_event(timeout=self.startup_timeout)
+            if event.id != message_id or event.type != "ready":
+                raise AgentWorkerError(
+                    "WORKER_HANDSHAKE_FAILED",
+                    f"Pi Worker 握手失败，收到 {event.type}",
+                )
+        except BaseException:
             self._terminate()
-            raise AgentWorkerError(
-                "WORKER_HANDSHAKE_FAILED",
-                f"Pi Worker 握手失败，收到 {event.type}",
-            )
+            raise
         self._started = True
         return event
 
@@ -137,7 +140,9 @@ class WorkerClient:
 
     def wait_for_exit(self, *, timeout: float | None = None) -> None:
         """Wait for a previously requested shutdown and terminate on timeout."""
-        process = self._require_process()
+        process = self._process
+        if process is None:
+            return
         try:
             process.wait(timeout=self.shutdown_timeout if timeout is None else timeout)
         except subprocess.TimeoutExpired:

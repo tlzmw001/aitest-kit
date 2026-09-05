@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import shlex
+import logging
 import threading
 from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
@@ -13,6 +14,7 @@ from aitest_kit.agent.protocol import ProtocolMessage, redact
 from aitest_kit.console.agent_connections import AgentConnectionService
 from aitest_kit.console.agent_event_log import AgentEventLog
 from aitest_kit.console.agent_session_store import AgentSessionRecord, AgentSessionStore
+from aitest_kit.console.agent_session_recovery import recover_session, session_write_lease
 from aitest_kit.console.agent_worker_lease import AgentWorkerLease
 from aitest_kit.console.errors import ConsoleError
 
@@ -20,6 +22,7 @@ from aitest_kit.console.errors import ConsoleError
 MAX_PROMPT_BYTES = 64 * 1024
 TERMINAL_STATES = {"succeeded", "failed", "aborted"}
 PERMISSION_DECISIONS = {"allow_once", "allow_session", "deny"}
+_LOGGER = logging.getLogger(__name__)
 
 
 class SessionWorker(Protocol):
@@ -67,11 +70,21 @@ class AgentSession:
         self.pi_session_id = str(ready.payload.get("session_id") or "")
         self._store.set_pi_session_file(record, str(ready.payload.get("session_file") or ""))
         self._reader = threading.Thread(target=self._read_worker, name="aitest-console-agent", daemon=True)
-        self._reader.start()
         self._append(
             "session_resumed" if resumed else "session_created",
             {"permission_mode": self.permission_mode},
         )
+        self._reader.start()
+
+    def event_replay(self, after_seq: int) -> dict[str, Any]:
+        with self._lock:
+            replay = self.events.replay(after_seq)
+            return {
+                "events": replay.events,
+                "resync_required": replay.resync_required,
+                "session": self.snapshot(),
+                "pending_approvals": list(self.pending_approvals.values()),
+            }
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
@@ -281,7 +294,7 @@ class AgentSessionManager:
             if self._current and self._current.session_id == session_id:
                 return self._current.snapshot()
             workspace = self._workspace_root().resolve()
-            record = self._recover(self._store.load(workspace, session_id))
+            record = self._store.load(workspace, session_id)
             return self._start(record, confirmed=confirmed, resumed=True)
 
     def list_sessions(self) -> list[dict[str, Any]]:
@@ -308,7 +321,8 @@ class AgentSessionManager:
     def history(self, session_id: str, *, after_seq: int) -> dict[str, Any]:
         with self._lock:
             if self._current and self._current.session_id == session_id:
-                events = self._current.events
+                replay = self._current.event_replay(after_seq)
+                return {**replay, "last_seq": replay["session"]["last_seq"]}
             else:
                 workspace = self._workspace_root().resolve()
                 record = self._recover(self._store.load(workspace, session_id))
@@ -318,6 +332,7 @@ class AgentSessionManager:
                 "events": replay.events,
                 "last_seq": events.last_seq,
                 "resync_required": replay.resync_required,
+                "session": record.snapshot(is_active=False),
             }
 
     def archive(self, session_id: str) -> None:
@@ -325,7 +340,8 @@ class AgentSessionManager:
             workspace = self._workspace_root().resolve()
             if self._current and self._current.session_id == session_id:
                 self._deactivate(require_idle=True)
-            self._store.archive(workspace, session_id)
+            with session_write_lease(self._store, workspace, self._worker_lease):
+                self._store.archive(workspace, session_id)
 
     def snapshot(self) -> dict[str, Any] | None:
         with self._lock:
@@ -352,15 +368,17 @@ class AgentSessionManager:
         self._validate_mode(record.permission_mode, confirmed=confirmed)
         self._deactivate(require_idle=True)
         workspace = self._workspace_root().resolve()
-        launch = self._connections.runtime_launch(workspace, permission_mode=record.permission_mode)
-        payload = dict(launch.initialize_payload)
-        payload["session_dir"] = str(self._store.pi_dir(workspace, record.session_id))
-        session_file = self._store.resolve_pi_session_file(record)
-        if session_file is not None and session_file.is_file():
-            payload["session_file"] = str(session_file)
         lease = self._store.worker_lease(workspace)
         lease.acquire()
+        worker = None
         try:
+            record = recover_session(self._store, self._store.load(workspace, record.session_id), lease)
+            launch = self._connections.runtime_launch(workspace, permission_mode=record.permission_mode)
+            payload = dict(launch.initialize_payload)
+            payload["session_dir"] = str(self._store.pi_dir(workspace, record.session_id))
+            session_file = self._store.resolve_pi_session_file(record)
+            if session_file is not None and session_file.is_file():
+                payload["session_file"] = str(session_file)
             worker = self._worker_factory(launch.environment)
             self._current = AgentSession(
                 workspace=workspace,
@@ -371,7 +389,13 @@ class AgentSessionManager:
                 resumed=resumed,
             )
             self._worker_lease = lease
-        except Exception as exc:
+        except BaseException as exc:
+            if worker is not None:
+                try:
+                    worker.request_shutdown()
+                except AgentWorkerError:
+                    _LOGGER.warning("Worker shutdown request failed during session initialization cleanup")
+                worker.wait_for_exit(timeout=5)
             lease.release()
             if isinstance(exc, AgentWorkerError):
                 raise ConsoleError(exc.code, str(exc), status_code=502) from exc
@@ -390,24 +414,7 @@ class AgentSessionManager:
             )
 
     def _recover(self, record: AgentSessionRecord) -> AgentSessionRecord:
-        stale = record.active_prompt or record.pending_approval_ids or record.status in {"running", "awaiting_approval"}
-        if not stale:
-            return record
-        events = AgentEventLog(
-            journal_path=self._store.event_path(Path(record.workspace_path), record.session_id)
-        )
-        events.append(
-            record.session_id,
-            "session_interrupted",
-            {"reason": "runtime_restart", "tool_result_unknown": True},
-        )
-        record.status = "interrupted"
-        record.active_prompt = False
-        record.pending_approval_ids = []
-        record.last_seq = events.last_seq
-        record.updated_at = _now()
-        self._store.save(record)
-        return record
+        return recover_session(self._store, record, self._worker_lease)
 
     def _deactivate(self, *, require_idle: bool) -> None:
         current = self._current
