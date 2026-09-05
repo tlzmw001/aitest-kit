@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
 
@@ -188,13 +189,24 @@ def create_app(
     agent_worker_factory: WorkerFactory | None = None,
     agent_session_home: str | Path | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="AITest Local Console", docs_url=None, redoc_url=None)
     runtime = ConsoleRuntime(
         initial_workspace,
         agent_connection_tester,
         agent_worker_factory,
         agent_session_home,
     )
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        try:
+            yield
+        finally:
+            try:
+                runtime.agent_sessions.close()
+            finally:
+                runtime.agent_runtime.close()
+
+    app = FastAPI(title="AITest Local Console", docs_url=None, redoc_url=None, lifespan=lifespan)
     app.state.console_runtime = runtime
     app.add_middleware(
         CORSMiddleware,
@@ -224,8 +236,6 @@ def create_app(
     )
     app.include_router(create_agent_session_router(runtime.agent_sessions), dependencies=[auth])
     app.include_router(create_agent_runtime_router(runtime.agent_runtime), dependencies=[auth])
-    app.add_event_handler("shutdown", runtime.agent_sessions.close)
-    app.add_event_handler("shutdown", runtime.agent_runtime.close)
 
     @app.get("/api/health", dependencies=[auth])
     async def health() -> dict[str, str]:
