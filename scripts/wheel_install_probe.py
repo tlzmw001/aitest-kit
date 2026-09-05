@@ -10,8 +10,19 @@ import subprocess
 import sys
 import threading
 import time
+from collections import deque
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
+
+
+def safe_diagnostic(output: str) -> str:
+    sensitive = re.compile(r"token|api[_-]?key|password|secret|authorization|session url|sk-", re.I)
+    lines = [line for line in output.splitlines() if not sensitive.search(line)]
+    return "\n".join(lines[-12:])[-2000:]
+
+
+class ConsoleStartupError(RuntimeError):
+    pass
 
 
 def session_token(line: str) -> str | None:
@@ -38,18 +49,23 @@ def verify_console(cli: Path, workspace: Path) -> dict:
         "--port", str(port), "--no-open",
     ], cwd=workspace.parent, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
        text=True, encoding="utf-8")
-    tokens: queue.Queue[str] = queue.Queue()
+    tokens: queue.Queue[str | None] = queue.Queue()
+    diagnostics: deque[str] = deque(maxlen=30)
 
     def consume() -> None:
         for line in process.stdout:
+            diagnostics.append(safe_diagnostic(line))
             token = session_token(line)
             if token:
                 tokens.put(token)
+        tokens.put(None)
 
     reader = threading.Thread(target=consume, daemon=True)
     reader.start()
     try:
         token = tokens.get(timeout=30)
+        if token is None:
+            raise ConsoleStartupError(safe_diagnostic("\n".join(diagnostics)))
         with httpx.Client(base_url=f"http://127.0.0.1:{port}", trust_env=False, timeout=3) as client:
             deadline = time.monotonic() + 30
             last_error = "not started"
@@ -131,10 +147,13 @@ def main() -> int:
         report.update(verify_console(cli, workspace))
         report["status"] = "passed"
     except Exception as exc:
-        # Do not serialize command stdout/stderr or exception text: launch URLs are credentials.
+        # Only bounded, filtered diagnostics from this credential-free probe may cross the boundary.
         report.update(stage=stage, error_type=type(exc).__name__)
         if isinstance(exc, subprocess.CalledProcessError):
             report["exit_code"] = exc.returncode
+            report["diagnostic"] = safe_diagnostic((exc.stdout or "") + (exc.stderr or ""))
+        elif isinstance(exc, ConsoleStartupError):
+            report["diagnostic"] = safe_diagnostic(str(exc))
     print(json.dumps(report))
     return 0 if report["status"] == "passed" else 1
 

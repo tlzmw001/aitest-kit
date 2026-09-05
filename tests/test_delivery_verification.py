@@ -75,6 +75,15 @@ def test_console_token_extraction_is_fragment_only():
     assert module.session_token("http://127.0.0.1:42/?token=do-not-use") is None
 
 
+def test_probe_diagnostics_keep_errors_without_launch_credentials():
+    module = load_script("wheel_install_probe")
+    output = 'Session URL: http://localhost/#token=private\nAPI_KEY=private\nAttributeError: app has no add_event_handler\n'
+    rendered = module.safe_diagnostic(output)
+    assert 'AttributeError' in rendered
+    assert 'private' not in rendered
+    assert 'token' not in rendered
+
+
 def test_install_failure_report_does_not_expose_subprocess_output(tmp_path, monkeypatch, capsys):
     module = load_script("verify_wheel_install")
     (tmp_path / "aitest_kit-0.4.0-py3-none-any.whl").touch()

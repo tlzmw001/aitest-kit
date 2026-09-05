@@ -26,7 +26,8 @@ Console HTTP 服务、认证和静态 JS。不会调用模型，不需要 API ke
 真实凭证塞进报告。临时 Runtime、npm cache 和 workspace 在结束时清理。
 
 成功输出 `status: passed`。失败报告提供 `stage`、`error_type` 和可用的退出码；
-不保存原始子进程输出，以免 Console 会话地址进入日志。CI 为每个平台/Node 组合
+probe 子进程失败可附带最多 2,000 字符的过滤诊断，删除含会话地址、token、密钥等
+字段的行，不保存原始完整日志。CI 为每个平台/Node 组合
 上传一份独立报告。构建失败发生在 probe 前时可能没有 JSON，查看对应构建步骤。
 
 ## 视觉回归

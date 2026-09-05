@@ -48,3 +48,11 @@
 - Vue 110、Worker 20、macOS Playwright 12 个测试通过；前端生产构建成功。
 - 持久化测量九轮均重开 seq 一致，p95 小于 0.7 ms；保留原逐事件写入语义。完整数据见 `docs/benchmarks/agent_persistence.md`。
 - 不把历史 Linux 图片来源、本机测试或 CI 配置存在表述为最新六组远程绿灯。
+
+## 首次远程验收反馈
+
+run `33944436852` 的 Linux Playwright 13 项已通过；安装验收发现较新 Python
+解析到的 FastAPI 不再提供 `add_event_handler`，Console 改用官方 lifespan
+（https://fastapi.tiangolo.com/advanced/events/），保留 shutdown 清理，未调整依赖版本。
+probe 增加有界且过滤敏感行的错误诊断，子进程提前退出时立即报告，不再只等到
+token 队列超时。Windows setup 失败另行按具体诊断定位，不依据 macOS 推断通过。
