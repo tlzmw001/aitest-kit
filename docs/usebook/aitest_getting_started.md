@@ -91,10 +91,13 @@ Console 也不会自动修改 `.gitignore`。
 `aitest agent setup`。Python wheel 携带精确 lockfile 和 Worker seed，依赖安装到当前用户的
 `~/.aitest/runtimes/`，不修改 workspace；Node.js 最低为 22.19.0，推荐 Node.js 24 LTS。
 安装就绪后可从主导航“Agent”创建本地 session。approval 模式下，
-write/edit、Shell 和外部目录请求由页面内审批卡处理；write/edit 可以查看 Monaco Diff。
-full_trust 会继承 Console 进程的本地权限，读取内容可能进入模型上下文，因此每次创建都必须
-针对当前 workspace 明确确认。页面刷新会使用 `after_seq` 恢复当前 Console 进程内保存的事件；
-Console 或 Pi Worker 进程重启后的 session 恢复尚未提供。
+递归 grep、write/edit、Shell 和外部目录请求由页面内审批卡处理；write/edit 可以查看 Monaco Diff。
+直接敏感路径读取默认拒绝；批准 grep/Shell 后仍可能读取敏感内容，审批不是逐文件隔离或沙箱。
+full_trust 会继承 Console 进程的本地权限，读取内容可能进入模型上下文，因此每次创建或重新激活都必须
+针对当前 workspace 明确确认。页面刷新会使用 `after_seq` 恢复事件，超出窗口时重同步最近历史及待审批请求。
+持久 session 默认保存在 `~/.aitest/sessions/`（可通过 `AITEST_AGENT_SESSION_HOME` 指定），按 workspace 隔离。
+支持多个历史会话、单 active Worker。重启后可查看历史并显式继续；未完成任务标记为 interrupted，
+最后工具结果可能未知，不自动重试 Shell/工具或恢复旧审批授权。
 
 ## 二、迁移原则
 
@@ -377,5 +380,6 @@ Module Harness 装配阶段会报缺少的变量名。通过 shell、CI secret �
 
 ## 相关文档
 
+- [Console / Pi 交付验收](./console_delivery_verification.md) — 维护者运行三平台安装、视觉回归与持久化测量
 - [Profile Guide](./codegen_profile_guide.md) — module/suite profile 编写细节
 - [Troubleshooting](./codegen_troubleshooting.md) — codegen 常见问题和排查

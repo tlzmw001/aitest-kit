@@ -1,0 +1,63 @@
+{
+  "measured_at": "2026-09-05T04:06:03.291924+00:00",
+  "os": "macOS-26.4-arm64-arm-64bit",
+  "machine": "arm64",
+  "python": "3.9.6",
+  "scope": "journal append + metadata save; real fsync; no model/SSE/browser",
+  "runs": [
+    {
+      "events": 10000,
+      "payload_bytes": 128,
+      "elapsed_seconds": 4.179274625000001,
+      "events_per_second": 2392.759724422273,
+      "latency_ms": {
+        "p50": 0.39366699999998644,
+        "p95": 0.5657089999999698,
+        "max": 4.842834000000185
+      },
+      "fsync_calls": 20000,
+      "fsync_seconds": 0.39004546700004133,
+      "journal_bytes": 3528894,
+      "metadata_bytes": 537,
+      "reopen_ms": 50.94916699999974,
+      "reopened_seq": 10000,
+      "metadata_seq": 10000
+    },
+    {
+      "events": 10000,
+      "payload_bytes": 128,
+      "elapsed_seconds": 4.335984292000001,
+      "events_per_second": 2306.281417681851,
+      "latency_ms": {
+        "p50": 0.3862500000000324,
+        "p95": 0.621875000000216,
+        "max": 5.571584000000129
+      },
+      "fsync_calls": 20000,
+      "fsync_seconds": 0.38164129200002694,
+      "journal_bytes": 3528894,
+      "metadata_bytes": 537,
+      "reopen_ms": 48.12362499999878,
+      "reopened_seq": 10000,
+      "metadata_seq": 10000
+    },
+    {
+      "events": 10000,
+      "payload_bytes": 128,
+      "elapsed_seconds": 3.9111150830000003,
+      "events_per_second": 2556.8155852702635,
+      "latency_ms": {
+        "p50": 0.3775420000007301,
+        "p95": 0.5285420000014085,
+        "max": 2.0004580000012595
+      },
+      "fsync_calls": 20000,
+      "fsync_seconds": 0.36453182299989884,
+      "journal_bytes": 3528894,
+      "metadata_bytes": 537,
+      "reopen_ms": 48.863875000000334,
+      "reopened_seq": 10000,
+      "metadata_seq": 10000
+    }
+  ]
+}

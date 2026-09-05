@@ -604,7 +604,7 @@ cd .. && git diff --check
 | 待办 | 当前状态 | 进入条件 |
 |---|---|---|
 | 当前 Console/Pi 分支创建 PR、合并并发布 | 已记录，暂不执行 | 跨平台 Playwright 视觉基线验证通过，并由用户明确授权提交、push、PR 或发布 |
-| Pi Worker 随安装包分发 | 待方案讨论 | 先确认 wheel 内置构建产物、独立 npm 包或首次启动下载等交付路线，再写分发 Spec |
+| Pi Worker 随安装包分发 | 已由后续 Spec 实现 | wheel 携带安装种子，显式 setup 安装用户级 Runtime；权威增量见 `docs/specs/pi_worker_distribution_spec.md`，跨平台验收见 `docs/specs/console_delivery_verification_spec.md` |
 | Console/Worker 重启后的持久 session 恢复 | 已由后续 Spec 实现 | 权威增量见 `docs/specs/local_console_agent_persistent_sessions_spec.md` |
 | 多 session 和会话列表 | 已由后续 Spec 实现 | 多历史 session、单 active Worker，不引入数据库或第二套模型上下文状态源 |
 | 外部 API Capability Registry | 已记录，未批准设计 | 先确认首方受审能力与第三方可安装能力的供应边界；不先暴露通用 `http_request` |

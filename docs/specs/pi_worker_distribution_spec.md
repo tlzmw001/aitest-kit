@@ -382,6 +382,12 @@ Runtime service。Console setup 复用现有有界输出与进程组取消机制
 
 ## 18. 完成条件
 
+后续交付验收接入：`.github/workflows/ci.yml` 的 `install-smoke` 矩阵覆盖三种
+GitHub-hosted OS × Node 22.19.0/24，通过真实 clean-wheel 安装、两次 setup、
+self-test 和 Console HTTP 验证以上路线。脚本和本地复现见
+`docs/usebook/console_delivery_verification.md`。配置存在不等于六组远程已通过，
+实际状态以对应提交的 GitHub run 为准。
+
 - wheel 用户无需 AITest 源码 checkout 即可安装并启动 Pi Worker。
 - `aitest agent setup` 不依赖 cwd/workspace，失败不破坏已有 Runtime。
 - Console 安装入口真实接线，非静态演示。

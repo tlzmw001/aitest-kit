@@ -149,10 +149,13 @@ modify the workspace. Once ready, the **Agent** navigation item can create eithe
 full-trust local session. A resumable SSE stream presents the
 conversation, tool timeline, and inline approval cards. Write/edit requests can open Monaco Diff,
 and backend-validated workspace paths and AITest run/report events link to the editor or reports.
-Approval mode supports allow once, allow for session, and deny. Every full-trust session requires
-an explicit confirmation for the current workspace. Browser refresh can replay events retained by
-the current Console process; session recovery after a Console or Pi Worker process restart remains
-out of scope.
+Approval mode supports allow once, allow for session, and deny. Recursive `grep`, write/edit, shell,
+and external directory access require approval. Direct reads of sensitive paths are denied by default,
+but approved grep/shell calls can still read sensitive content: approval is not per-file isolation or a sandbox.
+Creating or reactivating a full-trust session requires explicit confirmation for the current workspace.
+Workspace-scoped history persists in the current user's session directory, with multiple historical sessions
+and one active Worker. After restart, users can review history and explicitly continue; unfinished runs become
+interrupted, without automatically retrying tools or replaying approvals.
 
 For real API tests, provide credentials via env file:
 
@@ -315,6 +318,7 @@ This repository includes `coupon_system` as a realistic regression asset. See [C
 - [Profile Guide](docs/usebook/codegen_profile_guide.md)
 - [Troubleshooting](docs/usebook/codegen_troubleshooting.md)
 - [Contributing](CONTRIBUTING.md)
+- [Console / Pi delivery verification](docs/usebook/console_delivery_verification.md) — Cross-platform installation CI, visual baselines, and persistence measurements (Chinese)
 - [CHANGELOG](CHANGELOG.md)
 
 ## License

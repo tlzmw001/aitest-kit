@@ -142,9 +142,11 @@ Pi Agent Runtime 通过 Console 的 Runtime 卡片或 `aitest agent setup` 显�
 不会修改 workspace，也不会读取模型 API Key。安装就绪后，主导航的“Agent”可以创建 approval
 或 full_trust 本地 session。页面通过可恢复的 SSE 事件流展示对话、工具时间线和审批卡；write/edit 可展开
 Monaco Diff，已验证的 workspace 路径和 AITest run/report 工具事件可以跳转到编辑器或报告页。
-approval 模式支持允许一次、本会话允许和拒绝；full_trust 每次创建 session 都必须针对当前
-workspace 明确确认。刷新页面可恢复当前 Console 进程内的事件，Console 或 Pi Worker 进程
-重启后的 session 恢复仍不在当前范围内。
+approval 模式支持允许一次、本会话允许和拒绝；递归 `grep`、write/edit、Shell 和外部目录访问需要审批。
+直接读取敏感路径默认拒绝，但批准 grep/Shell 后仍可能读取敏感内容；审批不是逐文件隔离或沙箱。
+full_trust 每次创建或重新激活 session 都必须针对当前 workspace 明确确认。
+会话历史保存在当前用户的 workspace-scoped session 目录，支持多历史会话、单 active Worker。
+重启后可查看历史并显式继续；未完成的运行标记为 interrupted，不自动重试工具或重放审批。
 
 运行真实接口测试时通过 env 文件提供凭据：
 
@@ -296,6 +298,7 @@ python3 -m aitest_kit.cli doctor
 - [Profile Guide](docs/usebook/codegen_profile_guide.md) — 编写 module/suite profile
 - [Troubleshooting](docs/usebook/codegen_troubleshooting.md) — codegen 常见问题
 - [Contributing](CONTRIBUTING.md) — 贡献指南
+- [Console / Pi 交付验收](docs/usebook/console_delivery_verification.md) — 三平台安装 CI、视觉基线和持久化测量
 - [CHANGELOG](CHANGELOG.md) — 版本变更记录
 
 ## License
