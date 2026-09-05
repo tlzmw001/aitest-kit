@@ -41,6 +41,24 @@ describe('ReportsView', () => {
     vi.mocked(api.reportDetail).mockResolvedValue(detail)
   })
 
+  it('ignores a late response from an older report selection', async () => {
+    const wrapper = mount(ReportsView, { global: {
+      plugins: [createPinia()], stubs: { RouterLink: true, CodeEditor: true, SafeMarkdown: true },
+    } })
+    await flushPromises()
+    let finish!: (value: ReportDetail) => void
+    vi.mocked(api.reportDetail).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    const view = wrapper.vm as unknown as { selectReport: (report: ReportSummary) => Promise<void>; detail: ReportDetail }
+    const old = view.selectReport(summary)
+    const second = { ...summary, run_id: 'second', result_path: 'second/result.json' }
+    const secondDetail = { ...detail, summary: second }
+    vi.mocked(api.reportDetail).mockResolvedValueOnce(secondDetail)
+    await view.selectReport(second)
+    finish(detail)
+    await old
+    expect(view.detail.summary.run_id).toBe('second')
+  })
+
   it('uses safe Markdown for report.md and a read-only JSON Monaco view', async () => {
     const wrapper = mount(ReportsView, {
       global: {

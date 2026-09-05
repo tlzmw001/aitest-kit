@@ -15,34 +15,42 @@ const selected = ref<ReportSummary | null>(null)
 const detail = ref<ReportDetail | null>(null)
 const tab = ref<'report' | 'json'>('report')
 const error = ref('')
+let detailRequest = 0
+let listRequest = 0
 const summary = computed(() => detail.value?.summary.summary ?? {})
 const resultJson = computed(() => detail.value ? JSON.stringify(detail.value.result, null, 2) : '')
 const resultPath = computed(() => detail.value?.summary.result_path ?? 'result.json')
 
 async function loadReports(): Promise<void> {
+  const request = ++listRequest
   error.value = ''
   try {
-    reports.value = (await api.reports()).reports
+    const loaded = await api.reports()
+    if (request !== listRequest) return
+    reports.value = loaded.reports
     const selectedPath = selected.value?.result_path
     const nextReport = reports.value.find((report) => report.result_path === selectedPath) ?? reports.value[0] ?? null
     if (nextReport) await selectReport(nextReport)
     else {
+      detailRequest += 1
       selected.value = null
       detail.value = null
     }
   } catch (cause) {
-    error.value = messageFrom(cause)
+    if (request === listRequest) error.value = messageFrom(cause)
   }
 }
 
 async function selectReport(report: ReportSummary): Promise<void> {
+  const request = ++detailRequest
   selected.value = report
   detail.value = null
   error.value = ''
   try {
-    detail.value = await api.reportDetail(report.result_path)
+    const loaded = await api.reportDetail(report.result_path)
+    if (request === detailRequest) detail.value = loaded
   } catch (cause) {
-    error.value = messageFrom(cause)
+    if (request === detailRequest) error.value = messageFrom(cause)
   }
 }
 

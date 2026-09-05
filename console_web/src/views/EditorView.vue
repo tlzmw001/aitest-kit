@@ -133,30 +133,37 @@ async function save(): Promise<void> {
   await saveTab(tab)
 }
 
+const savingTabs = new WeakSet<EditorTab>()
+
 async function saveTab(tab: EditorTab): Promise<void> {
-  if (!tab || tab.document.read_only || !isDirty(tab)) return
+  if (!tab || tab.document.read_only || !isDirty(tab) || savingTabs.has(tab)) return
+  savingTabs.add(tab)
+  const sentContent = tab.content
   error.value = ''
   try {
-    const saved = await api.saveFile(tab.document, tab.content)
-    const current = tabs.value.find((item) => item.document.path === tab.document.path)
+    const saved = await api.saveFile(tab.document, sentContent)
+    const current = tabs.value.find((item) => item === tab)
     if (current) {
       current.document = saved
-      current.content = saved.content
+      if (current.content === sentContent) current.content = saved.content
     }
     await store.refresh()
     savedMessage.value = '已保存并更新文件 hash'
-    scheduleValidation(current ?? tab)
+    if (current) scheduleValidation(current)
     window.setTimeout(() => (savedMessage.value = ''), 2400)
   } catch (cause) {
+    if (!tabs.value.includes(tab)) return
     if (cause instanceof ApiError && cause.code === 'FILE_CONFLICT') await openConflict(tab)
     else error.value = messageFrom(cause)
+  } finally {
+    savingTabs.delete(tab)
   }
 }
 
 async function openConflict(tab: EditorTab): Promise<void> {
   try {
     const disk = await api.readFile(tab.document.path)
-    const current = tabs.value.find((item) => item.document.path === tab.document.path)
+    const current = tabs.value.find((item) => item === tab)
     if (!current) return
     conflict.value = { path: tab.document.path, disk, localContent: current.content }
     error.value = '文件已在 Console 外发生变化。请比较两个版本后再决定。'

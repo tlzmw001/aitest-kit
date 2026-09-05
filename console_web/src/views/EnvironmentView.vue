@@ -15,6 +15,8 @@ const revealPending = ref(false)
 const externalPath = ref('')
 const error = ref('')
 const message = ref('')
+const savingDocuments = new WeakSet<FileDocument>()
+let revealVersion = 0
 
 const selected = computed<EnvSource | null>(() => metadata.value?.sources.find((item) => item.path === selectedPath.value) ?? null)
 const dirty = computed(() => Boolean(document.value && document.value.content !== content.value))
@@ -48,32 +50,44 @@ function hideSensitive(): void {
 }
 
 async function reveal(): Promise<void> {
+  const version = ++revealVersion
+  const path = selectedPath.value
   error.value = ''
   try {
-    document.value = await api.revealEnv(selectedPath.value)
+    const revealed = await api.revealEnv(path)
+    if (version !== revealVersion || path !== selectedPath.value) return
+    document.value = revealed
     content.value = document.value.content
     revealPending.value = false
   } catch (cause) {
-    error.value = messageFrom(cause)
+    if (version === revealVersion) error.value = messageFrom(cause)
   }
 }
 
 function clearSensitive(): void {
+  revealVersion += 1
   document.value = null
   content.value = ''
   revealPending.value = false
 }
 
 async function save(): Promise<void> {
-  if (!document.value || !dirty.value) return
+  const source = document.value
+  if (!source || !dirty.value || savingDocuments.has(source)) return
+  savingDocuments.add(source)
+  const sentContent = content.value
   error.value = ''
   try {
-    document.value = await api.saveEnv(document.value, content.value)
-    content.value = document.value.content
+    const saved = await api.saveEnv(source, sentContent)
+    if (document.value !== source) return
+    document.value = saved
+    if (content.value === sentContent) content.value = saved.content
     message.value = 'Env 已保存，内容未写入历史记录'
     await loadMetadata()
   } catch (cause) {
-    error.value = messageFrom(cause)
+    if (document.value === source) error.value = messageFrom(cause)
+  } finally {
+    savingDocuments.delete(source)
   }
 }
 

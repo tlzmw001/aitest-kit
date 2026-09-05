@@ -297,6 +297,27 @@ describe('EditorView tabs', () => {
     expect(wrapper.get('.editor-stub').attributes('data-theme')).toBe('high-contrast-dark')
   })
 
+  it('preserves edits typed during save and saves them against the new hash', async () => {
+    const path = 'cases/saving.md'
+    let finish!: (value: FileDocument) => void
+    vi.mocked(api.saveFile).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    const { wrapper } = await mountEditor(path)
+    const editor = wrapper.getComponent(CodeEditorStub)
+    editor.vm.$emit('update:modelValue', '# sent')
+    await nextTick()
+    await wrapper.get('.tab-action').trigger('click')
+    editor.vm.$emit('update:modelValue', '# newer')
+    await nextTick()
+    const saved = { ...documentFor(path), content: '# sent', sha256: 'new-hash' }
+    finish(saved)
+    await flushPromises()
+    expect(wrapper.get('.editor-stub').text()).toBe('# newer')
+    vi.mocked(api.saveFile).mockResolvedValue({ ...saved, content: '# newer' })
+    await wrapper.get('.tab-action').trigger('click')
+    await flushPromises()
+    expect(api.saveFile).toHaveBeenLastCalledWith(saved, '# newer')
+  })
+
   it('shows backend diagnostics in the real Problems panel', async () => {
     vi.useFakeTimers()
     vi.mocked(api.validateEditor).mockResolvedValue({

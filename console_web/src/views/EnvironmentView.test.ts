@@ -13,12 +13,14 @@ vi.mock('../api/client', async () => {
       ...actual.api,
       environment: vi.fn(),
       revealEnv: vi.fn(),
+      saveEnv: vi.fn(),
     },
   }
 })
 
 describe('EnvironmentView', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     vi.unstubAllGlobals()
     vi.mocked(api.environment).mockResolvedValue({
       sources: [{ path: '.env', absolute_path: null, exists: true, external: false, active: true, keys: ['DEMO_TOKEN'], error: '', git_status: 'ignored' }],
@@ -26,6 +28,33 @@ describe('EnvironmentView', () => {
       precedence: ['shell', 'explicit_env_files', 'workspace_dotenv'],
     })
     vi.mocked(api.revealEnv).mockResolvedValue({ path: '.env', name: '.env', content: 'DEMO_TOKEN=secret\n', sha256: 'hash', owner: 'ENV', read_only: false })
+  })
+
+  it('preserves newer env input while updating the saved hash', async () => {
+    const CodeEditorStub = defineComponent({
+      props: ['modelValue'], emits: ['update:modelValue', 'save'],
+      template: '<div class="editor-stub">{{ modelValue }}</div>',
+    })
+    let finish!: (value: Awaited<ReturnType<typeof api.saveEnv>>) => void
+    vi.mocked(api.saveEnv).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    const wrapper = mount(EnvironmentView, { global: { stubs: { CodeEditor: CodeEditorStub } } })
+    await flushPromises()
+    await wrapper.get('.env-source').trigger('click')
+    await wrapper.get('.sensitive-gate .primary-btn').trigger('click')
+    await flushPromises()
+    const editor = wrapper.getComponent(CodeEditorStub)
+    editor.vm.$emit('update:modelValue', 'DEMO_VALUE=sent')
+    await flushPromises()
+    editor.vm.$emit('save')
+    editor.vm.$emit('update:modelValue', 'DEMO_VALUE=newer')
+    const saved = { path: '.env', name: '.env', content: 'DEMO_VALUE=sent', sha256: 'new-hash', owner: 'ENV' as const, read_only: false }
+    finish(saved)
+    await flushPromises()
+    expect(wrapper.get('.editor-stub').text()).toBe('DEMO_VALUE=newer')
+    vi.mocked(api.saveEnv).mockResolvedValue({ ...saved, content: 'DEMO_VALUE=newer' })
+    editor.vm.$emit('save')
+    await flushPromises()
+    expect(api.saveEnv).toHaveBeenLastCalledWith(saved, 'DEMO_VALUE=newer')
   })
 
   it('requires a second explicit action before revealing env content', async () => {
