@@ -1,5 +1,5 @@
 {
-  "bundle_hash": "4dd492943bf2b7f7a1c27e7f48062ed73697be5942862feed61b94115750f044",
+  "bundle_hash": "8166cf5f9522bbf0356a404a828b28c96d9d21a07f5afccde953961298ef8bd1",
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.84.3",
     "@gotgenes/pi-permission-system": "27.1.1"
@@ -8,7 +8,7 @@
   "files": {
     "package-lock.json": "ecdc164d12c3dc6d4d6d993a3ae3d761dbc0941c84aade24393531755ada2052",
     "package.json": "d40f50984e5943ace95a9d9a13ea1d187da50b614e390ea2ea303e6c4284bde9",
-    "src/permissions.ts": "3dc81c6a58a879eace1858a5c3c7f5db67abef03688a9079931644c2d3653097",
+    "src/permissions.ts": "66826b97492a04fc8610d250006e4f30346a05a8fd2f467f2d1582964672b8cc",
     "src/protocol.ts": "851912abbdb024fd6505211adda5835c6b5e3fa9ea1c15b670a6a3bf7e68bb64",
     "src/session.ts": "045d24b92d89d4e6c8bcc5139a431930690b7583cada2f69b7ad0c08703c1baf",
     "src/worker.ts": "053959ddfbd7c5f3057f561bad2fbbcc4e517496f2307e2267209bea11a2cb56"

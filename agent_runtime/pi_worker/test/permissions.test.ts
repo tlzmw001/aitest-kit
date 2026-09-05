@@ -9,7 +9,7 @@ test("approval profile allows workspace discovery, asks for mutation, and denies
 
   assert.equal(config.yoloMode, false);
   assert.equal(config.permission.read, "allow");
-  assert.equal(config.permission.grep, "allow");
+  assert.equal(config.permission.grep, "ask");
   assert.equal(config.permission.write, "ask");
   assert.equal(config.permission.edit, "ask");
   assert.equal(config.permission.bash, "ask");

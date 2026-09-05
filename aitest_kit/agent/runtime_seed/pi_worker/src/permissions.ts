@@ -60,7 +60,8 @@ export function createPermissionConfig(mode: PermissionMode): PermissionConfig {
     permission: {
       "*": "ask",
       read: "allow",
-      grep: "allow",
+      // Native grep authorizes the root, not each recursively searched file.
+      grep: "ask",
       find: "allow",
       ls: "allow",
       write: "ask",
