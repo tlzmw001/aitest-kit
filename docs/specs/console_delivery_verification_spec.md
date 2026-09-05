@@ -61,3 +61,8 @@ token 队列超时。Windows setup 失败另行按具体诊断定位，不依据
 `git -c core.autocrlf=true checkout-index` 在临时目录复现；`.gitattributes`
 为 Worker 源和 runtime seed 固定 `eol=lf` 后同一测试通过，不放宽校验、不重算
 Windows 专属 bundle hash。Ubuntu/macOS 四组 clean-wheel 已在第二轮通过。
+
+第三轮 Windows 已通过 seed 校验，随后暴露裸 `npm` 命令不能解析 `npm.cmd`。
+Runtime 子进程入口使用标准库 `shutil.which` 先解析可执行文件完整路径，仍用参数
+列表且不启用 shell；增加含空格 launcher 路径回归。实际 Windows 安装结果继续由
+后续矩阵验证，不将模拟 launcher 单测等同于 Windows 通过。

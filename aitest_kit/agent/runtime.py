@@ -370,7 +370,11 @@ def _install_failure(stage: str, completed: subprocess.CompletedProcess[str]) ->
 
 
 def _run_command(command: list[str], cwd: Path, timeout: float) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(command, cwd=cwd, check=False, capture_output=True, text=True, timeout=timeout)
+    executable = shutil.which(command[0]) or command[0]
+    return subprocess.run(
+        [executable, *command[1:]], cwd=cwd, check=False,
+        capture_output=True, text=True, timeout=timeout,
+    )
 
 
 def _redacted_runtime_text(value: str, environ: Mapping[str, str] | None = None) -> str:

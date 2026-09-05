@@ -18,6 +18,26 @@ from aitest_kit.agent.runtime import (
 SEED = Path(__file__).resolve().parents[2] / "aitest_kit" / "agent" / "runtime_seed" / "pi_worker"
 
 
+def test_runtime_command_resolves_platform_launcher_before_spawn(tmp_path, monkeypatch):
+    from aitest_kit.agent import runtime
+
+    launcher = str(tmp_path / "Program Files" / "nodejs" / "npm.cmd")
+    monkeypatch.setattr(runtime.shutil, "which", lambda tool: launcher if tool == "npm" else None)
+    calls = []
+
+    def spawn(command, **kwargs):
+        calls.append((command, kwargs))
+        if command[0] != launcher:
+            raise FileNotFoundError("bare npm does not resolve the Windows launcher")
+        return subprocess.CompletedProcess(command, 0, "11.0.0\n", "")
+
+    monkeypatch.setattr(runtime.subprocess, "run", spawn)
+    result = runtime._run_command(["npm", "--version"], tmp_path, 5)
+    assert result.returncode == 0
+    assert calls[0][0] == [launcher, "--version"]
+    assert calls[0][1].get("shell", False) is False
+
+
 def _copy_seed(tmp_path: Path) -> Path:
     seed = tmp_path / "seed"
     shutil.copytree(SEED, seed)
