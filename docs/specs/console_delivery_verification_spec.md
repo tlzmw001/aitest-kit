@@ -56,3 +56,8 @@ run `33944436852` 的 Linux Playwright 13 项已通过；安装验收发现较�
 （https://fastapi.tiangolo.com/advanced/events/），保留 shutdown 清理，未调整依赖版本。
 probe 增加有界且过滤敏感行的错误诊断，子进程提前退出时立即报告，不再只等到
 token 队列超时。Windows setup 失败另行按具体诊断定位，不依据 macOS 推断通过。
+
+第二轮 Windows 日志确认 seed `package-lock.json` 字节哈希不匹配。使用
+`git -c core.autocrlf=true checkout-index` 在临时目录复现；`.gitattributes`
+为 Worker 源和 runtime seed 固定 `eol=lf` 后同一测试通过，不放宽校验、不重算
+Windows 专属 bundle hash。Ubuntu/macOS 四组 clean-wheel 已在第二轮通过。

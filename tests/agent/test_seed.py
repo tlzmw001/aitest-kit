@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -73,3 +74,16 @@ def test_seed_validation_rejects_package_lock_drift(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeSeedError, match="do not match"):
         build_runtime_seed(source, tmp_path / "seed")
+
+
+def test_windows_checkout_preserves_runtime_seed_hashes(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[2]
+    relative = "aitest_kit/agent/runtime_seed/pi_worker"
+    files = subprocess.check_output(["git", "ls-files", "-z", "--", relative], cwd=root)
+    assert files
+    subprocess.run([
+        "git", "-c", "core.autocrlf=true", "checkout-index", "--stdin", "-z",
+        f"--prefix={tmp_path.as_posix()}/",
+    ], input=files, cwd=root, check=True, capture_output=True)
+    manifest = validate_runtime_seed(tmp_path / relative)
+    assert manifest["bundle_hash"] == validate_runtime_seed(root / relative)["bundle_hash"]

@@ -1,1 +1,4 @@
 aitest_kit/console/web/assets/* -whitespace
+# The runtime manifest hashes exact bytes; checkout must not convert LF to CRLF.
+aitest_kit/agent/runtime_seed/** text eol=lf
+agent_runtime/pi_worker/** text eol=lf
