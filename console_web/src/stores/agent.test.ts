@@ -44,6 +44,33 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
+test('detailed diagnostics is one-shot after accepted send and retained after failure', async () => {
+  const store = useAgentStore()
+  store.session = structuredClone(snapshot)
+  store.detailedDiagnostics = true
+  vi.mocked(api.sendAgentMessage).mockRejectedValueOnce(new Error('offline'))
+  await expect(store.sendMessage('hello')).rejects.toThrow('offline')
+  expect(store.detailedDiagnostics).toBe(true)
+  vi.mocked(api.sendAgentMessage).mockResolvedValue({ ...snapshot, last_seq: 1 })
+  await store.sendMessage('hello')
+  expect(api.sendAgentMessage).toHaveBeenLastCalledWith('session-1', 'hello', 'stream')
+  expect(store.detailedDiagnostics).toBe(false)
+  store.detailedDiagnostics = true
+  store.prepareNewSession()
+  expect(store.detailedDiagnostics).toBe(false)
+})
+
+test('resync restores request phase even when diagnostic events have been evicted', () => {
+  const store = useAgentStore()
+  store.session = structuredClone(snapshot)
+  const diagnostics = { requests: [{ request_id: 'r', phase: 'waiting_response' }], retry: null, message_id: 'm' }
+  store.applyEvent(event(1100, 'resync_required', { session: { ...snapshot, last_seq: 1100, diagnostics }, events: [] }))
+  expect(store.session?.diagnostics).toEqual(diagnostics)
+  store.applyEvent(event(1101, 'request_diagnostic', { request_id: 'r', message_id: 'm', phase: 'receiving' }))
+  expect(store.session?.diagnostics?.requests).toHaveLength(1)
+  expect(store.session?.diagnostics?.requests[0]?.phase).toBe('receiving')
+})
+
 test.each(['send', 'approval', 'abort'])('late %s HTTP response cannot revert newer SSE state', async (action) => {
   const store = useAgentStore()
   store.session = structuredClone(snapshot)

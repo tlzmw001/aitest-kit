@@ -61,7 +61,11 @@ async function handleLine(line: string): Promise<void> {
       if (typeof text !== "string" || text.length === 0) {
         throw new ProtocolFailure("INVALID_PROMPT", "prompt.text must be a non-empty string");
       }
-      void controller.prompt(command.id, text).catch((error) => emitError(command.id, "PROMPT_FAILED", error));
+      const diagnostics = command.payload.diagnostics ?? "basic";
+      if (diagnostics !== "basic" && diagnostics !== "stream") {
+        throw new ProtocolFailure("INVALID_DIAGNOSTICS", "prompt.diagnostics must be basic or stream");
+      }
+      void controller.prompt(command.id, text, diagnostics).catch((error) => emitError(command.id, "PROMPT_FAILED", error));
       return;
     }
     if (command.type === "permission_decision") {

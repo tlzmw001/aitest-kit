@@ -244,7 +244,49 @@ export interface AgentRuntimeStatus {
 export type AgentPermissionMode = 'approval' | 'full_trust'
 export type AgentSessionStatus = 'created' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed' | 'aborted' | 'interrupted'
 
+export interface AgentRequestDiagnostic {
+  request_id: string
+  message_id: string
+  phase: string
+  started_at: string
+  phase_started_at: string
+  detail: 'off' | 'enabled' | 'unsupported'
+  request_ms?: number
+  headers_ms?: number
+  http_status?: number
+  first_text_ms?: number
+  complete_ms?: number
+  error_category?: string
+  http_attempts?: number
+  first_byte_ms?: number
+  first_sse_event_ms?: number
+  raw_first_text_ms?: number
+  raw_terminal?: string
+  raw_event_types?: Record<string, { count: number; first_ms: number; last_ms: number }>
+  raw_missing_terminal?: boolean
+  raw_invalid_json?: number
+  raw_incomplete_frame_at_eof?: boolean
+  observer_oversized_frame?: boolean
+}
+
+export interface AgentRetryDiagnostic {
+  phase: string
+  waiting?: boolean
+  attempt?: number
+  max_attempts?: number
+  delay_ms?: number
+  success?: boolean
+  error_category?: string
+}
+
+export interface AgentDiagnosticsSnapshot {
+  requests: AgentRequestDiagnostic[]
+  retry: AgentRetryDiagnostic | null
+  message_id: string
+}
+
 export interface AgentSessionSnapshot {
+  diagnostics?: AgentDiagnosticsSnapshot
   session_id: string
   pi_session_id: string
   permission_mode: AgentPermissionMode

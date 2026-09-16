@@ -6,7 +6,7 @@ import json
 import uuid
 from collections.abc import Iterator, Mapping
 from datetime import datetime, timezone
-from typing import Any, Optional, Protocol
+from typing import Any, Literal, Optional, Protocol
 
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import StreamingResponse
@@ -29,6 +29,7 @@ class ActivateAgentSessionRequest(BaseModel):
 
 class AgentMessageRequest(BaseModel):
     text: str = Field(max_length=MAX_PROMPT_BYTES)
+    diagnostics: Literal["basic", "stream"] = "basic"
 
 
 class AgentApprovalRequest(BaseModel):
@@ -41,7 +42,7 @@ class AgentSessionProtocol(Protocol):
 
     def snapshot(self) -> dict[str, Any]: ...
     def event_replay(self, after_seq: int) -> dict[str, Any]: ...
-    def send_message(self, text: str) -> dict[str, Any]: ...
+    def send_message(self, text: str, *, diagnostics: str = "basic") -> dict[str, Any]: ...
     def resolve_approval(self, request_id: str, decision: str) -> dict[str, Any]: ...
     def abort(self) -> dict[str, Any]: ...
 
@@ -99,7 +100,8 @@ def create_agent_session_router(manager: AgentSessionManagerProtocol) -> APIRout
     @router.post("/sessions/{session_id}/messages")
     async def send_message(session_id: str, payload: AgentMessageRequest, response: Response) -> dict[str, Any]:
         response.headers["Cache-Control"] = "no-store"
-        return manager.require(session_id).send_message(payload.text)
+        session = manager.require(session_id)
+        return session.send_message(payload.text, diagnostics="stream") if payload.diagnostics == "stream" else session.send_message(payload.text)
 
     @router.post("/sessions/{session_id}/approvals/{request_id}")
     async def approve(session_id: str, request_id: str, payload: AgentApprovalRequest, response: Response) -> dict[str, Any]:

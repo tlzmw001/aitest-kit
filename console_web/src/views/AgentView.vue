@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Bot, CircleAlert, Clock3, LoaderCircle, OctagonX, Play, Plus, Send, Shield, ShieldCheck, Trash2, X } from '@lucide/vue'
 import { DialogContent, DialogDescription, DialogOverlay, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui'
 import AgentActivityStream from '../components/AgentActivityStream.vue'
+import AgentDiagnostics from '../components/AgentDiagnostics.vue'
 import { api } from '../api/client'
 import { messageFrom, useWorkspaceStore } from '../stores/workspace'
 import { useAgentStore } from '../stores/agent'
@@ -252,6 +253,7 @@ function handleComposerKey(event: KeyboardEvent): void {
           @decide="decide"
         />
       </div>
+      <div class="agent-diagnostics-host"><AgentDiagnostics :session="store.session" /></div>
 
       <form v-if="store.session.is_active" class="agent-composer" @submit.prevent="send">
         <textarea
@@ -266,6 +268,7 @@ function handleComposerKey(event: KeyboardEvent): void {
         />
         <div>
           <span>Enter 发送 · Shift Enter 换行</span>
+          <label class="agent-diagnostics-toggle"><input v-model="store.detailedDiagnostics" type="checkbox" :disabled="acting || store.session.active_prompt" />仅下一条消息采集详细流诊断</label>
           <button v-if="store.session.active_prompt" class="abort-agent-btn" type="button" :disabled="acting" @click="abort"><OctagonX :size="15" />中止</button>
           <button v-else class="primary-btn" type="submit" data-test="send-agent-message" :disabled="!canSend">
             <LoaderCircle v-if="acting" class="spin-icon" :size="15" /><Send v-else :size="15" />发送

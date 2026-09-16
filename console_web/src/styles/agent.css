@@ -1,6 +1,7 @@
 .agent-view { height: 100%; min-height: 0; overflow: hidden; }
 .agent-view.with-session-list { display: grid; grid-template-columns: 224px minmax(0, 1fr); }
-.agent-stage { display: grid; min-width: 0; min-height: 0; height: 100%; grid-template-rows: auto auto minmax(0, 1fr) auto; overflow: hidden; }
+.agent-stage { display: grid; min-width: 0; min-height: 0; height: 100%; grid-template-rows: auto auto minmax(0, 1fr) auto auto; overflow: hidden; }
+.agent-diagnostics-host { max-height: 35vh; overflow-y: auto; }
 .agent-session-list { display: flex; min-width: 0; min-height: 0; flex-direction: column; border-right: 1px solid var(--line); background: var(--surface); }
 .agent-session-list > header { display: flex; min-height: 48px; align-items: center; justify-content: space-between; padding: 0 9px 0 14px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
 .agent-session-list > header button { display: grid; width: 32px; height: 32px; place-items: center; border: 0; border-radius: var(--r1); background: transparent; color: var(--muted); cursor: pointer; }
@@ -106,6 +107,9 @@
 .agent-composer textarea { display: block; width: 100%; min-height: 72px; max-height: 180px; resize: vertical; padding: 13px 14px; border: 0; outline: 0; background: transparent; color: var(--text); font: 12px/1.55 var(--ui); }
 .agent-composer > div { display: flex; min-height: 46px; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-top: 1px solid var(--line); }
 .agent-composer > div > span { margin-right: auto; color: var(--muted-2); font-size: 9px; }
+.agent-diagnostics-toggle { display: flex; min-height: 40px; align-items: center; gap: 6px; color: var(--muted); font-size: 10px; cursor: pointer; }
+.agent-diagnostics-toggle input { accent-color: var(--signal); }
+.agent-composer > div { flex-wrap: wrap; }
 .abort-agent-btn { display: inline-flex; min-height: 34px; align-items: center; gap: 6px; padding: 0 11px; border: 1px solid color-mix(in oklch, var(--danger) 48%, var(--line)); border-radius: var(--r2); background: transparent; color: var(--danger); cursor: pointer; }
 .agent-new-session { min-height: 32px; padding: 0 9px; font-size: 10px; }
 .agent-resume-bar { display: flex; width: min(880px, calc(100% - 48px)); min-height: 64px; align-items: center; justify-content: space-between; gap: 16px; margin: 0 auto 18px; padding: 10px 12px 10px 16px; border: 1px solid var(--line-strong); border-radius: var(--r2); background: var(--surface); color: var(--muted); font-size: 10px; }

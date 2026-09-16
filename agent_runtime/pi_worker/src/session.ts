@@ -15,6 +15,7 @@ import {
 
 import { ApprovalBridge, type PermissionDecision, type PermissionMode, writePermissionConfig } from "./permissions.ts";
 import { createMessage, redact } from "./protocol.ts";
+import { RequestDiagnostics } from "./diagnostics.ts";
 
 
 const AGENT_TOOL_NAMES = ["read", "write", "edit", "grep", "find", "ls", "bash"] as const;
@@ -123,6 +124,7 @@ export class PiSessionController {
   private activeMessageId: string | null = null;
   private sessionAnnounced = false;
   private finishStatus: "succeeded" | "failed" | "aborted" = "succeeded";
+  private diagnostics: RequestDiagnostics;
 
   private constructor(
     agentDir: string,
@@ -130,12 +132,14 @@ export class PiSessionController {
     bridge: ApprovalBridge,
     send: EventSink,
     previousAgentDirEnv: string | undefined,
+    diagnostics: RequestDiagnostics,
   ) {
     this.agentDir = agentDir;
     this.session = session;
     this.bridge = bridge;
     this.send = send;
     this.previousAgentDirEnv = previousAgentDirEnv;
+    this.diagnostics = diagnostics;
   }
 
   static async create(payload: InitializePayload, send: EventSink, log: (message: string) => void): Promise<PiSessionController> {
@@ -162,6 +166,7 @@ export class PiSessionController {
       });
 
       const permissionExtensionPath = permissionSystemExtensionPath();
+      const diagnostics = new RequestDiagnostics(send, log);
       const settingsManager = SettingsManager.inMemory(
         {
           defaultProjectTrust: "never",
@@ -175,6 +180,7 @@ export class PiSessionController {
         settingsManager,
         eventBus,
         additionalExtensionPaths: [permissionExtensionPath],
+        extensionFactories: [diagnostics.extension],
         additionalSkillPaths: payload.skill_paths ?? [],
         noExtensions: true,
         noSkills: true,
@@ -214,7 +220,8 @@ export class PiSessionController {
         uiContext: bridge.createUiContext(log) as any,
         mode: "rpc",
       });
-      const controller = new PiSessionController(agentDir, session, bridge, send, previousAgentDirEnv);
+      session.agent.streamFunction = diagnostics.wrap(session.agent.streamFunction);
+      const controller = new PiSessionController(agentDir, session, bridge, send, previousAgentDirEnv, diagnostics);
       controller.unsubscribe = session.subscribe((event: Record<string, unknown>) => controller.handleSessionEvent(event));
       return controller;
     } catch (error) {
@@ -232,11 +239,12 @@ export class PiSessionController {
     return this.session.sessionFile;
   }
 
-  async prompt(messageId: string, text: string): Promise<void> {
+  async prompt(messageId: string, text: string, diagnostics: "basic" | "stream" = "basic"): Promise<void> {
     if (this.activeMessageId !== null) {
       throw new Error("an Agent prompt is already running");
     }
     this.activeMessageId = messageId;
+    this.diagnostics.begin(messageId, diagnostics);
     this.finishStatus = "succeeded";
     if (!this.sessionAnnounced) {
       this.send(createMessage(messageId, "session_started", { session_id: this.sessionId }));
@@ -245,6 +253,7 @@ export class PiSessionController {
     try {
       await this.session.prompt(text);
     } finally {
+      this.diagnostics.end();
       this.activeMessageId = null;
     }
   }
@@ -268,6 +277,7 @@ export class PiSessionController {
   }
 
   private handleSessionEvent(event: Record<string, unknown>): void {
+    this.diagnostics.event(event);
     if (event.type === "agent_end") {
       this.finishStatus = deriveFinishStatus(event);
       return;

@@ -169,10 +169,10 @@ export const api = {
       method: 'POST',
       body: json({ confirmed }),
     }),
-  sendAgentMessage: (sessionId: string, text: string) =>
+  sendAgentMessage: (sessionId: string, text: string, diagnostics: 'basic' | 'stream' = 'basic') =>
     request<AgentSessionSnapshot>(`/api/agent/sessions/${encodeURIComponent(sessionId)}/messages`, {
       method: 'POST',
-      body: json({ text }),
+      body: json(diagnostics === 'stream' ? { text, diagnostics } : { text }),
     }),
   resolveAgentApproval: (sessionId: string, requestId: string, decision: AgentApprovalDecision) =>
     request<AgentSessionSnapshot>(

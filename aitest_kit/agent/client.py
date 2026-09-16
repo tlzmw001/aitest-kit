@@ -119,9 +119,14 @@ class WorkerClient:
             raise self._exited_error() from exc
         return message.id
 
-    def send_prompt(self, text: str) -> str:
+    def send_prompt(self, text: str, *, diagnostics: str = "basic") -> str:
         """Send a prompt without consuming its event stream."""
-        return self.send("prompt", {"text": text})
+        if diagnostics not in {"basic", "stream"}:
+            raise ValueError("diagnostics must be basic or stream")
+        payload = {"text": text}
+        if diagnostics == "stream":
+            payload["diagnostics"] = diagnostics
+        return self.send("prompt", payload)
 
     def send_permission_decision(self, request_id: str, decision: str) -> str:
         """Resolve one permission request without consuming worker events."""

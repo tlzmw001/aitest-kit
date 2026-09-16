@@ -13,6 +13,7 @@ from aitest_kit.agent.client import AgentWorkerError, WorkerClient, default_work
 from aitest_kit.agent.protocol import ProtocolMessage, redact
 from aitest_kit.console.agent_connections import AgentConnectionService
 from aitest_kit.console.agent_event_log import AgentEventLog
+from aitest_kit.console.agent_diagnostics import DiagnosticProjection
 from aitest_kit.console.agent_session_store import AgentSessionRecord, AgentSessionStore
 from aitest_kit.console.agent_session_recovery import recover_session, session_write_lease
 from aitest_kit.console.agent_worker_lease import AgentWorkerLease
@@ -28,7 +29,7 @@ _LOGGER = logging.getLogger(__name__)
 class SessionWorker(Protocol):
     def start(self, payload: Mapping[str, Any]) -> ProtocolMessage: ...
     def read_event(self, *, timeout: float | None = None) -> ProtocolMessage: ...
-    def send_prompt(self, text: str) -> str: ...
+    def send_prompt(self, text: str, *, diagnostics: str = "basic") -> str: ...
     def send_permission_decision(self, request_id: str, decision: str) -> str: ...
     def request_abort(self) -> str: ...
     def request_shutdown(self) -> str: ...
@@ -57,6 +58,7 @@ class AgentSession:
         self._store = store
         self.worker = worker
         self.events = AgentEventLog(journal_path=store.event_path(self.workspace, self.session_id))
+        self._diagnostics = DiagnosticProjection(self.events.replay(0).events)
         self.status = record.status
         self.pi_session_id = record.pi_session_id
         self.active_prompt = False
@@ -100,9 +102,12 @@ class AgentSession:
                 "created_at": self.created_at,
                 "updated_at": self.updated_at,
                 "is_active": True,
+                "diagnostics": self._diagnostics.snapshot(),
             }
 
-    def send_message(self, text: str) -> dict[str, Any]:
+    def send_message(self, text: str, *, diagnostics: str = "basic") -> dict[str, Any]:
+        if diagnostics not in {"basic", "stream"}:
+            raise ConsoleError("AGENT_DIAGNOSTICS_INVALID", "诊断模式不受支持", status_code=422)
         normalized = text.strip()
         if not normalized:
             raise ConsoleError("AGENT_PROMPT_REQUIRED", "请输入消息", status_code=422)
@@ -111,7 +116,7 @@ class AgentSession:
         with self._lock:
             if self.active_prompt:
                 raise ConsoleError("AGENT_PROMPT_ALREADY_RUNNING", "当前 Agent 正在处理上一条消息", status_code=409)
-            message_id = self.worker.send_prompt(normalized)
+            message_id = self.worker.send_prompt(normalized, diagnostics="stream") if diagnostics == "stream" else self.worker.send_prompt(normalized)
             if self.title == "新会话":
                 self.title = _session_title(normalized)
             self.active_prompt = True
@@ -244,6 +249,7 @@ class AgentSession:
     def _append(self, event_type: str, payload: Mapping[str, Any], correlation_id: str = "") -> None:
         self.updated_at = _now()
         self.events.append(self.session_id, event_type, payload, correlation_id)
+        self._diagnostics.apply(event_type, payload, correlation_id)
         self._persist()
 
     def _persist(self) -> None:
@@ -332,7 +338,7 @@ class AgentSessionManager:
                 "events": replay.events,
                 "last_seq": events.last_seq,
                 "resync_required": replay.resync_required,
-                "session": record.snapshot(is_active=False),
+                "session": {**record.snapshot(is_active=False), "diagnostics": DiagnosticProjection(events.replay(0).events).snapshot()},
             }
 
     def archive(self, session_id: str) -> None:

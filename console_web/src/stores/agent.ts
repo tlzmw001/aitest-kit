@@ -8,6 +8,7 @@ import type {
   AgentSessionSnapshot,
 } from '../types'
 import { useWorkspaceStore } from './workspace'
+import { projectDiagnostics } from '../agent-diagnostics'
 
 export type AgentConnectionState = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'failed'
 
@@ -19,6 +20,7 @@ export const useAgentStore = defineStore('agent', () => {
   const connectionState = ref<AgentConnectionState>('idle')
   const error = ref('')
   const draft = ref('')
+  const detailedDiagnostics = ref(false)
   const approvalEvents = ref<AgentEvent[]>([])
   let streamController: AbortController | null = null
   let selectionVersion = 0
@@ -43,6 +45,7 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   async function createSession(mode: AgentPermissionMode, confirmed = false): Promise<void> {
+    detailedDiagnostics.value = false
     const version = ++selectionVersion
     disconnectEvents()
     events.value = []
@@ -66,6 +69,7 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   async function selectSnapshot(selected: AgentSessionSnapshot): Promise<void> {
+    detailedDiagnostics.value = false
     const version = ++selectionVersion
     disconnectEvents()
     session.value = selected
@@ -172,6 +176,7 @@ export const useAgentStore = defineStore('agent', () => {
     if (!session.value || event.seq <= session.value.last_seq) return
     session.value.last_seq = event.seq
     session.value.updated_at = event.timestamp
+    session.value.diagnostics = projectDiagnostics(session.value.diagnostics, event)
     if (event.type === 'user_message') {
       session.value.active_prompt = true
       session.value.status = 'running'
@@ -212,7 +217,11 @@ export const useAgentStore = defineStore('agent', () => {
     if (!session.value?.is_active) return
     const version = selectionVersion
     const sentDraft = draft.value
-    acceptSnapshot(await api.sendAgentMessage(session.value.session_id, text), version)
+    const detail = detailedDiagnostics.value
+    const response = detail ? await api.sendAgentMessage(session.value.session_id, text, 'stream')
+      : await api.sendAgentMessage(session.value.session_id, text)
+    acceptSnapshot(response, version)
+    if (version === selectionVersion) detailedDiagnostics.value = false
     if (version === selectionVersion && draft.value === sentDraft) draft.value = ''
   }
 
@@ -246,6 +255,7 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   function resetSelection(): void {
+    detailedDiagnostics.value = false
     selectionVersion += 1
     disconnectEvents()
     session.value = null
@@ -277,6 +287,7 @@ export const useAgentStore = defineStore('agent', () => {
     pendingApprovals,
     error,
     draft,
+    detailedDiagnostics,
     loadSession,
     createSession,
     selectSession,

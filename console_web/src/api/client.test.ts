@@ -63,6 +63,17 @@ describe('console API session', () => {
     expect(headers.get('X-AITest-Console-Token')).toBe('test-session-token')
   })
 
+  it('sends stream diagnostics only when explicitly selected', async () => {
+    configureTokenFromUrl()
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('{}', {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    }))
+    await api.sendAgentMessage('s', 'hello', 'stream')
+    await api.sendAgentMessage('s', 'hello')
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({ text: 'hello', diagnostics: 'stream' })
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({ text: 'hello' })
+  })
+
   it('does not store an agent API key while saving a connection', async () => {
     configureTokenFromUrl()
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
