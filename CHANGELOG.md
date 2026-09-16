@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.5.0 - 2026-09-16
+
+### Added
+
+- Added a local Vue Console for opening or initializing workspaces, browsing test assets, and creating targets, modules, suites, and tasks.
+- Added Monaco multi-tab source editing, Markdown preview, editor themes, validation, save-conflict handling, and suite-level deletion.
+- Added Console controls for profile validation, codegen, freshness checks, test execution, structured reports, failure diagnostics, and authorized environment-file editing.
+- Integrated the Pi Agent Runtime with BYOK model connections, workspace skills, native tools, inline approval cards, write/edit diffs, and explicitly confirmed full-trust sessions.
+- Added locked user-level Runtime installation through `aitest agent setup` or the Console, plus persistent workspace-scoped session history and explicit continuation after restart.
+- Added bounded request timing and retry diagnostics, with optional one-message OpenAI Responses stream diagnostics that exclude request/response bodies and credentials.
+
+### Changed
+
+- Included the compiled Console frontend and locked Pi Worker installation seed in Python distributions; ordinary Console users do not need a frontend build.
+- Expanded the Chinese and English README with Console navigation, installation, Agent setup, permissions, history recovery, and troubleshooting instructions.
+- Added browser regression coverage and clean-wheel installation CI for Linux, macOS, and Windows with Node.js 22.19 and 24.
+
+### Fixed
+
+- Preserved unsaved edits, save-conflict recovery, selected report updates, and execution polling through transient failures.
+- Hardened session ownership, approval recovery, interrupted-run handling, and failed Worker cleanup without automatically replaying tools after restart.
+- Required approval for recursive native search, preserved Runtime seed bytes on Windows, and resolved platform executable paths before spawning.
+- Excluded Pi context-compaction calls from conversational request diagnostics to prevent false failures and incomplete request rows.
+
+### Usage and boundaries
+
+- Install `aitest-kit[server]` and start `aitest console --workspace <workspace> --port <port>` for the local interface. Agent use additionally requires Node.js 22.19.0+ and npm, Runtime installation, and a model connection.
+- Sessions support multiple persistent histories but only one active Worker per Console. Approval and full-trust modes are not sandboxes; approved tools run with local process permissions.
+- UI-entered API keys remain in Console process memory and must be supplied again after restarting or switching workspaces. Model calls may incur provider charges.
+
 ## 0.4.0 - 2026-08-12
 
 ### Added
