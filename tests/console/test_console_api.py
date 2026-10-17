@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from aitest_kit.console.app import create_app
 
 
-def test_console_uses_lifespan_and_closes_agent_services(console_workspace, monkeypatch):
+def test_console_starts_without_removed_fastapi_event_hook(console_workspace, monkeypatch):
     from fastapi import FastAPI
 
     def removed_hook(*args, **kwargs):
@@ -15,14 +15,8 @@ def test_console_uses_lifespan_and_closes_agent_services(console_workspace, monk
 
     monkeypatch.setattr(FastAPI, "add_event_handler", removed_hook, raising=False)
     app = create_app(initial_workspace=console_workspace, token="console-token")
-    closed = []
-    runtime = app.state.console_runtime
-    monkeypatch.setattr(runtime.agent_sessions, "close", lambda: closed.append("sessions"))
-    monkeypatch.setattr(runtime.agent_runtime, "close", lambda: closed.append("runtime"))
     with TestClient(app) as client:
         assert client.get("/api/health", headers=_headers()).status_code == 200
-        assert closed == []
-    assert closed == ["sessions", "runtime"]
 
 
 def _client(root: Path) -> TestClient:

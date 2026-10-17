@@ -6,14 +6,13 @@ on:
 
 jobs:
   install-smoke:
-    name: Install / ${{ matrix.os }} / Node ${{ matrix.node }}
+    name: Install / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        node: ["22.19.0", "24"]
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -21,10 +20,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node }}
       - name: Build distributable wheel
         run: |
           python -m pip install build
@@ -35,7 +30,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: install-smoke-${{ matrix.os }}-node-${{ matrix.node }}
+          name: install-smoke-${{ matrix.os }}
           path: install-smoke.json
           if-no-files-found: warn
           retention-days: 7
@@ -71,16 +66,6 @@ jobs:
           cache: npm
           cache-dependency-path: |
             console_web/package-lock.json
-            agent_runtime/pi_worker/package-lock.json
-
-      - name: Verify Pi Worker
-        if: matrix.python-version == '3.11'
-        run: |
-          npm --prefix agent_runtime/pi_worker ci --ignore-scripts
-          npm --prefix agent_runtime/pi_worker test
-          npm --prefix agent_runtime/pi_worker run check
-          python scripts/build_pi_worker_seed.py
-          git diff --exit-code -- aitest_kit/agent/runtime_seed
 
       - name: Verify Console frontend bundle
         if: matrix.python-version == '3.11'
@@ -130,11 +115,15 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import runpy
           import tarfile
           import zipfile
 
           wheel = next(Path("dist").glob("aitest_kit-*.whl"))
           sdist = next(Path("dist").glob("aitest_kit-*.tar.gz"))
+          verify_archive = runpy.run_path("scripts/verify_wheel_install.py")["verify_archive"]
+          verify_archive(wheel)
+          verify_archive(sdist)
           forbidden = ("coupon_system", "ab_experiment_sdk", "discount_system")
           required = (
               "aitest_kit/console/web/index.html",
@@ -143,9 +132,6 @@ jobs:
               "aitest_kit/templates/project_workspace/CLAUDE.md",
               "aitest_kit/templates/project_workspace/skills/README.md",
               "aitest_kit/templates/project_workspace/skills/test-codegen/SKILL.md",
-              "aitest_kit/agent/runtime_seed/pi_worker/runtime-manifest.json",
-              "aitest_kit/agent/runtime_seed/pi_worker/package-lock.json",
-              "aitest_kit/agent/runtime_seed/pi_worker/src/worker.ts",
           )
 
           with zipfile.ZipFile(wheel) as zf:
@@ -163,12 +149,6 @@ jobs:
           leaked = [name for name in wheel_names if any(item in name for item in forbidden)]
           if leaked:
               raise SystemExit(f"wheel includes forbidden target assets: {leaked[:10]}")
-          runtime_leaks = [
-              name for name in wheel_names
-              if "/node_modules/" in name or "/runtime_seed/pi_worker/test/" in name
-          ]
-          if runtime_leaks:
-              raise SystemExit(f"wheel includes forbidden Runtime files: {runtime_leaks[:10]}")
           if not wheel.name.endswith("py3-none-any.whl"):
               raise SystemExit(f"wheel is not a universal pure-Python artifact: {wheel.name}")
 
@@ -177,7 +157,4 @@ jobs:
           leaked = [name for name in sdist_names if any(item in name for item in forbidden)]
           if leaked:
               raise SystemExit(f"sdist includes forbidden target assets: {leaked[:10]}")
-          required_sdist = [name for name in sdist_names if name.endswith("aitest_kit/agent/runtime_seed/pi_worker/runtime-manifest.json")]
-          if not required_sdist:
-              raise SystemExit("sdist missing Pi Worker Runtime seed")
           PY

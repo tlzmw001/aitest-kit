@@ -80,11 +80,24 @@ uses: pypa/gh-action-pypi-publish@release/v1
 
 3. 构建并检查发布产物。
 
+   先提交待测代码，从没有历史构建产物的独立 checkout/worktree 执行以下命令。
+   例如 `git worktree add --detach /path/to/new-clean-build HEAD`，再进入这个新目录。
+   不自动清理当前工作目录的 `build/`、`dist/` 或缓存；新 worktree 不含未提交修改。
+
    ```bash
-   rm -rf build dist aitest_kit.egg-info
    python3 -m build
+   python3 - <<'PY'
+   from pathlib import Path
+   import runpy
+
+   verify_archive = runpy.run_path("scripts/verify_wheel_install.py")["verify_archive"]
+   for pattern in ("aitest_kit-*.whl", "aitest_kit-*.tar.gz"):
+       verify_archive(next(Path("dist").glob(pattern)))
+   PY
    python3 -m twine check dist/*
    ```
+
+   归档内容检查与 CI/安装验收复用同一函数，避免把已移除的 Agent 文件随旧构建缓存重新发布。
 
 4. 提交并推送 `main`。
 

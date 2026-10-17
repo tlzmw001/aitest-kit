@@ -2,6 +2,8 @@
 
 AI 驱动的自动化测试工具，围绕"文档 → 知识库 → 用例 → codegen → pytest → 报告 → 沉淀"构建可复用测试流程。
 
+当前 Agent 集成边界：AITest 保留测试资产、确定性 CLI 与 Console；独立 Agent 通过 workspace skills、文件和 CLI 使用这些能力，不再内置 Pi Runtime、模型连接、会话或审批 UI。当前变更见 `docs/specs/external_agent_workbench_spec.md`，历史实现保留于 `codex/archive-pi-agent-v0.5.0` / `v0.5.0`；不自动清理用户旧会话、Runtime 或配置。
+
 ## 项目结构
 
 ```

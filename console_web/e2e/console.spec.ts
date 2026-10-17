@@ -49,68 +49,6 @@ const reportSummary = {
   report_path: 'test_workspace/reports/run-20260827-1/report.md',
 }
 
-const agentConnection = {
-  connection_name: 'E2E gateway',
-  protocol: 'auto',
-  base_url: 'https://gateway.example.test',
-  model: 'gpt-5.5',
-  api_key_env: 'AITEST_AGENT_API_KEY',
-  has_api_key: false,
-  credential_source: 'missing',
-}
-
-let agentSession: Record<string, unknown> | null = null
-let agentPhase = 0
-let agentCreatePayload: Record<string, unknown> | null = null
-
-function agentSnapshot(overrides: Record<string, unknown> = {}) {
-  return {
-    session_id: 'agent-session-1',
-    pi_session_id: 'pi-session-1',
-    permission_mode: 'approval',
-    title: '检查并运行当前 suite',
-    status: agentPhase === 0 ? 'created' : agentPhase === 1 ? 'awaiting_approval' : 'succeeded',
-    active_prompt: agentPhase === 1,
-    pending_approval_ids: agentPhase === 1 ? ['permission-1'] : [],
-    last_seq: agentPhase === 0 ? 1 : agentPhase === 1 ? 6 : 10,
-    created_at: '2026-08-28T12:00:00Z',
-    updated_at: '2026-08-28T12:00:01Z',
-    is_active: true,
-    ...overrides,
-  }
-}
-
-function agentEvents() {
-  const base = [
-    { event_id: 'ae-1', seq: 1, type: 'session_created', payload: { permission_mode: agentSession?.permission_mode ?? 'approval' } },
-  ]
-  if (agentPhase >= 1) base.push(
-    { event_id: 'ae-2', seq: 2, type: 'user_message', payload: { text: '检查并运行当前 suite' } },
-    { event_id: 'ae-3', seq: 3, type: 'text_delta', payload: { delta: '我先检查用例和 profile。' } },
-    {
-      event_id: 'ae-4', seq: 4, type: 'tool_call_requested',
-      payload: {
-        tool_call_id: 'tool-1', tool_name: 'write', aitest_operation: 'run',
-        input: { path: casesPath, workspace_path: casesPath, content: '# Orders smoke\n\nupdated by Agent\n' },
-      },
-    },
-    {
-      event_id: 'ae-5', seq: 5, type: 'permission_requested',
-      payload: { request_id: 'permission-1', tool_name: 'write', surface: 'write', target: casesPath, summary: '写入 Markdown suite' },
-    },
-  )
-  if (agentPhase >= 2) base.push(
-    { event_id: 'ae-6', seq: 6, type: 'approval_submitted', payload: { request_id: 'permission-1', decision: 'allow_once' } },
-    { event_id: 'ae-7', seq: 7, type: 'permission_resolved', payload: { request_id: 'permission-1', decision: 'allow_once' } },
-    { event_id: 'ae-8', seq: 8, type: 'tool_call_finished', payload: { tool_call_id: 'tool-1', tool_name: 'write', is_error: false, result: {} } },
-    { event_id: 'ae-9', seq: 9, type: 'text_delta', payload: { delta: '用例已更新。' } },
-    { event_id: 'ae-10', seq: 10, type: 'agent_finished', payload: { status: 'succeeded' } },
-  )
-  return base.map((event) => ({
-    session_id: 'agent-session-1', timestamp: '2026-08-28T12:00:01Z', correlation_id: 'prompt-1', ...event,
-  }))
-}
-
 async function mockConsoleApi(page: Page): Promise<void> {
   await page.route((url) => url.pathname.startsWith('/api/'), async (route) => respond(route))
 }
@@ -125,83 +63,6 @@ async function respond(route: Route): Promise<void> {
   })
 
   if (url.pathname === '/api/workspace') return json(workspace)
-  if (url.pathname === '/api/agent/runtime') return json({
-    state: 'ready', source: 'source', message: 'ready',
-    runtime_dir: '/repo/agent_runtime/pi_worker', bundle_hash: 'a'.repeat(64),
-    minimum_node_version: '22.19.0', node_version: 'v24.14.0', npm_version: '11.9.0',
-    registry: 'https://registry.npmjs.org/', dependencies: [], setup_command: 'aitest agent setup',
-  })
-  if (url.pathname === '/api/agent/session') return json(agentSession)
-  if (url.pathname === '/api/agent/sessions' && request.method() === 'GET') {
-    return json({ sessions: agentSession ? [agentSession] : [] })
-  }
-  if (url.pathname === '/api/agent/sessions' && request.method() === 'POST') {
-    const input = request.postDataJSON() as { permission_mode: string }
-    agentCreatePayload = input as unknown as Record<string, unknown>
-    agentPhase = 0
-    agentSession = agentSnapshot({ permission_mode: input.permission_mode })
-    return json(agentSession)
-  }
-  if (/^\/api\/agent\/sessions\/[^/]+\/messages$/.test(url.pathname)) {
-    agentPhase = 1
-    agentSession = agentSnapshot()
-    return json(agentSession)
-  }
-  if (/^\/api\/agent\/sessions\/[^/]+\/approvals\/[^/]+$/.test(url.pathname)) {
-    agentPhase = 2
-    agentSession = agentSnapshot()
-    return json(agentSession)
-  }
-  if (/^\/api\/agent\/sessions\/[^/]+\/abort$/.test(url.pathname)) {
-    agentSession = agentSnapshot({ status: 'aborted', active_prompt: false, pending_approval_ids: [] })
-    return json(agentSession)
-  }
-  if (/^\/api\/agent\/sessions\/[^/]+\/history$/.test(url.pathname)) {
-    const afterSeq = Number(url.searchParams.get('after_seq') || '0')
-    const events = agentEvents().filter((event) => event.seq > afterSeq)
-    return json({ events, last_seq: agentSnapshot().last_seq, resync_required: false })
-  }
-  if (/^\/api\/agent\/sessions\/[^/]+\/activate$/.test(url.pathname)) {
-    agentSession = agentSnapshot({ is_active: true })
-    return json(agentSession)
-  }
-  if (/^\/api\/agent\/sessions\/[^/]+\/events$/.test(url.pathname)) {
-    const afterSeq = Number(url.searchParams.get('after_seq') || '0')
-    const body = agentEvents()
-      .filter((event) => event.seq > afterSeq)
-      .map((event) => `id: ${event.seq}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
-      .join('')
-    return route.fulfill({ status: 200, contentType: 'text/event-stream', body })
-  }
-  if (/^\/api\/agent\/sessions\/[^/]+$/.test(url.pathname) && request.method() === 'DELETE') {
-    agentSession = null
-    agentPhase = 0
-    return route.fulfill({ status: 204, body: '' })
-  }
-  if (/^\/api\/agent\/sessions\/[^/]+\/archive$/.test(url.pathname) && request.method() === 'POST') {
-    agentSession = null
-    agentPhase = 0
-    return route.fulfill({ status: 204, body: '' })
-  }
-  if (/^\/api\/agent\/sessions\/[^/]+$/.test(url.pathname) && request.method() === 'GET') {
-    return agentSession ? json(agentSession) : json({ error: { code: 'AGENT_SESSION_NOT_FOUND', message: 'not found' } }, 404)
-  }
-  if (url.pathname === '/api/agent/connection') {
-    if (request.method() === 'PUT') {
-      return json({ ...agentConnection, has_api_key: true, credential_source: 'session' })
-    }
-    return json(agentConnection)
-  }
-  if (url.pathname === '/api/agent/connection/test') {
-    return json({
-      status: 'connected',
-      detected_protocol: 'openai_responses',
-      internal_provider: 'openai',
-      model: 'gpt-5.5',
-      response_text: 'OK',
-      latency_ms: 6218,
-    })
-  }
   if (url.pathname === '/api/assets/options') {
     return json({ module_types: [{ name: 'standard_http', description: 'HTTP 模块' }] })
   }
@@ -242,9 +103,6 @@ async function respond(route: Route): Promise<void> {
 }
 
 test.beforeEach(async ({ page }) => {
-  agentSession = null
-  agentPhase = 0
-  agentCreatePayload = null
   await mockConsoleApi(page)
   await page.goto('/?launch=e2e#/token=e2e-local-session')
   await expect(page).toHaveURL(/#\/$/)
@@ -253,48 +111,19 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('.runtime kbd')).toHaveCount(0)
 })
 
-test('runs an approval Agent session, shows Monaco Diff, and recovers after refresh', async ({ page }) => {
-  await page.getByRole('link', { name: 'Agent', exact: true }).click()
-  await page.locator('[data-test="create-approval-session"]').click()
-  await page.locator('[data-test="agent-composer"]').fill('检查并运行当前 suite')
-  await page.locator('[data-test="send-agent-message"]').click()
-
-  const approval = page.locator('[data-test="agent-approval-card"]')
-  await expect(approval).toBeVisible()
-  await expect(approval).toContainText(casesPath)
-  await approval.getByRole('button', { name: '查看 Monaco Diff' }).click()
-  await expect(page.locator('.approval-diff [role="code"]')).toHaveCount(2)
-  const composer = page.locator('[data-test="agent-composer"]')
-  await expect(composer).toBeVisible()
-  await expect.poll(() => composer.evaluate((element) => element.getBoundingClientRect().bottom < window.innerHeight - 26)).toBe(true)
-  await expect(approval.locator('.section-label')).toHaveCSS('display', 'block')
-  await expect(page).toHaveScreenshot('agent-approval-workbench.png')
-
-  await page.locator('[data-test="allow-session"]').click()
-  await expect(page.getByText('本轮完成')).toBeVisible()
-  await expect(page.getByText('用例已更新。')).toBeVisible()
-  await page.locator('.agent-tool-summary').click()
-  await expect(page.getByRole('link', { name: '在编辑器打开' })).toHaveAttribute('href', /#\/editor\?path=.*cases\.md/)
-  await expect(page.getByRole('link', { name: '查看执行报告' })).toHaveAttribute('href', '#/reports')
-
+test('keeps editor settings available without embedded Agent requests', async ({ page }) => {
+  const agentRequests: string[] = []
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.startsWith('/api/agent/')) agentRequests.push(request.url())
+  })
   await page.reload()
-  await expect(page.getByText('本轮完成')).toBeVisible()
-  await expect(page.locator('.user-message')).toHaveCount(1)
-  await expect(page.getByText('用例已更新。')).toBeVisible()
-})
-
-test('requires a workspace-specific confirmation before full trust', async ({ page }) => {
-  await page.getByRole('link', { name: 'Agent', exact: true }).click()
-  await page.locator('[data-test="create-full-trust-session"]').click()
-
-  const dialog = page.locator('[data-test="full-trust-dialog"]')
-  await expect(dialog).toContainText('/tmp/aitest-console-e2e')
-  await expect(dialog).toContainText('文件内容可能发送给当前模型服务')
-  await page.locator('[data-test="confirm-full-trust"]').click()
-
-  await expect(page.getByText('完全信任', { exact: true }).first()).toBeVisible()
-  await expect(page.getByText('该确认只对本次 session 生效')).toBeHidden()
-  expect(agentCreatePayload).toMatchObject({ permission_mode: 'full_trust', confirmed: true })
+  await expect(page.getByText(workspace.name, { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Agent', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: '设置', exact: true }).click()
+  await expect(page.getByText('打开文件的方式', { exact: true })).toBeVisible()
+  await expect(page.getByText('编辑器配色', { exact: true })).toBeVisible()
+  await expect(page.locator('[data-test="agent-connection-settings"]')).toHaveCount(0)
+  expect(agentRequests).toEqual([])
 })
 
 test('opens multiple files and preserves the compact close hover surface', async ({ page }) => {
@@ -482,35 +311,4 @@ test('renders sanitized Markdown and opens result.json with keyboard tabs', asyn
   await expect(page.locator('.json-editor-panel')).toContainText('run-20260827-1')
   expect(await page.evaluate(() => sessionStorage.getItem('aitest-console-session-token'))).toBe('e2e-local-session')
   expect(page.url()).not.toContain('e2e-local-session')
-})
-
-test('configures an agent connection without asking for a Pi provider', async ({ page }) => {
-  await page.getByRole('button', { name: '设置' }).click()
-  await page.getByRole('link', { name: /打开模型连接/ }).click()
-
-  await expect(page).toHaveURL(/#\/settings\/agent$/)
-  await expect(page.getByRole('heading', { name: '模型连接' })).toBeVisible()
-  await expect(page.locator('[data-test="agent-runtime-card"]')).toContainText('源码 checkout')
-  await expect(page.locator('[data-test="agent-runtime-card"]')).toContainText('v24.14.0')
-  await expect(page.locator('[name="provider"]')).toHaveCount(0)
-  await page.locator('[data-test="connection-api-key"]').fill('e2e-session-key')
-  await page.locator('[data-test="test-connection"]').click()
-
-  await expect(page.getByText('连接测试成功')).toBeVisible()
-  await expect(page.getByRole('definition').filter({ hasText: 'OpenAI Responses' })).toBeVisible()
-  await expect(page.getByText('6.22 s')).toBeVisible()
-  await expect(page.locator('.model-response')).toContainText('OK')
-
-  await page.locator('[data-test="save-connection"]').click()
-  await expect(page.getByText('配置已保存', { exact: false })).toBeVisible()
-  await expect(page.getByText('当前 Console 会话已提供 Key')).toBeVisible()
-  await expect(page.locator('[data-test="connection-api-key"]')).toHaveValue('')
-  const persistedValues = await page.evaluate(() => {
-    const values = (storage: Storage) => Array.from(
-      { length: storage.length },
-      (_, index) => storage.getItem(storage.key(index) || ''),
-    )
-    return [...values(localStorage), ...values(sessionStorage)]
-  })
-  expect(persistedValues).not.toContain('e2e-session-key')
 })

@@ -1,5 +1,7 @@
 # Agent 持久化阶段测量
 
+历史范围：以下记录适用于 v0.5.0 内置 Pi Agent。当前外部 Agent 工作台已移除该 Runtime 和测量脚本，报告保留供历史查证；当前方向见 [Spec](../specs/external_agent_workbench_spec.md)。
+
 结论：本次样本没有显示需要改变逐事件落盘策略的证据。保留 journal fsync +
 metadata fsync/replace；不引入异步写队列、批量丢失窗口或数据库。
 

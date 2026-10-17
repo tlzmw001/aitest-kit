@@ -2,8 +2,8 @@
 
 > 把开发文档、API 契约和 AI 设计出来的测试想法，沉淀成可审查、可重复生成、可运行报告的自动化测试资产。
 
-一个本地优先的测试研发工作台：用浏览器管理测试资产，用内置 Pi Agent 辅助设计和维护，
-用确定性的 CLI 完成校验、生成、执行与报告。文件保存在你的 workspace，模型服务和 API Key 由你选择（BYOK）。
+一个本地优先的测试研发工作台：用浏览器管理测试资产，用确定性的 CLI 完成校验、生成、执行与报告。
+通用编程与测试 Agent 通过 skills、文件和 CLI 操作同一 workspace，文件保存在本地。
 
 [English](README.en.md)
 
@@ -22,7 +22,6 @@ AI 负责探索未知，代码负责稳定重复。
 - **越测越稳定** — 初期 AI 读文档、探索系统、设计用例；反复验证的模式沉淀进 profile 和 assertion_rules，AI 参与逐步减少，确定性逐步增加。
 - **9 个 AI skill 覆盖全流程** — 从文档审查、知识库构建、用例设计到 fixture 脚手架、codegen、失败修复和规则沉淀，skill 约束 AI 行为，人工 review 把关质量。
 - **同一套文件，界面和 CLI 都能用** — 浏览目录打开 workspace，用 Monaco 多标签编辑用例和配置，在界面执行校验、生成和测试，再查看结构化报告。
-- **Agent 可以动手，权限由你决定** — Pi Agent 可以读取文档、按 skill 生成或修改测试资产、运行命令；审批模式逐项确认，也支持显式开启完全信任模式。
 
 不适合：一次性 pytest、没有可执行接口、需要自动创建生产账号或付费资源。
 
@@ -30,8 +29,8 @@ AI 负责探索未知，代码负责稳定重复。
 
 ### 1. 安装
 
-体验本文的 Console 和 Agent 能力，推荐从当前 `main` 安装。需要 Python 3.9+；
-仅使用界面和 CLI 不需要 Node.js，使用 Agent 另外需要 Node.js 22.19.0+ 和 npm。
+本节描述移除内置 Pi Agent 后的开发版本，需要 Python 3.9+；使用 Console 和 CLI 不需要 Node.js。
+已发布 v0.5.0 仍包含 Pi，本次调整尚未发布。
 
 ```bash
 git clone https://github.com/tlzmw001/aitest-kit.git
@@ -77,7 +76,7 @@ aitest console --workspace . --port 8123
 
 `8123` 是示例端口，可换成空闲端口。浏览器会自动打开带本地会话凭证的页面。
 先在“工作台”查看资产，再到“用例”编辑、“运行”执行、“报告”看结果。
-想让 Agent 帮忙创建或维护测试资产，继续阅读下方 [Agent 配置与使用](#agent-配置与使用)。
+外部 Agent 的使用方式见下方 [与外部 Agent 配合](#与外部-agent-配合)。
 
 刚初始化时没有模块是正常的。把文档放入 `docs/`，让 AI 按 skills 走完整流程：
 
@@ -123,8 +122,6 @@ aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- --c
 aitest init --target <dir>                                   # 初始化 workspace
 aitest doctor                                                # 体检
 aitest console --workspace <dir> --port <port>                # 启动本地界面
-aitest agent setup                                           # 安装当前用户的 Pi Runtime
-aitest agent doctor                                          # 检查本地 Pi Runtime
 aitest codegen --suite-file <suite.yaml> --validate-profile  # profile 门禁
 aitest codegen --suite-file <suite.yaml>                     # 生成 pytest
 aitest codegen --suite-file <suite.yaml> --check             # 检查 generated 是否过期
@@ -148,7 +145,6 @@ aitest report --suite-file/--target/--all ...                # 重渲染报告
 | 报告 | 查看历史执行、`result.json` 和 `report.md`；JSON 只读查看 |
 | 诊断 | 查看失败分类并跳转相关源文件；区分配置、脚手架、环境、生成和断言问题，断言失败不自动等于待测系统 bug |
 | 环境 | 显式创建或编辑已授权 env 文件，敏感值默认隐藏，外部 env 文件逐文件授权 |
-| Agent | 与模型协作、查看工具调用和写入 Diff、处理审批、继续历史会话、查看请求诊断 |
 
 suite 是界面增删管理的最小用例单位。修改或删除 suite 内的单个 case，请直接编辑对应 Markdown 并保存；
 不提供 case 级新增／删除表单。generated pytest 和报告保持只读，Harness、helper、profile 使用代码编辑器，不提供复杂低代码表单。
@@ -180,55 +176,29 @@ aitest console --port 8123
 环境页支持 `.env`、`AITEST_ENV_FILE` 和 task `env_files`；env 值不进入普通文件接口或 localStorage。
 任务输出会对 Console 已知的敏感值做脱敏，但测试资产仍不得主动打印凭证。
 
-## Agent 配置与使用
+## 与外部 Agent 配合
 
-内置 Agent 通过 Pi SDK 运行，可以读取文档和测试知识库、遵循 workspace skills 生成 Markdown 用例、
-补充 Harness/profile、执行校验和 codegen、分析失败并修改测试资产。AI 负责判断与编辑，
-稳定的校验、生成和执行仍交给 AITest CLI；不是让模型绕过 profile gate 直接维护 generated pytest。
+AITest 提供测试资产、工作流 skills、CLI 和本地 Console。模型连接、对话、工具审批和会话由外部 Agent 负责；本开发分支已移除内置 Pi Agent。
 
-### 1. 准备 Runtime 和模型连接
+外部 Agent 打开同一 workspace，先读取协作规则及相关 SKILL.md，再通过文件工具编辑 Markdown、profile、Harness，调用 CLI 校验、生成和运行：
 
-1. 安装 Node.js 22.19.0+ 和 npm，再打开“设置 → 模型连接”。
-2. 在 Runtime 卡片确认安装，或在终端执行 `aitest agent setup`。它按锁定依赖安装到当前用户目录，不修改 workspace。
-3. 填写连接名称、接口类型、Base URL、模型名和 API Key，无需查找 Pi Provider。
-   支持 OpenAI Responses、OpenAI Chat Completions、Anthropic Messages；OpenAI 兼容模型的“自动检测”优先 Responses，仅在明确协议不兼容时尝试 Chat Completions。Claude 模型名自动选择 Anthropic Messages。
-4. 点击“测试连接”，确认成功后保存。测试会发送真实、无工具的模型请求，可能产生服务商费用；自动检测回退时可能多于一次。
-
-Base URL 和模型名以你的服务商提供的信息为准。非敏感配置保存在 workspace；界面输入的 Key 仅保存在当前
-Console 进程内存，重启或切换 workspace 后需要重新输入。也可在启动 Console 前通过所配置的环境变量提供 Key。
-本地优先不等于模型离线：Agent 读取的内容可能发送给所配置的模型服务，使用外部源码和知识库前需确认数据使用权限。
-
-### 2. 创建会话，按 skill 工作
-
-打开“Agent”，建议先创建审批模式会话。Console 会将当前 workspace 的 `.codex/skills/`、
-`.agents/skills/`、`skills/` 作为 skill 输入；新 workspace 自带的 `skills/` 可直接使用，不必额外安装一套全局 Pi 配置。
-AITest 使用隔离的 Agent 配置目录，不自动加载用户全局 Pi 配置和第三方扩展。
-
-可以从这些具体指令开始（把模块和路径换成自己的）：
-
-```text
-使用 test-maintain 检查当前 workspace，告诉我下一步该做什么，先不要改文件。
-使用 test-design，基于已有知识库为指定模块设计一个 suite，写完后停下来等我 review。
-使用 test-scaffold 补齐已确认 suite 的 Harness 和 profile，然后使用 test-codegen 校验并生成测试。
-读取这次执行的 result.json，区分环境、脚手架和断言问题，先提出修复建议。
+```bash
+aitest doctor --workspace /path/to/aitest_workspace
+aitest codegen --workspace /path/to/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
+aitest codegen --workspace /path/to/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest codegen --workspace /path/to/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
+aitest run --workspace /path/to/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 ```
 
-审批卡展示待执行工具与参数，支持“允许一次”“本会话允许”“拒绝”；write/edit 可查看 Monaco Diff。
-外部目录、递归 grep、写文件和 Shell 需要审批；直接读取敏感路径默认拒绝。
-**审批不是沙箱**：批准 grep/Shell 后仍可能访问敏感内容。完全信任模式会使用本机进程权限，
-每次创建或重新激活都需针对当前 workspace 确认，只应在信任任务、文件和模型时使用。
+Console 读取同一份测试资产和结果，便于人工 review。遵循“知识库 → Markdown 用例 → 人工 review → scaffold/codegen”；generated pytest 仍是编译产物。
 
-### 3. 历史恢复与长等待排查
+Naiyue Test Agent 当前发现 `.agents/skills/` 和 `.claude/skills/`。新 workspace 的 neutral `skills/` 可按下方说明复制到 `.agents/skills/`；目标已存在时先检查内容，避免覆盖本地修改。
 
-支持多个持久历史会话，同一 Console 同时只有一个活跃 Worker，不能并行运行多个 Agent 会话。
-重启后可查看历史并显式继续；未完成任务标记为 `interrupted`，不自动重试工具或恢复旧审批授权，
-应先核对最后一次工具是否已产生效果。历史保存在用户级、按 workspace 隔离的目录，不是额外的跨会话语义记忆库。
+[外部 Agent 工作台 Spec](docs/specs/external_agent_workbench_spec.md) 记录了接入方向。目前可复用文件工具与 CLI，结构化工具和 MCP 尚未实施。
 
-输入区上方展示请求阶段和审批状态，展开“请求诊断”可看 HTTP、首字、完成耗时及自动重试。
-遇到长等待，可在发送前勾选“仅下一条消息采集详细流诊断”；目前仅 OpenAI Responses 支持详细 SSE 统计。
-诊断不记录请求／响应正文、思考内容、header 或凭证，也不改变原有权限和重试策略。
+历史 Pi 版本保留在 `codex/archive-pi-agent-v0.5.0` 和 `v0.5.0`。本次移除不清理用户旧会话、Runtime 或 workspace 配置；当前分支不再提供 Agent 页面、模型连接或 `aitest agent` 命令。
 
-### CLI、Runtime 与运行凭据
+### 运行凭据
 
 运行真实接口测试时通过 env 文件提供凭据：
 
@@ -240,53 +210,6 @@ AITEST_ENV_FILE=/tmp/test.env aitest run --suite-file <suite.yaml>
 
 排查失败时可加 `--capture`，运行目录下会生成一个 `capture.jsonl`。框架只自动捕获默认 HTTP 用例；自定义 fixture、gRPC 或 SDK 调用可以手动调用 `aitest_kit.helpers.capture.capture_io()`。在 generated 测试函数体内调用时，`capture_io()` 可自动归因到当前 case；显式传入 `case_id` 仍然有效。pytest fixture setup/teardown 阶段不在该 context 内。capture 不自动脱敏，敏感字段应在用户 fixture 中处理后再写入。
 
-### 本地 Pi Agent Runtime
-
-Python wheel 携带锁定的 Pi Worker 安装种子，不携带体积较大的 `node_modules`。用户先安装
-Node.js（最低 `22.19.0`，推荐 Node.js 24 LTS），再显式安装用户级 Runtime：
-
-```bash
-aitest agent setup
-aitest agent doctor --workspace /path/to/aitest_workspace
-```
-
-默认安装到 `~/.aitest/runtimes/pi-worker/<bundle-hash>/`，可以用 `AITEST_RUNTIME_HOME` 覆盖根目录。
-setup 使用 wheel 内的精确 lockfile，不安装 Node、不写 workspace、不修改 Python `site-packages`，
-也不会读取模型凭证。源码开发仍可运行 `npm ci --prefix agent_runtime/pi_worker`；resolver 会优先
-使用依赖完整的源码 Worker，再使用当前 bundle 对应的用户级 Runtime。
-
-在 workspace 的 `aitest_config/aitest.yaml` 中只配置模型引用和环境变量名，不保存 Key 值：
-
-```yaml
-agent:
-  runtime: pi
-  connection_name: Anthropic
-  model:
-    protocol: anthropic_messages
-    provider: anthropic
-    name: claude-sonnet-4-5
-    api_key_env: ANTHROPIC_API_KEY
-    base_url: null
-    base_url_env: null
-```
-
-Key 由当前 shell 提供。审批模式是默认值；完全信任模式必须逐次明确确认，它会让原生
-read/write/edit/grep/find/ls/bash 继承当前本机用户权限，不是 Sandbox：
-
-```bash
-export ANTHROPIC_API_KEY=<your-key>
-aitest agent run --workspace /path/to/aitest_workspace \
-  --skill-path /path/to/skill \
-  --prompt "检查当前测试资产，并运行 profile validation"
-
-aitest agent run --workspace /path/to/aitest_workspace \
-  --mode full_trust \
-  --prompt "执行已确认的测试维护任务"
-```
-
-协议和日志只传环境变量名，不传 Key。审批模式下 workspace 内 read/find/ls 默认允许，
-grep/write/edit/bash/外部目录需批准，`.env`、私钥等敏感路径默认拒绝。
-
 ## AI Skills
 
 workspace 内置 agent-neutral 的 `skills/`，按环境复制到对应目录：
@@ -294,6 +217,7 @@ workspace 内置 agent-neutral 的 `skills/`，按环境复制到对应目录：
 ```bash
 mkdir -p .claude/skills && cp -R skills/. .claude/skills/   # Claude Code
 mkdir -p .codex/skills && cp -R skills/. .codex/skills/     # Codex
+mkdir -p .agents/skills && cp -R skills/. .agents/skills/   # Naiyue Test Agent
 ```
 
 | Skill | 什么时候用 |
@@ -349,14 +273,14 @@ Module 运行能力只有一种公开形态：`setup_{module}` fixture 直接返
 
 - 不提交 `.env`、token、密码或生产账号。
 - profile `variables.env` 只写变量名，不写值；报告可能含请求/响应详情，对外共享前需脱敏。
-- 不应让 Agent 未经确认创建真实账号、充值或变更生产资源；模型连接测试和 Agent 对话会调用你配置的服务，可能产生费用。
+- 外部 Agent 的模型凭证和工具权限由该 Agent 管理。
 
 ## 当前稳定边界
 
 核心链路：`aitest init/codegen/run/report/doctor/upgrade`、workspace layout、Markdown 用例格式、profile schema、request bindings、structured assertions、Case IR → pytest、freshness check、结构化报告。
 
-当前 `main` 还提供本地 Console、Monaco 编辑、Pi Agent 审批与持久会话、请求诊断；不包含多人服务、沙箱或多 Agent 会话并行执行。
-仍在演进：Console/Agent 交互、health/promotion report 口径、`case_flows` step 词汇表、内部 Python API 和契约测试方向。
+当前开发分支保留 Console、Monaco 编辑、资产管理、运行和报告，移除了内置 Pi Agent。
+仍在演进：外部 Agent 工具接入、health/promotion report 口径、`case_flows` step 词汇表、内部 Python API 和契约测试方向。
 
 ## 开发本仓
 
@@ -375,7 +299,7 @@ python3 -m aitest_kit.cli doctor
 
 本仓内置 `coupon_system/` 作为真实回归资产。详见 [Coupon System Full Example](docs/usebook/coupon_system_full_example.md)。
 
-修改前端才需要 Node.js 和前端构建。源码开发建议统一使用满足 Worker 要求的 Node.js 22.19.0+：
+修改前端才需要 Node.js 和前端构建，版本要求见 `console_web/package.json`：
 
 ```bash
 npm ci --prefix console_web
@@ -383,7 +307,7 @@ npm run build --prefix console_web
 ```
 
 构建产物写入 `aitest_kit/console/web/`。重新启动 Console 并使用新打开的会话页面查看效果；
-只重启 Python 不会自动编译 Vue 源码。Worker 源码开发和用户级 Runtime 安装方式见上文。
+只重启 Python 不会自动编译 Vue 源码。
 
 ## 文档
 
@@ -391,7 +315,7 @@ npm run build --prefix console_web
 - [Profile Guide](docs/usebook/codegen_profile_guide.md) — 编写 module/suite profile
 - [Troubleshooting](docs/usebook/codegen_troubleshooting.md) — codegen 常见问题
 - [Contributing](CONTRIBUTING.md) — 贡献指南
-- [Console / Pi 交付验收](docs/usebook/console_delivery_verification.md) — 三平台安装 CI、视觉基线和持久化测量
+- [Console 交付验收](docs/usebook/console_delivery_verification.md) — 三平台安装 CI 和视觉基线
 - [CHANGELOG](CHANGELOG.md) — 版本变更记录
 
 ## License

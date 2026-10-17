@@ -12,17 +12,7 @@ import type {
   TrashEntry,
   SelectorPayload,
   WorkspaceSnapshot,
-  AgentConnection,
-  AgentConnectionInput,
-  AgentConnectionTestResult,
-  AgentRuntimeStatus,
-  AgentApprovalDecision,
-  AgentEvent,
-  AgentPermissionMode,
-  AgentSessionSnapshot,
-  AgentSessionHistory,
 } from '../types'
-import { consumeSseStream } from './sse'
 
 const TOKEN_KEY = 'aitest-console-session-token'
 
@@ -133,80 +123,6 @@ export const api = {
       method: 'PUT',
       body: json({ path, confirmed: true }),
     }),
-  agentConnection: () => request<AgentConnection>('/api/agent/connection'),
-  testAgentConnection: (payload: AgentConnectionInput) =>
-    request<AgentConnectionTestResult>('/api/agent/connection/test', {
-      method: 'POST',
-      body: json(payload),
-    }),
-  saveAgentConnection: (payload: AgentConnectionInput) =>
-    request<AgentConnection>('/api/agent/connection', {
-      method: 'PUT',
-      body: json(payload),
-    }),
-  agentRuntime: () => request<AgentRuntimeStatus>('/api/agent/runtime'),
-  setupAgentRuntime: () =>
-    request<Job>('/api/agent/runtime/setup', { method: 'POST', body: json({ confirmed: true }) }),
-  agentRuntimeSetupJob: (id: string) =>
-    request<Job>(`/api/agent/runtime/setup/${encodeURIComponent(id)}`),
-  cancelAgentRuntimeSetup: (id: string) =>
-    request<Job>(`/api/agent/runtime/setup/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
-  agentSession: () => request<AgentSessionSnapshot | null>('/api/agent/session'),
-  agentSessions: () => request<{ sessions: AgentSessionSnapshot[] }>('/api/agent/sessions'),
-  agentSessionDetail: (sessionId: string) =>
-    request<AgentSessionSnapshot>(`/api/agent/sessions/${encodeURIComponent(sessionId)}`),
-  agentSessionHistory: (sessionId: string, afterSeq = 0) =>
-    request<AgentSessionHistory>(
-      `/api/agent/sessions/${encodeURIComponent(sessionId)}/history?after_seq=${afterSeq}`,
-    ),
-  createAgentSession: (permissionMode: AgentPermissionMode, confirmed = false) =>
-    request<AgentSessionSnapshot>('/api/agent/sessions', {
-      method: 'POST',
-      body: json({ permission_mode: permissionMode, confirmed }),
-    }),
-  activateAgentSession: (sessionId: string, confirmed = false) =>
-    request<AgentSessionSnapshot>(`/api/agent/sessions/${encodeURIComponent(sessionId)}/activate`, {
-      method: 'POST',
-      body: json({ confirmed }),
-    }),
-  sendAgentMessage: (sessionId: string, text: string, diagnostics: 'basic' | 'stream' = 'basic') =>
-    request<AgentSessionSnapshot>(`/api/agent/sessions/${encodeURIComponent(sessionId)}/messages`, {
-      method: 'POST',
-      body: json(diagnostics === 'stream' ? { text, diagnostics } : { text }),
-    }),
-  resolveAgentApproval: (sessionId: string, requestId: string, decision: AgentApprovalDecision) =>
-    request<AgentSessionSnapshot>(
-      `/api/agent/sessions/${encodeURIComponent(sessionId)}/approvals/${encodeURIComponent(requestId)}`,
-      { method: 'POST', body: json({ decision }) },
-    ),
-  abortAgent: (sessionId: string) =>
-    request<AgentSessionSnapshot>(`/api/agent/sessions/${encodeURIComponent(sessionId)}/abort`, { method: 'POST' }),
-  closeAgentSession: (sessionId: string) =>
-    request<void>(`/api/agent/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }),
-  streamAgentEvents: async (
-    sessionId: string,
-    afterSeq: number,
-    signal: AbortSignal,
-    onEvent: (event: AgentEvent) => void,
-    onOpen?: () => void,
-    onActivity?: () => void,
-  ) => {
-    const token = sessionStorage.getItem(TOKEN_KEY)
-    const headers = new Headers()
-    if (token) headers.set('X-AITest-Console-Token', token)
-    const response = await fetch(
-      `/api/agent/sessions/${encodeURIComponent(sessionId)}/events?after_seq=${afterSeq}`,
-      { headers, signal, cache: 'no-store' },
-    )
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}))
-      const error = data?.error ?? {}
-      throw new ApiError(error.code || 'AGENT_STREAM_FAILED', error.message || `HTTP ${response.status}`, response.status)
-    }
-    if (!response.body) throw new ApiError('AGENT_STREAM_UNAVAILABLE', '浏览器未提供事件流', 502)
-    onOpen?.()
-    await consumeSseStream(response.body, onEvent, onActivity)
-  },
   reports: () => request<{ reports: ReportSummary[] }>('/api/reports'),
   reportDetail: (path: string) =>
     request<ReportDetail>(`/api/reports/detail?path=${encodeURIComponent(path)}`),

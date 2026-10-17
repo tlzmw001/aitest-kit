@@ -10,12 +10,11 @@ Linux baseline provenance:
   commit `a70855ef9d67965191b0bc7bbd81058258306515`.
 - `console-playwright-diagnostics` artifact, Chromium on the Ubuntu runner.
 - Each saved baseline has the same SHA-256 as its corresponding `*-actual.png`.
-- Both images were visually reviewed before importing. The 1440×900 approval
-  workbench is complete; the 34×38 close-button crop has the expected compact hover.
+- The 34×38 close-button crop was visually reviewed before importing and has the expected compact hover.
+  The former Agent approval screenshot was removed with the embedded Agent UI and remains available in v0.5.0.
 
 | Linux file | SHA-256 |
 | --- | --- |
-| agent-approval-workbench-linux.png | 0c41c952827c7213d486ad0d82735c1824c32f043188c9a377fbc2b3eafbbae5 |
 | editor-tab-close-hover-linux.png | 3dc25eb59ef21558e16ef8440c5cc3e9d2f583499c424b4adf0796bdc7dc0a28 |
 
 This import does not establish that newer code passes Linux visual regression.

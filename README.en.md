@@ -2,9 +2,9 @@
 
 > Turn development docs, API contracts, and AI-designed test ideas into reviewable, reproducible, runnable automated test assets.
 
-A local-first workbench for test engineers: manage test assets in a browser, use the built-in Pi Agent
-to help design and maintain them, and run validation, code generation, tests, and reports through a
-deterministic CLI. Files stay in your workspace; you choose the model service and bring your own API key (BYOK).
+A local-first workbench for test engineers: manage assets in a browser and run validation, code generation,
+tests, and reports through a deterministic CLI. External Agents use skills, files, and CLI commands
+to operate on the same local workspace.
 
 [中文 README](README.md)
 
@@ -23,7 +23,6 @@ AI explores unknowns. Code stabilizes repeatable work.
 - **Gets more deterministic over time** — AI explores the system and drafts cases early on; validated patterns are promoted into profiles and assertion_rules, gradually reducing AI involvement and increasing repeatability.
 - **9 AI skills across the full workflow** — From doc review, knowledge base, test design to fixture scaffolding, codegen, failure fixing, and rule promotion. Skills constrain AI behavior; human review gates quality.
 - **One set of files for the UI and CLI** — Browse directories to open a workspace, edit cases and configuration in Monaco tabs, then validate, generate, run, and inspect structured reports.
-- **An Agent with tools and explicit permissions** — Pi can read docs, follow skills to create or modify test assets, and run commands. Choose approval mode or explicitly enable full trust.
 
 Not meant for: one-off pytest, systems without executable interfaces, or auto-creating production accounts and paid resources.
 
@@ -31,8 +30,8 @@ Not meant for: one-off pytest, systems without executable interfaces, or auto-cr
 
 ### 1. Install
 
-To try the Console and Agent described here, install from the current `main` branch. Python 3.9+
-is required. The Console and CLI alone do not need Node.js; the Agent additionally needs Node.js 22.19.0+ and npm.
+These instructions describe the development version after removing the embedded Pi Agent. Python 3.9+
+is required; Console and CLI use does not need Node.js. Published v0.5.0 still includes Pi; this change is not released yet.
 
 ```bash
 git clone https://github.com/tlzmw001/aitest-kit.git
@@ -78,7 +77,7 @@ aitest console --workspace . --port 8123
 
 `8123` is an example; choose an available port. The browser opens automatically with a local session credential.
 Start in Workbench (工作台), edit in Cases (用例), execute in Run (运行), and inspect Reports (报告).
-To have the Agent help create or maintain test assets, continue with [Agent setup and usage](#agent-setup-and-usage).
+For Agent-assisted workflows, see [Using an external Agent](#using-an-external-agent).
 
 An empty workspace has no modules yet. Put docs under `docs/`, then use the bundled AI skills:
 
@@ -124,8 +123,6 @@ Public docs / API contracts
 aitest init --target <dir>                                   # initialize workspace
 aitest doctor                                                # health check
 aitest console --workspace <dir> --port <port>                # start the local UI
-aitest agent setup                                           # install the current user's Pi Runtime
-aitest agent doctor                                          # check the local Pi Runtime
 aitest codegen --suite-file <suite.yaml> --validate-profile  # profile gate
 aitest codegen --suite-file <suite.yaml>                     # generate pytest
 aitest codegen --suite-file <suite.yaml> --check             # check generated freshness
@@ -149,7 +146,6 @@ It binds only to a local loopback address, not a hosted multi-user service. The 
 | Reports (报告) | Review execution history, `result.json`, and `report.md`; read-only JSON viewing |
 | Diagnostics (诊断) | Inspect failure categories and open related source files; distinguish configuration, scaffolding, environment, codegen, and assertion problems without automatically blaming the SUT |
 | Environment (环境) | Explicitly create or edit authorized env files; sensitive values hidden by default and external env files authorized individually |
-| Agent | Chat, inspect tool calls and write diffs, approve actions, continue historical sessions, and inspect request diagnostics |
 
 A suite is the smallest unit for case-asset creation/deletion in the UI. To change or remove an individual case,
 edit its Markdown file and save; there is no per-case creation/deletion form. Generated pytest and reports stay read-only.
@@ -184,61 +180,29 @@ initializer; template conflicts stop initialization and preserve existing files.
 Environment supports `.env`, `AITEST_ENV_FILE`, and task `env_files`. Values do not enter the ordinary file API
 or localStorage. Job output redacts sensitive values known to the Console, but test assets must still never print credentials deliberately.
 
-## Agent Setup and Usage
+## Using an External Agent
 
-The built-in Agent uses the Pi SDK to read docs and test knowledge, follow workspace skills to draft Markdown cases,
-maintain Harnesses/profiles, run validation and codegen, and investigate failures. AI makes decisions and edits;
-AITest CLI still owns deterministic validation, generation, and execution. The Agent should not bypass the profile gate
-or treat generated pytest as hand-maintained source.
+AITest provides test assets, workflow skills, CLI commands, and the local Console. An external Agent owns model connections, conversations, permissions, and sessions. This development branch removes the embedded Pi Agent.
 
-### 1. Prepare the Runtime and Model Connection
+Open the same workspace in an Agent, read its instructions and relevant SKILL.md, edit Markdown, profiles, or Harnesses with file tools, and run the deterministic CLI:
 
-1. Install Node.js 22.19.0+ and npm, then open Settings → Model connection (设置 → 模型连接).
-2. Confirm installation in the Runtime card, or run `aitest agent setup`. It installs locked dependencies under the current user's directory, without modifying the workspace.
-3. Enter a connection name, API type, Base URL, model name, and API key; no Pi provider lookup is needed.
-   Supported protocols are OpenAI Responses, OpenAI Chat Completions, and Anthropic Messages. For OpenAI-compatible models, auto detection tries Responses first and only falls back to Chat Completions on explicit protocol incompatibility. Claude model names automatically select Anthropic Messages.
-4. Test the connection, then save. Testing sends real, tool-free model requests and may incur provider charges; auto-detection fallback can require more than one request.
-
-Use the Base URL and model identifier supplied by your service. Non-sensitive settings are saved in the workspace.
-A key entered in the UI stays only in the current Console process memory; enter it again after restarting or switching workspaces.
-Alternatively, supply the configured environment variable before starting the Console.
-Local-first does not mean offline inference: content read by the Agent may be sent to the configured model service.
-Check data-sharing permissions before using external source code or knowledge bases.
-
-### 2. Create a Session and Work with Skills
-
-Open Agent and start with approval mode. The Console supplies `.codex/skills/`, `.agents/skills/`, and `skills/`
-from the current workspace. A new workspace's bundled `skills/` works directly; no global Pi configuration is required.
-AITest uses an isolated Agent configuration directory and does not automatically load global Pi configuration or third-party extensions.
-
-Example requests, with your own module and paths:
-
-```text
-Use test-maintain to inspect this workspace and suggest the next step. Do not modify files yet.
-Use test-design and the existing knowledge base to design a suite for the selected module. Stop for my review.
-Use test-scaffold to complete the approved suite's Harness and profiles, then test-codegen to validate and generate tests.
-Read this run's result.json, distinguish environment, scaffolding, and assertion failures, and propose a fix first.
+```bash
+aitest doctor --workspace /path/to/aitest_workspace
+aitest codegen --workspace /path/to/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --validate-profile
+aitest codegen --workspace /path/to/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
+aitest codegen --workspace /path/to/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml --check
+aitest run --workspace /path/to/aitest_workspace --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
 ```
 
-Approval cards show the tool and arguments, with allow once, allow for session, and deny choices.
-Write/edit requests support Monaco Diff. External-directory access, recursive grep, writes, and shell commands require approval;
-direct reads of sensitive paths are denied by default. **Approval is not a sandbox**: approved grep/shell calls can still access
-sensitive data. Full trust uses the local process's permissions and requires confirmation for the current workspace on every
-creation or reactivation. Use it only when you trust the task, files, and model.
+The Console reads those same assets and reports for human review. Follow knowledge → Markdown cases → human review → scaffolding/codegen; generated pytest remains a build artifact.
 
-### 3. Resume History and Diagnose Long Waits
+Naiyue Test Agent currently discovers `.agents/skills/` and `.claude/skills/`. For a fresh workspace with only neutral `skills/`, copy to `.agents/skills/` as shown below. Check an existing destination before copying over local changes.
 
-Multiple historical sessions persist, but each Console has only one active Worker; Agent sessions do not run concurrently.
-After a restart, review history and explicitly continue. Unfinished turns become `interrupted`; tools are not automatically retried
-and old approval grants are not restored. Check whether the last tool already had an effect before continuing.
-History is stored in a user-level, workspace-scoped directory, not an additional cross-session semantic memory store.
+The [external Agent workbench Spec](docs/specs/external_agent_workbench_spec.md) describes the proposed adapter. File tools and CLI commands are available; structured tools and MCP integration have not been implemented.
 
-The composer shows request phases and approval status. Expand request diagnostics to inspect HTTP, first-text, completion,
-and automatic-retry timing. For a long wait, enable detailed stream diagnostics for the next message before sending;
-detailed SSE statistics currently support only OpenAI Responses. Diagnostics do not record request/response bodies,
-reasoning content, headers, or credentials, and do not change permissions or retry policies.
+The Pi implementation remains on `codex/archive-pi-agent-v0.5.0` and `v0.5.0`. Existing user sessions, Runtime directories, and workspace configuration are preserved. This branch no longer provides Agent pages, model connections, or `aitest agent` commands.
 
-### CLI, Runtime, and Test Credentials
+### Test Credentials
 
 For real API tests, provide credentials via env file:
 
@@ -255,58 +219,6 @@ function body, `capture_io()` can infer the current case; explicit `case_id` sti
 wins. Pytest fixture setup/teardown runs outside this context. Capture does not redact; redact
 in your fixture before writing sensitive data.
 
-### Local Pi Agent Runtime
-
-The Python wheel carries a locked Pi Worker installation seed, not the large expanded
-`node_modules`. Install Node.js first (minimum `22.19.0`; Node.js 24 LTS is recommended), then
-explicitly install the user-level Runtime:
-
-```bash
-aitest agent setup
-aitest agent doctor --workspace /path/to/aitest_workspace
-```
-
-The default destination is `~/.aitest/runtimes/pi-worker/<bundle-hash>/`; override the root with
-`AITEST_RUNTIME_HOME`. Setup uses the exact lockfile shipped in the wheel. It does not install Node,
-write to the workspace, modify Python `site-packages`, or read model credentials. Source contributors
-can still run `npm ci --prefix agent_runtime/pi_worker`; the resolver prefers a complete source Worker
-and otherwise uses the user Runtime matching the current bundle.
-
-Store only model references and environment variable names in
-`aitest_config/aitest.yaml`, never the key value:
-
-```yaml
-agent:
-  runtime: pi
-  connection_name: Anthropic
-  model:
-    protocol: anthropic_messages
-    provider: anthropic
-    name: claude-sonnet-4-5
-    api_key_env: ANTHROPIC_API_KEY
-    base_url: null
-    base_url_env: null
-```
-
-Provide the key through the current shell. Approval mode is the default. Full trust requires an
-explicit confirmation for every session and gives the native read/write/edit/grep/find/ls/bash
-tools the current local user's host permissions. It is not a sandbox:
-
-```bash
-export ANTHROPIC_API_KEY=<your-key>
-aitest agent run --workspace /path/to/aitest_workspace \
-  --skill-path /path/to/skill \
-  --prompt "Inspect the test assets and run profile validation"
-
-aitest agent run --workspace /path/to/aitest_workspace \
-  --mode full_trust \
-  --prompt "Perform the approved test-maintenance task"
-```
-
-The protocol and logs carry the environment variable name, not the key. In approval mode,
-workspace read/find/ls are allowed by default; grep/write/edit/bash/external-directory access
-asks for approval, while `.env` and private-key paths are denied by default.
-
 ## AI Skills
 
 The workspace includes an agent-neutral `skills/` directory. Copy to your agent:
@@ -314,6 +226,7 @@ The workspace includes an agent-neutral `skills/` directory. Copy to your agent:
 ```bash
 mkdir -p .claude/skills && cp -R skills/. .claude/skills/   # Claude Code
 mkdir -p .codex/skills && cp -R skills/. .codex/skills/     # Codex
+mkdir -p .agents/skills && cp -R skills/. .agents/skills/   # Naiyue Test Agent
 ```
 
 | Skill | When to use |
@@ -369,14 +282,14 @@ Each module has one public runtime shape: the `setup_{module}` fixture directly 
 
 - Do not commit `.env`, tokens, passwords, or production accounts.
 - Profile `variables.env` stores variable names only, not values; reports may contain request/response details — review before sharing.
-- Do not let the Agent create real accounts, top up balances, or change production resources without confirmation. Connection tests and Agent conversations call your configured model service and may incur charges.
+- The external Agent manages its model credentials and tool permissions.
 
 ## Stable Scope
 
 Core pipeline: `aitest init/codegen/run/report/doctor/upgrade`, workspace layout, Markdown case format, profile schema, request bindings, structured assertions, Case IR → pytest, freshness checks, and structured reports.
 
-Current `main` also includes the local Console, Monaco editing, Pi Agent approvals and persistent sessions, and request diagnostics. It does not provide a multi-user service, sandbox, or concurrent Agent sessions.
-Still evolving: Console/Agent interactions, health/promotion report wording, `case_flows` step vocabulary, internal Python APIs, and contract-test directions.
+This development branch retains Console, Monaco editing, asset management, runs, and reports, while removing the embedded Pi Agent.
+Still evolving: external Agent tool integration, health/promotion report wording, `case_flows` step vocabulary, internal Python APIs, and contract-test directions.
 
 ## Development
 
@@ -395,8 +308,7 @@ python3 -m aitest_kit.cli doctor
 
 This repository includes `coupon_system` as a realistic regression asset. See [Coupon System Full Example](docs/usebook/coupon_system_full_example.md).
 
-Node.js and a frontend build are needed only when changing the UI source. For source development, use Node.js 22.19.0+
-to also satisfy the Worker requirement:
+Node.js and a frontend build are needed only when changing UI source; see `console_web/package.json` for the required Node version:
 
 ```bash
 npm ci --prefix console_web
@@ -404,7 +316,7 @@ npm run build --prefix console_web
 ```
 
 The build writes to `aitest_kit/console/web/`. Restart the Console and use the newly opened session page to see changes;
-restarting Python alone does not compile Vue source. See above for source Worker development and user-level Runtime installation.
+restarting Python alone does not compile Vue source.
 
 ## Documentation
 
@@ -413,7 +325,7 @@ restarting Python alone does not compile Vue source. See above for source Worker
 - [Profile Guide](docs/usebook/codegen_profile_guide.md)
 - [Troubleshooting](docs/usebook/codegen_troubleshooting.md)
 - [Contributing](CONTRIBUTING.md)
-- [Console / Pi delivery verification](docs/usebook/console_delivery_verification.md) — Cross-platform installation CI, visual baselines, and persistence measurements (Chinese)
+- [Console delivery verification](docs/usebook/console_delivery_verification.md) — Cross-platform installation CI and visual baselines (Chinese)
 - [CHANGELOG](CHANGELOG.md)
 
 ## License

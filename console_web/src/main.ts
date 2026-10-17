@@ -5,8 +5,6 @@ import { createConsoleRouter } from './router'
 import { configureTokenFromUrl } from './api/client'
 import './styles/base.css'
 import './styles/views.css'
-import './styles/agent-connection.css'
-import './styles/agent.css'
 
 configureTokenFromUrl()
 const router = createConsoleRouter()
