@@ -23,6 +23,10 @@
 
 在这个仓库里协作时，优先遵守这条飞轮，而不是绕过文档、知识库和 Markdown 用例，直接产出零散 pytest。
 
+## 当前 Agent 集成边界
+
+AITest 保留测试资产、确定性 CLI 和本地 Console。通用编程与测试 Agent 由独立项目提供，通过 workspace skills、文件和 CLI 使用 AITest；不再内置 Pi Runtime、模型连接、会话或审批 UI。当前变更见 `docs/specs/external_agent_workbench_spec.md`，历史实现保留于 `codex/archive-pi-agent-v0.5.0` / `v0.5.0`。不自动删除用户旧会话、Runtime 或配置。
+
 ## 仓库结构
 
 - `coupon_system/`

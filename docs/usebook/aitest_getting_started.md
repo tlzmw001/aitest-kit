@@ -87,27 +87,13 @@ codegen 和 run 必须由用户显式发起。
 localStorage；任务输出会对 Console 已知的敏感值做脱敏，测试资产仍不得主动打印凭证。
 Console 也不会自动修改 `.gitignore`。
 
-首次使用 Agent 前，在“设置 → 模型连接”的 Runtime 卡片确认安装，或从任意目录运行
-`aitest agent setup`。Python wheel 携带精确 lockfile 和 Worker seed，依赖安装到当前用户的
-`~/.aitest/runtimes/`，不修改 workspace；Node.js 最低为 22.19.0，推荐 Node.js 24 LTS。
-安装就绪后可从主导航“Agent”创建本地 session。approval 模式下，
-递归 grep、write/edit、Shell 和外部目录请求由页面内审批卡处理；write/edit 可以查看 Monaco Diff。
-直接敏感路径读取默认拒绝；批准 grep/Shell 后仍可能读取敏感内容，审批不是逐文件隔离或沙箱。
-full_trust 会继承 Console 进程的本地权限，读取内容可能进入模型上下文，因此每次创建或重新激活都必须
-针对当前 workspace 明确确认。页面刷新会使用 `after_seq` 恢复事件，超出窗口时重同步最近历史及待审批请求。
-持久 session 默认保存在 `~/.aitest/sessions/`（可通过 `AITEST_AGENT_SESSION_HOME` 指定），按 workspace 隔离。
-支持多个历史会话、单 active Worker。重启后可查看历史并显式继续；未完成任务标记为 interrupted，
-最后工具结果可能未知，不自动重试 Shell/工具或恢复旧审批授权。
+### 与外部 Agent 配合
 
-Agent 输入区上方显示模型请求阶段：准备请求、等待服务响应、已连接等待回复、接收回复；
-收到真实 thinking 事件才提示思考阶段。工具审批优先显示“等待你的审批”，不会把审批等待算成模型卡住。
-Pi 自动重试会显示次数和退避时间，不改变原有重试策略。
-展开“请求诊断”可查看最近 20 次可见调用的 HTTP/首字/完成时间；每次模型调用单独编号，
-缺少的指标显示“未采集”，历史回放范围仍受现有事件窗口限制。
-需要定位流内长等待时，发送前勾选“仅下一条消息采集详细流诊断”；消息接受后自动复位，
-仅 OpenAI Responses 支持原始 SSE 事件类型统计、首字时间和终止标志，其他协议明确显示不支持。
-诊断不会保存请求/响应正文、思考内容、header 或凭证；也不会改变工具权限、模型参数或增加真实模型请求。
-浏览器断线时应同时检查 connected/reconnecting 状态，旧诊断不是模型仍在运行的证据。
+当前开发分支已移除内置 Pi Agent，保留测试资产和 Console。外部 Agent 读取相同 workspace 的协作规则与 skills，以文件工具编辑 Markdown/profile/Harness，通过 `aitest doctor`、`codegen`、`run` 和 `report` 执行确定性操作。
+
+Naiyue Test Agent 当前发现 `.agents/skills/` 和 `.claude/skills/`；新 workspace 的 neutral `skills/` 可按实际 Agent 复制到对应目录。已有目录先检查本地修改。Agent 的模型连接、审批、会话和凭证由外部 Agent 管理，不再在 Console 配置。
+
+原 Pi 实现在 `codex/archive-pi-agent-v0.5.0` 和 `v0.5.0` 中保留。此次代码移除不清理用户的旧 Runtime、会话文件或 workspace 配置，也不迁移会话。结构化工具适配仍需后续实施，见 [外部 Agent 工作台 Spec](../specs/external_agent_workbench_spec.md)。
 
 ## 二、迁移原则
 

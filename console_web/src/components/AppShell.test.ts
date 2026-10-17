@@ -18,7 +18,6 @@ describe('AppShell settings', () => {
       history: createMemoryHistory(),
       routes: [
         { path: '/', name: 'workbench', component: { template: '<div />' } },
-        { path: '/settings/agent', name: 'agent-connection', component: { template: '<div />' } },
       ],
     })
     await router.push('/')
@@ -38,7 +37,8 @@ describe('AppShell settings', () => {
 
     await wrapper.get('[data-test="open-mode-reuse"]').trigger('click')
     expect(usePreferencesStore().editorOpenMode).toBe('reuse')
-    expect(wrapper.get('[data-test="agent-connection-settings"]').attributes('href')).toContain('/settings/agent')
+    expect(wrapper.find('[data-test="agent-connection-settings"]').exists()).toBe(false)
+    expect(wrapper.find('a[href="/agent"]').exists()).toBe(false)
   })
 
   it('shows every editor theme and applies the selected preset', async () => {

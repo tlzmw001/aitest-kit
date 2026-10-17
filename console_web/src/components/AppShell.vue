@@ -3,9 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   Activity,
-  Bot,
   Bug,
-  Cable,
   FileText,
   FlaskConical,
   FolderTree,
@@ -29,7 +27,6 @@ const settingsOpen = ref(false)
 const nav = [
   { name: 'workbench', label: '工作台', icon: FolderTree, to: '/' },
   { name: 'editor', label: '用例', icon: FileText, to: '/editor' },
-  { name: 'agent', label: 'Agent', icon: Bot, to: '/agent' },
   { name: 'run', label: '运行', icon: Play, to: '/run' },
   { name: 'reports', label: '报告', icon: Activity, to: '/reports' },
   { name: 'diagnostics', label: '诊断', icon: Bug, to: '/diagnostics' },
@@ -88,20 +85,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleEscape))
         <button aria-label="关闭设置" @click="settingsOpen = false"><X :size="17" /></button>
       </header>
       <section class="settings-section">
-        <div class="settings-subsection settings-destination">
-          <span class="section-label">Agent</span>
-          <strong>模型连接</strong>
-          <p>配置模型地址和凭证，由 Console 识别底层接口，无需查找 Pi Provider。</p>
-          <RouterLink
-            class="settings-route"
-            to="/settings/agent"
-            data-test="agent-connection-settings"
-            @click="settingsOpen = false"
-          >
-            <Cable :size="17" />
-            <span><b>打开模型连接</b><small>测试 Base URL、模型和 API Key</small></span>
-          </RouterLink>
-        </div>
         <div class="settings-subsection">
           <span class="section-label">编辑器</span>
           <strong>打开文件的方式</strong>

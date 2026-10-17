@@ -30,6 +30,19 @@ jobs:
       - name: Build wheel and sdist
         run: python -m build
 
+      - name: Inspect embedded Agent removal
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import runpy
+
+          verify_archive = runpy.run_path("scripts/verify_wheel_install.py")["verify_archive"]
+          wheel = next(Path("dist").glob("aitest_kit-*.whl"))
+          sdist = next(Path("dist").glob("aitest_kit-*.tar.gz"))
+          verify_archive(wheel)
+          verify_archive(sdist)
+          PY
+
       - name: Check distributions
         run: python -m twine check dist/*
 

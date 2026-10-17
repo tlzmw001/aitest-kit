@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Removed
+
+- Removed the embedded Pi Agent, model connections, approvals, request diagnostics, and persistent session UI from the Console. The `aitest agent` commands and `/api/agent/*` endpoints are no longer available.
+- Removed the Pi Worker and Runtime installation seed from distributions. Console and CLI users no longer need Node.js or npm; frontend contributors still need the declared Node.js toolchain.
+
+### Changed
+
+- Kept the local Console, Monaco editor, test asset management, environment editing, and deterministic validation/codegen/run/report workflow. External Agents can use workspace skills, files, and CLI commands; dedicated structured-tool and MCP adapters are not implemented yet.
+- Preserved existing workspace files, Agent configuration, user Runtime directories, and session history without automatic deletion or migration. Old Pi sessions cannot continue in this workbench; use v0.5.0 or the local `codex/archive-pi-agent-v0.5.0` preservation branch to read them.
+
+### Fixed
+
+- Inspect wheel and sdist manifests for removed Agent modules, Worker seeds, frontend chunks, and node_modules before installation or artifact upload. An absent Agent API alone no longer counts as proof of clean package contents.
+- Removed obsolete Agent field-placement instructions from the configuration references, including the workspace initialization template.
+
 ## 0.5.0 - 2026-09-16
 
 ### Added

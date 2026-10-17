@@ -8,7 +8,9 @@ import os
 import platform
 import subprocess
 import sys
+import tarfile
 import tempfile
+import zipfile
 from pathlib import Path
 
 
@@ -20,11 +22,6 @@ def clean_environment(root: Path, source: dict[str, str]) -> dict[str, str]:
     }
     env = {key: value for key, value in source.items() if key.upper() in allowed}
     env.update({
-        "AITEST_RUNTIME_HOME": str(root / "runtimes"),
-        "AITEST_AGENT_SESSION_HOME": str(root / "sessions"),
-        "NPM_CONFIG_USERCONFIG": str(root / "empty-user.npmrc"),
-        "NPM_CONFIG_GLOBALCONFIG": str(root / "empty-global.npmrc"),
-        "NPM_CONFIG_CACHE": str(root / "npm-cache"),
         "PIP_CONFIG_FILE": os.devnull,
         "PIP_DISABLE_PIP_VERSION_CHECK": "1",
         "PYTHONUTF8": "1",
@@ -42,6 +39,33 @@ def select_wheel(directory: Path) -> Path:
     return wheels[0]
 
 
+def verify_archive(path: Path) -> None:
+    """Reject removed runtime files by manifest only; never extract or execute members."""
+    if path.name.endswith(".whl"):
+        with zipfile.ZipFile(path) as archive:
+            names = archive.namelist()
+    elif path.name.endswith(".tar.gz"):
+        with tarfile.open(path, "r:gz") as archive:
+            names = archive.getnames()
+    else:
+        raise ValueError("Expected a wheel or source distribution")
+    forbidden = (
+        "/aitest_kit/agent/",
+        "/aitest_kit/console/agent_",
+        "/agent_runtime/pi_worker/",
+        "/runtime_seed/pi_worker/",
+        "/aitest_kit/console/web/assets/Agent",
+        "/node_modules/",
+    )
+    paths = ("/" + name.replace("\\", "/") + "/" for name in names)
+    leaked = sum(any(marker in name for marker in forbidden) for name in paths)
+    if leaked:
+        raise ValueError(
+            f"Distribution includes {leaked} removed Agent/Runtime entries; "
+            "rebuild from a clean checkout or worktree"
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--wheel-dir", type=Path, required=True)
@@ -52,6 +76,9 @@ def main() -> int:
     try:
         wheel = select_wheel(args.wheel_dir.resolve())
         report["wheel"] = wheel.name
+        stage = "inspect_wheel"
+        verify_archive(wheel)
+        report.update(wheel_contents="passed", embedded_agent="absent")
         with tempfile.TemporaryDirectory(prefix="aitest wheel smoke ") as temporary:
             root = Path(temporary).resolve()
             env = clean_environment(root, dict(os.environ))
@@ -74,6 +101,8 @@ def main() -> int:
                 report["status"] = "failed"
     except Exception as exc:
         report.update(status="failed", stage=stage, error_type=type(exc).__name__)
+        if stage == "inspect_wheel":
+            report["diagnostic"] = "Archive inspection failed; rebuild from a clean checkout or worktree."
         if isinstance(exc, subprocess.CalledProcessError):
             report["exit_code"] = exc.returncode
     args.output.parent.mkdir(parents=True, exist_ok=True)

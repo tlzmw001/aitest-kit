@@ -84,18 +84,14 @@ def verify_console(cli: Path, workspace: Path) -> dict:
             workspace_response = client.get("/api/workspace")
             workspace_response.raise_for_status()
             assert Path(workspace_response.json()["path"]).resolve() == workspace.resolve()
-            runtime_response = client.get("/api/agent/runtime")
-            runtime_response.raise_for_status()
-            assert runtime_response.json()["state"] == "ready"
-            assert runtime_response.json()["source"] == "user"
-            assert runtime_response.headers["cache-control"] == "no-store"
+            assert client.get("/api/agent/runtime").status_code == 404
             assets = re.findall(r'src="(/assets/[^"\s]+\.js)"', response.text)
             assert assets, "Packaged index must reference JavaScript"
             for asset in assets:
                 js = client.get(asset)
                 js.raise_for_status()
                 assert "javascript" in js.headers["content-type"] and len(js.content) > 0
-        return {"console_http": "passed", "console_runtime": "passed",
+        return {"console_http": "passed", "agent_api": "absent",
                 "unauthorized_status": 401, "javascript_assets": len(assets)}
     finally:
         if process.poll() is None:
@@ -114,7 +110,6 @@ def main() -> int:
     stage = "installed_import"
     try:
         import aitest_kit
-        from aitest_kit.agent.runtime import runtime_status
 
         root = Path(sys.argv[1]).resolve()
         package = Path(aitest_kit.__file__).resolve()
@@ -126,23 +121,7 @@ def main() -> int:
         run([str(cli), "init", "--target", str(workspace)], root)
         stage = "workspace_doctor"
         run([str(cli), "doctor", "--workspace", str(workspace)], root)
-        stage = "agent_setup"
-        run([str(cli), "agent", "setup"], root, timeout=700)
-        status = runtime_status()
-        assert status["state"] == "ready" and status["source"] == "user"
-        runtime = Path(status["runtime_dir"]).resolve()
-        assert (root / "runtimes") in runtime.parents
-        metadata = {path.name: (path.read_bytes(), path.stat().st_mtime_ns)
-                    for path in runtime.glob("*.json")}
-        stage = "setup_idempotence"
-        run([str(cli), "agent", "setup"], root, timeout=700)
-        assert metadata == {path.name: (path.read_bytes(), path.stat().st_mtime_ns)
-                            for path in runtime.glob("*.json")}
-        stage = "worker_self_test"
-        result = run(["node", "--experimental-strip-types", str(runtime / "src/worker.ts"), "--self-test"], root)
-        assert json.loads(result) == {"runtime": "pi", "status": "ok"}
-        report.update(runtime_source="user", node=status["node_version"], bundle_hash=status["bundle_hash"],
-                      workspace_doctor="passed", setup_idempotence="passed", worker_self_test="passed")
+        report.update(workspace_doctor="passed")
         stage = "console"
         report.update(verify_console(cli, workspace))
         report["status"] = "passed"
