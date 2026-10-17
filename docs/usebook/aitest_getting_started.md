@@ -89,7 +89,7 @@ Console 也不会自动修改 `.gitignore`。
 
 ### 与外部 Agent 配合
 
-当前开发分支已移除内置 Pi Agent，保留测试资产和 Console。外部 Agent 读取相同 workspace 的协作规则与 skills，以文件工具编辑 Markdown/profile/Harness，通过 `aitest doctor`、`codegen`、`run` 和 `report` 执行确定性操作。
+从 v0.6.0 起，AITest 移除内置 Pi Agent，保留测试资产和 Console。外部 Agent 读取相同 workspace 的协作规则与 skills，以文件工具编辑 Markdown/profile/Harness，通过 `aitest doctor`、`codegen`、`run` 和 `report` 执行确定性操作。
 
 Naiyue Test Agent 当前发现 `.agents/skills/` 和 `.claude/skills/`；新 workspace 的 neutral `skills/` 可按实际 Agent 复制到对应目录。已有目录先检查本地修改。Agent 的模型连接、审批、会话和凭证由外部 Agent 管理，不再在 Console 配置。
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.6.0 - 2026-10-17
+
 ### Removed
 
 - Removed the embedded Pi Agent, model connections, approvals, request diagnostics, and persistent session UI from the Console. The `aitest agent` commands and `/api/agent/*` endpoints are no longer available.

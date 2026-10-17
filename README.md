@@ -29,20 +29,26 @@ AI 负责探索未知，代码负责稳定重复。
 
 ### 1. 安装
 
-本节描述移除内置 Pi Agent 后的开发版本，需要 Python 3.9+；使用 Console 和 CLI 不需要 Node.js。
-已发布 v0.5.0 仍包含 Pi，本次调整尚未发布。
+需要 Python 3.9+。从 **0.6.0** 起不再内置 Pi Agent；使用 Console 和 CLI 不需要 Node.js 或 Pi Runtime。
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -U "aitest-kit[server]"
+```
+
+Windows PowerShell 使用 `.venv\Scripts\Activate.ps1` 激活环境，并按本机安装使用 `python` 替代 `python3`。
+安装包已包含构建好的前端，不需要 clone 仓库或执行 npm 构建。
+从 v0.5.0 升级会移除 Agent 页面、模型连接和 `aitest agent` 命令；旧数据保留但不再继续旧 Pi 会话。
+已有 workspace 不要重新执行 `init`，升级前先备份并运行 `aitest upgrade --check --workspace <路径>`。
+
+源码开发时可 clone 仓库并使用 editable 安装：
 
 ```bash
 git clone https://github.com/tlzmw001/aitest-kit.git
 cd aitest-kit
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install -e ".[server]"
+python3 -m pip install -e ".[dev,server]"
 ```
-
-Windows PowerShell 使用 `.venv\Scripts\Activate.ps1` 激活环境，并按本机安装使用 `python` 替代 `python3`。
-仓库已包含构建好的前端，不需要先执行 npm 构建。偏好已发布版本时可安装
-`python3 -m pip install -U "aitest-kit[server]"`，但 PyPI 版本可能落后于当前 `main`。
 
 后续命令使用同一个 Python 环境。找不到 `aitest` 时，先确认已激活环境，或将命令前缀替换为
 `python3 -m aitest_kit.cli`，例如 `python3 -m aitest_kit.cli console --port 8123`。
@@ -178,7 +184,7 @@ aitest console --port 8123
 
 ## 与外部 Agent 配合
 
-AITest 提供测试资产、工作流 skills、CLI 和本地 Console。模型连接、对话、工具审批和会话由外部 Agent 负责；本开发分支已移除内置 Pi Agent。
+AITest 提供测试资产、工作流 skills、CLI 和本地 Console。模型连接、对话、工具审批和会话由外部 Agent 负责；从 v0.6.0 起不再内置 Pi Agent。
 
 外部 Agent 打开同一 workspace，先读取协作规则及相关 SKILL.md，再通过文件工具编辑 Markdown、profile、Harness，调用 CLI 校验、生成和运行：
 
@@ -196,7 +202,7 @@ Naiyue Test Agent 当前发现 `.agents/skills/` 和 `.claude/skills/`。新 wor
 
 [外部 Agent 工作台 Spec](docs/specs/external_agent_workbench_spec.md) 记录了接入方向。目前可复用文件工具与 CLI，结构化工具和 MCP 尚未实施。
 
-历史 Pi 版本保留在 `codex/archive-pi-agent-v0.5.0` 和 `v0.5.0`。本次移除不清理用户旧会话、Runtime 或 workspace 配置；当前分支不再提供 Agent 页面、模型连接或 `aitest agent` 命令。
+历史 Pi 版本保留在本地 `codex/archive-pi-agent-v0.5.0` 分支和 `v0.5.0` tag。本次移除不清理用户旧会话、Runtime 或 workspace 配置；v0.6.0 不再提供 Agent 页面、模型连接或 `aitest agent` 命令。
 
 ### 运行凭据
 
@@ -279,7 +285,7 @@ Module 运行能力只有一种公开形态：`setup_{module}` fixture 直接返
 
 核心链路：`aitest init/codegen/run/report/doctor/upgrade`、workspace layout、Markdown 用例格式、profile schema、request bindings、structured assertions、Case IR → pytest、freshness check、结构化报告。
 
-当前开发分支保留 Console、Monaco 编辑、资产管理、运行和报告，移除了内置 Pi Agent。
+v0.6.0 保留 Console、Monaco 编辑、资产管理、运行和报告，移除了内置 Pi Agent。
 仍在演进：外部 Agent 工具接入、health/promotion report 口径、`case_flows` step 词汇表、内部 Python API 和契约测试方向。
 
 ## 开发本仓

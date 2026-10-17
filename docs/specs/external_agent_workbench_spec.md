@@ -1,12 +1,12 @@
 # AITest 外部 Agent 工作台
 
-状态：内置 Pi Agent 已移除并通过本地验证；外部接入方案待讨论。2026-10-17。
+状态：内置 Pi Agent 已移除并通过分支 CI，正在收束 v0.6.0 发布；外部接入方案待讨论。2026-10-17。
 
 ## 产品决定
 
 用户准备以独立的 Naiyue Test Agent 作为通用编程与测试操作入口。AITest 保留测试资产、确定性测试流水线和 Console，不再内嵌一套模型连接、Agent 会话与审批运行时。
 
-当前 `main` 为 `1c98669`（v0.5.0）。已创建本地保留分支 `codex/archive-pi-agent-v0.5.0`；实施分支为 `codex/external-agent-workbench`。不回退整个 Console，不丢失 Monaco、资产管理、环境页与测试运行等后续改进。
+实施起点 `main` 为 `1c98669`（v0.5.0）。已创建本地保留分支 `codex/archive-pi-agent-v0.5.0`；实施分支为 `codex/external-agent-workbench`。不回退整个 Console，不丢失 Monaco、资产管理、环境页与测试运行等后续改进。
 
 ## 当前链路
 
@@ -40,7 +40,15 @@ Console 其余页面 / aitest CLI
 
 不修改本机 `~/.aitest/sessions/`、`~/.aitest/runtimes/` 或其他凭证/状态目录；保留旧配置中的 `agent` 字段，不自动迁移/清除。旧 Pi 历史不能在新工作台继续，但可使用保留分支及原版本读取。
 
-不改 Naiyue Test Agent 项目的代码、配置或工作区。用户已于 2026-10-17 授权：修复分支审查问题、验证通过后提交到当前实施分支；不推送、不合入 main、不发布。
+不改 Naiyue Test Agent 项目的代码、配置或工作区。用户先授权在实施分支修复并提交，随后授权推送并复查 CI；现已授权合入 main，等待合入后准确提交的 CI 通过，再打新 tag 触发 PyPI 发布。
+
+## v0.6.0 发布收束
+
+- 本次移除公开 Agent CLI/API，以 0.6.0 发布，不作为 0.5.x 补丁。只更新 `pyproject.toml` 版本、CHANGELOG 正式条目、中英文 README 与使用手册的安装/版本文案，以及对应交付合同测试；不新增业务能力、不升级依赖。
+- 在独立干净 worktree 合入已通过 CI 的实施分支；不切换、清理或提交原工作目录中的研究文件、学习记录、环境配置及用户状态。
+- CHANGELOG 保留空的 Unreleased 与完整 v0.5.0 历史，将本次移除条目归档到 0.6.0。交付测试校验项目版本有正式条目，并在 0.6.0 条目继续要求旧命令/API 移除和 Runtime/session 数据保留说明，不删除原断言，也不要求未来每个版本重复该说明。
+- 本地完整测试、编译、profile/freshness/collect、干净 wheel/sdist、归档内容/版本和隔离安装通过后，推送 main。必须等待该准确 SHA 的 CI 成功，才在同一 SHA 创建并推送 v0.6.0。
+- 跟进 Publish workflow，核验 PyPI 0.6.0 的 wheel/sdist 可见、发布产物不含 Agent，并从已发布 wheel 做隔离安装。若 main、tag 或包版本发生漂移，停止发布而不覆盖历史。
 
 ## 移除后正常与失败链路
 
@@ -103,7 +111,7 @@ AITest `result.json` 是执行事实；模型工具成功只说明调用完成�
 - 交付回归：修复前污染 wheel 验收误判及两份配置手册、CHANGELOG 断言共 4 条失败；修复后 `tests/test_delivery_verification.py` 为 35 passed。原“子进程异常脱敏”测试的空文件改为有效 ZIP fixture，以继续验证 venv 失败分支，不放宽原断言。
 - 复用旧构建缓存生成的 wheel 含 26 个旧 Agent Python 文件和 7 个旧 Agent 页面资源；修正后的安装验收返回退出码 1，stage=inspect_wheel，不再误判通过。
 - 干净 wheel/sdist 构建和 `twine check` 通过；CI、publish 两个工作流中的归档检查 Python 片段均在本地对实际产物执行通过。这不是远程 workflow 或发布执行证据。
-- 安全和架构提交前只读复核未发现阻断项。提交边界：仅当前实施分支，不推送、不合入 main、不发布；其他研究和学习文件保持原状。
+- 安全和架构提交前只读复核未发现阻断项。以上为实施分支阶段证据，分支提交 `729a8d1` 的远程 CI 已通过；其他研究和学习文件保持原状。发布阶段按上方合同另行验证，不把分支 CI 代替 main/tag 的证据。
 
 ## 回退
 

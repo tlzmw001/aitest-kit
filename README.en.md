@@ -30,20 +30,28 @@ Not meant for: one-off pytest, systems without executable interfaces, or auto-cr
 
 ### 1. Install
 
-These instructions describe the development version after removing the embedded Pi Agent. Python 3.9+
-is required; Console and CLI use does not need Node.js. Published v0.5.0 still includes Pi; this change is not released yet.
+Python 3.9+ is required. Starting with **0.6.0**, the embedded Pi Agent is removed;
+Console and CLI use does not need Node.js or the Pi Runtime.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -U "aitest-kit[server]"
+```
+
+On Windows PowerShell, activate with `.venv\Scripts\Activate.ps1` and use `python` instead of `python3`
+if that is your installed command. The package includes a built frontend; no clone or npm build is needed.
+Upgrading from v0.5.0 removes Agent pages, model connections, and `aitest agent` commands. Old data is preserved,
+but Pi sessions cannot continue here. Do not reinitialize existing workspaces: back them up and run
+`aitest upgrade --check --workspace <path>` first.
+
+For source development, clone the repository and install in editable mode:
 
 ```bash
 git clone https://github.com/tlzmw001/aitest-kit.git
 cd aitest-kit
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install -e ".[server]"
+python3 -m pip install -e ".[dev,server]"
 ```
-
-On Windows PowerShell, activate with `.venv\Scripts\Activate.ps1` and use `python` instead of `python3`
-if that is your installed command. The repository includes a built frontend; no npm build is needed for ordinary use.
-For a released version, use `python3 -m pip install -U "aitest-kit[server]"`; PyPI may lag behind `main`.
 
 Use the same Python environment for subsequent commands. If `aitest` is not on `PATH`, activate the environment
 or replace the command prefix with `python3 -m aitest_kit.cli`, for example `python3 -m aitest_kit.cli console --port 8123`.
@@ -182,7 +190,7 @@ or localStorage. Job output redacts sensitive values known to the Console, but t
 
 ## Using an External Agent
 
-AITest provides test assets, workflow skills, CLI commands, and the local Console. An external Agent owns model connections, conversations, permissions, and sessions. This development branch removes the embedded Pi Agent.
+AITest provides test assets, workflow skills, CLI commands, and the local Console. An external Agent owns model connections, conversations, permissions, and sessions. Starting with v0.6.0, AITest no longer embeds the Pi Agent.
 
 Open the same workspace in an Agent, read its instructions and relevant SKILL.md, edit Markdown, profiles, or Harnesses with file tools, and run the deterministic CLI:
 
@@ -200,7 +208,7 @@ Naiyue Test Agent currently discovers `.agents/skills/` and `.claude/skills/`. F
 
 The [external Agent workbench Spec](docs/specs/external_agent_workbench_spec.md) describes the proposed adapter. File tools and CLI commands are available; structured tools and MCP integration have not been implemented.
 
-The Pi implementation remains on `codex/archive-pi-agent-v0.5.0` and `v0.5.0`. Existing user sessions, Runtime directories, and workspace configuration are preserved. This branch no longer provides Agent pages, model connections, or `aitest agent` commands.
+The Pi implementation remains on the local `codex/archive-pi-agent-v0.5.0` branch and the `v0.5.0` tag. Existing user sessions, Runtime directories, and workspace configuration are preserved. v0.6.0 no longer provides Agent pages, model connections, or `aitest agent` commands.
 
 ### Test Credentials
 
@@ -288,7 +296,7 @@ Each module has one public runtime shape: the `setup_{module}` fixture directly 
 
 Core pipeline: `aitest init/codegen/run/report/doctor/upgrade`, workspace layout, Markdown case format, profile schema, request bindings, structured assertions, Case IR → pytest, freshness checks, and structured reports.
 
-This development branch retains Console, Monaco editing, asset management, runs, and reports, while removing the embedded Pi Agent.
+v0.6.0 retains Console, Monaco editing, asset management, runs, and reports, while removing the embedded Pi Agent.
 Still evolving: external Agent tool integration, health/promotion report wording, `case_flows` step vocabulary, internal Python APIs, and contract-test directions.
 
 ## Development

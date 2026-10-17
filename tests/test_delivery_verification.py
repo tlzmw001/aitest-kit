@@ -3,6 +3,7 @@ import importlib.util
 import io
 import struct
 import json
+import re
 import subprocess
 import tarfile
 import zipfile
@@ -12,6 +13,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PROJECT_VERSION = re.search(r'^version = "([^"]+)"$', (ROOT / "pyproject.toml").read_text(encoding="utf-8"), re.M).group(1)
 REMOVED_AGENT_PATHS = (
     "aitest_kit/agent/runtime.py",
     "aitest_kit/console/agent_sessions.py",
@@ -220,8 +222,24 @@ def test_configuration_reference_does_not_prescribe_retired_agent_fields(prefix)
     assert "当前 Console/CLI 不消费这些字段" in content
 
 
-def test_unreleased_notes_explain_agent_removal_and_data_preservation():
+def test_package_version_has_a_changelog_entry():
+    assert f"## {PROJECT_VERSION} - " in (ROOT / "CHANGELOG.md").read_text()
+
+
+def test_agent_removal_release_notes_explain_data_preservation():
     content = (ROOT / "CHANGELOG.md").read_text()
-    notes = content.split("## Unreleased\n", 1)[1].split("\n## ", 1)[0]
+    heading = "## 0.6.0 - "
+    assert heading in content
+    notes = content.split(heading, 1)[1].split("\n## ", 1)[0]
     for contract in ("aitest agent", "/api/agent/*", "Runtime", "session", "v0.5.0"):
         assert contract in notes
+
+
+@pytest.mark.parametrize("name", ["README.md", "README.en.md"])
+def test_readme_describes_current_pypi_release_without_embedded_agent(name):
+    content = (ROOT / name).read_text()
+    installation = content.split("### 1.", 1)[1].split("### 2.", 1)[0]
+    assert PROJECT_VERSION in installation
+    assert 'python3 -m pip install -U "aitest-kit[server]"' in installation
+    assert "尚未发布" not in installation
+    assert "not released yet" not in installation
