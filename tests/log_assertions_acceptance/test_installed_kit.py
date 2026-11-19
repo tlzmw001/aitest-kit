@@ -31,8 +31,8 @@ def test_legacy_workspace_upgrade(tmp_path):
     suite = fixture_module.SUITE
 
     def cli(python, *args):
-        result = subprocess.run([python, "-I", "-m", "aitest_kit.cli", *args], cwd=tmp_path,
-                                check=False, text=True, capture_output=True, timeout=30)
+        result = subprocess.run([python, "-I", "-X", "utf8", "-m", "aitest_kit.cli", *args], cwd=tmp_path,
+                                check=False, encoding="utf-8", capture_output=True, timeout=30)
         assert result.returncode == 0, result.stdout + result.stderr
         return result.stdout
 
@@ -41,20 +41,20 @@ def test_legacy_workspace_upgrade(tmp_path):
     cli(candidate, "init", "--target", str(sample))
     shutil.copytree(sample / "examples/log_assertions/test_workspace", tmp_path / "test_workspace", dirs_exist_ok=True)
     profile = tmp_path / suite.replace("suite.yaml", "profile_log_assertions_suite.md")
-    profile.write_text(profile.read_text().split("    log_assertions:")[0] + "```\n")
+    profile.write_text(profile.read_text(encoding="utf-8").split("    log_assertions:")[0] + "```\n", encoding="utf-8")
     module = tmp_path / "test_workspace/targets/demo/modules/log_demo"
     module_spec = module / "module.yaml"
-    module_spec.write_text(module_spec.read_text().replace("log_capture:\n  source_id: demo\n", ""))
+    module_spec.write_text(module_spec.read_text(encoding="utf-8").replace("log_capture:\n  source_id: demo\n", ""))
     (module / "harness.py").write_text("class LogDemoHarness:\n    def query(self):\n        return {'code': 200}\n")
     (module / "fixture.py").write_text("import pytest\nfrom .harness import LogDemoHarness\n\n"
                                       "@pytest.fixture\ndef setup_log_demo() -> LogDemoHarness:\n    return LogDemoHarness()\n")
     cli(baseline, "codegen", "--suite-file", suite)
     cli(baseline, "run", "--suite-file", suite)
     old, = tmp_path.glob("test_workspace/reports/**/runs/*/result.json")
-    old_id = json.loads(old.read_text())["run_id"]
+    old_id = json.loads(old.read_text(encoding="utf-8"))["run_id"]
     old_hash = hashlib.sha256(old.read_bytes()).hexdigest()
     schema = tmp_path / "aitest_config/schemas/codegen_profile.schema.json"
-    schema_data = json.loads(schema.read_text())
+    schema_data = json.loads(schema.read_text(encoding="utf-8"))
     schema_data["title"] = "User-customized schema"
     schema.write_text(json.dumps(schema_data))
     schema_hash = hashlib.sha256(schema.read_bytes()).hexdigest()

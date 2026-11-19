@@ -41,7 +41,7 @@ def inspect_archive(path):
 
 
 def invoke(args, root, env, record, timeout=180):
-    result = subprocess.run(args, cwd=root, env=env, text=True, capture_output=True, timeout=timeout)
+    result = subprocess.run(args, cwd=root, env=env, encoding="utf-8", capture_output=True, timeout=timeout)
     record.append({"command": list(map(str, args)), "exit_code": result.returncode})
     if result.returncode:
         print(result.stdout, result.stderr, file=sys.stderr)
@@ -52,11 +52,11 @@ def invoke(args, root, env, record, timeout=180):
 
 def install_wheel(venv, wheel, env, commands, constraints=None):
     root = venv.parent
-    invoke([sys.executable, "-I", "-m", "venv", venv], root, env, commands)
+    invoke([sys.executable, "-I", "-X", "utf8", "-m", "venv", venv], root, env, commands)
     python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     options = ["-r", constraints] if constraints else []
-    invoke([python, "-I", "-m", "pip", "install", *options, wheel], root, env, commands, 360)
-    invoke([python, "-I", "-m", "pip", "check"], root, env, commands)
+    invoke([python, "-I", "-X", "utf8", "-m", "pip", "install", *options, wheel], root, env, commands, 360)
+    invoke([python, "-I", "-X", "utf8", "-m", "pip", "check"], root, env, commands)
     return python
 
 
@@ -69,8 +69,8 @@ def agent_probe(agent_root, python, root, env, commands, output, report):
     test = root / "preflight_case.py"
     test.write_text("def test_preflight():\n    assert 1 + 2 == 3\n", encoding="utf-8")
     junit = root / "preflight.xml"
-    invoke([python, "-I", "-m", "pytest", test, "-q", f"--junitxml={junit}"], root, env, commands)
-    invoke([python, "-I", "-c", script, junit, test, output / "agent-preflight-report.md"], root, env, commands)
+    invoke([python, "-I", "-X", "utf8", "-m", "pytest", test, "-q", f"--junitxml={junit}"], root, env, commands)
+    invoke([python, "-I", "-X", "utf8", "-c", script, junit, test, output / "agent-preflight-report.md"], root, env, commands)
     locks = write_candidate_locks(output, report)
     return {"status": "passed", "agent_head": subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=agent_root, text=True).strip(),
@@ -127,10 +127,10 @@ def main():
                 if mode == "parallel" and args.agent_root:
                     origin = args.agent_root / "release/cloud-test-requirements.txt"
                     constraints = root / "agent-constraints.txt"
-                    constraints.write_text("\n".join(line for line in origin.read_text().splitlines()
+                    constraints.write_text("\n".join(line for line in origin.read_text(encoding="utf-8").splitlines()
                                                      if not line.startswith("aitest-kit==")) + "\n", encoding="utf-8")
                 python = install_wheel(root / mode, install, env, commands, constraints)
-                installed = invoke([python, "-I", "-m", "pip", "list", "--format=json"], root, env, commands)
+                installed = invoke([python, "-I", "-X", "utf8", "-m", "pip", "list", "--format=json"], root, env, commands)
                 report["checks"][mode]["packages"] = json.loads(installed)
                 env.update(AITEST_ACCEPTANCE_PYTHON=str(python), AITEST_ACCEPTANCE_MODE=mode)
                 if baseline:
@@ -139,7 +139,7 @@ def main():
                     report["agent_probe"] = agent_probe(args.agent_root, python, root, env, commands, output, report)
 
                 junit = output / f"{mode}.xml"
-                invoke([python, "-I", "-m", "pytest", ROOT / "tests/log_assertions_acceptance", "-q",
+                invoke([python, "-I", "-X", "utf8", "-m", "pytest", ROOT / "tests/log_assertions_acceptance", "-q",
                         "--junitxml", junit, "--basetemp", root / f"{mode}-runs"], root, env, commands)
                 artifacts = output / mode
                 for index, latest in enumerate(sorted((root / f"{mode}-runs").glob("test_*[0-9]/**/latest/result.json"))):

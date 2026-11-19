@@ -136,9 +136,9 @@ def service():
 
 def invoke(workspace, env, *args):
     installed = os.environ.get("AITEST_ACCEPTANCE_PYTHON")
-    python = [installed, "-I"] if installed else [sys.executable]
+    python = [installed, "-I", "-X", "utf8"] if installed else [sys.executable]
     return subprocess.run([*python, "-m", "aitest_kit.cli", *args],
-                          cwd=workspace, env=env, text=True, capture_output=True, timeout=30)
+                          cwd=workspace, env=env, encoding="utf-8", capture_output=True, timeout=30)
 
 
 @pytest.mark.parametrize("case_slots,log_slots,cases,task,scenario", [
@@ -164,19 +164,19 @@ def test_real_fixture_run_and_resume_without_replaying_requests(
     shutil.copytree(tmp_path / "examples/log_assertions/test_workspace", tmp_path / "test_workspace", dirs_exist_ok=True)
     paths = (tmp_path / SUITE).parent
     business = paths / "business.md"
-    first = business.read_text()
+    first = business.read_text(encoding="utf-8")
     business.write_text(first + "".join(
         "\n" + first[first.index("###"):].replace("TC-DEMO-001", f"TC-DEMO-{index:03d}")
         for index in range(2, cases + 1)
-    ))
+    ), encoding="utf-8")
     profile = paths / "profile_log_assertions_suite.md"
-    first = profile.read_text()
+    first = profile.read_text(encoding="utf-8")
     marker = chr(96) * 3
     start = first.index("  TC-DEMO-001:")
     profile.write_text(first[:first.rindex(marker)] + "".join(
         first[start:first.rindex(marker)].replace("TC-DEMO-001", f"TC-DEMO-{index:03d}")
         for index in range(2, cases + 1)
-    ) + marker + "\n")
+    ) + marker + "\n", encoding="utf-8")
     (tmp_path / "aitest_config/log_assertions.yaml").write_text("execution:\n  poll_interval_seconds: 0.05\n")
     if not task and case_slots == 1 and scenario == "ok":
         credentials_file = tmp_path / "isolated-log-credentials.env"
@@ -213,7 +213,7 @@ def test_real_fixture_run_and_resume_without_replaying_requests(
                     "--case-concurrency", str(case_slots), "--log-concurrency", str(log_slots))
     assert result.returncode == (0 if scenario == "ok" else 1), result.stdout + result.stderr
     final, = tmp_path.glob("test_workspace/reports/**/latest/result.json")
-    report = json.loads(final.read_text())
+    report = json.loads(final.read_text(encoding="utf-8"))
     if mode:
         offline = invoke(tmp_path, env, "report", *selector)
         assert offline.returncode == 0, offline.stdout + offline.stderr
@@ -230,7 +230,7 @@ def test_real_fixture_run_and_resume_without_replaying_requests(
         assert failed["failure"]["phase"] == "log_assertion"
         assert "assert" in failed["failure"]["message"]
         assert [item[0] for item in state["cleanup"]] == [["demo-2"]]
-        assert "cleanup-demo-2" in final.with_name("report.md").read_text()
+        assert "cleanup-demo-2" in final.with_name("report.md").read_text(encoding="utf-8")
     if scenario == "cleanup_403":
         assert len(report["log_validation"]["issues"]) == 2
         assert junit.get("errors") == "2"
@@ -276,7 +276,7 @@ def test_packaged_multiple_requests_and_pages(tmp_path, service):
     ]
     assert state["cleanup"] == []
     final, = tmp_path.glob("test_workspace/reports/**/latest/result.json")
-    case, = json.loads(final.read_text())["cases"]
+    case, = json.loads(final.read_text(encoding="utf-8"))["cases"]
     assert [(item["request_step"], item["reqId"]) for item in case["log_validation"]["requests"]] == [
         ("first", "demo-1"), ("second", "demo-2"),
     ]
