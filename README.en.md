@@ -30,7 +30,7 @@ Not meant for: one-off pytest, systems without executable interfaces, or auto-cr
 
 ### 1. Install
 
-Python 3.9+ is required. Starting with **0.6.0**, the embedded Pi Agent is removed;
+The current release is **0.7.0** and requires Python 3.9+. The embedded Pi Agent was removed in 0.6.0;
 Console and CLI use does not need Node.js or the Pi Runtime.
 
 ```bash

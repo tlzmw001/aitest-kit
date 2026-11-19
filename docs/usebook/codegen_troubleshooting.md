@@ -314,3 +314,7 @@ generated pytest 中出现：
 - 用例不可测：修改 Markdown 或记录为测试基础设施需求。
 - Harness/codegen 问题：修改 module package、suite profile、target helper 或 `aitest.yaml`。
 - 待测系统 bug：记录到 `test_workspace/results/`，保留复现命令、实际结果和期望结果。
+
+## 异步日志断言
+
+模块来源、suite 规则、Harness 接入与 E533–E536 见[异步日志断言参考](../../aitest_config/refs/log-assertions.md)。

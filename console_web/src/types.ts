@@ -60,6 +60,7 @@ export interface ReportSummary {
   suite: string
   result_path: string
   report_path: string | null
+  log_validation?: { final: boolean; revision: number; issue_count: number; cleanup_issue_count: number }
 }
 
 export interface WorkspaceSnapshot {
@@ -131,6 +132,8 @@ export interface Job {
   started_at: string
   finished_at: string
   cancel_requested: boolean
+  run_id?: string | null
+  report?: ReportSummary | null
 }
 
 export interface SelectorPayload {

@@ -289,8 +289,9 @@ def _case_from_testcase(testcase: ET.Element, meta: dict[str, Any]) -> dict[str,
 
     outcome, failure = _outcome_and_failure(testcase)
     nodeid = matched.get("nodeid") or _fallback_nodeid(classname, func_name)
+    instance_id = testcase.find("./properties/property[@name='aitest_nodeid']")
     result = {
-        "nodeid": nodeid,
+        "nodeid": instance_id.get("value", nodeid) if instance_id is not None else nodeid,
         "tc_id": matched.get("tc_id", "UNKNOWN"),
         "module": matched.get("module", "UNKNOWN"),
         "suite": matched.get("suite") or _suite_from_source(matched.get("source", "")),

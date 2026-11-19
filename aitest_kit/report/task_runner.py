@@ -76,6 +76,16 @@ def run_task_context_command_impl(
     unit_results: list[dict[str, Any]] = []
     exit_code = 0
 
+    from aitest_kit.log_assertions.run import CURRENT
+    session = CURRENT.get()
+    if session is not None:
+        session.report_plan = {
+            "root": str(task_run_dir.resolve()), "bucket": str(task_reports_dir.resolve()),
+            "base": _task_result(task, run_id=task_run_id, duration_seconds=0, unit_results=[], exit_code=0,
+                                 include_manual=include_manual, extra_args=extra_args, capture=effective_capture.enabled),
+            "units": [[index, str(unit_report_dir(task_run_dir, _unit_dir_name(unit, index)).resolve())]
+                      for index, unit in enumerate(task.units, start=1)],
+        }
     click.echo(f"Task: {task.task}")
     for index, unit in enumerate(task.units, start=1):
         result, code = _run_task_unit(
@@ -108,10 +118,11 @@ def run_task_context_command_impl(
     )
     _write_result(task_run_dir, task_reports_dir, aggregate)
     summary = aggregate["summary"]
-    click.echo(
-        f"Task report written: {task_run_dir / 'report.md'} "
-        f"(passed={summary['passed']}, failed={summary['failed']}, error={summary['error']})"
-    )
+    if session is None or session.store is None:
+        click.echo(
+            f"Task report written: {task_run_dir / 'report.md'} "
+            f"(passed={summary['passed']}, failed={summary['failed']}, error={summary['error']})"
+        )
     if capture_file is not None and capture_file.exists():
         click.echo(f"Capture written: {capture_file}")
     raise SystemExit(exit_code)
@@ -164,6 +175,7 @@ def _run_task_unit(
             capture_settings=capture_settings,
             capture_file_path=capture_file_path,
             echo_capture_path=False,
+            unit_index=index,
         )
         code = 0
     except SystemExit as exc:
@@ -178,6 +190,13 @@ def _run_task_unit(
 
 
 def _read_unit_result(unit_dir: Path) -> dict[str, Any] | None:
+    from aitest_kit.log_assertions.run import CURRENT
+    from aitest_kit.log_assertions.projection import load_base
+    session = CURRENT.get()
+    if session is not None and session.store is not None:
+        result = load_base(session.store, unit_dir)
+        if result is not None:
+            return result
     result_path = unit_dir / "result.json"
     if not result_path.exists():
         return None

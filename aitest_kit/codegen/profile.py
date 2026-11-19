@@ -195,7 +195,7 @@ def validate_case_flows(
             errors.append(f"{prefix}: flow must be a mapping")
             continue
 
-        allowed_flow_keys = {"description", "steps"}
+        allowed_flow_keys = {"description", "steps", "log_assertions"}
         for key in flow:
             if key not in allowed_flow_keys:
                 errors.append(f"{prefix}: unknown field {key}")

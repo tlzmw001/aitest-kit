@@ -122,6 +122,13 @@ def validate_profile_suite(
 
     for message in validate_profile_strategy_conflicts(suite_case_bodies, suite_case_flows):
         _error(report, "E502", message)
+    from aitest_kit.codegen.log_assertion_validation import validate_log_flow
+
+    for case_id, flow in suite_case_flows.items():
+        for code, message in validate_log_flow(
+            flow, f"case_flows.{case_id}", context.module_binding, runtime_variables,
+        ):
+            _error(report, code, message, str(context.suite_profile_path))
     for message in validate_case_flows(runtime_case_flows):
         _error(report, "E503", message)
     for message in validate_profile_variables(suite_variables):
@@ -689,7 +696,8 @@ def _validate_request_refs(
     case_flows: dict[str, Any],
 ) -> None:
     for case_id, flow in case_flows.items():
-        for source, value in _iter_flow_values(flow, f"case_flows.{case_id}"):
+        immediate = {key: value for key, value in flow.items() if key != "log_assertions"} if isinstance(flow, dict) else flow
+        for source, value in _iter_flow_values(immediate, f"case_flows.{case_id}"):
             if not isinstance(value, dict) or set(value) != {"request_ref"}:
                 continue
             ref = value.get("request_ref")

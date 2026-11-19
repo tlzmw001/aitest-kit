@@ -29,7 +29,7 @@ AI 负责探索未知，代码负责稳定重复。
 
 ### 1. 安装
 
-需要 Python 3.9+。从 **0.6.0** 起不再内置 Pi Agent；使用 Console 和 CLI 不需要 Node.js 或 Pi Runtime。
+当前版本为 **0.7.0**，需要 Python 3.9+。从 0.6.0 起，Console 和 CLI 可独立运行，无需 Node.js 或 Pi Runtime。
 
 ```bash
 python3 -m venv .venv

@@ -246,7 +246,8 @@ class WorkspaceState:
             if not reports_root.exists():
                 continue
             for path in reports_root.rglob("result.json"):
-                if "latest" in path.parts or "units" in path.parts:
+                if any(part in {"latest", "units", ".latest-previous"} or part.startswith(".report-stage-")
+                       for part in path.relative_to(reports_root).parts):
                     continue
                 try:
                     data = json.loads(path.read_text(encoding="utf-8"))
@@ -272,7 +273,11 @@ class WorkspaceState:
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:
             raise ConsoleError("FILE_ENCODING_ERROR", "无法读取 result.json", status_code=400) from exc
         report_path = path.with_name("report.md")
-        report_markdown = report_path.read_text(encoding="utf-8") if report_path.exists() else ""
+        if result.get("log_validation"):
+            from aitest_kit.report.renderer import render_markdown
+            report_markdown = render_markdown(result)
+        else:
+            report_markdown = report_path.read_text(encoding="utf-8") if report_path.exists() else ""
         return {
             "summary": _report_summary(self, path, result),
             "result": result,
@@ -480,7 +485,14 @@ def _git_branch(root: Path) -> str:
 def _report_summary(state: WorkspaceState, path: Path, data: dict[str, Any]) -> dict[str, Any]:
     scope = data.get("run_scope", {}) if isinstance(data.get("run_scope"), dict) else {}
     summary = data.get("summary", {}) if isinstance(data.get("summary"), dict) else {}
+    validation = data.get("log_validation")
+    progress = {} if not isinstance(validation, dict) else {"log_validation": {
+        "final": validation.get("final", False), "revision": validation.get("revision"),
+        "issue_count": len(validation.get("issues", [])),
+        "cleanup_issue_count": sum(issue.get("kind") == "cleanup" for issue in validation.get("issues", [])),
+    }}
     return {
+        **progress,
         "run_id": str(data.get("run_id", "")),
         "status": str(data.get("status", "UNKNOWN")),
         "timestamp": str(data.get("timestamp", "")),

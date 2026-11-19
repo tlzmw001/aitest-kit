@@ -43,6 +43,7 @@ class Job:
     started_at: str = ""
     finished_at: str = ""
     cancel_requested: bool = False
+    run_id: str | None = None
     process: subprocess.Popen[str] | None = field(default=None, repr=False)
 
     def public(self) -> dict[str, Any]:
@@ -56,6 +57,7 @@ class Job:
             "started_at": self.started_at,
             "finished_at": self.finished_at,
             "cancel_requested": self.cancel_requested,
+            "run_id": self.run_id,
         }
 
 
@@ -250,6 +252,9 @@ class JobManager:
 
     def _append(self, job: Job, text: str) -> None:
         with self._lock:
+            match = re.fullmatch(r"Log assertion run: ([A-Za-z0-9][A-Za-z0-9_-]{0,127})", text.rstrip("\n"))
+            if job.operation == "run" and job.run_id is None and match:
+                job.run_id = match[1]
             job.output += text
             if len(job.output) > self.max_output_chars:
                 job.output = "[earlier output truncated]\n" + job.output[-self.max_output_chars :]

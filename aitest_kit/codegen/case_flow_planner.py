@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from aitest_kit.codegen.ir import AssertionIR, CaseFlowIR, CaseFlowStepIR
+from aitest_kit.codegen.log_assertion_validation import build_log_groups
 from aitest_kit.codegen.parser import TestCase
 from aitest_kit.codegen.project_config import AssertionRule, ProjectConfig
 from aitest_kit.codegen.render_utils import resolve_assertion, strip_backticks
@@ -60,6 +61,12 @@ def build_case_flow_ir(
         fixture=(module_binding.fixture_name if module_binding else ""),
         object_name=(module_binding.object_name if module_binding else "harness"),
         steps=steps,
+        log_assertions=build_log_groups(flow.get("log_assertions", [])),
+        log_source_id=(
+            module_binding.log_capture.source_id
+            if flow.get("log_assertions") and module_binding and module_binding.log_capture
+            else ""
+        ),
     )
 
 

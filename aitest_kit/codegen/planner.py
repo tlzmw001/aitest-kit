@@ -422,6 +422,18 @@ def build_file_ir(
         for error in validate_request_variable_references(requests, profile_variables)
     )
 
+    from aitest_kit.codegen.log_assertion_validation import validate_log_flow
+
+    invalid_log_flows = False
+    for case_id, flow in case_flows.items():
+        for code, message in validate_log_flow(
+            flow, f"case_flows.{case_id}", profile.module_binding, profile_variables,
+        ):
+            file_ir.diagnostics.append(DiagnosticIR(code=code, layer="planner", message=message))
+            invalid_log_flows = True
+    if invalid_log_flows:
+        return file_ir
+
     cases_by_id = {tc.id: tc for tc in parse_result.cases}
 
     for tc in parse_result.cases:

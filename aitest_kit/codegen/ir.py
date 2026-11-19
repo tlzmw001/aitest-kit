@@ -98,11 +98,25 @@ class CaseFlowStepIR:
 
 
 @dataclass
+class LogAssertionGroupIR:
+    request_step: str
+    group_index: int
+    select: dict[str, str]
+    expected: dict[str, Any]
+    checks: list[str]
+    cleanup: str
+    executor_version: int
+    rule_sha256: str
+
+
+@dataclass
 class CaseFlowIR:
     source: str
     fixture: str
     object_name: str = ""
     steps: list[CaseFlowStepIR] = field(default_factory=list)
+    log_assertions: dict[str, list[LogAssertionGroupIR]] = field(default_factory=dict)
+    log_source_id: str = ""
 
 
 @dataclass

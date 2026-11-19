@@ -17,3 +17,6 @@ venv/
 
 # Local test backups
 test_workspace/backups/
+
+# Local assertion run state
+.aitest/runs/

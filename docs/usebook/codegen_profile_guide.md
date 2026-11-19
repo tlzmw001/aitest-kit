@@ -464,3 +464,7 @@ v0.1 中，以下内容按稳定契约维护：
 - `aitest_kit.codegen` 内部 Python API
 
 迁移新项目时，不要把内部 Python API 当成扩展点；优先通过 Markdown、profile、Module Harness、target helper 和 `aitest.yaml` 表达规则。
+
+## 异步日志断言
+
+模块来源、suite 规则、Harness 接入与 E533–E536 见[异步日志断言参考](../../aitest_config/refs/log-assertions.md)。

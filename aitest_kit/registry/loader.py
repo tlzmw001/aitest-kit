@@ -1,6 +1,7 @@
 """Load target/module/suite/task registry contexts."""
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +9,7 @@ import yaml
 
 from aitest_kit.workspace_config import AITEST_CONFIG_PATH
 from aitest_kit.registry.models import (
+    LogCapture,
     ModuleBinding,
     ModuleContext,
     RegisteredSuite,
@@ -98,6 +100,13 @@ def load_module_context(
         fixture_path,
         diagnostics,
     )
+    if "log_capture" in data:
+        capture = data["log_capture"]
+        if (not isinstance(capture, dict) or set(capture) != {"source_id"}
+                or not isinstance(capture["source_id"], str) or not capture["source_id"].strip()):
+            diagnostics.append(f"E536: {config_path}: log_capture requires a nonempty source_id")
+        else:
+            binding = replace(binding, log_capture=LogCapture(capture["source_id"]))
     registered_suites = _registered_suites(
         target_context,
         module_name,

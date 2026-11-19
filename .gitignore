@@ -40,3 +40,6 @@ docs/prd/
 
 # Personal notes
 docs/usebook/备忘continue.md
+
+# Local assertion run state
+.aitest/runs/

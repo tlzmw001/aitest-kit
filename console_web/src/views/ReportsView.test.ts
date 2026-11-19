@@ -41,6 +41,23 @@ describe('ReportsView', () => {
     vi.mocked(api.reportDetail).mockResolvedValue(detail)
   })
 
+  it('shows pending log checks without marking an unfinished run successful', async () => {
+    const running = {
+      ...summary,
+      status: 'RUNNING',
+      summary: { passed: 0, failed: 0, error: 0, pending: 2 },
+      log_validation: { final: false, revision: 1, issue_count: 0, cleanup_issue_count: 0 },
+    }
+    vi.mocked(api.reports).mockResolvedValue({ reports: [running] })
+    vi.mocked(api.reportDetail).mockResolvedValue({ ...detail, summary: running })
+    const wrapper = mount(ReportsView, { global: {
+      plugins: [createPinia()], stubs: { RouterLink: true, CodeEditor: true, SafeMarkdown: true },
+    } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('2待验证')
+    expect(wrapper.get('.history-mark').classes()).not.toContain('ok')
+  })
+
   it('ignores a late response from an older report selection', async () => {
     const wrapper = mount(ReportsView, { global: {
       plugins: [createPinia()], stubs: { RouterLink: true, CodeEditor: true, SafeMarkdown: true },

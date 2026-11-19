@@ -1,0 +1,1 @@
+"""Demo log assertion module."""

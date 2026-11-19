@@ -177,11 +177,12 @@ def _render_case_flow(
         request_vars[request_case_id] = var_name
         body_lines.append(f"        {var_name} = {_render_req_call(request_binding)}")
 
+    from aitest_kit.codegen.log_assertion_rendering import render_log_call
+
     for step in case_ir.case_flow.steps:
         if step.kind == "call":
-            body_lines.append(
-                f"        {render_flow_call(step, current_case_id=case_ir.case_id, request_vars=request_vars)}"
-            )
+            call = render_flow_call(step, current_case_id=case_ir.case_id, request_vars=request_vars)
+            body_lines.extend(render_log_call(case_ir.case_flow, step, call))
             continue
         if step.kind == "assert" and step.assertion is not None:
             for cl in step.assertion.code_lines:

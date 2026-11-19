@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aitest-kit"
-version = "0.6.0"
+version = "0.7.0"
 description = "AI-assisted testing toolchain: docs → knowledge base → Markdown cases → pytest code → structured reports"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -51,6 +51,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+parallel = ["pytest-xdist==3.8.0"]
 dev = [
     "fakeredis>=2.21",
     "pytest-asyncio>=0.23",
@@ -96,6 +97,14 @@ include = ["aitest_kit*"]
     "skills/*/SKILL.md",
     "skills/*/refs/*",
     "docs/.gitkeep",
+    "examples/log_assertions/README.md",
+    "examples/log_assertions/test_workspace/knowledge/L1/*.md",
+    "examples/log_assertions/test_workspace/targets/demo/*.yaml",
+    "examples/log_assertions/test_workspace/targets/demo/modules/log_demo/*.yaml",
+    "examples/log_assertions/test_workspace/targets/demo/modules/log_demo/*.md",
+    "examples/log_assertions/test_workspace/targets/demo/modules/log_demo/*.py",
+    "examples/log_assertions/test_workspace/suites/demo/*/*.yaml",
+    "examples/log_assertions/test_workspace/suites/demo/*/*.md",
     "aitest_config/*.yaml",
     "aitest_config/refs/*.md",
     "aitest_config/schemas/*.json",

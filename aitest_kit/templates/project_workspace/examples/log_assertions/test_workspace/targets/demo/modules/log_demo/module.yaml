@@ -1,0 +1,7 @@
+target: demo
+module: log_demo
+module_type: multi_endpoint
+log_capture:
+  source_id: demo
+knowledge_refs:
+  l1: [test_workspace/knowledge/L1/log_demo.md]

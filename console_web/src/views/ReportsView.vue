@@ -73,6 +73,8 @@ onMounted(loadReports)
       <div class="metric"><span>{{ summary.passed ?? 0 }}</span><small>Passed</small></div>
       <div class="metric"><span>{{ summary.failed ?? 0 }}</span><small>Failed</small></div>
       <div class="metric"><span>{{ summary.error ?? 0 }}</span><small>Error</small></div>
+      <div v-if="selected.log_validation" class="metric"><span>{{ summary.pending ?? 0 }}</span><small>待验证</small></div>
+      <div v-if="selected.log_validation?.issue_count" class="metric"><span>{{ selected.log_validation.issue_count }}</span><small>运行问题</small></div>
       <div class="metric"><span>{{ selected.duration_seconds }}s</span><small>Duration</small></div>
     </div>
 
@@ -100,7 +102,7 @@ onMounted(loadReports)
         <div class="section-heading"><div><span class="eyebrow">FILESYSTEM HISTORY</span><h2>最近执行</h2></div><span>{{ reports.length }}</span></div>
         <div v-if="!reports.length" class="section-empty">当前 reports 目录没有历史执行。</div>
         <button v-for="report in reports" :key="report.result_path" class="history-item" :class="{ active: selected?.result_path === report.result_path }" @click="selectReport(report)">
-          <span class="history-mark" :class="{ ok: !(report.summary.failed || report.summary.error), bad: report.summary.failed || report.summary.error }" />
+          <span class="history-mark" :class="{ ok: report.log_validation?.final !== false && report.status !== 'CANCELLED' && !(report.summary.failed || report.summary.error || report.log_validation?.issue_count), bad: report.summary.failed || report.summary.error || report.log_validation?.issue_count }" />
           <div><strong>{{ report.suite || report.run_id }}</strong><small>{{ report.summary.passed ?? 0 }} passed · {{ report.summary.failed ?? 0 }} failed</small></div>
           <time>{{ report.timestamp.slice(5, 10) }}</time>
         </button>

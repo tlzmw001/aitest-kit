@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.7.0 - 2026-11-19
+
+### Added
+
+- Added deferred log assertions in suite profiles, with per-request binding, paginated log snapshots, and response-derived expectations.
+- Added separate case and log concurrency settings, optional pytest-xdist support, and durable run recovery.
+- Added optional cleanup of log records by exact request ID, with idempotent retries and receipt tracking.
+- Included single-request and multi-request examples, an upgrade regression from 0.6.0, and installed-wheel acceptance across Linux, macOS, and Windows.
+
+### Changed
+
+- CLI, JSON, Markdown, JUnit, and Console reports now include deferred log outcomes and cleanup status.
+- Report publication retains completed legacy suite results and publishes complete snapshots for latest reports.
+
 ## 0.6.0 - 2026-10-17
 
 ### Removed

@@ -630,3 +630,7 @@ aitest registry register-suite \
 aitest codegen --target <target> --module <module> --check
 aitest run --target <target> --module <module> -- --collect-only -q
 ```
+
+## 异步日志断言
+
+模块来源、suite 规则、Harness 接入与 E533–E536 见[异步日志断言参考](log-assertions.md)。
