@@ -213,6 +213,15 @@ def _case_flow_section(case_ir: CaseIR) -> list[str]:
         if step.assertion and step.assertion.code_lines:
             for code_line in step.assertion.code_lines:
                 lines.append(f"       code: {code_line}")
+    for step, groups in flow.log_assertions.items():
+        lines.append(f"  deferred log assertions for {step} (source: {flow.log_source_id}):")
+        for group in groups:
+            source = getattr(group, "source_id", flow.log_source_id)
+            actions = "read, cleanup" if group.cleanup == "on_success" else "read"
+            lines.append(f"    group[{group.group_index}] source={source!r} actions={actions}")
+            lines.append(f"    select={group.select!r} cleanup={group.cleanup} executor={group.executor_version}")
+            lines.append(f"    expected={group.expected!r}")
+            lines.extend(f"    check: {check}" for check in group.checks)
     return lines + [""]
 
 

@@ -7,6 +7,7 @@ import { displayOwner, ownerLabel, type DisplayOwner } from '../utils/classifica
 import type { ReportDetail, ReportSummary } from '../types'
 
 interface FailureItem {
+  key: string
   caseId: string
   title: string
   raw: string
@@ -24,21 +25,30 @@ const error = ref('')
 
 const failures = computed<FailureItem[]>(() => {
   const cases = Array.isArray(detail.value?.result?.cases) ? detail.value?.result?.cases as Record<string, unknown>[] : []
-  return cases
-    .filter((item) => !['passed', 'skipped'].includes(String(item.outcome ?? item.status ?? '').toLowerCase()))
-    .map((item) => {
-      const raw = String(item.failure_type ?? item.classification ?? item.error_type ?? 'UNKNOWN')
-      const caseId = String(item.case_id ?? item.id ?? 'unknown-case')
-      const reportedSource = typeof item.source_path === 'string' ? item.source_path.trim() : ''
+  const failedCases = cases
+    .filter((item) => ['failed', 'error'].includes(String(item.outcome ?? item.status ?? '').toLowerCase())
+      || (!item.outcome && !!item.failure_type))
+    .map((item, index) => {
+      const failure = item.failure as Record<string, unknown> | undefined
+      const raw = String(failure?.classification ?? item.failure_type ?? item.classification ?? item.error_type ?? 'UNKNOWN')
+      const caseId = String(item.tc_id ?? item.case_id ?? item.id ?? 'unknown-case')
+      const reportedSource = item.source_md ?? item.source_path
       return {
+        key: `${item.nodeid ?? caseId}-${index}`,
         caseId,
         title: String(item.title ?? item.name ?? '没有 case 标题'),
         raw,
-        message: String(item.message ?? item.error ?? item.longrepr ?? '本次结果没有提供失败详情'),
+        message: String(failure?.message ?? item.message ?? item.error ?? item.longrepr ?? '本次结果没有提供失败详情'),
         owner: displayOwner(raw),
-        sourcePath: reportedSource || sourcePathFor(caseId),
+        sourcePath: typeof reportedSource === 'string' && reportedSource.trim() ? reportedSource : sourcePathFor(caseId),
       }
     })
+  const validation = detail.value?.result?.log_validation as { issues?: Record<string, unknown>[] } | undefined
+  return [...failedCases, ...(validation?.issues ?? []).map((issue, index) => ({
+    key: `issue-${index}`, caseId: String(issue.request_step ?? '运行'), title: String(issue.kind),
+    raw: 'ENVIRONMENT_ERROR', owner: displayOwner('ENVIRONMENT_ERROR'),
+    message: String(issue.message ?? issue.reason ?? ''), sourcePath: '',
+  }))]
 })
 
 function sourcePathFor(caseId: string): string {
@@ -55,7 +65,7 @@ function sourcePathFor(caseId: string): string {
 
 async function load(): Promise<void> {
   try {
-    reports.value = (await api.reports()).reports.filter((item) => (item.summary.failed ?? 0) + (item.summary.error ?? 0) > 0)
+    reports.value = (await api.reports()).reports.filter((item) => (item.summary.failed ?? 0) + (item.summary.error ?? 0) + (item.log_validation?.issue_count ?? 0) > 0)
     if (reports.value.length) await selectReport(reports.value[0])
   } catch (cause) {
     error.value = messageFrom(cause)
@@ -86,7 +96,7 @@ onMounted(load)
     <div v-if="failures.length" class="diagnostic-layout">
       <section class="failure-list">
         <div class="failure-list-head"><strong>Failures</strong><span>{{ failures.length }} cases</span></div>
-        <button v-for="failure in failures" :key="failure.caseId" class="failure-item" :class="{ active: selectedFailure?.caseId === failure.caseId }" @click="selectedFailure = failure">
+        <button v-for="failure in failures" :key="failure.key" class="failure-item" :class="{ active: selectedFailure?.key === failure.key }" @click="selectedFailure = failure">
           <span class="bad-dot">×</span><div><code>{{ failure.caseId }}</code><strong>{{ failure.title }}</strong><small>{{ failure.raw }}</small></div><span class="provenance" :class="failure.owner.toLowerCase()">{{ failure.owner }}</span>
         </button>
       </section>

@@ -179,3 +179,7 @@ scaffold 完成表示测试资产能稳定进入 codegen，不代表真实服务
 7. module selector 能发现已注册 suite。
 
 输出格式见 `refs/formats.md#输出摘要模板`。
+
+## 异步日志断言
+
+异步日志用例先阅读 `aitest_config/refs/log-assertions.md`。使用 suite profile 的 `case_flows.<TC-ID>.log_assertions` 绑定请求步骤并写后台断言。Harness 根据当前请求是否启用日志决定如何触发采集并绑定关联值。用 profile gate、IR、freshness 和 collect 检查接线。完整示例见初始化后的 `examples/log_assertions/`。 多来源别名写在 module.yaml 的 `log_capture.sources`，组内以 `source` 选择。Harness 用默认来源绑定一次请求 ID。使用 `log_grouped` 示例检查 IR 的来源，报告中按来源读取 `LOG_READINESS_TIMEOUT` 和 `not_run`。

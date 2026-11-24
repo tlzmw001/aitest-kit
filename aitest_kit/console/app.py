@@ -377,7 +377,14 @@ def create_app(
     @app.get("/api/jobs/{job_id}", dependencies=[auth])
     async def job(job_id: str) -> dict[str, Any]:
         try:
-            return runtime.require_jobs().get(job_id).public()
+            payload = runtime.require_jobs().get(job_id).public()
+            if payload.get("run_id"):
+                related = next((report for report in runtime.workspace.list_reports()
+                                if report["run_id"] == payload["run_id"]), None)
+                if related and not related.get("log_validation", {}).get("final", True) and payload["status"] not in {"queued", "running"}:
+                    related["status"] = "INTERRUPTED"
+                payload["report"] = related
+            return payload
         except KeyError as exc:
             raise ConsoleError("JOB_NOT_FOUND", "任务不存在", status_code=404) from exc
 

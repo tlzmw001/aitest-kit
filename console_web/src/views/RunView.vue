@@ -218,6 +218,9 @@ onBeforeUnmount(stopPolling)
     </div>
 
     <section class="job-output">
+      <p v-if="job?.report?.log_validation">
+        {{ job.report.status }} · 待验证 {{ job.report.summary.pending ?? 0 }} · 清理问题 {{ job.report.log_validation.cleanup_issue_count }}
+      </p>
       <div class="job-output-head"><span>OUTPUT</span><strong>{{ job?.status ?? 'idle' }}</strong><code v-if="job">{{ job.command_summary }}</code></div>
       <pre>{{ job?.output || '启动一个操作后，结构化任务输出会显示在这里。' }}</pre>
     </section>

@@ -1,0 +1,4 @@
+target: demo
+module: log_demo
+suite: log_grouped
+case_files: [business.md]

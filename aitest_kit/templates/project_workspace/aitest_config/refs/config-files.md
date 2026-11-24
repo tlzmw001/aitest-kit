@@ -630,3 +630,11 @@ aitest registry register-suite \
 aitest codegen --target <target> --module <module> --check
 aitest run --target <target> --module <module> -- --collect-only -q
 ```
+
+## 异步日志断言
+
+多来源别名写在 module.yaml 的 `log_capture.sources.<alias>.source_id`，suite profile 的日志断言组使用 `source: <alias>`。Harness 仍用模块默认来源绑定一个关联 ID。
+
+运行时自动读取 `aitest_config/log_assertions.yaml`。日志平台入口可填写 `platform.base_url`，凭证继续通过 `platform.token_env` 指定的变量提供。
+
+模块来源、suite 规则、Harness 接入与 E533–E536 见[异步日志断言参考](log-assertions.md)。

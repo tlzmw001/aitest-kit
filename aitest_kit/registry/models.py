@@ -35,6 +35,12 @@ class RegisteredSuite:
 
 
 @dataclass(frozen=True)
+class LogCapture:
+    source_id: str
+    sources: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ModuleBinding:
     """Canonical runtime binding derived from one module package."""
 
@@ -44,6 +50,7 @@ class ModuleBinding:
     fixture_name: str
     fixture_module: str = ""
     object_name: str = "harness"
+    log_capture: LogCapture | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +68,11 @@ class ModuleContext:
     binding: ModuleBinding
     registered_suites: list[RegisteredSuite]
     diagnostics: list[str] = field(default_factory=list)
+
+
+    @property
+    def log_capture(self) -> LogCapture | None:
+        return self.binding.log_capture
 
 
 @dataclass(frozen=True)

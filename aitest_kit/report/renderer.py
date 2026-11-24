@@ -24,7 +24,10 @@ def render_markdown(result: dict[str, Any]) -> str:
     lines.append("")
 
     if result.get("status") == "BLOCKED_RUN":
-        lines.extend(_blocked_section(result))
+        if result.get("blocked_reason") == "log_platform_preflight":
+            lines.extend(_log_section(result))
+        else:
+            lines.extend(_blocked_section(result))
         return "\n".join(lines) + "\n"
 
     summary = result.get("summary", {})
@@ -51,6 +54,7 @@ def render_markdown(result: dict[str, Any]) -> str:
         f"| codegen skipped | {summary.get('codegen_skipped', 0)} |",
         "",
     ])
+    lines.extend(_log_section(result))
     lines.extend(_manual_section(result.get("manual_cases", [])))
     lines.extend(_module_section(result.get("modules", {})))
     lines.extend(_failure_sections(result.get("cases", [])))
@@ -289,3 +293,41 @@ def _feedback_section(result: dict[str, Any]) -> list[str]:
 
 def _cell(text: str) -> str:
     return str(text).replace("|", "\\|").replace("\n", " ")
+
+
+def _log_section(result: dict[str, Any]) -> list[str]:
+    validation = result.get("log_validation")
+    if not validation:
+        return []
+    lines = ["## 日志验证", "", f"- 待完成用例 {result.get('summary', {}).get('pending', 0)}", ""]
+    for issue in validation["issues"]:
+        location = " · ".join(str(issue[key]) for key in ("source_id", "request_step") if issue.get(key))
+        lines.append(f"- {issue['kind']} {location} · {issue.get('message') or issue.get('reason', '')}")
+    for case in result.get("cases", []):
+        for request in case.get("log_validation", {}).get("requests", []):
+            cleanup = request["cleanup"]
+            observation = request.get("last_observation")
+            status = (observation or {}).get("capture_state") or (observation or {}).get("result") or "未知"
+            if request.get("result"):
+                detail = [case["tc_id"], request["request_step"], request["source_id"], request["result"], status]
+                if observation:
+                    observed = observation.get("event_count")
+                    expected = observation.get("expected_event_count")
+                    if observed is not None:
+                        detail.append(f"{observed} 条" if expected is None else f"{observed}/{expected} 条")
+                    detail.append(observation["observed_at"])
+                if request.get("reason"):
+                    detail.append(request["reason"])
+                if request.get("last_poll_error"):
+                    detail.append(request["last_poll_error"]["code"])
+                lines.append("- " + " · ".join(str(part) for part in detail))
+            for rule in request["rules"]:
+                if rule["result"] not in ("failed", "error"):
+                    continue
+                text = rule.get("expression") or rule.get("reason") or rule["result"]
+                lines.append(f"- {case['tc_id']} · {request['source_id']} · {request['request_step']} · {text}")
+                if "actual_summary" in rule:
+                    lines.append(f"  - 实际 {rule['actual_summary']} · 期望 {rule['expected_summary']}")
+            if cleanup.get("job_id"):
+                lines.append(f"- {case['tc_id']} · {request['request_step']} · {request['source_id']} · 清理回执 {cleanup['job_id']}")
+    return [*lines, ""]

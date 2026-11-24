@@ -1,0 +1,85 @@
+{
+  "purpose": "isolated_acceptance_only",
+  "setup": {
+    "source_a": {"format_ref": "ads_v1", "test_env": {"ADS_NORMAL_END_TYPE": "TEST_CAPTURE_END"}},
+    "source_b": {"format_ref": "orders_v1"},
+    "source_observed": {"copy_format": "orders_v1", "new_format_ref": "orders_without_end_v1", "override": {"completion": "none"}}
+  },
+  "starting_offsets": [
+    {"source_id": "source_a", "partition": 0, "next_offset": 100},
+    {"source_id": "source_b", "partition": 1, "next_offset": 730},
+    {"source_id": "source_observed", "partition": 0, "next_offset": 0}
+  ],
+  "records_in_processing_order": [
+    {"source_id":"source_a","partition":0,"offset":100,"value":{"schemaVersion":1,"eventType":"REQUEST_ENTER","stage":"request","timestamp":1699876543210,"reqId":"dbg-shared-01","slotId":"S1","route":1,"algoSceneId":30001,"mediaId":"M2","mediaSource":0,"data":{"score":0,"enabled":false},"futureField":{"keep":true}}},
+    {"source_id":"source_b","partition":1,"offset":730,"value":{"context":{"trace_id":"dbg-shared-01"},"kind":"priced","order":{"id":"O-7"},"body":[{"amount":8}]}},
+    {"source_id":"source_b","partition":1,"offset":731,"value":{"context":{"trace_id":"dbg-shared-01"},"kind":"signal","done":"true","body":null}},
+    {"source_id":"source_observed","partition":0,"offset":0,"value":{"context":{"trace_id":"dbg-observed-01"},"kind":"priced","body":{"amount":9}}},
+    {"source_id":"source_a","partition":0,"offset":101,"value":{"schemaVersion":1,"eventType":"TEST_CAPTURE_END","reqId":"dbg-shared-01","data":{}}},
+    {"source_id":"source_b","partition":1,"offset":732,"value":{"context":{"trace_id":"dbg-shared-01"},"kind":"finished","done":true}}
+  ],
+  "checkpoints": [
+    {"after_record":1,"source_id":"source_a","reqId":"dbg-shared-01","capture_state":"COLLECTING","event_count":1},
+    {"after_record":3,"source_id":"source_b","reqId":"dbg-shared-01","capture_state":"COLLECTING","event_count":2},
+    {"after_record":4,"source_id":"source_observed","reqId":"dbg-observed-01","capture_state":"OBSERVED","event_count":1},
+    {"after_record":5,"source_id":"source_a","reqId":"dbg-shared-01","capture_state":"COMPLETE","event_count":2},
+    {"after_record":6,"source_id":"source_b","reqId":"dbg-shared-01","capture_state":"COMPLETE","event_count":3}
+  ],
+  "inspect": [
+    {"source_id":"source_a","offset":100,"view":"raw","pointer":"/futureField/keep","equals":true},
+    {"source_id":"source_a","offset":100,"view":"data","pointer":"/score","equals":0},
+    {"source_id":"source_a","offset":100,"view":"data","pointer":"/enabled","equals":false},
+    {"source_id":"source_b","offset":730,"view":"data","pointer":"","equals":[{"amount":8}]},
+    {"source_id":"source_b","offset":731,"view":"data","pointer":"","equals":null},
+    {"source_id":"source_b","offset":732,"view":"data","data_member_present":false}
+  ],
+  "after_cleanup_of_source_a": {
+    "source_a": {"reqId":"dbg-shared-01","availability":"DELETED"},
+    "source_b": {"reqId":"dbg-shared-01","availability":"AVAILABLE","event_count":3}
+  },
+  "multi_source_readiness": {
+    "reqId": "at-readiness-01",
+    "sources": {
+      "main": {"format_ref":"orders_v1","topic":"acceptance.main"},
+      "perf": {"format_ref":"orders_v1","topic":"acceptance.perf","completion":{"mode":"expected_count","count":2,"event_id_path":"/body/sample"}},
+      "lake": {"format_ref":"orders_v1","topic":"acceptance.lake","completion":{"mode":"expected_count","count":1}},
+      "observed": {"format_ref":"orders_v1","topic":"acceptance.observed","completion":"none"}
+    },
+    "records_in_processing_order": [
+      {"source_id":"main","partition":0,"offset":20,"value":{"context":{"trace_id":"at-readiness-01"},"kind":"finished","done":true}},
+      {"source_id":"perf","partition":1,"offset":10,"value":{"context":{"trace_id":"at-readiness-01"},"kind":"perf","done":true,"body":{"sample":"A"}}},
+      {"source_id":"perf","partition":1,"offset":10,"value":{"context":{"trace_id":"at-readiness-01"},"kind":"perf","done":true,"body":{"sample":"A"}}},
+      {"source_id":"perf","partition":0,"offset":10,"value":{"context":{"trace_id":"at-readiness-01"},"kind":"perf","body":{"sample":"B"}}},
+      {"source_id":"lake","partition":0,"offset":7,"value":{"context":{"trace_id":"at-readiness-01"},"kind":"lake","body":{"saved":true}}},
+      {"source_id":"observed","partition":0,"offset":15,"value":{"context":{"trace_id":"at-readiness-01"},"kind":"finished","done":true}},
+      {"source_id":"perf","partition":0,"offset":11,"value":{"context":{"trace_id":"at-readiness-01"},"kind":"perf","body":{"sample":"C"}}},
+      {"source_id":"perf","partition":2,"offset":20,"value":{"context":{"trace_id":"at-retry-01"},"kind":"perf","body":{"sample":"X"}}},
+      {"source_id":"perf","partition":2,"offset":21,"value":{"context":{"trace_id":"at-retry-01"},"kind":"perf","body":{"sample":"X"}}},
+      {"source_id":"perf","partition":2,"offset":22,"value":{"context":{"trace_id":"at-retry-01"},"kind":"perf","body":{"sample":"Y"}}}
+    ],
+    "readiness_after_record_2": {
+      "path":"/v1/requests/readiness",
+      "body":{"items":[{"source_id":"main","reqId":"at-readiness-01"},{"source_id":"perf","reqId":"at-readiness-01"},{"source_id":"lake","reqId":"at-readiness-01"}]},
+      "expected_items_subset":[
+        {"source_id":"main","reqId":"at-readiness-01","result":"FOUND","request":{"capture_state":"COMPLETE","completion_basis":"producer_end","expected_event_count":null,"availability":"AVAILABLE","event_count":1}},
+        {"source_id":"perf","reqId":"at-readiness-01","result":"FOUND","request":{"capture_state":"COLLECTING","completion_basis":"expected_count","expected_event_count":2,"availability":"AVAILABLE","event_count":1}},
+        {"source_id":"lake","reqId":"at-readiness-01","result":"NOT_FOUND","request":null}
+      ]
+    },
+    "checkpoints": [
+      {"after_record":3,"source_id":"perf","capture_state":"COLLECTING","event_count":1,"version_unchanged_since_record":2},
+      {"after_record":4,"source_id":"perf","capture_state":"COMPLETE","event_count":2},
+      {"after_record":5,"source_id":"lake","capture_state":"COMPLETE","event_count":1,"expected_event_count":1},
+      {"after_record":6,"source_id":"observed","capture_state":"OBSERVED","event_count":1,"expected_event_count":null},
+      {"after_record":7,"source_id":"perf","capture_state":"INCOMPLETE","version_increased_since_record":4},
+      {"after_record":8,"source_id":"perf","reqId":"at-retry-01","capture_state":"COLLECTING","event_count":1},
+      {"after_record":9,"source_id":"perf","reqId":"at-retry-01","capture_state":"COLLECTING","event_count":1},
+      {"after_record":10,"source_id":"perf","reqId":"at-retry-01","capture_state":"COMPLETE","event_count":2}
+    ],
+    "snapshot": {
+      "after_record":4,"source_id":"perf","reqId":"at-readiness-01","evidence_view":"partitioned","page_size":1,
+      "expected_positions":[{"partition":0,"offset":"10"},{"partition":1,"offset":"10"}],
+      "retry_second_page_after_record":7,"expected_http_status":409,"expected_error_code":"VERSION_CONFLICT"
+    }
+  }
+}

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import sys
 import time
@@ -77,6 +76,9 @@ def _load_paths() -> ReportPaths:
 @click.option("--case-id", "case_ids", multiple=True, help="Run one case id; can be repeated")
 @click.option("--capture", is_flag=True, help="Write runtime request/response capture to capture.jsonl")
 @click.option("--workspace", type=click.Path(file_okay=False, dir_okay=True), help="Run from another AITest workspace root")
+@click.option("--case-concurrency", type=click.IntRange(min=1))
+@click.option("--log-concurrency", type=click.IntRange(min=1))
+@click.option("--resume", "resume_id")
 @click.argument("args", nargs=-1, type=click.UNPROCESSED, metavar="[PYTEST_ARGS]...")
 def run_command(
     include_manual: bool,
@@ -90,6 +92,9 @@ def run_command(
     capture: bool,
     workspace: str | None,
     args: tuple[str, ...],
+    case_concurrency: int | None = None,
+    log_concurrency: int | None = None,
+    resume_id: str | None = None,
 ):
     """Run generated pytest after freshness check and write structured reports.
 
@@ -103,21 +108,39 @@ def run_command(
       AITEST_ENV_FILE=/tmp/test.env aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml
       aitest run --suite-file test_workspace/suites/<target>/<suite>/suite.yaml -- -k boundary
     """
+    from aitest_kit.log_assertions.run import cancellation_signal, log_run, resume
+
     try:
-        with push_workspace(workspace):
-            _run_command_impl(
-                include_manual,
-                skip_codegen_check,
-                args,
-                suite_file=suite_file,
-                task_file=task_file,
-                target=target,
-                module_name=module_name,
-                all_suites=all_suites,
-                case_ids=case_ids,
-                capture=capture,
-            )
-    except (FileNotFoundError, NotADirectoryError) as exc:
+        with push_workspace(workspace), cancellation_signal():
+            root = Path.cwd().resolve()
+            if resume_id:
+                if any((include_manual, skip_codegen_check, suite_file, task_file, target, module_name,
+                        all_suites, case_ids, capture, args, case_concurrency, log_concurrency)):
+                    raise click.UsageError("--resume can only be combined with --workspace")
+                def resume_environment(paths):
+                    try:
+                        return _pytest_environment(env_files=paths)[0]
+                    except _RunEnvironmentError as exc:
+                        raise ValueError(str(exc)) from exc
+
+                raise SystemExit(resume(root, resume_id, resume_environment))
+            with log_run(root, case_concurrency, log_concurrency, {
+                "suite_file": suite_file, "task_file": task_file, "target": target, "module": module_name,
+                "all": all_suites, "case_ids": case_ids,
+            }):
+                _run_command_impl(
+                    include_manual,
+                    skip_codegen_check,
+                    args,
+                    suite_file=suite_file,
+                    task_file=task_file,
+                    target=target,
+                    module_name=module_name,
+                    all_suites=all_suites,
+                    case_ids=case_ids,
+                    capture=capture,
+                )
+    except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
         raise click.ClickException(str(exc)) from exc
 
 
@@ -140,6 +163,7 @@ def _run_command_impl(
     capture_settings: CaptureSettings | None = None,
     capture_file_path: Path | None = None,
     echo_capture_path: bool = True,
+    unit_index: int = 0,
 ) -> None:
     extra_args = list(args)
     if suite_file and task_file:
@@ -253,7 +277,7 @@ def _run_command_impl(
             environment=exc.environment,
             run_scope=run_scope,
         )
-        _write_result(run_dir, paths.reports_dir, result, update_latest=update_latest)
+        _write_result(run_dir, paths.reports_dir, result, update_latest=update_latest, unit_exit_code=10)
         click.echo(f"BLOCKED_RUN: {exc}")
         raise SystemExit(10) from exc
     if capture_file is not None:
@@ -273,7 +297,7 @@ def _run_command_impl(
             environment=environment,
             run_scope=run_scope,
         )
-        _write_result(run_dir, paths.reports_dir, result, update_latest=update_latest)
+        _write_result(run_dir, paths.reports_dir, result, update_latest=update_latest, unit_exit_code=10)
         click.echo(f"BLOCKED_RUN: {codegen_check['message']}")
         raise SystemExit(10)
 
@@ -290,7 +314,7 @@ def _run_command_impl(
             run_scope=run_scope,
         )
         result["summary"]["error"] = 1
-        _write_result(run_dir, paths.reports_dir, result, update_latest=update_latest)
+        _write_result(run_dir, paths.reports_dir, result, update_latest=update_latest, unit_exit_code=5)
         click.echo("No generated test files found.")
         raise SystemExit(5)
 
@@ -315,9 +339,41 @@ def _run_command_impl(
     pytest_cmd.extend(extra_args)
 
     started = time.monotonic()
-    completed = subprocess.run(pytest_cmd, text=True, env=pytest_env)
+    from aitest_kit.log_assertions.run import CURRENT
+
+    log_session = CURRENT.get()
+    if log_session is None:
+        completed = subprocess.run(pytest_cmd, text=True, env=pytest_env)
+    else:
+        def report_factory():
+            from aitest_kit.report.collector import _extract_generated_metadata
+            from aitest_kit.log_assertions.discovery import planned_steps
+            base = collect_result(junit_path=None, generated_files=files, run_id=run_id, command=command,
+                                  manual_policy=manual_policy, codegen_check=codegen_check,
+                                  environment=environment, run_scope=run_scope)
+            base["_node_metadata"] = {
+                f"{Path(os.path.relpath(item['file_path'])).as_posix()}::{item['class_name']}::{item['function_name']}": item
+                for item in _extract_generated_metadata(files)["by_full_key"].values()
+            }
+            base["_planned_steps"] = {
+                f"{Path(os.path.relpath(file)).as_posix()}::{name}": steps
+                for file in files if file.is_file() for name, steps in planned_steps(file).items()
+            }
+            return base
+
+        completed = log_session.execute(
+            pytest_cmd, pytest_env, files, run_dir, run_id, selected_nodeids or [], extra_args,
+            env_files or ([Path(environment["env_file"])] if environment["env_file_loaded"] else []), unit_index, report_factory,
+        )
+        if log_session.store is not None:
+            junit_path = log_session.raw_junit(unit_index)
     duration = round(time.monotonic() - started, 3)
 
+    if log_session is not None and log_session.store is not None:
+        from aitest_kit.log_assertions.projection import load_base
+        initial_result = load_base(log_session.store, run_dir) or {}
+    else:
+        initial_result = {}
     result = collect_result(
         junit_path=junit_path,
         generated_files=files,
@@ -329,12 +385,16 @@ def _run_command_impl(
         environment=environment,
         run_scope=run_scope,
     )
-    _write_result(run_dir, paths.reports_dir, result, update_latest=update_latest)
+    result.update({key: initial_result[key] for key in ("_node_metadata", "_planned_steps") if key in initial_result})
+    _write_result(run_dir, paths.reports_dir, result, update_latest=update_latest, unit_exit_code=completed.returncode)
     summary = result["summary"]
-    click.echo(
-        f"Report written: {run_dir / 'report.md'} "
-        f"(passed={summary['passed']}, failed={summary['failed']}, error={summary['error']})"
-    )
+    if log_session is not None and log_session.store is not None:
+        click.echo(f"Pytest phase complete for {run_dir}")
+    else:
+        click.echo(
+            f"Report written: {run_dir / 'report.md'} "
+            f"(passed={summary['passed']}, failed={summary['failed']}, error={summary['error']})"
+        )
     if echo_capture_path and capture_file is not None and capture_file.exists():
         click.echo(f"Capture written: {capture_file}")
     raise SystemExit(completed.returncode)
@@ -443,16 +503,15 @@ def _report_command_impl(
             case_ids=case_ids,
         )
 
-    result_path = (
-        reports_dir / "runs" / run_id / "result.json"
-        if run_id
-        else reports_dir / "latest" / "result.json"
-    )
-    if not result_path.exists():
-        raise click.ClickException(f"result.json not found: {result_path}")
-    result = json.loads(result_path.read_text(encoding="utf-8"))
-    report_path = result_path.parent / "report.md"
-    report_path.write_text(render_markdown(result), encoding="utf-8")
+    from aitest_kit.report.publication import atomic_write, latest_directory, report_lock
+    with report_lock(reports_dir):
+        directory = reports_dir / "runs" / run_id if run_id else latest_directory(reports_dir)
+        result_path = directory / "result.json"
+        if not result_path.exists():
+            raise click.ClickException(f"result.json not found: {result_path}")
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+        report_path = result_path.parent / "report.md"
+        atomic_write(report_path, render_markdown(result).encode("utf-8"))
     click.echo(f"Report written: {report_path}")
 
 
@@ -569,14 +628,20 @@ def _format_run_command(
     return " ".join(command)
 
 
-def _write_result(run_dir: Path, reports_dir: Path, result: dict, *, update_latest: bool = True) -> None:
-    result_path = run_dir / "result.json"
-    result_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    (run_dir / "report.md").write_text(render_markdown(result), encoding="utf-8")
+def _write_result(run_dir: Path, reports_dir: Path, result: dict, *, update_latest: bool = True,
+                  unit_exit_code: int | None = None) -> None:
+    from aitest_kit.log_assertions.run import CURRENT
+    from aitest_kit.log_assertions.projection import save_base
+    from aitest_kit.report.publication import report_lock, update_latest as publish_latest, write_report
 
-    if not update_latest:
+    session = CURRENT.get()
+    if session is not None and session.store is not None:
+        base = {**result, "_unit_exit_code": unit_exit_code} if unit_exit_code is not None else result
+        save_base(session.store, run_dir, base)
         return
-    latest_dir = reports_dir / "latest"
-    if latest_dir.exists():
-        shutil.rmtree(latest_dir)
-    shutil.copytree(run_dir, latest_dir)
+    if update_latest:
+        with report_lock(reports_dir):
+            write_report(run_dir, result)
+            publish_latest(run_dir, reports_dir, result)
+    else:
+        write_report(run_dir, result)

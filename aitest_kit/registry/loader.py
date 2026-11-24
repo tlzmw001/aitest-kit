@@ -1,6 +1,7 @@
 """Load target/module/suite/task registry contexts."""
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +9,7 @@ import yaml
 
 from aitest_kit.workspace_config import AITEST_CONFIG_PATH
 from aitest_kit.registry.models import (
+    LogCapture,
     ModuleBinding,
     ModuleContext,
     RegisteredSuite,
@@ -98,6 +100,25 @@ def load_module_context(
         fixture_path,
         diagnostics,
     )
+    if "log_capture" in data:
+        capture = data["log_capture"]
+        if (not isinstance(capture, dict) or set(capture) - {"source_id", "sources"}
+                or not isinstance(capture.get("source_id"), str) or not capture["source_id"].strip()):
+            diagnostics.append(f"E536: {config_path}: log_capture requires a nonempty source_id")
+        else:
+            aliases = capture.get("sources", {})
+            sources = {}
+            if not isinstance(aliases, dict):
+                diagnostics.append(f"E536: {config_path}: log_capture.sources must be a mapping")
+            else:
+                for alias, entry in aliases.items():
+                    if (not isinstance(alias, str) or not alias.strip()
+                            or not isinstance(entry, dict) or set(entry) != {"source_id"}
+                            or not isinstance(entry["source_id"], str) or not entry["source_id"].strip()):
+                        diagnostics.append(f"E536: {config_path}: invalid log_capture.sources entry {alias!r}")
+                    else:
+                        sources[alias] = entry["source_id"]
+            binding = replace(binding, log_capture=LogCapture(capture["source_id"], sources))
     registered_suites = _registered_suites(
         target_context,
         module_name,

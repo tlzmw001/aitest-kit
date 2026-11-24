@@ -159,6 +159,9 @@ def _render_case_flow(
             f"E301: emitter cannot render {case_ir.case_id} without case_flow IR"
         ]
 
+    from aitest_kit.codegen.log_assertion_rendering import render_log_call, render_log_source_guard
+
+    body_lines.extend(render_log_source_guard(case_ir.case_flow))
     if case_ir.profile_variables:
         body_lines.append(
             "        __tc_vars__ = resolve_profile_variables("
@@ -179,9 +182,8 @@ def _render_case_flow(
 
     for step in case_ir.case_flow.steps:
         if step.kind == "call":
-            body_lines.append(
-                f"        {render_flow_call(step, current_case_id=case_ir.case_id, request_vars=request_vars)}"
-            )
+            call = render_flow_call(step, current_case_id=case_ir.case_id, request_vars=request_vars)
+            body_lines.extend(render_log_call(case_ir.case_flow, step, call))
             continue
         if step.kind == "assert" and step.assertion is not None:
             for cl in step.assertion.code_lines:

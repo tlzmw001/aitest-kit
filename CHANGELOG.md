@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- Added deferred log checks with opt-in case and log concurrency, resumable SQLite state, and structured reports. A single request can use multiple log sources with batched readiness checks and versioned evidence snapshots.
+- Added configurable cleanup queue and submission budgets. Passing cases can submit exact cleanup requests with persistent idempotency keys.
+
 ### Removed
 
 - Removed the embedded Pi Agent, model connections, approvals, request diagnostics, and persistent session UI from the Console. The `aitest agent` commands and `/api/agent/*` endpoints are no longer available.

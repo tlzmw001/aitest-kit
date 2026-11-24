@@ -5,6 +5,7 @@ import re
 from typing import Any
 
 from aitest_kit.codegen.ir import ProfileVariableIR
+from aitest_kit.codegen.log_assertion_validation import iter_expected
 
 
 _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -68,6 +69,9 @@ def case_flow_variable_refs(flow: Any) -> set[str]:
     refs: set[str] = set()
     if not isinstance(flow, dict):
         return refs
+    refs.update(value["from_var"] for value in iter_expected(flow)
+                if isinstance(value, dict) and set(value) == {"from_var"}
+                and isinstance(value["from_var"], str))
     steps = flow.get("steps", [])
     for step in steps if isinstance(steps, list) else []:
         if not isinstance(step, dict):
